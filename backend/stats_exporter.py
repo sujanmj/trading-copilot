@@ -1,0 +1,281 @@
+"""
+Stats Exporter v1 - Path D
+Exports SQLite database stats to JSON for the GUI Stats tab
+
+Generates: data/stats_data.json
+Auto-runs after outcome_tracker (or manually)
+"""
+
+import os
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+import sys
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from db_manager import (
+    get_connection,
+    get_db_stats,
+    get_recent_predictions,
+    get_top_winners,
+    get_top_losers,
+    calculate_accuracy_metrics,
+    init_db,
+)
+
+
+def safe_print(text):
+    try:
+        print(text)
+    except (UnicodeEncodeError, ValueError):
+        try:
+            print(text.encode('ascii', errors='replace').decode('ascii'))
+        except Exception:
+            pass
+
+
+OUTPUT_FILE = Path(__file__).parent.parent / 'data' / 'stats_data.json'
+
+
+def get_predictions_by_sector():
+    """Group predictions by sector with win rates"""
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT 
+                p.sector,
+                COUNT(p.id) as total,
+                SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN o.verdict='LOSS' THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN o.verdict IS NOT NULL AND o.verdict != 'PENDING' THEN 1 ELSE 0 END) as evaluated
+            FROM predictions p
+            LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
+            WHERE p.sector IS NOT NULL AND p.sector != 'UNKNOWN'
+            GROUP BY p.sector
+            ORDER BY total DESC
+        """).fetchall()
+        
+        result = []
+        for r in rows:
+            d = dict(r)
+            evaluated = d['evaluated'] or 0
+            wins = d['wins'] or 0
+            win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+            result.append({
+                'sector': d['sector'],
+                'total': d['total'],
+                'wins': wins,
+                'losses': d['losses'] or 0,
+                'evaluated': evaluated,
+                'win_rate': round(win_rate, 1),
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def get_predictions_by_run_type():
+    """Group by which run created the prediction (overnight, premarket, etc.)"""
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT 
+                p.run_type,
+                COUNT(p.id) as total,
+                SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN o.verdict IS NOT NULL AND o.verdict != 'PENDING' THEN 1 ELSE 0 END) as evaluated
+            FROM predictions p
+            LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
+            GROUP BY p.run_type
+            ORDER BY total DESC
+        """).fetchall()
+        
+        result = []
+        for r in rows:
+            d = dict(r)
+            evaluated = d['evaluated'] or 0
+            wins = d['wins'] or 0
+            win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+            result.append({
+                'run_type': d['run_type'] or 'unknown',
+                'total': d['total'],
+                'wins': wins,
+                'evaluated': evaluated,
+                'win_rate': round(win_rate, 1),
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def get_predictions_by_date():
+    """Daily prediction count and accuracy"""
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT 
+                p.prediction_date,
+                COUNT(p.id) as total,
+                SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN o.verdict='LOSS' THEN 1 ELSE 0 END) as losses,
+                SUM(CASE WHEN o.verdict IS NOT NULL AND o.verdict != 'PENDING' THEN 1 ELSE 0 END) as evaluated,
+                AVG(o.max_gain_pct) as avg_max_gain,
+                AVG(o.max_loss_pct) as avg_max_loss
+            FROM predictions p
+            LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
+            GROUP BY p.prediction_date
+            ORDER BY p.prediction_date DESC
+            LIMIT 30
+        """).fetchall()
+        
+        result = []
+        for r in rows:
+            d = dict(r)
+            evaluated = d['evaluated'] or 0
+            wins = d['wins'] or 0
+            win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+            result.append({
+                'date': d['prediction_date'],
+                'total': d['total'],
+                'wins': wins,
+                'losses': d['losses'] or 0,
+                'evaluated': evaluated,
+                'win_rate': round(win_rate, 1),
+                'avg_max_gain': round(d['avg_max_gain'] or 0, 2),
+                'avg_max_loss': round(d['avg_max_loss'] or 0, 2),
+            })
+        return result
+    finally:
+        conn.close()
+
+
+def get_recent_predictions_simple(limit=15):
+    """Recent predictions formatted for GUI"""
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT 
+                p.id, p.prediction_date, p.ticker, p.sector,
+                p.recommendation, p.category, p.confidence,
+                p.entry_price, p.target_price, p.reasoning,
+                p.cross_validation, p.overall_conviction,
+                o.verdict, o.change_1d_pct, o.change_3d_pct, o.change_7d_pct,
+                o.max_gain_pct, o.max_loss_pct, o.target_hit
+            FROM predictions p
+            LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
+            ORDER BY p.created_at DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_signals_summary():
+    """Stats on scanner signals"""
+    conn = get_connection()
+    try:
+        total = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
+        ultra = conn.execute("SELECT COUNT(*) FROM signals WHERE strength='ULTRA'").fetchone()[0]
+        strong = conn.execute("SELECT COUNT(*) FROM signals WHERE strength='STRONG'").fetchone()[0]
+        bullish = conn.execute("SELECT COUNT(*) FROM signals WHERE direction='BULLISH'").fetchone()[0]
+        bearish = conn.execute("SELECT COUNT(*) FROM signals WHERE direction='BEARISH'").fetchone()[0]
+        
+        # Top tickers with most signals
+        top_tickers = conn.execute("""
+            SELECT ticker, COUNT(*) as count
+            FROM signals
+            GROUP BY ticker
+            ORDER BY count DESC
+            LIMIT 10
+        """).fetchall()
+        
+        return {
+            'total': total,
+            'ultra': ultra,
+            'strong': strong,
+            'bullish': bullish,
+            'bearish': bearish,
+            'top_tickers': [dict(r) for r in top_tickers],
+        }
+    finally:
+        conn.close()
+
+
+def export_stats():
+    safe_print("=" * 60)
+    safe_print("STATS EXPORTER v1")
+    safe_print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    safe_print("=" * 60)
+    
+    init_db()
+    
+    # Calculate fresh metrics
+    metrics = calculate_accuracy_metrics('all_time')
+    weekly = calculate_accuracy_metrics('weekly')
+    daily = calculate_accuracy_metrics('daily')
+    
+    # Gather all data
+    db_stats = get_db_stats()
+    recent = get_recent_predictions_simple(15)
+    winners = get_top_winners(10)
+    losers = get_top_losers(10)
+    by_sector = get_predictions_by_sector()
+    by_run_type = get_predictions_by_run_type()
+    by_date = get_predictions_by_date()
+    signals_summary = get_signals_summary()
+    
+    output = {
+        'last_updated': datetime.now(timezone.utc).isoformat(),
+        'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        
+        # Headline metrics
+        'db_stats': db_stats,
+        'metrics_all_time': metrics or {},
+        'metrics_weekly': weekly or {},
+        'metrics_daily': daily or {},
+        
+        # Detailed breakdowns
+        'recent_predictions': recent,
+        'top_winners': winners,
+        'top_losers': losers,
+        'by_sector': by_sector,
+        'by_run_type': by_run_type,
+        'by_date': by_date,
+        'signals_summary': signals_summary,
+    }
+    
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+    
+    safe_print(f"\n[OK] Saved {OUTPUT_FILE}")
+    safe_print(f"\nDatabase Summary:")
+    safe_print(f"  Predictions:       {db_stats['total_predictions']}")
+    safe_print(f"  Outcomes:          {db_stats['total_outcomes']}")
+    safe_print(f"  Evaluated:         {db_stats['evaluated_outcomes']}")
+    safe_print(f"  Signals:           {db_stats['total_signals']}")
+    safe_print(f"  DB size:           {db_stats['db_size_kb']} KB")
+    
+    if metrics and metrics.get('total_evaluated', 0) > 0:
+        safe_print(f"\nAll-time Accuracy:")
+        safe_print(f"  Win rate:          {metrics['win_rate']}%")
+        safe_print(f"  Avg gain:          {metrics['avg_gain_pct']}%")
+        safe_print(f"  Avg loss:          {metrics['avg_loss_pct']}%")
+        safe_print(f"  Profit factor:     {metrics['profit_factor']}")
+    
+    safe_print("=" * 60)
+
+
+if __name__ == "__main__":
+    try:
+        export_stats()
+    except Exception as e:
+        import traceback
+        safe_print(f"[FATAL] {e}")
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass

@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Trading Copilot</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; display: flex; flex-direction: column; }
+    .topbar { background: #111; border-bottom: 1px solid #222; padding: 8px 15px; display: flex; align-items: center; gap: 8px; height: 50px; flex-shrink: 0; flex-wrap: wrap; }
+    .topbar h1 { font-size: 16px; color: #00ff88; font-weight: 700; margin-right: 10px; }
+    .btn-group-label { font-size: 9px; color: #555; text-transform: uppercase; margin-right: 4px; letter-spacing: 0.5px; }
+    .broker-btn, .news-btn { background: #1a1a2e; border: 1px solid #333; color: #ccc; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px; transition: all 0.2s; }
+    .broker-btn:hover { background: #00ff88; color: #000; border-color: #00ff88; }
+    .news-btn:hover { background: #ffaa00; color: #000; border-color: #ffaa00; }
+    .broker-btn.active { background: #00ff88; color: #000; font-weight: bold; }
+    .news-btn.active { background: #ffaa00; color: #000; font-weight: bold; }
+    .divider { width: 1px; height: 20px; background: #333; margin: 0 5px; }
+    .live-badge { background: #ff4444; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: auto; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+    .broker-panel { flex: 0 0 60%; background: #000; border-right: 2px solid #222; position: relative; overflow: hidden; }
+    .broker-placeholder { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #444; gap: 15px; }
+    .broker-placeholder h2 { font-size: 20px; color: #555; }
+    .loading-bar { position: absolute; top: 0; left: 0; right: 0; background: #1a1a2e; padding: 6px 12px; font-size: 11px; color: #00ff88; border-bottom: 1px solid #00ff88; z-index: 100; display: none; }
+    .loading-bar.active { display: block; }
+    webview { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; border: none; }
+    .ai-panel { flex: 0 0 40%; background: #0d0d0d; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .ai-header { background: #111; padding: 10px 15px; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .ai-header h3 { font-size: 13px; color: #00ff88; font-weight: 700; }
+    .refresh-btn { background: #1a1a1a; border: 1px solid #333; color: #888; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+    .refresh-btn:hover { border-color: #00ff88; color: #00ff88; }
+    .tabs { display: flex; background: #0a0a0a; border-bottom: 1px solid #222; flex-shrink: 0; flex-wrap: wrap; }
+    .tab { flex: 1; min-width: 0; padding: 8px 4px; text-align: center; cursor: pointer; font-size: 10px; color: #666; border-right: 1px solid #1a1a1a; transition: all 0.2s; }
+    .tab:last-child { border-right: none; }
+    .tab:hover { background: #111; color: #ccc; }
+    .tab.active { background: #1a1a2e; color: #00ff88; font-weight: bold; border-bottom: 2px solid #00ff88; }
+    .tab-content { flex: 1; overflow-y: auto; min-height: 0; padding: 12px; display: none; }
+    .tab-content.active { display: block; }
+    .tab-content::-webkit-scrollbar { width: 4px; }
+    .tab-content::-webkit-scrollbar-track { background: #111; }
+    .tab-content::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .conviction-bar { background: #1a1a2e; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #00ff88; }
+    .conviction-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+    .conviction-value { font-size: 18px; font-weight: bold; color: #00ff88; margin-top: 2px; }
+    .stars { font-size: 11px; color: #ffaa00; margin-top: 2px; }
+    .intel-section { margin-bottom: 14px; background: #0a0a0a; border-radius: 6px; padding: 10px; border: 1px solid #1a1a1a; }
+    .intel-text { font-size: 11px; color: #bbb; line-height: 1.6; white-space: pre-wrap; }
+    .intel-text strong { color: #fff; }
+    .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+    .market-card { background: #111; padding: 8px; border-radius: 5px; border: 1px solid #1a1a1a; }
+    .market-card-name { font-size: 9px; color: #666; text-transform: uppercase; }
+    .market-card-value { font-size: 12px; font-weight: bold; margin: 2px 0; }
+    .market-card-change { font-size: 10px; }
+    .green { color: #00ff88; }
+    .red { color: #ff4444; }
+    .yellow { color: #ffaa00; }
+    .region-header { color: #ffaa00; font-size: 10px; text-transform: uppercase; font-weight: bold; margin: 12px 0 6px 0; letter-spacing: 0.5px; }
+    .news-item { background: #111; padding: 8px; border-radius: 4px; margin-bottom: 6px; border-left: 2px solid #444; font-size: 11px; }
+    .news-item.positive, .news-item.bullish { border-left-color: #00ff88; }
+    .news-item.negative, .news-item.bearish { border-left-color: #ff4444; }
+    .news-item.neutral { border-left-color: #888; }
+    .news-source { color: #00ff88; font-size: 9px; text-transform: uppercase; }
+    .news-title { color: #ccc; margin-top: 3px; line-height: 1.4; }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; margin-right: 4px; }
+    .badge-green { background: #0d2a0d; color: #00ff88; }
+    .badge-red { background: #2a0d0d; color: #ff4444; }
+    .badge-yellow { background: #2a200d; color: #ffaa00; }
+    .badge-purple { background: #1a0d2a; color: #cc88ff; }
+    .stock-mention { display: inline-block; background: #1a1a2e; padding: 2px 8px; border-radius: 3px; font-size: 10px; margin: 2px; color: #00ff88; }
+    .stock-mention.hot { background: #2a1a0d; color: #ffaa00; }
+    .govt-item { background: #1a1a2e; padding: 12px; border-radius: 6px; margin: 10px 0; }
+    .govt-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .govt-score { padding: 3px 10px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+    .govt-score.bullish { background: #00ff88; color: #000; }
+    .govt-score.bearish { background: #ff4444; color: #fff; }
+    .govt-score.neutral { background: #ffaa00; color: #000; }
+    .govt-source { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    .govt-relevance { font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #333; color: #aaa; margin-left: 6px; }
+    .govt-relevance.high { background: #2a0d0d; color: #ff4444; }
+    .govt-relevance.medium { background: #2a200d; color: #ffaa00; }
+    .govt-relevance.low { background: #1a1a2e; color: #888; }
+    .govt-relevance.none { background: #0a0a0a; color: #555; }
+    .govt-headline { font-size: 13px; color: #fff; line-height: 1.4; margin-bottom: 8px; font-weight: 600; }
+    .govt-reasons { font-size: 10px; color: #ffaa00; margin: 6px 0; }
+    .read-link { display: inline-block; padding: 4px 10px; background: #0a0a0a; color: #00ff88; text-decoration: none; border-radius: 4px; font-size: 10px; margin-top: 8px; margin-right: 6px; border: 1px solid #00ff88; transition: all 0.2s; cursor: pointer; }
+    .read-link:hover { background: #00ff88; color: #000; }
+    .tv-video { background: #111; padding: 8px; border-radius: 4px; margin-bottom: 6px; font-size: 11px; border-left: 2px solid #444; }
+    .tv-video.live { border-left-color: #ff4444; }
+    .tv-channel { color: #ffaa00; font-size: 9px; text-transform: uppercase; font-weight: bold; }
+    .tv-title { color: #ccc; margin-top: 3px; line-height: 1.4; }
+    .live-tag { background: #ff4444; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 8px; font-weight: bold; margin-left: 4px; animation: pulse 1.5s infinite; }
+    .timestamp { font-size: 9px; color: #444; text-align: right; margin-bottom: 8px; }
+    .loading { color: #444; text-align: center; padding: 20px; font-size: 12px; }
+    .ask-bar { border-top: 1px solid #222; padding: 8px 10px; display: flex; gap: 8px; background: #111; flex-shrink: 0; }
+    .ask-input { flex: 1; background: #1a1a1a; border: 1px solid #333; color: #fff; padding: 6px 10px; border-radius: 5px; font-size: 12px; outline: none; }
+    .ask-input:focus { border-color: #00ff88; }
+    .ask-btn { background: #00ff88; color: #000; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold; }
+    .ask-btn:hover { background: #00cc66; }
+    .ask-btn:disabled { background: #555; cursor: not-allowed; }
+    .mood-card { background: linear-gradient(135deg, #1a1a2e 0%, #0d1a0d 100%); border-radius: 8px; padding: 14px; margin-bottom: 12px; border: 1px solid #222; }
+    .mood-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .mood-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+    .mood-value { font-size: 22px; font-weight: bold; margin: 4px 0; }
+    .mood-value.bullish { color: #00ff88; }
+    .mood-value.bearish { color: #ff4444; }
+    .mood-value.neutral { color: #ffaa00; }
+    .mood-confidence { font-size: 11px; color: #888; }
+    .mood-summary { font-size: 11px; color: #ccc; margin-top: 8px; padding-top: 8px; border-top: 1px solid #222; line-height: 1.5; }
+    .mood-themes { margin-top: 8px; }
+    .theme-tag { display: inline-block; background: #2a1a0d; color: #ffaa00; font-size: 9px; padding: 2px 8px; border-radius: 10px; margin: 2px 4px 2px 0; }
+    .reddit-ticker { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
+    .reddit-ticker.bullish { border-left-color: #00ff88; }
+    .reddit-ticker.bearish { border-left-color: #ff4444; }
+    .reddit-ticker.neutral { border-left-color: #ffaa00; }
+    .reddit-ticker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .reddit-ticker-name { font-size: 13px; font-weight: bold; color: #fff; }
+    .reddit-ticker-mentions { font-size: 10px; color: #888; }
+    .reddit-sent-pill { font-size: 9px; padding: 2px 7px; border-radius: 10px; font-weight: bold; }
+    .reddit-sent-pill.bullish { background: #0d2a0d; color: #00ff88; }
+    .reddit-sent-pill.bearish { background: #2a0d0d; color: #ff4444; }
+    .reddit-sent-pill.neutral { background: #2a200d; color: #ffaa00; }
+    .reddit-top-post { font-size: 10px; color: #aaa; margin-top: 6px; line-height: 1.4; padding: 6px; background: #0a0a0a; border-radius: 3px; }
+    .reddit-top-post-meta { font-size: 9px; color: #666; margin-top: 4px; }
+    .reddit-discussion { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
+    .reddit-discussion.bullish { border-left-color: #00ff88; }
+    .reddit-discussion.bearish { border-left-color: #ff4444; }
+    .reddit-discussion-title { font-size: 12px; color: #ddd; line-height: 1.4; margin-bottom: 6px; }
+    .reddit-discussion-meta { display: flex; gap: 8px; align-items: center; font-size: 9px; color: #666; }
+    .reddit-sub { color: #ffaa00; font-weight: bold; }
+    .reddit-stats { color: #00ff88; }
+    .reddit-tickers-inline { margin-top: 4px; }
+    .scanner-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+    .scanner-stat-card { background: #111; padding: 8px; border-radius: 5px; border: 1px solid #1a1a1a; text-align: center; }
+    .scanner-stat-label { font-size: 9px; color: #666; text-transform: uppercase; }
+    .scanner-stat-value { font-size: 18px; font-weight: bold; color: #00ff88; margin-top: 2px; }
+    .signal-row { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
+    .signal-row.ultra { border-left-color: #cc88ff; background: linear-gradient(90deg, #1a0d2a 0%, #111 60%); }
+    .signal-row.strong { border-left-color: #00ff88; }
+    .signal-row.moderate { border-left-color: #ffaa00; }
+    .signal-row.bearish { border-left-color: #ff4444; }
+    .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .signal-ticker { font-size: 14px; font-weight: bold; color: #fff; }
+    .signal-sector { font-size: 9px; color: #888; text-transform: uppercase; margin-left: 6px; }
+    .signal-strength-pill { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+    .signal-strength-pill.ultra { background: #1a0d2a; color: #cc88ff; border: 1px solid #cc88ff; }
+    .signal-strength-pill.strong { background: #0d2a0d; color: #00ff88; }
+    .signal-strength-pill.moderate { background: #2a200d; color: #ffaa00; }
+    .signal-strength-pill.bearish { background: #2a0d0d; color: #ff4444; }
+    .signal-price-row { display: flex; gap: 12px; align-items: center; font-size: 11px; margin: 4px 0; }
+    .signal-price { color: #fff; font-weight: bold; }
+    .signal-change { font-weight: bold; }
+    .signal-change.up { color: #00ff88; }
+    .signal-change.down { color: #ff4444; }
+    .signal-volume { color: #ffaa00; font-size: 10px; }
+    .signal-tags { margin-top: 6px; }
+    .signal-tag { display: inline-block; background: #1a1a2e; color: #ccc; font-size: 9px; padding: 2px 7px; border-radius: 3px; margin-right: 4px; margin-bottom: 2px; }
+    .signal-tag.volume { background: #2a200d; color: #ffaa00; }
+    .signal-tag.breakout { background: #0d2a0d; color: #00ff88; }
+    .signal-tag.breakdown { background: #2a0d0d; color: #ff4444; }
+    .signal-tag.gap { background: #1a0d2a; color: #cc88ff; }
+    .sector-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #111; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #444; }
+    .sector-row.bullish { border-left-color: #00ff88; }
+    .sector-row.bearish { border-left-color: #ff4444; }
+    .sector-row.neutral { border-left-color: #ffaa00; }
+    .sector-name { font-size: 11px; color: #ddd; font-weight: bold; }
+    .sector-stats { display: flex; gap: 10px; align-items: center; font-size: 10px; }
+    .sector-move { font-weight: bold; }
+    .sector-meta { color: #666; font-size: 9px; }
+    .corr-break { background: #1a0d2a; padding: 8px 10px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #cc88ff; font-size: 11px; }
+    .corr-ticker { color: #cc88ff; font-weight: bold; }
+    .corr-detail { color: #ccc; font-size: 10px; margin-top: 2px; }
+    .stats-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+    .stat-big-card { background: #111; padding: 12px 8px; border-radius: 6px; border: 1px solid #222; text-align: center; }
+    .stat-big-label { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-big-value { font-size: 22px; font-weight: bold; margin: 6px 0 2px 0; }
+    .stat-big-sub { font-size: 9px; color: #888; }
+    .stat-big-value.green { color: #00ff88; }
+    .stat-big-value.red { color: #ff4444; }
+    .stat-big-value.yellow { color: #ffaa00; }
+    .stat-big-value.purple { color: #cc88ff; }
+    .stat-big-value.blue { color: #88ccff; }
+    .winner-row { background: linear-gradient(90deg, #0d2a0d 0%, #111 70%); padding: 8px 10px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #00ff88; }
+    .loser-row { background: linear-gradient(90deg, #2a0d0d 0%, #111 70%); padding: 8px 10px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #ff4444; }
+    .pred-ticker { font-size: 12px; font-weight: bold; color: #fff; }
+    .pred-meta { font-size: 9px; color: #888; margin-top: 2px; }
+    .pred-result { float: right; font-size: 12px; font-weight: bold; }
+    .pred-result.win { color: #00ff88; }
+    .pred-result.loss { color: #ff4444; }
+    .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #0a0a0a; border-radius: 4px; margin-bottom: 3px; font-size: 11px; }
+    .breakdown-name { color: #ccc; }
+    .breakdown-bar { flex: 1; height: 4px; background: #222; border-radius: 2px; margin: 0 10px; overflow: hidden; }
+    .breakdown-fill { height: 100%; background: #00ff88; transition: width 0.3s; }
+    .breakdown-stat { color: #00ff88; font-weight: bold; min-width: 50px; text-align: right; }
+    .empty-stats { text-align: center; padding: 30px 20px; color: #555; font-size: 12px; line-height: 1.6; }
+    .empty-stats h4 { color: #888; margin-bottom: 10px; font-size: 14px; }
+    .verdict-pill { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+    .verdict-pill.win { background: #0d2a0d; color: #00ff88; }
+    .verdict-pill.loss { background: #2a0d0d; color: #ff4444; }
+    .verdict-pill.neutral { background: #2a200d; color: #ffaa00; }
+    .verdict-pill.pending { background: #1a1a2e; color: #888; }
+    .recent-pred-card { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
+    .recent-pred-card.opportunity { border-left-color: #00ff88; }
+    .recent-pred-card.risk { border-left-color: #ff4444; }
+    .recent-pred-card.evaluated.win { background: linear-gradient(90deg, #0d2a0d 0%, #111 80%); }
+    .recent-pred-card.evaluated.loss { background: linear-gradient(90deg, #2a0d0d 0%, #111 80%); }
+    .recent-pred-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+
+    /* === HISTORY TAB STYLES === */
+    .period-selector { display: flex; gap: 4px; margin-bottom: 14px; background: #0a0a0a; padding: 4px; border-radius: 6px; }
+    .period-btn { flex: 1; background: transparent; border: none; color: #888; padding: 8px 6px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s; }
+    .period-btn:hover { background: #1a1a2e; color: #ccc; }
+    .period-btn.active { background: #00ff88; color: #000; }
+    .day-section { background: #0a0a0a; border-radius: 6px; padding: 10px; margin-bottom: 12px; border: 1px solid #1a1a1a; }
+    .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #222; }
+    .day-date { font-size: 12px; color: #00ff88; font-weight: bold; }
+    .day-stats { font-size: 10px; color: #888; }
+    .day-stats .win-rate-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: bold; margin-left: 6px; }
+    .day-stats .win-rate-pill.high { background: #0d2a0d; color: #00ff88; }
+    .day-stats .win-rate-pill.medium { background: #2a200d; color: #ffaa00; }
+    .day-stats .win-rate-pill.low { background: #2a0d0d; color: #ff4444; }
+    .day-stats .win-rate-pill.pending { background: #1a1a2e; color: #888; }
+    .pred-card-history { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; cursor: pointer; transition: all 0.2s; }
+    .pred-card-history:hover { background: #1a1a1a; }
+    .pred-card-history.opportunity { border-left-color: #00ff88; }
+    .pred-card-history.risk { border-left-color: #ff4444; }
+    .pred-card-history.evaluated.win { background: linear-gradient(90deg, #0d2a0d 0%, #111 80%); }
+    .pred-card-history.evaluated.loss { background: linear-gradient(90deg, #2a0d0d 0%, #111 80%); }
+    .pred-card-row { display: flex; justify-content: space-between; align-items: center; }
+    .pred-card-left { display: flex; flex-direction: column; gap: 2px; }
+    .pred-card-right { text-align: right; display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+    .pred-card-ticker { font-size: 13px; font-weight: bold; color: #fff; }
+    .pred-card-rec { font-size: 9px; padding: 1px 6px; border-radius: 3px; background: #1a1a2e; color: #ccc; margin-left: 6px; }
+    .pred-card-meta-line { font-size: 9px; color: #888; margin-top: 2px; }
+    .pred-card-prices { font-size: 10px; color: #aaa; }
+    .pred-card-change { font-size: 13px; font-weight: bold; }
+    .pred-card-change.up { color: #00ff88; }
+    .pred-card-change.down { color: #ff4444; }
+    .pred-card-change.neutral { color: #ffaa00; }
+    .pred-card-change.pending { color: #888; }
+    .pred-detail-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; padding: 20px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; z-index: 1000; box-shadow: 0 0 30px rgba(0,255,136,0.3); border: 1px solid #00ff88; }
+    .pred-detail-modal.active { display: block; }
+    .pred-detail-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
+    .pred-detail-overlay.active { display: block; }
+    .pred-detail-close { position: absolute; top: 10px; right: 12px; background: transparent; border: none; color: #888; font-size: 18px; cursor: pointer; }
+    .pred-detail-close:hover { color: #ff4444; }
+    .pred-detail-title { font-size: 16px; color: #00ff88; font-weight: bold; margin-bottom: 4px; }
+    .pred-detail-subtitle { font-size: 11px; color: #888; margin-bottom: 14px; }
+    .pred-detail-section { margin-bottom: 12px; }
+    .pred-detail-label { font-size: 9px; color: #ffaa00; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .pred-detail-value { font-size: 12px; color: #ccc; line-height: 1.6; }
+    .pred-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pred-detail-cell { background: #0a0a0a; padding: 8px 10px; border-radius: 4px; }
+    .pred-detail-cell-label { font-size: 9px; color: #666; }
+    .pred-detail-cell-value { font-size: 13px; color: #fff; font-weight: bold; margin-top: 2px; }
+    .history-summary-card { background: linear-gradient(135deg, #1a1a2e 0%, #0d1a0d 100%); border-radius: 8px; padding: 12px; margin-bottom: 14px; border: 1px solid #222; }
+    .history-empty-day { text-align: center; padding: 14px; color: #555; font-size: 11px; font-style: italic; }
+    .history-section-collapsible { cursor: pointer; }
+    .history-section-collapsible:after { content: ' ▼'; font-size: 9px; color: #888; }
+    .history-section-collapsible.collapsed:after { content: ' ▶'; }
+    .chat-history-block { margin-top: 14px; border-top: 1px dashed #222; padding-top: 12px; }
+    .chat-history-header { font-size: 9px; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+    .clear-chat-btn { background: #2a0d0d; color: #ff4444; border: 1px solid #ff4444; padding: 2px 8px; border-radius: 3px; font-size: 9px; cursor: pointer; }
+    .clear-chat-btn:hover { background: #ff4444; color: #fff; }
+    .chat-msg-user { padding: 8px; background: #1a1a1a; border-radius: 5px; border-left: 2px solid #00ff88; margin: 6px 0; }
+    .chat-msg-ai { padding: 8px; background: #0d1a0d; border-radius: 5px; border-left: 2px solid #004422; margin: 6px 0; }
+    .chat-msg-meta { color: #00ff88; font-size: 9px; margin-bottom: 4px; }
+    .chat-msg-content { font-size: 11px; color: #ccc; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <h1>⚡ Trading Copilot</h1>
+    <span class="btn-group-label">BROKERS:</span>
+    <button class="broker-btn" data-url="https://www.angelone.in/login">Angel One</button>
+    <button class="broker-btn" data-url="https://kite.zerodha.com">Zerodha</button>
+    <button class="broker-btn" data-url="https://groww.in/login">Groww</button>
+    <button class="broker-btn" data-url="https://login.upstox.com">Upstox</button>
+    <button class="broker-btn" data-url="https://www.indmoney.com/login">IndMoney</button>
+    <button class="broker-btn" data-url="https://finance.yahoo.com/portfolios">💼 Yahoo Portfolio</button>
+    <div class="divider"></div>
+    <span class="btn-group-label">NEWS:</span>
+    <button class="news-btn" data-url="https://www.moneycontrol.com">MoneyControl</button>
+    <button class="news-btn" data-url="https://economictimes.indiatimes.com/markets">ET Markets</button>
+    <button class="news-btn" data-url="https://www.livemint.com/market">Mint</button>
+    <button class="news-btn" data-url="https://www.ndtvprofit.com">NDTV Profit</button>
+    <button class="news-btn" data-url="https://inshorts.com/en/read">📱 Inshorts</button>
+    <button class="news-btn" data-url="https://www.reddit.com/r/IndianStockMarket">🤖 Reddit</button>
+    <button class="news-btn" data-url="https://www.youtube.com/@etnow">ET Now YT</button>
+    <button class="news-btn" data-url="https://www.youtube.com/@CNBC-TV18">CNBC-TV18</button>
+    <button class="news-btn" data-url="https://www.nseindia.com">NSE Live</button>
+    <span class="live-badge">🔴 LIVE</span>
+  </div>
+
+  <div class="main">
+    <div class="broker-panel" id="brokerPanel">
+      <div class="loading-bar" id="loadingBar">⏳ Loading...</div>
+      <div class="broker-placeholder" id="placeholder">
+        <h2>📈 Select Broker or News Source</h2>
+        <p style="color:#444; font-size:12px;">Click any button above to open</p>
+      </div>
+    </div>
+
+    <div class="ai-panel">
+      <div class="ai-header">
+        <h3>🤖 AI Intelligence Hub</h3>
+        <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="brain">🧠 Brain</div>
+        <div class="tab" data-tab="govt">🏛️ Govt</div>
+        <div class="tab" data-tab="scanner">📈 Scan</div>
+        <div class="tab" data-tab="markets">📊 Mkt</div>
+        <div class="tab" data-tab="news">📰 News</div>
+        <div class="tab" data-tab="tv">📺 TV</div>
+        <div class="tab" data-tab="reddit">🤖 Rdt</div>
+        <div class="tab" data-tab="stats">📊 Stats</div>
+        <div class="tab" data-tab="history">📜 Hist</div>
+      </div>
+
+      <div class="tab-content active" id="tab-brain"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-govt"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-scanner"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-markets"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-news"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-tv"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-reddit"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-stats"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-history"><div class="loading">⏳ Loading...</div></div>
+
+      <div class="ask-bar">
+        <select id="aiModel" style="background:#1a1a1a;border:1px solid #333;color:#ccc;padding:6px 8px;border-radius:5px;font-size:11px;cursor:pointer;">
+          <option value="ask_basic">⚡ Gemini (Free)</option>
+          <option value="ask_haiku">💨 Haiku</option>
+          <option value="ask_deep">🧠 Sonnet</option>
+        </select>
+        <input class="ask-input" id="askInput" placeholder="Ask anything..."/>
+        <button class="ask-btn" id="askBtn">Ask</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prediction Detail Modal -->
+  <div class="pred-detail-overlay" id="predDetailOverlay"></div>
+  <div class="pred-detail-modal" id="predDetailModal">
+    <button class="pred-detail-close" id="predDetailClose">✕</button>
+    <div id="predDetailContent"></div>
+  </div>
+
+  <script>
+  const fs = require('fs')
+  const path = require('path')
+  const dotenv = require('dotenv')
+  const { spawn } = require('child_process')
+
+  const envPath = path.join(__dirname, 'config', 'keys.env')
+  dotenv.config({ path: envPath })
+
+  const dataDir = path.join(__dirname, 'data')
+  const files = {
+    intelligence: path.join(dataDir, 'unified_intelligence.json'),
+    indiaMarket: path.join(dataDir, 'latest_market_data.json'),
+    globalMarket: path.join(dataDir, 'global_markets.json'),
+    news: path.join(dataDir, 'news_feed.json'),
+    youtube: path.join(dataDir, 'youtube_feed.json'),
+    govt: path.join(dataDir, 'govt_intelligence.json'),
+    inshorts: path.join(dataDir, 'inshorts_feed.json'),
+    reddit: path.join(dataDir, 'reddit_data.json'),
+    scanner: path.join(dataDir, 'scanner_data.json'),
+    stats: path.join(dataDir, 'stats_data.json'),
+    history: path.join(dataDir, 'history_data.json'),
+  }
+
+  // Persistent chat
+  const CHAT_STORAGE_KEY = 'tradingcopilot_chat_history'
+  const MAX_CHAT_MESSAGES = 50
+
+  function getTodayKey() {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+  function loadChatHistory() {
+    try {
+      const stored = localStorage.getItem(CHAT_STORAGE_KEY)
+      if (!stored) return []
+      const data = JSON.parse(stored)
+      if (data.date !== getTodayKey()) {
+        localStorage.removeItem(CHAT_STORAGE_KEY)
+        return []
+      }
+      return data.messages || []
+    } catch (e) { return [] }
+  }
+  function saveChatHistory(messages) {
+    try {
+      const trimmed = messages.slice(-MAX_CHAT_MESSAGES)
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({ date: getTodayKey(), messages: trimmed }))
+    } catch (e) { console.error('Chat save failed:', e) }
+  }
+  function addChatMessage(role, content, model) {
+    const messages = loadChatHistory()
+    const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+    messages.push({ role, content, model: model || '', time, ts: Date.now() })
+    saveChatHistory(messages)
+    return messages
+  }
+  function renderChatHistory(container) {
+    if (!container) return
+    const existing = container.querySelector('.chat-history-block')
+    if (existing) existing.remove()
+    const messages = loadChatHistory()
+    if (messages.length === 0) return
+    let html = '<div class="chat-history-block">'
+    html += '<div class="chat-history-header">'
+    html += `💬 Chat History (${messages.length})`
+    html += '<button class="clear-chat-btn" id="clearChatBtn">🗑️ Clear</button>'
+    html += '</div>'
+    messages.forEach(msg => {
+      if (msg.role === 'user') {
+        html += `<div class="chat-msg-user"><div class="chat-msg-meta">YOU [${escapeHtml(msg.model || '')}] • ${msg.time}</div><div class="chat-msg-content">${escapeHtml(msg.content)}</div></div>`
+      } else {
+        html += `<div class="chat-msg-ai"><div class="chat-msg-meta">${escapeHtml(msg.model || 'AI')} • ${msg.time}</div><div class="chat-msg-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div></div>`
+      }
+    })
+    html += '</div>'
+    container.insertAdjacentHTML('beforeend', html)
+    const clearBtn = document.getElementById('clearChatBtn')
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (confirm('Clear all chat history for today?')) {
+          localStorage.removeItem(CHAT_STORAGE_KEY)
+          refreshAll()
+        }
+      })
+    }
+  }
+
+  function openInPanel(url) {
+    const panel = document.getElementById('brokerPanel')
+    const ph = document.getElementById('placeholder')
+    if (ph) ph.style.display = 'none'
+    const existing = panel.querySelector('webview')
+    if (existing) existing.remove()
+    const wv = document.createElement('webview')
+    wv.src = url
+    wv.setAttribute('partition', 'persist:tradingcopilot')
+    wv.setAttribute('allowpopups', 'true')
+    wv.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    panel.appendChild(wv)
+  }
+
+  function loadSite(url, btn) {
+    const loadingBar = document.getElementById('loadingBar')
+    loadingBar.classList.add('active')
+    loadingBar.innerText = '⏳ Loading ' + url + ' ...'
+    openInPanel(url)
+    document.querySelectorAll('.broker-btn, .news-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    setTimeout(() => loadingBar.classList.remove('active'), 3000)
+  }
+
+  document.querySelectorAll('.broker-btn, .news-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadSite(btn.dataset.url, btn))
+  })
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+      tab.classList.add('active')
+      const container = document.getElementById('tab-' + target)
+      container.classList.add('active')
+      setTimeout(() => renderChatHistory(container), 50)
+    })
+  })
+
+  function loadJson(filePath) {
+    try {
+      if (!fs.existsSync(filePath)) return null
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    } catch (e) { return null }
+  }
+
+  function escapeHtml(text) {
+    if (!text) return ''
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+
+  function formatTime(iso) {
+    if (!iso) return ''
+    try { return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) }
+    catch { return '' }
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return ''
+    try {
+      const d = new Date(dateStr)
+      return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+    } catch { return dateStr }
+  }
+
+  function formatBrainText(text) {
+    return escapeHtml(text)
+      .replace(/^#{1,3} (.+)$/gm, '<div style="color:#00ff88;font-weight:bold;font-size:12px;margin:10px 0 4px 0;text-transform:uppercase;letter-spacing:0.5px;">$1</div>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/---/g, '<hr style="border-color:#222;margin:8px 0">')
+  }
+
+  function loadBrain() {
+    const data = loadJson(files.intelligence)
+    const container = document.getElementById('tab-brain')
+    if (!data) {
+      container.innerHTML = `<div class="loading">⏳ Run: <code style="color:#00ff88">python master_scheduler.py</code></div>`
+      return
+    }
+    const analysis = data.analysis || ''
+    const ts = formatTime(data.timestamp)
+    const convictionMatch = analysis.match(/Overall conviction[:\s]+(\d+)\/10/i)
+    const conviction = convictionMatch ? parseInt(convictionMatch[1]) : 0
+    const stars = '★'.repeat(Math.round(conviction / 2)) + '☆'.repeat(5 - Math.round(conviction / 2))
+    let html = `<div class="timestamp">Updated: ${ts}</div>`
+    if (conviction > 0) {
+      html += `<div class="conviction-bar"><div class="conviction-label">Overall Conviction</div><div class="conviction-value">${conviction}/10</div><div class="stars">${stars}</div></div>`
+    }
+    html += `<div class="intel-section"><div class="intel-text">${formatBrainText(analysis)}</div></div>`
+    container.innerHTML = html
+  }
+
+  function loadGovt() {
+    const data = loadJson(files.govt)
+    const container = document.getElementById('tab-govt')
+    if (!data) {
+      container.innerHTML = '<div class="loading">⏳ Run: <code style="color:#00ff88">python govt_tracker.py</code></div>'
+      return
+    }
+    let html = `<div class="timestamp">Updated: ${formatTime(data.timestamp)}</div>`
+    html += `<div style="margin-bottom:10px;font-size:11px;">
+      <span class="badge badge-red">🚨 ${data.high_impact_count || 0} HIGH</span>
+      <span class="badge badge-yellow">⚠️ ${data.medium_impact_count || 0} MED</span>
+      <span class="badge badge-green">📋 ${data.analyzed_items || 0} analyzed</span>
+      ${data.total_translated ? `<span class="badge badge-purple">🌐 ${data.total_translated} translated</span>` : ''}
+    </div>`
+
+    const high = data.high_impact_items || []
+    if (high.length > 0) {
+      html += '<div class="region-header">🚨 HIGH-IMPACT ANNOUNCEMENTS</div>'
+      high.slice(0, 8).forEach((item, idx) => {
+        const score = item.impact_score || 0
+        const direction = item.direction || 'NEUTRAL'
+        const dirClass = direction === 'BULLISH' ? 'bullish' : direction === 'BEARISH' ? 'bearish' : 'neutral'
+        const stocks = item.affected_stocks || []
+        const reasons = item.impact_reasons || []
+        const headline = item.english_headline || item.title || ''
+        const relevance = (item.market_relevance || '').toLowerCase()
+        const relClass = relevance.includes('high') ? 'high' : relevance.includes('medium') ? 'medium' : relevance.includes('none') ? 'none' : 'low'
+        const source = item.source || '?'
+        const link = item.link || ''
+        const linkId = `gl_${idx}_${Date.now()}`
+        html += `
+          <div class="govt-item">
+            <div class="govt-item-header">
+              <div>
+                <span class="govt-score ${dirClass}">${score}/10 ${direction}</span>
+                ${item.market_relevance ? `<span class="govt-relevance ${relClass}">${escapeHtml(item.market_relevance)}</span>` : ''}
+              </div>
+              <span class="govt-source">${escapeHtml(source)}</span>
+            </div>
+            <div class="govt-headline">${escapeHtml(headline)}</div>
+            ${reasons.length > 0 ? `<div class="govt-reasons">⚡ ${escapeHtml(reasons.slice(0,4).join(', '))}</div>` : ''}
+            ${stocks.length > 0 ? `<div style="margin-top:6px;">${stocks.slice(0,8).map(s => `<span class="stock-mention">${s}</span>`).join('')}</div>` : ''}
+            ${link ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(link)}">📄 Open Original →</a>` : ''}
+          </div>
+        `
+      })
+    }
+
+    const affected = data.affected_stocks || {}
+    if (Object.keys(affected).length > 0) {
+      html += '<div class="region-header">📊 Stocks with Govt Exposure</div><div style="margin-bottom:10px;">'
+      Object.entries(affected).slice(0, 12).forEach(([stock, count]) => {
+        html += `<span class="stock-mention">${stock} (${count})</span>`
+      })
+      html += '</div>'
+    }
+    if (high.length === 0) {
+      html += '<div class="loading">No major govt announcements detected in last 72 hours</div>'
+    }
+    container.innerHTML = html
+    container.querySelectorAll('.read-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault()
+        const url = link.getAttribute('data-url')
+        if (url) openInPanel(url)
+      })
+    })
+  }
+function loadScanner() {
+    const data = loadJson(files.scanner)
+    const container = document.getElementById('tab-scanner')
+
+    if (!data) {
+      container.innerHTML = `<div class="loading">⏳ Run: <code style="color:#00ff88">python stock_scanner.py</code></div>`
+      return
+    }
+
+    const ts = formatTime(data.last_updated)
+    const totalScanned = data.total_scanned || 0
+    const totalSignals = data.total_signals || 0
+    const universe = data.universe || 'NSE'
+
+    let html = `<div class="timestamp">Updated: ${ts} • ${universe}</div>`
+
+    const summary = data.summary || {}
+    html += `
+      <div class="scanner-stats">
+        <div class="scanner-stat-card">
+          <div class="scanner-stat-label">Stocks Scanned</div>
+          <div class="scanner-stat-value">${totalScanned}</div>
+        </div>
+        <div class="scanner-stat-card">
+          <div class="scanner-stat-label">Total Signals</div>
+          <div class="scanner-stat-value">${totalSignals}</div>
+        </div>
+        <div class="scanner-stat-card">
+          <div class="scanner-stat-label">Volume Spikes</div>
+          <div class="scanner-stat-value yellow">${summary.VOLUME_SPIKE || 0}</div>
+        </div>
+      </div>
+    `
+
+    html += `<div style="margin-bottom:12px;font-size:10px;">`
+    if (summary.BREAKOUT) html += `<span class="badge badge-green">📈 ${summary.BREAKOUT} breakouts</span>`
+    if (summary.BREAKDOWN) html += `<span class="badge badge-red">📉 ${summary.BREAKDOWN} breakdowns</span>`
+    if (summary.GAP_UP) html += `<span class="badge badge-green">⬆ ${summary.GAP_UP} gap-up</span>`
+    if (summary.GAP_DOWN) html += `<span class="badge badge-red">⬇ ${summary.GAP_DOWN} gap-down</span>`
+    if (summary.MAJOR_MOVE) html += `<span class="badge badge-purple">⚡ ${summary.MAJOR_MOVE} major moves</span>`
+    html += `</div>`
+
+    const topSignals = data.top_signals || []
+    const ultraSignals = topSignals.filter(s => s.strength === 'ULTRA')
+    const strongSignals = topSignals.filter(s => s.strength === 'STRONG')
+
+    if (ultraSignals.length > 0) {
+      html += '<div class="region-header">💎 ULTRA SIGNALS (2+ strong stacked)</div>'
+      ultraSignals.slice(0, 8).forEach(s => {
+        html += renderSignalRow(s, 'ultra')
+      })
+    }
+
+    if (strongSignals.length > 0) {
+      html += '<div class="region-header">🔥 STRONG SIGNALS</div>'
+      strongSignals.slice(0, 10).forEach(s => {
+        const cls = s.direction === 'BEARISH' ? 'bearish' : 'strong'
+        html += renderSignalRow(s, cls)
+      })
+    }
+
+    const rotation = data.sector_rotation || []
+    if (rotation.length > 0) {
+      html += '<div class="region-header">🌐 Sector Rotation (Macro Signal)</div>'
+      rotation.slice(0, 12).forEach(r => {
+        const sector = r.sector || '?'
+        const move = r.avg_change_percent || 0
+        const direction = (r.direction || 'NEUTRAL').toLowerCase()
+        const strength = r.strength || '?'
+        const stocks = r.stocks_analyzed || 0
+        const volRatio = r.avg_volume_ratio || 0
+        const moveColor = move >= 0 ? 'green' : 'red'
+        const sign = move >= 0 ? '+' : ''
+        
+        html += `
+          <div class="sector-row ${direction}">
+            <div>
+              <div class="sector-name">${escapeHtml(sector)}</div>
+              <div class="sector-meta">${stocks} stocks • vol ${volRatio.toFixed(1)}x • ${strength}</div>
+            </div>
+            <div class="sector-stats">
+              <span class="sector-move ${moveColor}">${sign}${move.toFixed(2)}%</span>
+            </div>
+          </div>
+        `
+      })
+    }
+
+    const breaks = data.correlation_breaks || []
+    if (breaks.length > 0) {
+      html += '<div class="region-header">🎯 Correlation Breaks (Alpha Opportunities)</div>'
+      html += '<div style="font-size:10px;color:#888;margin-bottom:6px;">Stocks moving opposite to their sector — often idiosyncratic catalysts</div>'
+      breaks.slice(0, 10).forEach(b => {
+        const ticker = b.ticker || '?'
+        const sector = b.sector || '?'
+        const note = b.note || ''
+        const volRatio = b.volume_ratio || 0
+        
+        html += `
+          <div class="corr-break">
+            <div><span class="corr-ticker">${escapeHtml(ticker)}</span> <span style="color:#666;font-size:9px;">(${escapeHtml(sector)})</span></div>
+            <div class="corr-detail">${escapeHtml(note)} • vol ${volRatio.toFixed(1)}x</div>
+          </div>
+        `
+      })
+    }
+
+    const bySignal = data.by_signal || {}
+    
+    if (bySignal.volume_spikes && bySignal.volume_spikes.length > 0) {
+      html += '<div class="region-header">📊 Top Volume Spikes</div>'
+      html += '<div style="font-size:10px;color:#888;margin-bottom:6px;">Often precedes news — institutional accumulation/distribution</div>'
+      bySignal.volume_spikes.slice(0, 8).forEach(s => {
+        html += renderCompactSignal(s)
+      })
+    }
+
+    if (bySignal.breakouts && bySignal.breakouts.length > 0) {
+      html += '<div class="region-header">📈 Top Breakouts (20-day high)</div>'
+      bySignal.breakouts.slice(0, 6).forEach(s => {
+        html += renderCompactSignal(s)
+      })
+    }
+
+    if (bySignal.breakdowns && bySignal.breakdowns.length > 0) {
+      html += '<div class="region-header">📉 Top Breakdowns (20-day low)</div>'
+      bySignal.breakdowns.slice(0, 6).forEach(s => {
+        html += renderCompactSignal(s, true)
+      })
+    }
+
+    if (totalSignals === 0) {
+      html += '<div class="loading">No signals detected — quiet market or scanner not run yet</div>'
+    }
+
+    container.innerHTML = html
+  }
+
+  function renderSignalRow(s, cls) {
+    const ticker = s.ticker || '?'
+    const sector = s.sector || '?'
+    const strength = s.strength || '?'
+    const direction = s.direction || '?'
+    const change = s.change_percent || 0
+    const volRatio = s.volume_ratio || 0
+    const price = s.price || 0
+    const signals = s.signals || []
+    const sign = change >= 0 ? '+' : ''
+    const changeClass = change >= 0 ? 'up' : 'down'
+    const strengthCls = (cls === 'ultra') ? 'ultra' : (direction === 'BEARISH' ? 'bearish' : 'strong')
+
+    return `
+      <div class="signal-row ${cls}">
+        <div class="signal-header">
+          <div>
+            <span class="signal-ticker">${escapeHtml(ticker)}</span>
+            <span class="signal-sector">${escapeHtml(sector)}</span>
+          </div>
+          <span class="signal-strength-pill ${strengthCls}">${strength} • ${direction}</span>
+        </div>
+        <div class="signal-price-row">
+          <span class="signal-price">Rs.${price.toLocaleString('en-IN')}</span>
+          <span class="signal-change ${changeClass}">${sign}${change.toFixed(2)}%</span>
+          <span class="signal-volume">vol ${volRatio.toFixed(1)}x avg</span>
+        </div>
+        <div class="signal-tags">
+          ${signals.map(sig => {
+            let tagCls = ''
+            if (sig.includes('VOLUME')) tagCls = 'volume'
+            else if (sig === 'BREAKOUT') tagCls = 'breakout'
+            else if (sig === 'BREAKDOWN') tagCls = 'breakdown'
+            else if (sig.includes('GAP')) tagCls = 'gap'
+            return `<span class="signal-tag ${tagCls}">${sig}</span>`
+          }).join('')}
+        </div>
+      </div>
+    `
+  }
+
+  function renderCompactSignal(s, bearish = false) {
+    const ticker = s.ticker || '?'
+    const sector = s.sector || '?'
+    const change = s.change_percent || 0
+    const volRatio = s.volume_ratio || 0
+    const price = s.price || 0
+    const sign = change >= 0 ? '+' : ''
+    const changeClass = change >= 0 ? 'up' : 'down'
+
+    return `
+      <div class="sector-row ${bearish ? 'bearish' : (change >= 0 ? 'bullish' : 'bearish')}">
+        <div>
+          <div class="sector-name">${escapeHtml(ticker)} <span style="color:#666;font-size:9px;font-weight:normal;">(${escapeHtml(sector)})</span></div>
+          <div class="sector-meta">Rs.${price.toLocaleString('en-IN')} • vol ${volRatio.toFixed(1)}x</div>
+        </div>
+        <div class="sector-stats">
+          <span class="sector-move ${changeClass === 'up' ? 'green' : 'red'}">${sign}${change.toFixed(2)}%</span>
+        </div>
+      </div>
+    `
+  }
+
+  function loadMarkets() {
+    const data = loadJson(files.globalMarket)
+    const indiaData = loadJson(files.indiaMarket)
+    const container = document.getElementById('tab-markets')
+    if (!data && !indiaData) {
+      container.innerHTML = '<div class="loading">⏳ No market data yet</div>'
+      return
+    }
+    let html = `<div class="timestamp">Updated: ${formatTime(data?.timestamp)}</div>`
+    if (data?.sentiment) {
+      html += '<div class="region-header">🌍 Regional Sentiment</div><div class="market-grid">'
+      for (const [region, info] of Object.entries(data.sentiment)) {
+        const moodColor = info.mood === 'BULLISH' || info.mood === 'POSITIVE' ? 'green' : info.mood === 'BEARISH' || info.mood === 'NEGATIVE' ? 'red' : 'yellow'
+        const avg = info.average_change || info.expected_open || 0
+        const sign = avg >= 0 ? '+' : ''
+        html += `<div class="market-card"><div class="market-card-name">${region.toUpperCase()}</div><div class="market-card-value ${moodColor}">${info.mood}</div><div class="market-card-change ${moodColor}">${sign}${avg.toFixed(2)}%</div></div>`
+      }
+      html += '</div>'
+    }
+    if (indiaData?.prices) {
+      html += '<div class="region-header">🇮🇳 India Watchlist</div><div class="market-grid">'
+      for (const [name, p] of Object.entries(indiaData.prices)) {
+        const isGreen = p.change_percent >= 0
+        html += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">₹${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
+      }
+      html += '</div>'
+    }
+    if (data?.markets) {
+      const showGroups = ['USA_INDICES', 'EUROPE_INDICES', 'ASIA_INDICES']
+      for (const group of showGroups) {
+        if (!data.markets[group]) continue
+        html += `<div class="region-header">${group.replace('_', ' ')}</div><div class="market-grid">`
+        for (const [name, p] of Object.entries(data.markets[group])) {
+          const isGreen = p.change_percent >= 0
+          html += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
+        }
+        html += '</div>'
+      }
+    }
+    if (data?.alerts && data.alerts.length > 0) {
+      html += '<div class="region-header">🚨 Unusual Movements</div>'
+      data.alerts.slice(0, 8).forEach(a => {
+        const badge = a.severity === 'MAJOR' ? 'badge-red' : a.severity === 'SIGNIFICANT' ? 'badge-yellow' : 'badge-green'
+        html += `<div style="font-size:11px;color:#bbb;margin:4px 0;"><span class="badge ${badge}">${a.severity}</span>${escapeHtml(a.name)} ${a.direction} ${Math.abs(a.change_percent).toFixed(2)}%</div>`
+      })
+    }
+    container.innerHTML = html
+  }
+
+  function loadNews() {
+    const newsData = loadJson(files.news)
+    const inshortsData = loadJson(files.inshorts)
+    const container = document.getElementById('tab-news')
+
+    if (!newsData && !inshortsData) {
+      container.innerHTML = '<div class="loading">⏳ No news data yet</div>'
+      return
+    }
+
+    let html = `<div class="timestamp">Updated: ${formatTime(newsData?.timestamp || inshortsData?.timestamp)}</div>`
+
+    const sent = newsData?.sentiment_distribution || {}
+    const isent = inshortsData?.sentiment_distribution || {}
+    const totalPos = (sent.positive || 0) + (isent.positive || 0)
+    const totalNeg = (sent.negative || 0) + (isent.negative || 0)
+    const totalNeu = (sent.neutral || 0) + (isent.neutral || 0)
+
+    html += `<div style="margin-bottom:10px;font-size:11px;">
+      <span class="badge badge-green">+ ${totalPos}</span>
+      <span class="badge badge-red">− ${totalNeg}</span>
+      <span class="badge badge-yellow">○ ${totalNeu}</span>
+    </div>`
+
+    if (newsData?.hot_stocks && newsData.hot_stocks.length > 0) {
+      html += '<div class="region-header">🔥 Hot Stocks</div><div style="margin-bottom:10px;">'
+      newsData.hot_stocks.forEach(h => {
+        const cls = h.velocity === 'HIGH' ? 'hot' : ''
+        html += `<span class="stock-mention ${cls}">${h.stock} (${h.mention_count})</span>`
+      })
+      html += '</div>'
+    }
+
+    if (newsData?.top_stocks) {
+      html += '<div class="region-header">📊 Most Mentioned</div><div style="margin-bottom:10px;">'
+      Object.entries(newsData.top_stocks).slice(0, 12).forEach(([stock, count]) => {
+        html += `<span class="stock-mention">${stock} (${count})</span>`
+      })
+      html += '</div>'
+    }
+
+    if (newsData?.sector_buzz) {
+      html += '<div class="region-header">🏷️ Sector Buzz</div><div style="margin-bottom:10px;">'
+      Object.entries(newsData.sector_buzz).slice(0, 8).forEach(([sector, count]) => {
+        html += `<span class="stock-mention">${sector}: ${count}</span>`
+      })
+      html += '</div>'
+    }
+
+    if (inshortsData?.stories && inshortsData.stories.length > 0) {
+      html += `<div class="region-header">📱 Inshorts (filtered: ${inshortsData.total_stories} stories)</div>`
+      inshortsData.stories.slice(0, 12).forEach((story, idx) => {
+        const sent = story.sentiment || 'neutral'
+        const link = story.source_url || story.shortened_url || ''
+        const ilinkId = `il_${idx}_${Date.now()}`
+        html += `
+          <div class="news-item ${sent}">
+            <div class="news-source">${escapeHtml(story.category || 'INSHORTS')}</div>
+            <div class="news-title">${escapeHtml(story.title || '')}</div>
+            ${link ? `<a class="read-link" id="${ilinkId}" data-url="${escapeHtml(link)}" style="font-size:9px;padding:2px 8px;">📄 Read full →</a>` : ''}
+          </div>
+        `
+      })
+    }
+
+    if (newsData?.articles) {
+      html += '<div class="region-header">📰 Latest Headlines (All Sources)</div>'
+      newsData.articles.slice(0, 25).forEach((a, idx) => {
+        const sent = a.sentiment_label || 'neutral'
+        const link = a.url || ''
+        const nlinkId = `nl_${idx}_${Date.now()}`
+        html += `<div class="news-item ${sent}">
+          <div class="news-source">${escapeHtml(a.source || 'Unknown')}</div>
+          <div class="news-title">${escapeHtml(a.title || '')}</div>
+          ${link ? `<a class="read-link" id="${nlinkId}" data-url="${escapeHtml(link)}" style="font-size:9px;padding:2px 8px;">📄 Read full →</a>` : ''}
+        </div>`
+      })
+    }
+
+    container.innerHTML = html
+    container.querySelectorAll('.read-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault()
+        const url = link.getAttribute('data-url')
+        if (url) openInPanel(url)
+      })
+    })
+  }
+
+  function loadTV() {
+    const data = loadJson(files.youtube)
+    const container = document.getElementById('tab-tv')
+    if (!data) {
+      container.innerHTML = '<div class="loading">⏳ No TV/YouTube data yet</div>'
+      return
+    }
+
+    let html = `<div class="timestamp">Updated: ${formatTime(data.timestamp)} • ${data.total_videos} videos</div>`
+
+    html += `<div style="margin-bottom:10px;font-size:11px;">
+      <span class="badge badge-red">🔴 ${data.live_streams || 0} LIVE</span>
+      <span class="badge badge-yellow">⏰ ${data.recent_videos_3h || 0} recent (3h)</span>
+    </div>`
+
+    if (data.cross_channel_buzz && data.cross_channel_buzz.length > 0) {
+      html += '<div class="region-header">⚡ Cross-Channel Buzz</div>'
+      data.cross_channel_buzz.slice(0, 10).forEach(b => {
+        const badge = b.signal_strength === 'STRONG' ? 'badge-green' : 'badge-yellow'
+        html += `<div style="font-size:11px;color:#bbb;margin:4px 0;"><span class="badge ${badge}">${b.signal_strength}</span><strong style="color:#00ff88;">${b.stock}</strong> on ${b.channel_count} channels</div>`
+      })
+    }
+
+    if (data.live_now && data.live_now.length > 0) {
+      html += '<div class="region-header">🔴 Live Now</div>'
+      data.live_now.slice(0, 6).forEach(v => {
+        html += `<div class="tv-video live"><div class="tv-channel">${escapeHtml(v.channel)} <span class="live-tag">LIVE</span></div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
+      })
+    }
+
+    if (data.stock_mentions && Object.keys(data.stock_mentions).length > 0) {
+      html += '<div class="region-header">📊 Stocks on TV</div><div style="margin-bottom:10px;">'
+      Object.entries(data.stock_mentions).slice(0, 12).forEach(([stock, count]) => {
+        html += `<span class="stock-mention">${stock} (${count})</span>`
+      })
+      html += '</div>'
+    }
+
+    if (data.recent_videos && data.recent_videos.length > 0) {
+      html += '<div class="region-header">📺 Recent Videos (3h)</div>'
+      data.recent_videos.slice(0, 15).forEach(v => {
+        html += `<div class="tv-video"><div class="tv-channel">${escapeHtml(v.channel)}</div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
+      })
+    }
+
+    container.innerHTML = html
+  }
+
+  function loadReddit() {
+    const data = loadJson(files.reddit)
+    const container = document.getElementById('tab-reddit')
+
+    if (!data) {
+      container.innerHTML = `<div class="loading">⏳ Run: <code style="color:#00ff88">python reddit_tracker.py</code></div>`
+      return
+    }
+
+    const ts = formatTime(data.last_updated)
+    const totalPosts = data.total_posts_analyzed || 0
+    const subs = data.subreddits_scanned || []
+
+    let html = `<div class="timestamp">Updated: ${ts} • ${totalPosts} posts • ${subs.length} subs</div>`
+
+    const mood = data.market_mood || {}
+    const moodSent = (mood.sentiment || 'neutral').toLowerCase()
+    const moodConf = mood.confidence || 0
+    const moodSummary = mood.summary || ''
+    const moodThemes = mood.themes || []
+
+    html += `
+      <div class="mood-card">
+        <div class="mood-header">
+          <span class="mood-label">📊 Retail Market Mood</span>
+          <span class="mood-confidence">${moodConf}% confidence</span>
+        </div>
+        <div class="mood-value ${moodSent}">${moodSent.toUpperCase()}</div>
+        ${moodSummary ? `<div class="mood-summary">${escapeHtml(moodSummary)}</div>` : ''}
+        ${moodThemes.length > 0 ? `
+          <div class="mood-themes">
+            ${moodThemes.map(t => `<span class="theme-tag">${escapeHtml(t)}</span>`).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `
+
+    html += `<div style="margin-bottom:10px;font-size:10px;">`
+    subs.forEach(s => {
+      html += `<span class="badge badge-yellow">r/${s}</span>`
+    })
+    html += `</div>`
+
+    const trending = data.trending_tickers || []
+    if (trending.length > 0) {
+      html += '<div class="region-header">🔥 Trending Tickers (Retail Buzz)</div>'
+      trending.slice(0, 12).forEach((t, idx) => {
+        const ticker = t.ticker || '?'
+        const mentions = t.mentions || 0
+        const sent = (t.sentiment || 'neutral').toLowerCase()
+        const score = t.sentiment_score || 0.5
+        const topPost = t.top_post || {}
+        const linkId = `rt_${idx}_${Date.now()}`
+
+        html += `
+          <div class="reddit-ticker ${sent}">
+            <div class="reddit-ticker-header">
+              <div>
+                <span class="reddit-ticker-name">${escapeHtml(ticker)}</span>
+                <span class="reddit-ticker-mentions">• ${mentions} mention${mentions !== 1 ? 's' : ''}</span>
+              </div>
+              <span class="reddit-sent-pill ${sent}">${sent.toUpperCase()} ${score.toFixed(2)}</span>
+            </div>
+            ${topPost.title ? `
+              <div class="reddit-top-post">
+                <div>${escapeHtml(topPost.title)}</div>
+                <div class="reddit-top-post-meta">
+                  <span class="reddit-sub">r/${escapeHtml(topPost.subreddit || '')}</span>
+                  <span class="reddit-stats">↑${topPost.score || 0} • 💬${topPost.comments || 0}</span>
+                  ${topPost.url ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(topPost.url)}" style="font-size:9px;padding:2px 8px;margin-left:auto;">Read →</a>` : ''}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `
+      })
+    }
+
+    const hot = data.hot_discussions || []
+    if (hot.length > 0) {
+      html += '<div class="region-header">💬 Hot Discussions</div>'
+      hot.slice(0, 10).forEach((d, idx) => {
+        const sent = (d.sentiment || 'neutral').toLowerCase()
+        const tickers = d.tickers || []
+        const linkId = `rd_${idx}_${Date.now()}`
+
+        html += `
+          <div class="reddit-discussion ${sent}">
+            <div class="reddit-discussion-title">${escapeHtml(d.title || '')}</div>
+            <div class="reddit-discussion-meta">
+              <span class="reddit-sub">r/${escapeHtml(d.subreddit || '')}</span>
+              <span class="reddit-stats">↑${d.score || 0} • 💬${d.comments || 0}</span>
+              <span class="reddit-sent-pill ${sent}" style="margin-left:auto;">${sent.toUpperCase()}</span>
+            </div>
+            ${tickers.length > 0 ? `
+              <div class="reddit-tickers-inline">
+                ${tickers.slice(0, 5).map(t => `<span class="stock-mention">${escapeHtml(t)}</span>`).join('')}
+              </div>
+            ` : ''}
+            ${d.url ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(d.url)}" style="font-size:9px;padding:2px 8px;margin-top:6px;">Open Reddit →</a>` : ''}
+          </div>
+        `
+      })
+    }
+
+    if (trending.length === 0 && hot.length === 0) {
+      html += '<div class="loading">No Reddit data captured yet. Run reddit_tracker.py</div>'
+    }
+
+    container.innerHTML = html
+
+    container.querySelectorAll('.read-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault()
+        const url = link.getAttribute('data-url')
+        if (url) openInPanel(url)
+      })
+    })
+  }
+
+  function loadStats() {
+    const data = loadJson(files.stats)
+    const container = document.getElementById('tab-stats')
+
+    if (!data) {
+      container.innerHTML = `<div class="empty-stats">
+        <h4>📊 Learning Engine Not Active Yet</h4>
+        <p>Run: <code style="color:#00ff88">python stats_exporter.py</code></p>
+        <p style="margin-top:8px;color:#666;">Or wait for next scheduled run</p>
+      </div>`
+      return
+    }
+
+    const ts = formatTime(data.last_updated)
+    const dbStats = data.db_stats || {}
+    const metrics = data.metrics_all_time || {}
+    const recent = data.recent_predictions || []
+    const winners = data.top_winners || []
+    const losers = data.top_losers || []
+
+    let html = `<div class="timestamp">Updated: ${ts}</div>`
+
+    const totalPreds = dbStats.total_predictions || 0
+    const evaluated = metrics.total_evaluated || 0
+    const winRate = metrics.win_rate || 0
+    const profitFactor = metrics.profit_factor || 0
+    const avgGain = metrics.avg_gain_pct || 0
+
+    html += `
+      <div class="stats-grid-4">
+        <div class="stat-big-card">
+          <div class="stat-big-label">Predictions</div>
+          <div class="stat-big-value blue">${totalPreds}</div>
+          <div class="stat-big-sub">${evaluated} evaluated</div>
+        </div>
+        <div class="stat-big-card">
+          <div class="stat-big-label">Win Rate</div>
+          <div class="stat-big-value ${winRate >= 60 ? 'green' : winRate >= 40 ? 'yellow' : 'red'}">${winRate.toFixed(0)}%</div>
+          <div class="stat-big-sub">${metrics.wins || 0}W / ${metrics.losses || 0}L</div>
+        </div>
+        <div class="stat-big-card">
+          <div class="stat-big-label">Avg Gain</div>
+          <div class="stat-big-value green">+${avgGain.toFixed(1)}%</div>
+          <div class="stat-big-sub">when winning</div>
+        </div>
+        <div class="stat-big-card">
+          <div class="stat-big-label">Profit Factor</div>
+          <div class="stat-big-value ${profitFactor >= 2 ? 'green' : profitFactor >= 1 ? 'yellow' : 'red'}">${profitFactor.toFixed(2)}</div>
+          <div class="stat-big-sub">gain ÷ loss</div>
+        </div>
+      </div>
+    `
+
+    if (evaluated === 0) {
+      html += `
+        <div class="empty-stats" style="background:#1a1a2e;border-radius:6px;padding:14px;margin-bottom:14px;">
+          <h4>⏳ Collecting Track Record...</h4>
+          <p style="font-size:11px;line-height:1.5;color:#ccc;">
+            Your AI made <strong>${totalPreds}</strong> predictions. 
+            Outcomes will be evaluated starting <strong>tomorrow at 8 AM</strong>.
+          </p>
+        </div>
+      `
+    }
+
+    container.innerHTML = html
+  }
+
+  // ============================================================
+  // HISTORY TAB (NEW)
+  // ============================================================
+  
+  let currentPeriod = '7d'  // Default
+
+  function loadHistory() {
+    const data = loadJson(files.history)
+    const container = document.getElementById('tab-history')
+
+    if (!data) {
+      container.innerHTML = `<div class="empty-stats">
+        <h4>📜 No History Data Yet</h4>
+        <p>Run: <code style="color:#00ff88">python history_exporter.py</code></p>
+        <p style="margin-top:8px;color:#666;">Or wait for next scheduled run</p>
+      </div>`
+      return
+    }
+
+    const ts = formatTime(data.last_updated)
+    const totalInDb = data.total_in_db || {}
+
+    // Period selector buttons
+    let html = `<div class="timestamp">Updated: ${ts}</div>`
+    
+    html += `
+      <div class="period-selector">
+        <button class="period-btn ${currentPeriod === '1d' ? 'active' : ''}" data-period="1d">Today</button>
+        <button class="period-btn ${currentPeriod === '7d' ? 'active' : ''}" data-period="7d">7 Days</button>
+        <button class="period-btn ${currentPeriod === '15d' ? 'active' : ''}" data-period="15d">15 Days</button>
+        <button class="period-btn ${currentPeriod === '30d' ? 'active' : ''}" data-period="30d">30 Days</button>
+      </div>
+    `
+
+    const periods = data.periods || {}
+    const period = periods[currentPeriod] || { stats: {}, top_winners: [], top_losers: [], timeline: [] }
+    const stats = period.stats || {}
+
+    // Summary card
+    const total = stats.total || 0
+    const wins = stats.wins || 0
+    const losses = stats.losses || 0
+    const neutral = stats.neutral || 0
+    const pending = stats.pending || 0
+    const winRate = stats.win_rate || 0
+    const evaluated = stats.evaluated || 0
+
+    html += `
+      <div class="history-summary-card">
+        <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">Period: ${currentPeriod === '1d' ? 'Today' : 'Last ' + currentPeriod}</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+          <div style="text-align:center;">
+            <div style="font-size:9px;color:#666;">TOTAL</div>
+            <div style="font-size:18px;font-weight:bold;color:#88ccff;">${total}</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:9px;color:#666;">WINS</div>
+            <div style="font-size:18px;font-weight:bold;color:#00ff88;">${wins}</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:9px;color:#666;">LOSSES</div>
+            <div style="font-size:18px;font-weight:bold;color:#ff4444;">${losses}</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:9px;color:#666;">PENDING</div>
+            <div style="font-size:18px;font-weight:bold;color:#ffaa00;">${pending}</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:9px;color:#666;">WIN RATE</div>
+            <div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00ff88' : winRate >= 40 ? '#ffaa00' : '#ff4444'};">${winRate.toFixed(0)}%</div>
+          </div>
+        </div>
+        ${evaluated === 0 ? `
+          <div style="font-size:10px;color:#888;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid #222;">
+            ⏳ Outcomes evaluate after 1+ day. Wait for tomorrow's 8 AM run for first WIN/LOSS data.
+          </div>
+        ` : ''}
+      </div>
+    `
+
+    // Top Winners
+    const winners = period.top_winners || []
+    if (winners.length > 0) {
+      html += '<div class="region-header">🏆 Top Winners</div>'
+      winners.slice(0, 5).forEach(w => {
+        const ticker = w.ticker || '?'
+        const sector = w.sector || '?'
+        const gain = w.max_gain_pct || w.change_7d_pct || w.change_3d_pct || w.change_1d_pct || 0
+        const conf = w.confidence || 'MEDIUM'
+        const date = w.prediction_date || ''
+        html += `
+          <div class="winner-row">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <span class="pred-ticker">${escapeHtml(ticker)}</span>
+                <span style="font-size:9px;color:#888;margin-left:6px;">${escapeHtml(sector)}</span>
+              </div>
+              <span style="font-size:13px;font-weight:bold;color:#00ff88;">+${gain.toFixed(2)}%</span>
+            </div>
+            <div class="pred-meta">${conf} conf • ${date}</div>
+          </div>
+        `
+      })
+    }
+
+    // Top Losers
+    const losers = period.top_losers || []
+    if (losers.length > 0) {
+      html += '<div class="region-header">📉 Top Losers (Lessons)</div>'
+      losers.slice(0, 5).forEach(l => {
+        const ticker = l.ticker || '?'
+        const sector = l.sector || '?'
+        const loss = l.max_loss_pct || l.change_7d_pct || l.change_3d_pct || l.change_1d_pct || 0
+        const conf = l.confidence || 'MEDIUM'
+        const date = l.prediction_date || ''
+        html += `
+          <div class="loser-row">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <span class="pred-ticker">${escapeHtml(ticker)}</span>
+                <span style="font-size:9px;color:#888;margin-left:6px;">${escapeHtml(sector)}</span>
+              </div>
+              <span style="font-size:13px;font-weight:bold;color:#ff4444;">${loss.toFixed(2)}%</span>
+            </div>
+            <div class="pred-meta">${conf} conf • ${date}</div>
+          </div>
+        `
+      })
+    }
+
+    // Daily Timeline
+    const timeline = period.timeline || []
+    if (timeline.length > 0) {
+      html += '<div class="region-header">📅 Daily Timeline</div>'
+      timeline.forEach(day => {
+        const date = day.date || 'Unknown'
+        const dayStats = day.stats || {}
+        const dayPreds = day.predictions || []
+        const dayWins = dayStats.wins || 0
+        const dayLosses = dayStats.losses || 0
+        const dayPending = dayStats.pending || 0
+        const dayTotal = dayStats.total || 0
+        const dayWinRate = dayStats.win_rate || 0
+        const dayEvaluated = dayStats.evaluated || 0
+        
+        let pillClass = 'pending'
+        let pillText = `${dayPending} pending`
+        if (dayEvaluated > 0) {
+          if (dayWinRate >= 60) pillClass = 'high'
+          else if (dayWinRate >= 40) pillClass = 'medium'
+          else pillClass = 'low'
+          pillText = `${dayWinRate.toFixed(0)}% accuracy`
+        }
+        
+        html += `
+          <div class="day-section">
+            <div class="day-header">
+              <div class="day-date">${formatDate(date)} (${date})</div>
+              <div class="day-stats">
+                ${dayTotal} predictions
+                <span class="win-rate-pill ${pillClass}">${pillText}</span>
+              </div>
+            </div>
+        `
+        
+        if (dayPreds.length === 0) {
+          html += '<div class="history-empty-day">No predictions on this day</div>'
+        } else {
+          dayPreds.forEach((p, idx) => {
+            const ticker = p.ticker || '?'
+            const sector = p.sector || '?'
+            const cat = p.category || 'opportunity'
+            const rec = p.recommendation || ''
+            const conf = p.confidence || 'MEDIUM'
+            const verdict = (p.verdict || 'PENDING').toUpperCase()
+            const verdictLower = verdict.toLowerCase()
+            const entry = p.entry_price
+            const target = p.target_price
+            const stop = p.stop_loss
+            
+            const change = p.change_7d_pct ?? p.change_3d_pct ?? p.change_1d_pct
+            const evaluated = verdict !== 'PENDING'
+            const cardClass = `pred-card-history ${cat}${evaluated ? ' evaluated ' + verdictLower : ''}`
+            
+            let changeDisplay = ''
+            let changeClass = 'pending'
+            if (change !== null && change !== undefined) {
+              const sign = change >= 0 ? '+' : ''
+              changeDisplay = `${sign}${change.toFixed(2)}%`
+              changeClass = change >= 2 ? 'up' : change <= -2 ? 'down' : 'neutral'
+            } else {
+              changeDisplay = '⏳ Pending'
+            }
+            
+            // Encode prediction data for modal
+            const predDataJson = encodeURIComponent(JSON.stringify(p))
+            
+            html += `
+              <div class="${cardClass}" data-pred='${predDataJson}'>
+                <div class="pred-card-row">
+                  <div class="pred-card-left">
+                    <div>
+                      <span class="pred-card-ticker">${escapeHtml(ticker)}</span>
+                      <span class="pred-card-rec">${escapeHtml(rec)}</span>
+                      <span class="verdict-pill ${verdictLower}" style="margin-left:6px;">${verdict}</span>
+                    </div>
+                    <div class="pred-card-meta-line">${escapeHtml(sector)} • ${conf} conf</div>
+                    ${entry ? `<div class="pred-card-prices">Entry: Rs.${entry}${target ? ' • Target: Rs.' + target : ''}${stop ? ' • SL: Rs.' + stop : ''}</div>` : ''}
+                  </div>
+                  <div class="pred-card-right">
+                    <div class="pred-card-change ${changeClass}">${changeDisplay}</div>
+                    <div style="font-size:9px;color:#666;">click for details</div>
+                  </div>
+                </div>
+              </div>
+            `
+          })
+        }
+        
+        html += `</div>`
+      })
+    } else {
+      html += '<div class="loading">No predictions in this period</div>'
+    }
+
+    // DB info footer
+    html += `<div style="font-size:9px;color:#444;text-align:center;margin-top:20px;padding-top:10px;border-top:1px solid #222;">
+      DB: ${totalInDb.predictions || 0} predictions • ${totalInDb.signals || 0} signals • ${totalInDb.snapshots || 0} snapshots
+    </div>`
+
+    container.innerHTML = html
+
+    // Period button click handlers
+    container.querySelectorAll('.period-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentPeriod = btn.dataset.period
+        loadHistory()
+      })
+    })
+
+    // Prediction card click handlers (open modal)
+    container.querySelectorAll('.pred-card-history').forEach(card => {
+      card.addEventListener('click', () => {
+        try {
+          const predJson = card.getAttribute('data-pred')
+          const pred = JSON.parse(decodeURIComponent(predJson))
+          showPredictionDetail(pred)
+        } catch (e) {
+          console.error('Failed to show prediction detail:', e)
+        }
+      })
+    })
+  }
+
+  function showPredictionDetail(p) {
+    const overlay = document.getElementById('predDetailOverlay')
+    const modal = document.getElementById('predDetailModal')
+    const content = document.getElementById('predDetailContent')
+
+    const ticker = p.ticker || '?'
+    const sector = p.sector || '?'
+    const cat = p.category || 'opportunity'
+    const rec = p.recommendation || ''
+    const conf = p.confidence || 'MEDIUM'
+    const verdict = (p.verdict || 'PENDING').toUpperCase()
+    const date = p.prediction_date || ''
+    const entry = p.entry_price
+    const target = p.target_price
+    const stop = p.stop_loss
+    const reasoning = p.reasoning || ''
+    const cross = p.cross_validation || ''
+    const conviction = p.overall_conviction || 0
+    
+    const change_1d = p.change_1d_pct
+    const change_3d = p.change_3d_pct
+    const change_7d = p.change_7d_pct
+    const max_gain = p.max_gain_pct
+    const max_loss = p.max_loss_pct
+
+    let html = `
+      <div class="pred-detail-title">${escapeHtml(ticker)}</div>
+      <div class="pred-detail-subtitle">
+        ${escapeHtml(sector)} • ${escapeHtml(cat.toUpperCase())} • ${escapeHtml(rec)} • ${conf} conf • Predicted ${date}
+        <span class="verdict-pill ${verdict.toLowerCase()}" style="margin-left:8px;">${verdict}</span>
+      </div>
+    `
+
+    // Price targets
+    if (entry || target || stop) {
+      html += '<div class="pred-detail-section"><div class="pred-detail-label">📊 Price Targets</div>'
+      html += '<div class="pred-detail-grid">'
+      if (entry) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Entry</div><div class="pred-detail-cell-value">Rs.${entry}</div></div>`
+      if (target) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Target</div><div class="pred-detail-cell-value green">Rs.${target}</div></div>`
+      if (stop) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Stop Loss</div><div class="pred-detail-cell-value red">Rs.${stop}</div></div>`
+      html += '</div></div>'
+    }
+
+    // Outcome data
+    if (change_1d !== null || change_3d !== null || change_7d !== null) {
+      html += '<div class="pred-detail-section"><div class="pred-detail-label">📈 Actual Performance</div>'
+      html += '<div class="pred-detail-grid">'
+      if (change_1d !== null && change_1d !== undefined) {
+        const c = change_1d >= 0 ? 'green' : 'red'
+        const s = change_1d >= 0 ? '+' : ''
+        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">1 Day</div><div class="pred-detail-cell-value ${c}">${s}${change_1d.toFixed(2)}%</div></div>`
+      }
+      if (change_3d !== null && change_3d !== undefined) {
+        const c = change_3d >= 0 ? 'green' : 'red'
+        const s = change_3d >= 0 ? '+' : ''
+        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">3 Days</div><div class="pred-detail-cell-value ${c}">${s}${change_3d.toFixed(2)}%</div></div>`
+      }
+      if (change_7d !== null && change_7d !== undefined) {
+        const c = change_7d >= 0 ? 'green' : 'red'
+        const s = change_7d >= 0 ? '+' : ''
+        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">7 Days</div><div class="pred-detail-cell-value ${c}">${s}${change_7d.toFixed(2)}%</div></div>`
+      }
+      if (max_gain !== null && max_gain !== undefined) {
+        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Max Gain</div><div class="pred-detail-cell-value green">+${max_gain.toFixed(2)}%</div></div>`
+      }
+      if (max_loss !== null && max_loss !== undefined) {
+        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Max Loss</div><div class="pred-detail-cell-value red">${max_loss.toFixed(2)}%</div></div>`
+      }
+      html += '</div></div>'
+    } else {
+      html += `<div class="pred-detail-section"><div class="pred-detail-label">📈 Actual Performance</div><div class="pred-detail-value" style="color:#888;font-style:italic;">⏳ Pending — outcomes evaluate after 1+ trading day</div></div>`
+    }
+
+    // Reasoning
+    if (reasoning) {
+      html += `<div class="pred-detail-section"><div class="pred-detail-label">💡 AI Reasoning</div><div class="pred-detail-value">${escapeHtml(reasoning)}</div></div>`
+    }
+
+    // Cross validation
+    if (cross) {
+      html += `<div class="pred-detail-section"><div class="pred-detail-label">🔗 Cross-Validation</div><div class="pred-detail-value">${escapeHtml(cross)}</div></div>`
+    }
+
+    // Conviction
+    if (conviction) {
+      html += `<div class="pred-detail-section"><div class="pred-detail-label">🎯 Overall Conviction</div><div class="pred-detail-value"><strong>${conviction}/10</strong></div></div>`
+    }
+
+    content.innerHTML = html
+    overlay.classList.add('active')
+    modal.classList.add('active')
+  }
+
+  document.getElementById('predDetailClose').addEventListener('click', () => {
+    document.getElementById('predDetailOverlay').classList.remove('active')
+    document.getElementById('predDetailModal').classList.remove('active')
+  })
+  document.getElementById('predDetailOverlay').addEventListener('click', () => {
+    document.getElementById('predDetailOverlay').classList.remove('active')
+    document.getElementById('predDetailModal').classList.remove('active')
+  })
+
+  // ============================================================
+  // ASK AI
+  // ============================================================
+  async function askClaude() {
+    const input = document.getElementById('askInput')
+    const askBtn = document.getElementById('askBtn')
+    const question = input.value.trim()
+    if (!question) return
+
+    input.value = ''
+    askBtn.disabled = true
+    askBtn.innerText = '...'
+
+    const aiModel = document.getElementById('aiModel').value
+    const modelLabel = aiModel === 'ask_basic' ? 'Gemini' : aiModel === 'ask_haiku' ? 'Haiku' : 'Sonnet'
+
+    let context = ''
+    const intel = loadJson(files.intelligence)
+    if (intel?.analysis) context += 'Latest intelligence:\n' + intel.analysis.substring(0, 2000)
+
+    const activeTab = document.querySelector('.tab.active').dataset.tab
+    const container = document.getElementById('tab-' + activeTab)
+    const qid = 'q' + Date.now()
+
+    addChatMessage('user', question, modelLabel)
+
+    container.insertAdjacentHTML('beforeend', `
+      <div style="padding:8px;background:#1a1a1a;border-radius:5px;border-left:2px solid #00ff88;margin:10px 0 8px 0;">
+        <div style="color:#00ff88;font-size:10px;margin-bottom:4px;">YOU [${modelLabel}]:</div>
+        <div style="font-size:11px;">${escapeHtml(question)}</div>
+      </div>
+      <div id="${qid}" style="padding:8px;background:#0d1a0d;border-radius:5px;border-left:2px solid #004422;font-size:11px;color:#aaa;margin-bottom:10px;">
+        ⏳ Thinking with ${modelLabel}...
+      </div>
+    `)
+    container.scrollTop = container.scrollHeight
+
+    const fs2 = require('fs')
+    const promptText = `You are an Indian stock market expert.\n\nContext:\n${context}\n\nQuestion: ${question}\n\nAnswer in 4-6 lines for Indian retail investor.`
+
+    const promptFile = path.join(__dirname, 'data', '_temp_prompt.txt')
+    fs2.writeFileSync(promptFile, promptText, 'utf8')
+
+    const pyScript = `
+import sys
+sys.path.insert(0, r'${path.join(__dirname, 'backend').replace(/\\/g, '\\\\')}')
+
+with open(r'${promptFile.replace(/\\/g, '\\\\')}', 'r', encoding='utf-8') as f:
+    prompt = f.read()
+
+from ai_router import ask_ai
+result = ask_ai(prompt, use_case='${aiModel}', max_tokens=600)
+if result['success']:
+    print(result['text'])
+else:
+    print('ERROR: ' + str(result.get('error', 'Unknown')))
+`
+
+    const tmpFile = path.join(__dirname, 'data', '_temp_ask.py')
+    fs2.writeFileSync(tmpFile, pyScript, 'utf8')
+
+    const proc = spawn('python', [tmpFile], { encoding: 'utf8' })
+    let output = ''
+    let errors = ''
+
+    proc.stdout.on('data', (data) => { output += data.toString('utf8') })
+    proc.stderr.on('data', (data) => { errors += data.toString('utf8') })
+
+    proc.on('close', () => {
+      try { fs2.unlinkSync(tmpFile) } catch(e){}
+      try { fs2.unlinkSync(promptFile) } catch(e){}
+
+      askBtn.disabled = false
+      askBtn.innerText = 'Ask'
+
+      const responseEl = document.getElementById(qid)
+      if (!responseEl) return
+
+      let displayText = output.trim()
+      if (!displayText && errors) displayText = 'Error: ' + errors.substring(0, 300)
+      if (!displayText) displayText = 'No response received.'
+
+      addChatMessage('assistant', displayText, modelLabel)
+
+      responseEl.innerHTML = `<div style="color:#00ff88;font-size:10px;margin-bottom:4px;">${modelLabel}:</div>${escapeHtml(displayText).replace(/\n/g, '<br>')}`
+      container.scrollTop = container.scrollHeight
+    })
+
+    proc.on('error', (err) => {
+      askBtn.disabled = false
+      askBtn.innerText = 'Ask'
+      const responseEl = document.getElementById(qid)
+      if (responseEl) responseEl.innerHTML = `<div style="color:#ff4444;">❌ ${err.message}</div>`
+    })
+  }
+
+  document.getElementById('askBtn').addEventListener('click', askClaude)
+  document.getElementById('askInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') askClaude()
+  })
+  document.getElementById('refreshBtn').addEventListener('click', refreshAll)
+
+  function refreshAll() {
+    loadBrain()
+    loadGovt()
+    loadScanner()
+    loadMarkets()
+    loadNews()
+    loadTV()
+    loadReddit()
+    loadStats()
+    loadHistory()
+
+    setTimeout(() => {
+      const activeTab = document.querySelector('.tab.active')
+      if (activeTab) {
+        const target = activeTab.dataset.tab
+        const container = document.getElementById('tab-' + target)
+        if (container) renderChatHistory(container)
+      }
+    }, 150)
+  }
+
+  refreshAll()
+  setInterval(refreshAll, 30000)
+  </script>
+</body>
+</html>

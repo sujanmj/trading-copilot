@@ -1,0 +1,17 @@
+{
+  "name": "trading-copilot",
+  "version": "1.0.0",
+  "description": "AI Trading Copilot",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "electron": "^42.0.1",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.0.0"
+  }
+}
