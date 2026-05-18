@@ -1,1 +1,2 @@
-worker: python backend/master_scheduler.py
+web: cd backend && uvicorn api_server:app --host 0.0.0.0 --port $PORT
+worker: cd backend && python master_scheduler.py

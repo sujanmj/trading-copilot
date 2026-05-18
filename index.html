@@ -7,16 +7,20 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; }
     body { font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; display: flex; flex-direction: column; }
-    .topbar { background: #111; border-bottom: 1px solid #222; padding: 8px 15px; display: flex; align-items: center; gap: 8px; height: 50px; flex-shrink: 0; flex-wrap: wrap; }
-    .topbar h1 { font-size: 16px; color: #00ff88; font-weight: 700; margin-right: 10px; }
-    .btn-group-label { font-size: 9px; color: #555; text-transform: uppercase; margin-right: 4px; letter-spacing: 0.5px; }
-    .broker-btn, .news-btn { background: #1a1a2e; border: 1px solid #333; color: #ccc; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 11px; transition: all 0.2s; }
+    .topbar { background: #111; border-bottom: 1px solid #222; padding: 6px 12px; display: flex; align-items: center; gap: 6px; min-height: 50px; flex-shrink: 0; flex-wrap: wrap; }
+    .topbar h1 { font-size: 15px; color: #00ff88; font-weight: 700; margin-right: 8px; }
+    .btn-group-label { font-size: 9px; color: #555; text-transform: uppercase; margin-right: 3px; letter-spacing: 0.5px; }
+    .broker-btn, .news-btn { background: #1a1a2e; border: 1px solid #333; color: #ccc; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; transition: all 0.2s; white-space: nowrap; }
     .broker-btn:hover { background: #00ff88; color: #000; border-color: #00ff88; }
     .news-btn:hover { background: #ffaa00; color: #000; border-color: #ffaa00; }
     .broker-btn.active { background: #00ff88; color: #000; font-weight: bold; }
     .news-btn.active { background: #ffaa00; color: #000; font-weight: bold; }
-    .divider { width: 1px; height: 20px; background: #333; margin: 0 5px; }
-    .live-badge { background: #ff4444; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: auto; animation: pulse 1.5s infinite; }
+    .divider { width: 1px; height: 18px; background: #333; margin: 0 3px; }
+    .right-status { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+    .api-status { font-size: 9px; padding: 2px 7px; border-radius: 8px; }
+    .api-status.connected { background: #0d2a0d; color: #00ff88; }
+    .api-status.disconnected { background: #2a0d0d; color: #ff4444; }
+    .live-badge { background: #ff4444; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
     .main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
     .broker-panel { flex: 0 0 60%; background: #000; border-right: 2px solid #222; position: relative; overflow: hidden; }
@@ -184,14 +188,6 @@
     .loser-row { background: linear-gradient(90deg, #2a0d0d 0%, #111 70%); padding: 8px 10px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #ff4444; }
     .pred-ticker { font-size: 12px; font-weight: bold; color: #fff; }
     .pred-meta { font-size: 9px; color: #888; margin-top: 2px; }
-    .pred-result { float: right; font-size: 12px; font-weight: bold; }
-    .pred-result.win { color: #00ff88; }
-    .pred-result.loss { color: #ff4444; }
-    .breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #0a0a0a; border-radius: 4px; margin-bottom: 3px; font-size: 11px; }
-    .breakdown-name { color: #ccc; }
-    .breakdown-bar { flex: 1; height: 4px; background: #222; border-radius: 2px; margin: 0 10px; overflow: hidden; }
-    .breakdown-fill { height: 100%; background: #00ff88; transition: width 0.3s; }
-    .breakdown-stat { color: #00ff88; font-weight: bold; min-width: 50px; text-align: right; }
     .empty-stats { text-align: center; padding: 30px 20px; color: #555; font-size: 12px; line-height: 1.6; }
     .empty-stats h4 { color: #888; margin-bottom: 10px; font-size: 14px; }
     .verdict-pill { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
@@ -199,16 +195,8 @@
     .verdict-pill.loss { background: #2a0d0d; color: #ff4444; }
     .verdict-pill.neutral { background: #2a200d; color: #ffaa00; }
     .verdict-pill.pending { background: #1a1a2e; color: #888; }
-    .recent-pred-card { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
-    .recent-pred-card.opportunity { border-left-color: #00ff88; }
-    .recent-pred-card.risk { border-left-color: #ff4444; }
-    .recent-pred-card.evaluated.win { background: linear-gradient(90deg, #0d2a0d 0%, #111 80%); }
-    .recent-pred-card.evaluated.loss { background: linear-gradient(90deg, #2a0d0d 0%, #111 80%); }
-    .recent-pred-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-
-    /* === HISTORY TAB STYLES === */
-    .period-selector { display: flex; gap: 4px; margin-bottom: 14px; background: #0a0a0a; padding: 4px; border-radius: 6px; }
-    .period-btn { flex: 1; background: transparent; border: none; color: #888; padding: 8px 6px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s; }
+    .period-selector { display: flex; gap: 3px; margin-bottom: 14px; background: #0a0a0a; padding: 4px; border-radius: 6px; flex-wrap: wrap; }
+    .period-btn { flex: 1; min-width: 80px; background: transparent; border: none; color: #888; padding: 7px 4px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; transition: all 0.2s; }
     .period-btn:hover { background: #1a1a2e; color: #ccc; }
     .period-btn.active { background: #00ff88; color: #000; }
     .day-section { background: #0a0a0a; border-radius: 6px; padding: 10px; margin-bottom: 12px; border: 1px solid #1a1a1a; }
@@ -238,7 +226,7 @@
     .pred-card-change.down { color: #ff4444; }
     .pred-card-change.neutral { color: #ffaa00; }
     .pred-card-change.pending { color: #888; }
-    .pred-detail-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; padding: 20px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; z-index: 1000; box-shadow: 0 0 30px rgba(0,255,136,0.3); border: 1px solid #00ff88; }
+    .pred-detail-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; padding: 20px; border-radius: 10px; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; z-index: 1000; box-shadow: 0 0 30px rgba(0,255,136,0.3); border: 1px solid #00ff88; }
     .pred-detail-modal.active { display: block; }
     .pred-detail-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
     .pred-detail-overlay.active { display: block; }
@@ -253,11 +241,15 @@
     .pred-detail-cell { background: #0a0a0a; padding: 8px 10px; border-radius: 4px; }
     .pred-detail-cell-label { font-size: 9px; color: #666; }
     .pred-detail-cell-value { font-size: 13px; color: #fff; font-weight: bold; margin-top: 2px; }
+    .postmortem-btn { background: linear-gradient(135deg, #cc88ff 0%, #00ff88 100%); color: #000; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; margin-top: 10px; width: 100%; transition: all 0.2s; }
+    .postmortem-btn:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,255,136,0.3); }
+    .postmortem-btn:disabled { background: #444; color: #888; cursor: not-allowed; transform: none; }
+    .postmortem-result { margin-top: 14px; padding: 12px; background: #0a0a0a; border-radius: 6px; border: 1px solid #cc88ff; max-height: 400px; overflow-y: auto; }
+    .postmortem-result h2 { color: #cc88ff; font-size: 13px; margin: 10px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+    .postmortem-result strong { color: #00ff88; }
+    .postmortem-loading { text-align: center; color: #888; padding: 20px; font-style: italic; }
     .history-summary-card { background: linear-gradient(135deg, #1a1a2e 0%, #0d1a0d 100%); border-radius: 8px; padding: 12px; margin-bottom: 14px; border: 1px solid #222; }
     .history-empty-day { text-align: center; padding: 14px; color: #555; font-size: 11px; font-style: italic; }
-    .history-section-collapsible { cursor: pointer; }
-    .history-section-collapsible:after { content: ' ▼'; font-size: 9px; color: #888; }
-    .history-section-collapsible.collapsed:after { content: ' ▶'; }
     .chat-history-block { margin-top: 14px; border-top: 1px dashed #222; padding-top: 12px; }
     .chat-history-header { font-size: 9px; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
     .clear-chat-btn { background: #2a0d0d; color: #ff4444; border: 1px solid #ff4444; padding: 2px 8px; border-radius: 3px; font-size: 9px; cursor: pointer; }
@@ -273,24 +265,27 @@
   <div class="topbar">
     <h1>⚡ Trading Copilot</h1>
     <span class="btn-group-label">BROKERS:</span>
-    <button class="broker-btn" data-url="https://www.angelone.in/login">Angel One</button>
+    <button class="broker-btn" data-url="https://www.angelone.in/login">Angel</button>
     <button class="broker-btn" data-url="https://kite.zerodha.com">Zerodha</button>
     <button class="broker-btn" data-url="https://groww.in/login">Groww</button>
     <button class="broker-btn" data-url="https://login.upstox.com">Upstox</button>
     <button class="broker-btn" data-url="https://www.indmoney.com/login">IndMoney</button>
-    <button class="broker-btn" data-url="https://finance.yahoo.com/portfolios">💼 Yahoo Portfolio</button>
+    <button class="broker-btn" data-url="https://finance.yahoo.com/portfolios">💼 Portfolio</button>
     <div class="divider"></div>
     <span class="btn-group-label">NEWS:</span>
-    <button class="news-btn" data-url="https://www.moneycontrol.com">MoneyControl</button>
-    <button class="news-btn" data-url="https://economictimes.indiatimes.com/markets">ET Markets</button>
+    <button class="news-btn" data-url="https://www.moneycontrol.com">MC</button>
+    <button class="news-btn" data-url="https://economictimes.indiatimes.com/markets">ET</button>
     <button class="news-btn" data-url="https://www.livemint.com/market">Mint</button>
-    <button class="news-btn" data-url="https://www.ndtvprofit.com">NDTV Profit</button>
+    <button class="news-btn" data-url="https://www.ndtvprofit.com">NDTV</button>
     <button class="news-btn" data-url="https://inshorts.com/en/read">📱 Inshorts</button>
     <button class="news-btn" data-url="https://www.reddit.com/r/IndianStockMarket">🤖 Reddit</button>
-    <button class="news-btn" data-url="https://www.youtube.com/@etnow">ET Now YT</button>
-    <button class="news-btn" data-url="https://www.youtube.com/@CNBC-TV18">CNBC-TV18</button>
-    <button class="news-btn" data-url="https://www.nseindia.com">NSE Live</button>
-    <span class="live-badge">🔴 LIVE</span>
+    <button class="news-btn" data-url="https://www.youtube.com/@etnow">ET Now</button>
+    <button class="news-btn" data-url="https://www.youtube.com/@CNBC-TV18">CNBC</button>
+    <button class="news-btn" data-url="https://www.nseindia.com">NSE</button>
+    <div class="right-status">
+      <span class="api-status" id="apiStatus">⏳</span>
+      <span class="live-badge">🔴 LIVE</span>
+    </div>
   </div>
 
   <div class="main">
@@ -342,7 +337,25 @@
     </div>
   </div>
 
-  <!-- Prediction Detail Modal -->
+  <div class="pred-detail-overlay" id="customDateOverlay"></div>
+  <div class="pred-detail-modal" id="customDateModal" style="max-width:400px;">
+    <button class="pred-detail-close" id="customDateClose">✕</button>
+    <div class="pred-detail-title">📅 Custom Date Range</div>
+    <div class="pred-detail-subtitle">Pick start and end dates to see history</div>
+    <div class="pred-detail-section">
+      <div class="pred-detail-label">Start Date</div>
+      <input type="date" id="customStartDate" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:4px;font-size:13px;">
+    </div>
+    <div class="pred-detail-section">
+      <div class="pred-detail-label">End Date</div>
+      <input type="date" id="customEndDate" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:4px;font-size:13px;">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button id="customCancelBtn" style="flex:1;background:#1a1a2e;color:#888;border:1px solid #333;padding:10px;border-radius:5px;cursor:pointer;font-size:12px;">Cancel</button>
+      <button id="customApplyBtn" class="postmortem-btn" style="flex:2;margin-top:0;">Apply</button>
+    </div>
+  </div>
+
   <div class="pred-detail-overlay" id="predDetailOverlay"></div>
   <div class="pred-detail-modal" id="predDetailModal">
     <button class="pred-detail-close" id="predDetailClose">✕</button>
@@ -357,6 +370,34 @@
 
   const envPath = path.join(__dirname, 'config', 'keys.env')
   dotenv.config({ path: envPath })
+
+  // ============================================================
+  // RAILWAY DEPLOYMENT CONFIG
+  // ============================================================
+  const USE_API = true
+  
+  // LOCAL DEV (default):
+  const API_BASE = 'http://localhost:8000'
+  
+  // PRODUCTION (uncomment after Railway deploy):
+  // const API_BASE = 'https://your-app.up.railway.app'
+  
+  const API_KEY = 'ekjj6pa2wDvA1GUBW8XIDZ2Vn9ZpqYu88ftgPkz2Tfc'
+
+  // API headers helper
+  function apiHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'X-API-Key': API_KEY
+    }
+  }
+
+  let apiCache = {
+    intelligence: null, indiaMarket: null, globalMarket: null,
+    news: null, youtube: null, govt: null, inshorts: null,
+    reddit: null, scanner: null, stats: null, history: null,
+    lastFetch: 0, connected: false
+  }
 
   const dataDir = path.join(__dirname, 'data')
   const files = {
@@ -373,7 +414,54 @@
     history: path.join(dataDir, 'history_data.json'),
   }
 
-  // Persistent chat
+  function updateApiStatus(connected) {
+    const el = document.getElementById('apiStatus')
+    if (!el) return
+    if (USE_API) {
+      el.className = 'api-status ' + (connected ? 'connected' : 'disconnected')
+      el.textContent = connected ? '🟢 API' : '🔴 OFF'
+    } else {
+      el.style.display = 'none'
+    }
+  }
+
+  async function fetchAllFromAPI() {
+    try {
+      const response = await fetch(API_BASE + '/api/all', {
+        method: 'GET',
+        headers: apiHeaders()
+      })
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error('❌ API auth failed. Check API_KEY.')
+        }
+        throw new Error(`API ${response.status}`)
+      }
+      const data = await response.json()
+      apiCache.intelligence = data.intelligence
+      apiCache.indiaMarket = data.india
+      apiCache.globalMarket = data.markets
+      apiCache.news = data.news
+      apiCache.youtube = data.youtube
+      apiCache.govt = data.govt
+      apiCache.inshorts = data.inshorts
+      apiCache.reddit = data.reddit
+      apiCache.scanner = data.scanner
+      apiCache.stats = data.stats
+      apiCache.history = data.history
+      apiCache.lastFetch = Date.now()
+      apiCache.connected = true
+      updateApiStatus(true)
+      console.log('✅ API data fetched')
+      return true
+    } catch (e) {
+      console.error('❌ API fetch failed:', e.message)
+      apiCache.connected = false
+      updateApiStatus(false)
+      return false
+    }
+  }
+
   const CHAT_STORAGE_KEY = 'tradingcopilot_chat_history'
   const MAX_CHAT_MESSAGES = 50
 
@@ -397,7 +485,7 @@
     try {
       const trimmed = messages.slice(-MAX_CHAT_MESSAGES)
       localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({ date: getTodayKey(), messages: trimmed }))
-    } catch (e) { console.error('Chat save failed:', e) }
+    } catch (e) {}
   }
   function addChatMessage(role, content, model) {
     const messages = loadChatHistory()
@@ -429,7 +517,7 @@
     const clearBtn = document.getElementById('clearChatBtn')
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
-        if (confirm('Clear all chat history for today?')) {
+        if (confirm('Clear chat history?')) {
           localStorage.removeItem(CHAT_STORAGE_KEY)
           refreshAll()
         }
@@ -454,7 +542,7 @@
   function loadSite(url, btn) {
     const loadingBar = document.getElementById('loadingBar')
     loadingBar.classList.add('active')
-    loadingBar.innerText = '⏳ Loading ' + url + ' ...'
+    loadingBar.innerText = '⏳ Loading...'
     openInPanel(url)
     document.querySelectorAll('.broker-btn, .news-btn').forEach(b => b.classList.remove('active'))
     btn.classList.add('active')
@@ -478,6 +566,12 @@
   })
 
   function loadJson(filePath) {
+    if (USE_API) {
+      for (const [key, fileP] of Object.entries(files)) {
+        if (fileP === filePath) return apiCache[key]
+      }
+      return null
+    }
     try {
       if (!fs.existsSync(filePath)) return null
       return JSON.parse(fs.readFileSync(filePath, 'utf8'))
@@ -510,11 +604,19 @@
       .replace(/---/g, '<hr style="border-color:#222;margin:8px 0">')
   }
 
+  function formatPostMortem(text) {
+    return escapeHtml(text)
+      .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^-\s+(.+)$/gm, '• $1')
+      .replace(/\n/g, '<br>')
+  }
+
   function loadBrain() {
     const data = loadJson(files.intelligence)
     const container = document.getElementById('tab-brain')
     if (!data) {
-      container.innerHTML = `<div class="loading">⏳ Run: <code style="color:#00ff88">python master_scheduler.py</code></div>`
+      container.innerHTML = `<div class="loading">⏳ Run scheduler</div>`
       return
     }
     const analysis = data.analysis || ''
@@ -534,7 +636,7 @@
     const data = loadJson(files.govt)
     const container = document.getElementById('tab-govt')
     if (!data) {
-      container.innerHTML = '<div class="loading">⏳ Run: <code style="color:#00ff88">python govt_tracker.py</code></div>'
+      container.innerHTML = '<div class="loading">⏳ No govt data</div>'
       return
     }
     let html = `<div class="timestamp">Updated: ${formatTime(data.timestamp)}</div>`
@@ -544,7 +646,6 @@
       <span class="badge badge-green">📋 ${data.analyzed_items || 0} analyzed</span>
       ${data.total_translated ? `<span class="badge badge-purple">🌐 ${data.total_translated} translated</span>` : ''}
     </div>`
-
     const high = data.high_impact_items || []
     if (high.length > 0) {
       html += '<div class="region-header">🚨 HIGH-IMPACT ANNOUNCEMENTS</div>'
@@ -577,7 +678,6 @@
         `
       })
     }
-
     const affected = data.affected_stocks || {}
     if (Object.keys(affected).length > 0) {
       html += '<div class="region-header">📊 Stocks with Govt Exposure</div><div style="margin-bottom:10px;">'
@@ -587,7 +687,7 @@
       html += '</div>'
     }
     if (high.length === 0) {
-      html += '<div class="loading">No major govt announcements detected in last 72 hours</div>'
+      html += '<div class="loading">No major govt announcements</div>'
     }
     container.innerHTML = html
     container.querySelectorAll('.read-link').forEach(link => {
@@ -601,19 +701,15 @@
 function loadScanner() {
     const data = loadJson(files.scanner)
     const container = document.getElementById('tab-scanner')
-
     if (!data) {
-      container.innerHTML = `<div class="loading">⏳ Run: <code style="color:#00ff88">python stock_scanner.py</code></div>`
+      container.innerHTML = `<div class="loading">⏳ No scanner data</div>`
       return
     }
-
     const ts = formatTime(data.last_updated)
     const totalScanned = data.total_scanned || 0
     const totalSignals = data.total_signals || 0
     const universe = data.universe || 'NSE'
-
     let html = `<div class="timestamp">Updated: ${ts} • ${universe}</div>`
-
     const summary = data.summary || {}
     html += `
       <div class="scanner-stats">
@@ -631,7 +727,6 @@ function loadScanner() {
         </div>
       </div>
     `
-
     html += `<div style="margin-bottom:12px;font-size:10px;">`
     if (summary.BREAKOUT) html += `<span class="badge badge-green">📈 ${summary.BREAKOUT} breakouts</span>`
     if (summary.BREAKDOWN) html += `<span class="badge badge-red">📉 ${summary.BREAKDOWN} breakdowns</span>`
@@ -639,18 +734,13 @@ function loadScanner() {
     if (summary.GAP_DOWN) html += `<span class="badge badge-red">⬇ ${summary.GAP_DOWN} gap-down</span>`
     if (summary.MAJOR_MOVE) html += `<span class="badge badge-purple">⚡ ${summary.MAJOR_MOVE} major moves</span>`
     html += `</div>`
-
     const topSignals = data.top_signals || []
     const ultraSignals = topSignals.filter(s => s.strength === 'ULTRA')
     const strongSignals = topSignals.filter(s => s.strength === 'STRONG')
-
     if (ultraSignals.length > 0) {
-      html += '<div class="region-header">💎 ULTRA SIGNALS (2+ strong stacked)</div>'
-      ultraSignals.slice(0, 8).forEach(s => {
-        html += renderSignalRow(s, 'ultra')
-      })
+      html += '<div class="region-header">💎 ULTRA SIGNALS</div>'
+      ultraSignals.slice(0, 8).forEach(s => { html += renderSignalRow(s, 'ultra') })
     }
-
     if (strongSignals.length > 0) {
       html += '<div class="region-header">🔥 STRONG SIGNALS</div>'
       strongSignals.slice(0, 10).forEach(s => {
@@ -658,10 +748,9 @@ function loadScanner() {
         html += renderSignalRow(s, cls)
       })
     }
-
     const rotation = data.sector_rotation || []
     if (rotation.length > 0) {
-      html += '<div class="region-header">🌐 Sector Rotation (Macro Signal)</div>'
+      html += '<div class="region-header">🌐 Sector Rotation</div>'
       rotation.slice(0, 12).forEach(r => {
         const sector = r.sector || '?'
         const move = r.avg_change_percent || 0
@@ -671,7 +760,6 @@ function loadScanner() {
         const volRatio = r.avg_volume_ratio || 0
         const moveColor = move >= 0 ? 'green' : 'red'
         const sign = move >= 0 ? '+' : ''
-        
         html += `
           <div class="sector-row ${direction}">
             <div>
@@ -685,17 +773,14 @@ function loadScanner() {
         `
       })
     }
-
     const breaks = data.correlation_breaks || []
     if (breaks.length > 0) {
-      html += '<div class="region-header">🎯 Correlation Breaks (Alpha Opportunities)</div>'
-      html += '<div style="font-size:10px;color:#888;margin-bottom:6px;">Stocks moving opposite to their sector — often idiosyncratic catalysts</div>'
+      html += '<div class="region-header">🎯 Correlation Breaks</div>'
       breaks.slice(0, 10).forEach(b => {
         const ticker = b.ticker || '?'
         const sector = b.sector || '?'
         const note = b.note || ''
         const volRatio = b.volume_ratio || 0
-        
         html += `
           <div class="corr-break">
             <div><span class="corr-ticker">${escapeHtml(ticker)}</span> <span style="color:#666;font-size:9px;">(${escapeHtml(sector)})</span></div>
@@ -704,35 +789,22 @@ function loadScanner() {
         `
       })
     }
-
     const bySignal = data.by_signal || {}
-    
     if (bySignal.volume_spikes && bySignal.volume_spikes.length > 0) {
       html += '<div class="region-header">📊 Top Volume Spikes</div>'
-      html += '<div style="font-size:10px;color:#888;margin-bottom:6px;">Often precedes news — institutional accumulation/distribution</div>'
-      bySignal.volume_spikes.slice(0, 8).forEach(s => {
-        html += renderCompactSignal(s)
-      })
+      bySignal.volume_spikes.slice(0, 8).forEach(s => { html += renderCompactSignal(s) })
     }
-
     if (bySignal.breakouts && bySignal.breakouts.length > 0) {
-      html += '<div class="region-header">📈 Top Breakouts (20-day high)</div>'
-      bySignal.breakouts.slice(0, 6).forEach(s => {
-        html += renderCompactSignal(s)
-      })
+      html += '<div class="region-header">📈 Top Breakouts</div>'
+      bySignal.breakouts.slice(0, 6).forEach(s => { html += renderCompactSignal(s) })
     }
-
     if (bySignal.breakdowns && bySignal.breakdowns.length > 0) {
-      html += '<div class="region-header">📉 Top Breakdowns (20-day low)</div>'
-      bySignal.breakdowns.slice(0, 6).forEach(s => {
-        html += renderCompactSignal(s, true)
-      })
+      html += '<div class="region-header">📉 Top Breakdowns</div>'
+      bySignal.breakdowns.slice(0, 6).forEach(s => { html += renderCompactSignal(s, true) })
     }
-
     if (totalSignals === 0) {
-      html += '<div class="loading">No signals detected — quiet market or scanner not run yet</div>'
+      html += '<div class="loading">No signals detected</div>'
     }
-
     container.innerHTML = html
   }
 
@@ -748,7 +820,6 @@ function loadScanner() {
     const sign = change >= 0 ? '+' : ''
     const changeClass = change >= 0 ? 'up' : 'down'
     const strengthCls = (cls === 'ultra') ? 'ultra' : (direction === 'BEARISH' ? 'bearish' : 'strong')
-
     return `
       <div class="signal-row ${cls}">
         <div class="signal-header">
@@ -785,7 +856,6 @@ function loadScanner() {
     const price = s.price || 0
     const sign = change >= 0 ? '+' : ''
     const changeClass = change >= 0 ? 'up' : 'down'
-
     return `
       <div class="sector-row ${bearish ? 'bearish' : (change >= 0 ? 'bullish' : 'bearish')}">
         <div>
@@ -804,7 +874,7 @@ function loadScanner() {
     const indiaData = loadJson(files.indiaMarket)
     const container = document.getElementById('tab-markets')
     if (!data && !indiaData) {
-      container.innerHTML = '<div class="loading">⏳ No market data yet</div>'
+      container.innerHTML = '<div class="loading">⏳ No market data</div>'
       return
     }
     let html = `<div class="timestamp">Updated: ${formatTime(data?.timestamp)}</div>`
@@ -852,26 +922,21 @@ function loadScanner() {
     const newsData = loadJson(files.news)
     const inshortsData = loadJson(files.inshorts)
     const container = document.getElementById('tab-news')
-
     if (!newsData && !inshortsData) {
-      container.innerHTML = '<div class="loading">⏳ No news data yet</div>'
+      container.innerHTML = '<div class="loading">⏳ No news data</div>'
       return
     }
-
     let html = `<div class="timestamp">Updated: ${formatTime(newsData?.timestamp || inshortsData?.timestamp)}</div>`
-
     const sent = newsData?.sentiment_distribution || {}
     const isent = inshortsData?.sentiment_distribution || {}
     const totalPos = (sent.positive || 0) + (isent.positive || 0)
     const totalNeg = (sent.negative || 0) + (isent.negative || 0)
     const totalNeu = (sent.neutral || 0) + (isent.neutral || 0)
-
     html += `<div style="margin-bottom:10px;font-size:11px;">
       <span class="badge badge-green">+ ${totalPos}</span>
       <span class="badge badge-red">− ${totalNeg}</span>
       <span class="badge badge-yellow">○ ${totalNeu}</span>
     </div>`
-
     if (newsData?.hot_stocks && newsData.hot_stocks.length > 0) {
       html += '<div class="region-header">🔥 Hot Stocks</div><div style="margin-bottom:10px;">'
       newsData.hot_stocks.forEach(h => {
@@ -880,7 +945,6 @@ function loadScanner() {
       })
       html += '</div>'
     }
-
     if (newsData?.top_stocks) {
       html += '<div class="region-header">📊 Most Mentioned</div><div style="margin-bottom:10px;">'
       Object.entries(newsData.top_stocks).slice(0, 12).forEach(([stock, count]) => {
@@ -888,7 +952,6 @@ function loadScanner() {
       })
       html += '</div>'
     }
-
     if (newsData?.sector_buzz) {
       html += '<div class="region-header">🏷️ Sector Buzz</div><div style="margin-bottom:10px;">'
       Object.entries(newsData.sector_buzz).slice(0, 8).forEach(([sector, count]) => {
@@ -896,9 +959,8 @@ function loadScanner() {
       })
       html += '</div>'
     }
-
     if (inshortsData?.stories && inshortsData.stories.length > 0) {
-      html += `<div class="region-header">📱 Inshorts (filtered: ${inshortsData.total_stories} stories)</div>`
+      html += `<div class="region-header">📱 Inshorts (${inshortsData.total_stories})</div>`
       inshortsData.stories.slice(0, 12).forEach((story, idx) => {
         const sent = story.sentiment || 'neutral'
         const link = story.source_url || story.shortened_url || ''
@@ -912,9 +974,8 @@ function loadScanner() {
         `
       })
     }
-
     if (newsData?.articles) {
-      html += '<div class="region-header">📰 Latest Headlines (All Sources)</div>'
+      html += '<div class="region-header">📰 Latest Headlines</div>'
       newsData.articles.slice(0, 25).forEach((a, idx) => {
         const sent = a.sentiment_label || 'neutral'
         const link = a.url || ''
@@ -926,7 +987,6 @@ function loadScanner() {
         </div>`
       })
     }
-
     container.innerHTML = html
     container.querySelectorAll('.read-link').forEach(link => {
       link.addEventListener('click', (e) => {
@@ -941,17 +1001,14 @@ function loadScanner() {
     const data = loadJson(files.youtube)
     const container = document.getElementById('tab-tv')
     if (!data) {
-      container.innerHTML = '<div class="loading">⏳ No TV/YouTube data yet</div>'
+      container.innerHTML = '<div class="loading">⏳ No TV data</div>'
       return
     }
-
     let html = `<div class="timestamp">Updated: ${formatTime(data.timestamp)} • ${data.total_videos} videos</div>`
-
     html += `<div style="margin-bottom:10px;font-size:11px;">
       <span class="badge badge-red">🔴 ${data.live_streams || 0} LIVE</span>
       <span class="badge badge-yellow">⏰ ${data.recent_videos_3h || 0} recent (3h)</span>
     </div>`
-
     if (data.cross_channel_buzz && data.cross_channel_buzz.length > 0) {
       html += '<div class="region-header">⚡ Cross-Channel Buzz</div>'
       data.cross_channel_buzz.slice(0, 10).forEach(b => {
@@ -959,14 +1016,12 @@ function loadScanner() {
         html += `<div style="font-size:11px;color:#bbb;margin:4px 0;"><span class="badge ${badge}">${b.signal_strength}</span><strong style="color:#00ff88;">${b.stock}</strong> on ${b.channel_count} channels</div>`
       })
     }
-
     if (data.live_now && data.live_now.length > 0) {
       html += '<div class="region-header">🔴 Live Now</div>'
       data.live_now.slice(0, 6).forEach(v => {
         html += `<div class="tv-video live"><div class="tv-channel">${escapeHtml(v.channel)} <span class="live-tag">LIVE</span></div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
       })
     }
-
     if (data.stock_mentions && Object.keys(data.stock_mentions).length > 0) {
       html += '<div class="region-header">📊 Stocks on TV</div><div style="margin-bottom:10px;">'
       Object.entries(data.stock_mentions).slice(0, 12).forEach(([stock, count]) => {
@@ -974,38 +1029,31 @@ function loadScanner() {
       })
       html += '</div>'
     }
-
     if (data.recent_videos && data.recent_videos.length > 0) {
       html += '<div class="region-header">📺 Recent Videos (3h)</div>'
       data.recent_videos.slice(0, 15).forEach(v => {
         html += `<div class="tv-video"><div class="tv-channel">${escapeHtml(v.channel)}</div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
       })
     }
-
     container.innerHTML = html
   }
 
   function loadReddit() {
     const data = loadJson(files.reddit)
     const container = document.getElementById('tab-reddit')
-
     if (!data) {
-      container.innerHTML = `<div class="loading">⏳ Run: <code style="color:#00ff88">python reddit_tracker.py</code></div>`
+      container.innerHTML = `<div class="loading">⏳ No reddit data</div>`
       return
     }
-
     const ts = formatTime(data.last_updated)
     const totalPosts = data.total_posts_analyzed || 0
     const subs = data.subreddits_scanned || []
-
     let html = `<div class="timestamp">Updated: ${ts} • ${totalPosts} posts • ${subs.length} subs</div>`
-
     const mood = data.market_mood || {}
     const moodSent = (mood.sentiment || 'neutral').toLowerCase()
     const moodConf = mood.confidence || 0
     const moodSummary = mood.summary || ''
     const moodThemes = mood.themes || []
-
     html += `
       <div class="mood-card">
         <div class="mood-header">
@@ -1014,23 +1062,15 @@ function loadScanner() {
         </div>
         <div class="mood-value ${moodSent}">${moodSent.toUpperCase()}</div>
         ${moodSummary ? `<div class="mood-summary">${escapeHtml(moodSummary)}</div>` : ''}
-        ${moodThemes.length > 0 ? `
-          <div class="mood-themes">
-            ${moodThemes.map(t => `<span class="theme-tag">${escapeHtml(t)}</span>`).join('')}
-          </div>
-        ` : ''}
+        ${moodThemes.length > 0 ? `<div class="mood-themes">${moodThemes.map(t => `<span class="theme-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
       </div>
     `
-
     html += `<div style="margin-bottom:10px;font-size:10px;">`
-    subs.forEach(s => {
-      html += `<span class="badge badge-yellow">r/${s}</span>`
-    })
+    subs.forEach(s => { html += `<span class="badge badge-yellow">r/${s}</span>` })
     html += `</div>`
-
     const trending = data.trending_tickers || []
     if (trending.length > 0) {
-      html += '<div class="region-header">🔥 Trending Tickers (Retail Buzz)</div>'
+      html += '<div class="region-header">🔥 Trending Tickers</div>'
       trending.slice(0, 12).forEach((t, idx) => {
         const ticker = t.ticker || '?'
         const mentions = t.mentions || 0
@@ -1038,7 +1078,6 @@ function loadScanner() {
         const score = t.sentiment_score || 0.5
         const topPost = t.top_post || {}
         const linkId = `rt_${idx}_${Date.now()}`
-
         html += `
           <div class="reddit-ticker ${sent}">
             <div class="reddit-ticker-header">
@@ -1062,7 +1101,6 @@ function loadScanner() {
         `
       })
     }
-
     const hot = data.hot_discussions || []
     if (hot.length > 0) {
       html += '<div class="region-header">💬 Hot Discussions</div>'
@@ -1070,7 +1108,6 @@ function loadScanner() {
         const sent = (d.sentiment || 'neutral').toLowerCase()
         const tickers = d.tickers || []
         const linkId = `rd_${idx}_${Date.now()}`
-
         html += `
           <div class="reddit-discussion ${sent}">
             <div class="reddit-discussion-title">${escapeHtml(d.title || '')}</div>
@@ -1079,23 +1116,16 @@ function loadScanner() {
               <span class="reddit-stats">↑${d.score || 0} • 💬${d.comments || 0}</span>
               <span class="reddit-sent-pill ${sent}" style="margin-left:auto;">${sent.toUpperCase()}</span>
             </div>
-            ${tickers.length > 0 ? `
-              <div class="reddit-tickers-inline">
-                ${tickers.slice(0, 5).map(t => `<span class="stock-mention">${escapeHtml(t)}</span>`).join('')}
-              </div>
-            ` : ''}
+            ${tickers.length > 0 ? `<div class="reddit-tickers-inline">${tickers.slice(0, 5).map(t => `<span class="stock-mention">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
             ${d.url ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(d.url)}" style="font-size:9px;padding:2px 8px;margin-top:6px;">Open Reddit →</a>` : ''}
           </div>
         `
       })
     }
-
     if (trending.length === 0 && hot.length === 0) {
-      html += '<div class="loading">No Reddit data captured yet. Run reddit_tracker.py</div>'
+      html += '<div class="loading">No Reddit data captured yet</div>'
     }
-
     container.innerHTML = html
-
     container.querySelectorAll('.read-link').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault()
@@ -1108,31 +1138,19 @@ function loadScanner() {
   function loadStats() {
     const data = loadJson(files.stats)
     const container = document.getElementById('tab-stats')
-
     if (!data) {
-      container.innerHTML = `<div class="empty-stats">
-        <h4>📊 Learning Engine Not Active Yet</h4>
-        <p>Run: <code style="color:#00ff88">python stats_exporter.py</code></p>
-        <p style="margin-top:8px;color:#666;">Or wait for next scheduled run</p>
-      </div>`
+      container.innerHTML = `<div class="empty-stats"><h4>📊 Learning Engine Not Active</h4></div>`
       return
     }
-
     const ts = formatTime(data.last_updated)
     const dbStats = data.db_stats || {}
     const metrics = data.metrics_all_time || {}
-    const recent = data.recent_predictions || []
-    const winners = data.top_winners || []
-    const losers = data.top_losers || []
-
     let html = `<div class="timestamp">Updated: ${ts}</div>`
-
     const totalPreds = dbStats.total_predictions || 0
     const evaluated = metrics.total_evaluated || 0
     const winRate = metrics.win_rate || 0
     const profitFactor = metrics.profit_factor || 0
     const avgGain = metrics.avg_gain_pct || 0
-
     html += `
       <div class="stats-grid-4">
         <div class="stat-big-card">
@@ -1157,103 +1175,127 @@ function loadScanner() {
         </div>
       </div>
     `
-
     if (evaluated === 0) {
-      html += `
-        <div class="empty-stats" style="background:#1a1a2e;border-radius:6px;padding:14px;margin-bottom:14px;">
-          <h4>⏳ Collecting Track Record...</h4>
-          <p style="font-size:11px;line-height:1.5;color:#ccc;">
-            Your AI made <strong>${totalPreds}</strong> predictions. 
-            Outcomes will be evaluated starting <strong>tomorrow at 8 AM</strong>.
-          </p>
-        </div>
-      `
+      html += `<div class="empty-stats" style="background:#1a1a2e;border-radius:6px;padding:14px;margin-bottom:14px;">
+        <h4>⏳ Collecting Track Record...</h4>
+        <p style="font-size:11px;line-height:1.5;color:#ccc;">Your AI made <strong>${totalPreds}</strong> predictions. Outcomes evaluate at <strong>8 AM daily</strong>.</p>
+      </div>`
     }
-
     container.innerHTML = html
   }
 
   // ============================================================
-  // HISTORY TAB (NEW)
+  // HISTORY TAB - Smart Periods + Custom + Post-Mortem
   // ============================================================
-  
-  let currentPeriod = '7d'  // Default
+  let currentPeriod = 'this_week'
+  let customPeriodData = null
+
+  function openCustomDatePicker() {
+    const modal = document.getElementById('customDateModal')
+    const overlay = document.getElementById('customDateOverlay')
+    const today = new Date()
+    const weekAgo = new Date(today)
+    weekAgo.setDate(today.getDate() - 7)
+    const fmt = d => d.toISOString().split('T')[0]
+    document.getElementById('customStartDate').value = fmt(weekAgo)
+    document.getElementById('customEndDate').value = fmt(today)
+    overlay.classList.add('active')
+    modal.classList.add('active')
+  }
+
+  function closeCustomDatePicker() {
+    document.getElementById('customDateModal').classList.remove('active')
+    document.getElementById('customDateOverlay').classList.remove('active')
+  }
+
+  async function applyCustomDateRange() {
+    const start = document.getElementById('customStartDate').value
+    const end = document.getElementById('customEndDate').value
+    if (!start || !end) {
+      alert('Please select both dates')
+      return
+    }
+    if (start > end) {
+      alert('Start date must be before end date')
+      return
+    }
+    const applyBtn = document.getElementById('customApplyBtn')
+    applyBtn.disabled = true
+    applyBtn.textContent = '⏳ Loading...'
+    try {
+      const response = await fetch(API_BASE + '/api/history/custom', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ start_date: start, end_date: end })
+      })
+      const data = await response.json()
+      if (data.error) {
+        alert('Error: ' + data.error)
+        applyBtn.disabled = false
+        applyBtn.textContent = 'Apply'
+        return
+      }
+      customPeriodData = data
+      currentPeriod = 'custom'
+      closeCustomDatePicker()
+      loadHistory()
+    } catch (e) {
+      alert('Failed to fetch: ' + e.message)
+      applyBtn.disabled = false
+      applyBtn.textContent = 'Apply'
+    }
+  }
 
   function loadHistory() {
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
-
     if (!data) {
-      container.innerHTML = `<div class="empty-stats">
-        <h4>📜 No History Data Yet</h4>
-        <p>Run: <code style="color:#00ff88">python history_exporter.py</code></p>
-        <p style="margin-top:8px;color:#666;">Or wait for next scheduled run</p>
-      </div>`
+      container.innerHTML = `<div class="empty-stats"><h4>📜 No History Data Yet</h4></div>`
       return
     }
-
     const ts = formatTime(data.last_updated)
     const totalInDb = data.total_in_db || {}
-
-    // Period selector buttons
-    let html = `<div class="timestamp">Updated: ${ts}</div>`
-    
+    const todayDate = data.today_date || ''
+    const todayWeekday = data.today_weekday || ''
+    let html = `<div class="timestamp">Updated: ${ts} • ${todayWeekday} ${todayDate}</div>`
     html += `
       <div class="period-selector">
-        <button class="period-btn ${currentPeriod === '1d' ? 'active' : ''}" data-period="1d">Today</button>
-        <button class="period-btn ${currentPeriod === '7d' ? 'active' : ''}" data-period="7d">7 Days</button>
+        <button class="period-btn ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
+        <button class="period-btn ${currentPeriod === 'yesterday' ? 'active' : ''}" data-period="yesterday">Yesterday</button>
+        <button class="period-btn ${currentPeriod === 'this_week' ? 'active' : ''}" data-period="this_week">This Week</button>
+        <button class="period-btn ${currentPeriod === 'last_week' ? 'active' : ''}" data-period="last_week">Last Week</button>
         <button class="period-btn ${currentPeriod === '15d' ? 'active' : ''}" data-period="15d">15 Days</button>
-        <button class="period-btn ${currentPeriod === '30d' ? 'active' : ''}" data-period="30d">30 Days</button>
+        <button class="period-btn ${currentPeriod === 'custom' ? 'active' : ''}" data-period="custom">📅 Custom</button>
       </div>
     `
-
     const periods = data.periods || {}
-    const period = periods[currentPeriod] || { stats: {}, top_winners: [], top_losers: [], timeline: [] }
+    let period
+    if (currentPeriod === 'custom' && customPeriodData) {
+      period = customPeriodData
+    } else {
+      period = periods[currentPeriod] || { stats: {}, top_winners: [], top_losers: [], timeline: [] }
+    }
     const stats = period.stats || {}
-
-    // Summary card
     const total = stats.total || 0
     const wins = stats.wins || 0
     const losses = stats.losses || 0
-    const neutral = stats.neutral || 0
     const pending = stats.pending || 0
     const winRate = stats.win_rate || 0
     const evaluated = stats.evaluated || 0
-
+    const periodLabel = period.label || currentPeriod
     html += `
       <div class="history-summary-card">
-        <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">Period: ${currentPeriod === '1d' ? 'Today' : 'Last ' + currentPeriod}</div>
+        <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">${escapeHtml(periodLabel)}</div>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-          <div style="text-align:center;">
-            <div style="font-size:9px;color:#666;">TOTAL</div>
-            <div style="font-size:18px;font-weight:bold;color:#88ccff;">${total}</div>
-          </div>
-          <div style="text-align:center;">
-            <div style="font-size:9px;color:#666;">WINS</div>
-            <div style="font-size:18px;font-weight:bold;color:#00ff88;">${wins}</div>
-          </div>
-          <div style="text-align:center;">
-            <div style="font-size:9px;color:#666;">LOSSES</div>
-            <div style="font-size:18px;font-weight:bold;color:#ff4444;">${losses}</div>
-          </div>
-          <div style="text-align:center;">
-            <div style="font-size:9px;color:#666;">PENDING</div>
-            <div style="font-size:18px;font-weight:bold;color:#ffaa00;">${pending}</div>
-          </div>
-          <div style="text-align:center;">
-            <div style="font-size:9px;color:#666;">WIN RATE</div>
-            <div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00ff88' : winRate >= 40 ? '#ffaa00' : '#ff4444'};">${winRate.toFixed(0)}%</div>
-          </div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#666;">TOTAL</div><div style="font-size:18px;font-weight:bold;color:#88ccff;">${total}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#666;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00ff88;">${wins}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#666;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#ff4444;">${losses}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#666;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${pending}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#666;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00ff88' : winRate >= 40 ? '#ffaa00' : '#ff4444'};">${winRate.toFixed(0)}%</div></div>
         </div>
-        ${evaluated === 0 ? `
-          <div style="font-size:10px;color:#888;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid #222;">
-            ⏳ Outcomes evaluate after 1+ day. Wait for tomorrow's 8 AM run for first WIN/LOSS data.
-          </div>
-        ` : ''}
+        ${evaluated === 0 ? `<div style="font-size:10px;color:#888;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid #222;">⏳ Outcomes evaluate after 1+ day. Tomorrow 8 AM brings real data.</div>` : ''}
       </div>
     `
-
-    // Top Winners
     const winners = period.top_winners || []
     if (winners.length > 0) {
       html += '<div class="region-header">🏆 Top Winners</div>'
@@ -1277,8 +1319,6 @@ function loadScanner() {
         `
       })
     }
-
-    // Top Losers
     const losers = period.top_losers || []
     if (losers.length > 0) {
       html += '<div class="region-header">📉 Top Losers (Lessons)</div>'
@@ -1302,8 +1342,6 @@ function loadScanner() {
         `
       })
     }
-
-    // Daily Timeline
     const timeline = period.timeline || []
     if (timeline.length > 0) {
       html += '<div class="region-header">📅 Daily Timeline</div>'
@@ -1311,13 +1349,10 @@ function loadScanner() {
         const date = day.date || 'Unknown'
         const dayStats = day.stats || {}
         const dayPreds = day.predictions || []
-        const dayWins = dayStats.wins || 0
-        const dayLosses = dayStats.losses || 0
         const dayPending = dayStats.pending || 0
         const dayTotal = dayStats.total || 0
         const dayWinRate = dayStats.win_rate || 0
         const dayEvaluated = dayStats.evaluated || 0
-        
         let pillClass = 'pending'
         let pillText = `${dayPending} pending`
         if (dayEvaluated > 0) {
@@ -1326,22 +1361,17 @@ function loadScanner() {
           else pillClass = 'low'
           pillText = `${dayWinRate.toFixed(0)}% accuracy`
         }
-        
         html += `
           <div class="day-section">
             <div class="day-header">
               <div class="day-date">${formatDate(date)} (${date})</div>
-              <div class="day-stats">
-                ${dayTotal} predictions
-                <span class="win-rate-pill ${pillClass}">${pillText}</span>
-              </div>
+              <div class="day-stats">${dayTotal} predictions <span class="win-rate-pill ${pillClass}">${pillText}</span></div>
             </div>
         `
-        
         if (dayPreds.length === 0) {
           html += '<div class="history-empty-day">No predictions on this day</div>'
         } else {
-          dayPreds.forEach((p, idx) => {
+          dayPreds.forEach((p) => {
             const ticker = p.ticker || '?'
             const sector = p.sector || '?'
             const cat = p.category || 'opportunity'
@@ -1352,11 +1382,9 @@ function loadScanner() {
             const entry = p.entry_price
             const target = p.target_price
             const stop = p.stop_loss
-            
             const change = p.change_7d_pct ?? p.change_3d_pct ?? p.change_1d_pct
             const evaluated = verdict !== 'PENDING'
             const cardClass = `pred-card-history ${cat}${evaluated ? ' evaluated ' + verdictLower : ''}`
-            
             let changeDisplay = ''
             let changeClass = 'pending'
             if (change !== null && change !== undefined) {
@@ -1366,10 +1394,7 @@ function loadScanner() {
             } else {
               changeDisplay = '⏳ Pending'
             }
-            
-            // Encode prediction data for modal
             const predDataJson = encodeURIComponent(JSON.stringify(p))
-            
             html += `
               <div class="${cardClass}" data-pred='${predDataJson}'>
                 <div class="pred-card-row">
@@ -1391,38 +1416,36 @@ function loadScanner() {
             `
           })
         }
-        
         html += `</div>`
       })
     } else {
       html += '<div class="loading">No predictions in this period</div>'
     }
-
-    // DB info footer
     html += `<div style="font-size:9px;color:#444;text-align:center;margin-top:20px;padding-top:10px;border-top:1px solid #222;">
       DB: ${totalInDb.predictions || 0} predictions • ${totalInDb.signals || 0} signals • ${totalInDb.snapshots || 0} snapshots
     </div>`
-
     container.innerHTML = html
 
-    // Period button click handlers
     container.querySelectorAll('.period-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        currentPeriod = btn.dataset.period
-        loadHistory()
+        const period = btn.dataset.period
+        if (period === 'custom') {
+          openCustomDatePicker()
+        } else {
+          currentPeriod = period
+          customPeriodData = null
+          loadHistory()
+        }
       })
     })
 
-    // Prediction card click handlers (open modal)
     container.querySelectorAll('.pred-card-history').forEach(card => {
       card.addEventListener('click', () => {
         try {
           const predJson = card.getAttribute('data-pred')
           const pred = JSON.parse(decodeURIComponent(predJson))
           showPredictionDetail(pred)
-        } catch (e) {
-          console.error('Failed to show prediction detail:', e)
-        }
+        } catch (e) { console.error('Failed:', e) }
       })
     })
   }
@@ -1431,7 +1454,6 @@ function loadScanner() {
     const overlay = document.getElementById('predDetailOverlay')
     const modal = document.getElementById('predDetailModal')
     const content = document.getElementById('predDetailContent')
-
     const ticker = p.ticker || '?'
     const sector = p.sector || '?'
     const cat = p.category || 'opportunity'
@@ -1445,13 +1467,12 @@ function loadScanner() {
     const reasoning = p.reasoning || ''
     const cross = p.cross_validation || ''
     const conviction = p.overall_conviction || 0
-    
     const change_1d = p.change_1d_pct
     const change_3d = p.change_3d_pct
     const change_7d = p.change_7d_pct
     const max_gain = p.max_gain_pct
     const max_loss = p.max_loss_pct
-
+    const predId = p.id
     let html = `
       <div class="pred-detail-title">${escapeHtml(ticker)}</div>
       <div class="pred-detail-subtitle">
@@ -1459,8 +1480,6 @@ function loadScanner() {
         <span class="verdict-pill ${verdict.toLowerCase()}" style="margin-left:8px;">${verdict}</span>
       </div>
     `
-
-    // Price targets
     if (entry || target || stop) {
       html += '<div class="pred-detail-section"><div class="pred-detail-label">📊 Price Targets</div>'
       html += '<div class="pred-detail-grid">'
@@ -1469,8 +1488,6 @@ function loadScanner() {
       if (stop) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Stop Loss</div><div class="pred-detail-cell-value red">Rs.${stop}</div></div>`
       html += '</div></div>'
     }
-
-    // Outcome data
     if (change_1d !== null || change_3d !== null || change_7d !== null) {
       html += '<div class="pred-detail-section"><div class="pred-detail-label">📈 Actual Performance</div>'
       html += '<div class="pred-detail-grid">'
@@ -1497,27 +1514,60 @@ function loadScanner() {
       }
       html += '</div></div>'
     } else {
-      html += `<div class="pred-detail-section"><div class="pred-detail-label">📈 Actual Performance</div><div class="pred-detail-value" style="color:#888;font-style:italic;">⏳ Pending — outcomes evaluate after 1+ trading day</div></div>`
+      html += `<div class="pred-detail-section"><div class="pred-detail-label">📈 Actual Performance</div><div class="pred-detail-value" style="color:#888;font-style:italic;">⏳ Pending — outcomes evaluate after 1+ day</div></div>`
     }
-
-    // Reasoning
-    if (reasoning) {
-      html += `<div class="pred-detail-section"><div class="pred-detail-label">💡 AI Reasoning</div><div class="pred-detail-value">${escapeHtml(reasoning)}</div></div>`
+    if (reasoning) html += `<div class="pred-detail-section"><div class="pred-detail-label">💡 AI Reasoning</div><div class="pred-detail-value">${escapeHtml(reasoning)}</div></div>`
+    if (cross) html += `<div class="pred-detail-section"><div class="pred-detail-label">🔗 Cross-Validation</div><div class="pred-detail-value">${escapeHtml(cross)}</div></div>`
+    if (conviction) html += `<div class="pred-detail-section"><div class="pred-detail-label">🎯 Overall Conviction</div><div class="pred-detail-value"><strong>${conviction}/10</strong></div></div>`
+    if (verdict !== 'PENDING' && predId) {
+      html += `<button class="postmortem-btn" id="postmortemBtn" data-pred-id="${predId}">🔬 Generate AI Post-Mortem Analysis</button>`
+      html += `<div id="postmortemResult"></div>`
+    } else if (verdict === 'PENDING') {
+      html += `<div style="margin-top:14px;padding:10px;background:#1a1a2e;border-radius:6px;text-align:center;font-size:11px;color:#888;">
+        💡 Post-mortem available after outcome evaluates (tomorrow 8 AM)
+      </div>`
     }
-
-    // Cross validation
-    if (cross) {
-      html += `<div class="pred-detail-section"><div class="pred-detail-label">🔗 Cross-Validation</div><div class="pred-detail-value">${escapeHtml(cross)}</div></div>`
-    }
-
-    // Conviction
-    if (conviction) {
-      html += `<div class="pred-detail-section"><div class="pred-detail-label">🎯 Overall Conviction</div><div class="pred-detail-value"><strong>${conviction}/10</strong></div></div>`
-    }
-
     content.innerHTML = html
     overlay.classList.add('active')
     modal.classList.add('active')
+
+    const pmBtn = document.getElementById('postmortemBtn')
+    if (pmBtn) {
+      pmBtn.addEventListener('click', async () => {
+        const id = pmBtn.getAttribute('data-pred-id')
+        const resultDiv = document.getElementById('postmortemResult')
+        pmBtn.disabled = true
+        pmBtn.textContent = '⏳ Analyzing...'
+        resultDiv.innerHTML = '<div class="postmortem-loading">🤖 AI analyzing this prediction...</div>'
+        try {
+          const response = await fetch(API_BASE + '/api/postmortem', {
+            method: 'POST',
+            headers: apiHeaders(),
+            body: JSON.stringify({ prediction_id: parseInt(id) })
+          })
+          const data = await response.json()
+          if (data.success) {
+            resultDiv.innerHTML = `
+              <div class="postmortem-result">
+                <div style="font-size:9px;color:#888;margin-bottom:8px;">
+                  Model: ${data.model_used} • Cost: $${(data.cost || 0).toFixed(4)}
+                </div>
+                ${formatPostMortem(data.analysis)}
+              </div>
+            `
+            pmBtn.textContent = '✅ Post-Mortem Generated'
+          } else {
+            resultDiv.innerHTML = `<div class="postmortem-result" style="color:#ff4444;">❌ ${escapeHtml(data.error || 'Failed')}</div>`
+            pmBtn.disabled = false
+            pmBtn.textContent = '🔬 Try Again'
+          }
+        } catch (e) {
+          resultDiv.innerHTML = `<div class="postmortem-result" style="color:#ff4444;">❌ ${escapeHtml(e.message)}</div>`
+          pmBtn.disabled = false
+          pmBtn.textContent = '🔬 Try Again'
+        }
+      })
+    }
   }
 
   document.getElementById('predDetailClose').addEventListener('click', () => {
@@ -1529,32 +1579,25 @@ function loadScanner() {
     document.getElementById('predDetailModal').classList.remove('active')
   })
 
-  // ============================================================
-  // ASK AI
-  // ============================================================
+  document.getElementById('customDateClose').addEventListener('click', closeCustomDatePicker)
+  document.getElementById('customCancelBtn').addEventListener('click', closeCustomDatePicker)
+  document.getElementById('customApplyBtn').addEventListener('click', applyCustomDateRange)
+  document.getElementById('customDateOverlay').addEventListener('click', closeCustomDatePicker)
+
   async function askClaude() {
     const input = document.getElementById('askInput')
     const askBtn = document.getElementById('askBtn')
     const question = input.value.trim()
     if (!question) return
-
     input.value = ''
     askBtn.disabled = true
     askBtn.innerText = '...'
-
     const aiModel = document.getElementById('aiModel').value
     const modelLabel = aiModel === 'ask_basic' ? 'Gemini' : aiModel === 'ask_haiku' ? 'Haiku' : 'Sonnet'
-
-    let context = ''
-    const intel = loadJson(files.intelligence)
-    if (intel?.analysis) context += 'Latest intelligence:\n' + intel.analysis.substring(0, 2000)
-
     const activeTab = document.querySelector('.tab.active').dataset.tab
     const container = document.getElementById('tab-' + activeTab)
     const qid = 'q' + Date.now()
-
     addChatMessage('user', question, modelLabel)
-
     container.insertAdjacentHTML('beforeend', `
       <div style="padding:8px;background:#1a1a1a;border-radius:5px;border-left:2px solid #00ff88;margin:10px 0 8px 0;">
         <div style="color:#00ff88;font-size:10px;margin-bottom:4px;">YOU [${modelLabel}]:</div>
@@ -1565,64 +1608,32 @@ function loadScanner() {
       </div>
     `)
     container.scrollTop = container.scrollHeight
-
-    const fs2 = require('fs')
-    const promptText = `You are an Indian stock market expert.\n\nContext:\n${context}\n\nQuestion: ${question}\n\nAnswer in 4-6 lines for Indian retail investor.`
-
-    const promptFile = path.join(__dirname, 'data', '_temp_prompt.txt')
-    fs2.writeFileSync(promptFile, promptText, 'utf8')
-
-    const pyScript = `
-import sys
-sys.path.insert(0, r'${path.join(__dirname, 'backend').replace(/\\/g, '\\\\')}')
-
-with open(r'${promptFile.replace(/\\/g, '\\\\')}', 'r', encoding='utf-8') as f:
-    prompt = f.read()
-
-from ai_router import ask_ai
-result = ask_ai(prompt, use_case='${aiModel}', max_tokens=600)
-if result['success']:
-    print(result['text'])
-else:
-    print('ERROR: ' + str(result.get('error', 'Unknown')))
-`
-
-    const tmpFile = path.join(__dirname, 'data', '_temp_ask.py')
-    fs2.writeFileSync(tmpFile, pyScript, 'utf8')
-
-    const proc = spawn('python', [tmpFile], { encoding: 'utf8' })
-    let output = ''
-    let errors = ''
-
-    proc.stdout.on('data', (data) => { output += data.toString('utf8') })
-    proc.stderr.on('data', (data) => { errors += data.toString('utf8') })
-
-    proc.on('close', () => {
-      try { fs2.unlinkSync(tmpFile) } catch(e){}
-      try { fs2.unlinkSync(promptFile) } catch(e){}
-
+    try {
+      const response = await fetch(API_BASE + '/api/ask', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ question: question, use_case: aiModel })
+      })
+      const result = await response.json()
       askBtn.disabled = false
       askBtn.innerText = 'Ask'
-
       const responseEl = document.getElementById(qid)
       if (!responseEl) return
-
-      let displayText = output.trim()
-      if (!displayText && errors) displayText = 'Error: ' + errors.substring(0, 300)
-      if (!displayText) displayText = 'No response received.'
-
+      let displayText = ''
+      if (result.success) {
+        displayText = result.response || 'No response'
+      } else {
+        displayText = 'Error: ' + (result.error || 'Unknown')
+      }
       addChatMessage('assistant', displayText, modelLabel)
-
       responseEl.innerHTML = `<div style="color:#00ff88;font-size:10px;margin-bottom:4px;">${modelLabel}:</div>${escapeHtml(displayText).replace(/\n/g, '<br>')}`
       container.scrollTop = container.scrollHeight
-    })
-
-    proc.on('error', (err) => {
+    } catch (err) {
       askBtn.disabled = false
       askBtn.innerText = 'Ask'
       const responseEl = document.getElementById(qid)
       if (responseEl) responseEl.innerHTML = `<div style="color:#ff4444;">❌ ${err.message}</div>`
-    })
+    }
   }
 
   document.getElementById('askBtn').addEventListener('click', askClaude)
@@ -1631,7 +1642,10 @@ else:
   })
   document.getElementById('refreshBtn').addEventListener('click', refreshAll)
 
-  function refreshAll() {
+  async function refreshAll() {
+    if (USE_API) {
+      await fetchAllFromAPI()
+    }
     loadBrain()
     loadGovt()
     loadScanner()
@@ -1641,7 +1655,6 @@ else:
     loadReddit()
     loadStats()
     loadHistory()
-
     setTimeout(() => {
       const activeTab = document.querySelector('.tab.active')
       if (activeTab) {
