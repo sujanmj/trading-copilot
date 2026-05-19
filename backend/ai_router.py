@@ -1,17 +1,35 @@
 """
-AI ROUTER - Smart Multi-AI Routing
+AI ROUTER v2 - Smart Multi-AI Routing (Railway-Ready)
 Uses gemini-2.0-flash (higher free quota: 1500/day vs 20/day)
+
+v2 Changes:
+- Fixed env var loading for Railway/cloud environments
+- Reads keys at function call time (not import time)
+- override=False to preserve Railway's env vars
 """
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
-load_dotenv(env_path)
+# Load .env file ONLY if it exists (local dev)
+# On Railway, env vars come from system - don't override them
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
+    if env_path.exists():
+        load_dotenv(env_path, override=False)  # CRITICAL: don't override Railway vars
+except ImportError:
+    pass
 
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+
+def get_anthropic_key():
+    """Read Anthropic key at call time (not import time)"""
+    return os.environ.get('ANTHROPIC_API_KEY', '').strip()
+
+
+def get_google_key():
+    """Read Google key at call time (not import time)"""
+    return os.environ.get('GOOGLE_API_KEY', '').strip()
 
 
 MODELS = {
@@ -64,14 +82,36 @@ USE_CASE_ROUTING = {
     'ask_deep':           'sonnet',
     'stock_scanner':      'gemini',
     'alert_analysis':     'haiku',
-    'translate':          'gemini_lite',  # Lighter model for translations
+    'translate':          'gemini_lite',
+    'postmortem':         'sonnet',
 }
 
 
 def call_anthropic(model_name, prompt, max_tokens=2500):
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        
+        # READ KEY AT CALL TIME (fix for Railway)
+        api_key = get_anthropic_key()
+        
+        if not api_key:
+            return {
+                'success': False, 
+                'error': 'ANTHROPIC_API_KEY not set in environment', 
+                'model': model_name
+            }
+        
+        # Verify key format
+        if not api_key.startswith('sk-ant-'):
+            return {
+                'success': False,
+                'error': f'Invalid ANTHROPIC_API_KEY format (should start with sk-ant-). Got: {api_key[:10]}...',
+                'model': model_name
+            }
+        
+        # Pass API key explicitly to avoid env var issues
+        client = anthropic.Anthropic(api_key=api_key)
+        
         message = client.messages.create(
             model=model_name,
             max_tokens=max_tokens,
@@ -94,7 +134,17 @@ def call_gemini(model_name, prompt, max_tokens=2500):
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=GOOGLE_API_KEY)
+        # READ KEY AT CALL TIME
+        api_key = get_google_key()
+        
+        if not api_key:
+            return {
+                'success': False, 
+                'error': 'GOOGLE_API_KEY not set in environment', 
+                'model': model_name
+            }
+
+        client = genai.Client(api_key=api_key)
 
         response = client.models.generate_content(
             model=model_name,
@@ -126,7 +176,8 @@ def call_gemini(model_name, prompt, max_tokens=2500):
             try:
                 from google import genai
                 from google.genai import types
-                client = genai.Client(api_key=GOOGLE_API_KEY)
+                api_key = get_google_key()
+                client = genai.Client(api_key=api_key)
                 response = client.models.generate_content(
                     model='gemini-2.0-flash-lite',
                     contents=prompt,
@@ -176,9 +227,28 @@ def ask_ai(prompt, use_case='ask_basic', model_override=None, max_tokens=2500):
     return result
 
 
+def check_keys_status():
+    """Diagnostic: returns which keys are loaded"""
+    return {
+        'anthropic': bool(get_anthropic_key()),
+        'google': bool(get_google_key()),
+        'anthropic_first_chars': get_anthropic_key()[:15] if get_anthropic_key() else 'MISSING',
+        'anthropic_length': len(get_anthropic_key()),
+    }
+
+
 if __name__ == "__main__":
-    print("Testing AI Router...")
+    print("Testing AI Router v2...")
     print("=" * 60)
+    
+    # Show key status
+    status = check_keys_status()
+    print(f"\nKey Status:")
+    print(f"  Anthropic: {'✅ SET' if status['anthropic'] else '❌ MISSING'}")
+    print(f"  Google: {'✅ SET' if status['google'] else '❌ MISSING'}")
+    print(f"  Anthropic key starts with: {status['anthropic_first_chars']}")
+    print(f"  Anthropic key length: {status['anthropic_length']}")
+    print()
 
     test_prompt = "In one sentence, what is the Indian stock market?"
 
