@@ -182,7 +182,7 @@ def sanitize_json_value(obj):
 def load_json_file(filename: str) -> dict:
     filepath = DATA_DIR / filename
     if not filepath.exists():
-        return {"error": f"File not found: {filename}", "data: None}
+        return {"error": f"File not found: {filename}","data": None}
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
