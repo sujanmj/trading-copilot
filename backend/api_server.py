@@ -164,13 +164,30 @@ def startup_event():
     start_background_processes()
 
 
+import math
+
+def sanitize_json_value(obj):
+    """Replace NaN/Infinity with None (JSON compliant)"""
+    if isinstance(obj, dict):
+        return {k: sanitize_json_value(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_json_value(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    return obj
+
+
 def load_json_file(filename: str) -> dict:
     filepath = DATA_DIR / filename
     if not filepath.exists():
-        return {"error": f"File not found: {filename}", "data": None}
+        return {"error": f"File not found: {filename}", "data: None}
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+            # Sanitize NaN/Infinity that yfinance sometimes produces
+            return sanitize_json_value(data)
     except Exception as e:
         return {"error": str(e), "data": None}
 
