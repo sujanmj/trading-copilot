@@ -47,10 +47,6 @@ AI-powered Indian stock market intelligence system with real-time scanner, multi
 │ - 18+ commands │ │ - Local laptop │
 └──────────────────┘ └──────────────────┘
 
-
-Copy Code
----
-
 ## 📦 Backend Modules
 
 ### Orchestration
@@ -89,7 +85,6 @@ Copy Code
 
 ### Local Development
 
-```bash
 # 1. Clone repository
 git clone https://github.com/yourusername/trading-copilot.git
 cd trading-copilot
@@ -121,9 +116,7 @@ python backend/master_scheduler.py
 npm run electron
 
 Cloud Deployment (Railway.app)
-bash
 
-Copy Code
 # 1. Push to GitHub (private repo recommended)
 git add .
 git commit -m "Initial deploy"
@@ -202,8 +195,6 @@ Telegram listener restricts commands to single whitelisted Chat ID
 	•	Private GitHub repo recommended
 .gitignore excludes:
 
-
-Copy Code
 config/keys.env
 data/*.db
 data/*.json
@@ -215,8 +206,6 @@ __pycache__/
 
 📁 File Structure
 
-
-Copy Code
 trading-copilot/
 ├── backend/
 │   ├── api_server.py              # FastAPI + thread spawner (Railway entry)
@@ -286,10 +275,6 @@ This is a personal project, but suggestions welcome via GitHub issues.
 
 📧 Contact
 For questions about the architecture or implementation, open a GitHub issue.
-
-
-Copy Code
----
 
 ## 📋 Key Updates from Your Original
 
