@@ -166,7 +166,18 @@ def health():
         "postmortem_available": POSTMORTEM_AVAILABLE,
         "auth_enabled": bool(API_KEY)
     }
-
+@app.get("/api/debug-env")
+def debug_env():
+    """TEMPORARY: Check if env vars are loaded. REMOVE AFTER FIX."""
+    import os
+    return {
+        "ANTHROPIC_API_KEY": "SET" if os.environ.get('ANTHROPIC_API_KEY') else "MISSING",
+        "GOOGLE_API_KEY": "SET" if os.environ.get('GOOGLE_API_KEY') else "MISSING",
+        "TELEGRAM_BOT_TOKEN": "SET" if os.environ.get('TELEGRAM_BOT_TOKEN') else "MISSING",
+        "TELEGRAM_CHAT_ID": "SET" if os.environ.get('TELEGRAM_CHAT_ID') else "MISSING",
+        "API_KEY": "SET" if os.environ.get('API_KEY') else "MISSING",
+        "anthropic_key_first_chars": os.environ.get('ANTHROPIC_API_KEY', '')[:15] if os.environ.get('ANTHROPIC_API_KEY') else "NOT SET",
+    }
 
 # ============================================================
 # AUTHENTICATED ENDPOINTS
