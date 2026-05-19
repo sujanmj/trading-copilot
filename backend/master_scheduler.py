@@ -1,9 +1,15 @@
 """
-MASTER SCHEDULER v7.1 - Adds history_exporter to all runs
+MASTER SCHEDULER v7.2 - Adds Telegram Brain Pusher to all strategic runs
+
+v7.2 Changes (from v7.1):
+- telegram_brain_pusher.py runs after history_exporter on every strategic run
+- Phone receives full 6-message brain after every analysis cycle
+
 v7.1 Changes (from v7):
 - history_exporter.py runs after stats_exporter on every cycle
 - New 'H' command for manual history refresh
 """
+
 
 import schedule
 import time
@@ -13,8 +19,10 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+
 BACKEND_DIR = Path(__file__).parent
 PYTHON_EXE = sys.executable
+
 
 # Force UTF-8
 if sys.platform == 'win32':
@@ -24,7 +32,9 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
+
 last_runs = {}
+
 
 
 def run_module(module_name, args=None):
@@ -33,15 +43,19 @@ def run_module(module_name, args=None):
         print(f"  WARN {module_name}.py not found")
         return False
 
+
     print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Running {module_name}{' ' + ' '.join(args) if args else ''}...")
+
 
     child_env = os.environ.copy()
     child_env['PYTHONIOENCODING'] = 'utf-8'
     child_env['PYTHONUTF8'] = '1'
 
+
     cmd = [PYTHON_EXE, str(script_path)]
     if args:
         cmd.extend(args)
+
 
     try:
         result = subprocess.run(
@@ -53,6 +67,7 @@ def run_module(module_name, args=None):
             errors='replace',
             env=child_env,
         )
+
 
         if result.returncode == 0:
             lines = [l for l in result.stdout.split('\n') if l.strip()]
@@ -71,12 +86,14 @@ def run_module(module_name, args=None):
                 print(f"  ERROR (returncode={result.returncode}): {err_preview.encode('ascii', errors='replace').decode('ascii')}")
             return False
 
+
     except subprocess.TimeoutExpired:
         print(f"  TIMEOUT after 10 min")
         return False
     except Exception as e:
         print(f"  EXCEPTION: {e}")
         return False
+
 
 
 def overnight_brief():
@@ -95,9 +112,11 @@ def overnight_brief():
     run_module('master_analyzer')
     run_module('prediction_logger')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
+    run_module('telegram_brain_pusher', ['full'])   # NEW v7.2 - push brain to phone
     run_module('alert_engine', ['realtime'])
     print("\n*** OVERNIGHT BRIEF READY ***\n")
+
 
 
 def premarket_brief():
@@ -115,9 +134,11 @@ def premarket_brief():
     run_module('master_analyzer')
     run_module('prediction_logger')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
+    run_module('telegram_brain_pusher', ['full'])   # NEW v7.2
     run_module('alert_engine', ['morning'])
     print("\n*** PRE-MARKET BRIEF READY ***\n")
+
 
 
 def midday_check():
@@ -134,9 +155,11 @@ def midday_check():
     run_module('master_analyzer')
     run_module('prediction_logger')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
+    run_module('telegram_brain_pusher', ['full'])   # NEW v7.2
     run_module('alert_engine', ['realtime'])
     print("\n*** MIDDAY UPDATE READY ***\n")
+
 
 
 def post_close_analysis():
@@ -154,9 +177,11 @@ def post_close_analysis():
     run_module('master_analyzer')
     run_module('prediction_logger')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
+    run_module('telegram_brain_pusher', ['full'])   # NEW v7.2
     run_module('alert_engine', ['realtime'])
     print("\n*** POST-CLOSE READY ***\n")
+
 
 
 def us_market_check():
@@ -171,12 +196,16 @@ def us_market_check():
     run_module('master_analyzer')
     run_module('prediction_logger')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
+    run_module('telegram_brain_pusher', ['full'])   # NEW v7.2
     print("\n*** US UPDATE READY ***\n")
 
 
+
 def intraday_scanner_check():
-    """Lightweight intraday scan during market hours (every 30 min)"""
+    """Lightweight intraday scan during market hours (every 30 min).
+    NOTE: No brain push here to avoid spamming phone every 30 min.
+    Use /brain command on Telegram for on-demand intraday brain."""
     now = datetime.now()
     if now.weekday() >= 5:
         return
@@ -191,9 +220,10 @@ def intraday_scanner_check():
     run_module('master_analyzer')
     run_module('prediction_logger')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
     run_module('alert_engine', ['realtime'])
     print(f"\n*** INTRADAY SCAN COMPLETE @ {now.strftime('%H:%M')} ***\n")
+
 
 
 def daily_outcome_check():
@@ -208,9 +238,10 @@ def daily_outcome_check():
     print("Evaluating past predictions against actual market moves...")
     run_module('outcome_tracker')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
     run_module('alert_engine', ['outcome'])
     print("\n*** OUTCOME CHECK COMPLETE ***\n")
+
 
 
 def manual_refresh():
@@ -229,8 +260,10 @@ def manual_refresh():
     run_module('master_analyzer')
     run_module('prediction_logger')
     run_module('stats_exporter')
-    run_module('history_exporter')   # NEW v7.1
+    run_module('history_exporter')
+    run_module('telegram_brain_pusher', ['full'])   # NEW v7.2
     print("\n*** MANUAL REFRESH COMPLETE ***\n")
+
 
 
 def setup_schedule():
@@ -253,29 +286,33 @@ def setup_schedule():
         schedule.every().day.at(t).do(intraday_scanner_check)
 
 
+
 def print_schedule():
     print("\n" + "=" * 60)
-    print("SMART SCHEDULE v7.1 - Full Pipeline + History Exporter")
+    print("SMART SCHEDULE v7.2 - Full Pipeline + History + Brain Push")
     print("=" * 60)
-    print("STRATEGIC RUNS (Full pipeline + DB + Stats + History + Telegram):")
-    print("  05:00 AM - Overnight brief [SONNET] + alerts")
+    print("STRATEGIC RUNS (Full pipeline + Brain push to Telegram):")
+    print("  05:00 AM - Overnight brief [SONNET] + 6-msg brain + alerts")
     print("  08:00 AM - DAILY OUTCOME CHECK + Telegram report")
-    print("  08:45 AM - Pre-market brief [SONNET] + Morning brief")
-    print("  12:00 PM - Midday check [GEMINI FREE] + alerts")
-    print("  03:35 PM - Post-close [HAIKU] + alerts")
-    print("  11:00 PM - US check [GEMINI FREE]")
+    print("  08:45 AM - Pre-market brief [SONNET] + 6-msg brain + Morning brief")
+    print("  12:00 PM - Midday check [GEMINI FREE] + 6-msg brain + alerts")
+    print("  03:35 PM - Post-close [HAIKU] + 6-msg brain + alerts")
+    print("  11:00 PM - US check [GEMINI FREE] + 6-msg brain")
     print()
     print("INTRADAY SCANNER (every 30 min, Mon-Fri) + ULTRA alerts:")
     print("  09:30, 10:00, 10:30, 11:00, 11:30")
     print("  12:30, 13:00, 13:30, 14:00, 14:30, 15:00")
+    print("  (No brain push here - use /brain on Telegram for on-demand)")
     print()
     print("Sources: India + Global + News + Inshorts + YouTube + Govt + Reddit + Scanner")
     print("Database: SQLite (predictions, signals, outcomes, snapshots, accuracy)")
     print("Stats:    Auto-exported to data/stats_data.json")
     print("History:  Auto-exported to data/history_data.json")
+    print("Brain:    Auto-pushed to Telegram (6 messages per strategic run)")
     print("Alerts:   Telegram bot @Sujan_trading_bot")
     print("Cost:     ~$10-12/month")
     print("=" * 60)
+
 
 
 def status_check():
@@ -290,6 +327,7 @@ def status_check():
         for module, t in last_runs.items():
             mins_ago = int((now - t).total_seconds() / 60)
             print(f"  {module:25s} {mins_ago} min ago")
+
 
 
 def listen_for_manual_trigger():
@@ -320,9 +358,12 @@ def listen_for_manual_trigger():
                     run_module('stats_exporter')
                     run_module('history_exporter')
                 elif cmd == 'H':
-                    # NEW v7.1: history exporter only
                     print("\n[MANUAL] Refreshing history only...")
                     run_module('history_exporter')
+                elif cmd == 'B':
+                    # NEW v7.2: push brain to Telegram on demand
+                    print("\n[MANUAL] Pushing brain to Telegram...")
+                    run_module('telegram_brain_pusher', ['full'])
                 elif cmd == 'T':
                     print("\n[MANUAL] Sending Telegram alerts (realtime mode)...")
                     run_module('alert_engine', ['realtime'])
@@ -338,22 +379,27 @@ def listen_for_manual_trigger():
     thread.start()
 
 
+
 if __name__ == "__main__":
     print("=" * 60)
-    print("TRADING COPILOT - SCHEDULER v7.1 (Full Stack + History)")
+    print("TRADING COPILOT - SCHEDULER v7.2 (Full Stack + History + Brain Push)")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
+
 
     setup_schedule()
     print_schedule()
 
+
     print("\n[STARTUP] Initial refresh...")
     manual_refresh()
+
 
     print("\n[STARTUP] Running outcome tracker for any existing predictions...")
     run_module('outcome_tracker')
     run_module('stats_exporter')
     run_module('history_exporter')
+
 
     print("\n" + "=" * 60)
     print("SCHEDULER ACTIVE")
@@ -361,12 +407,15 @@ if __name__ == "__main__":
     print("  R = full refresh   |  I = intraday scan")
     print("  L = log predictions|  O = check outcomes + telegram")
     print("  X = refresh stats  |  H = refresh history only")
+    print("  B = push brain to telegram (NEW)")
     print("  T = test telegram  |  M = morning brief")
     print("  S = status         |  Q = quit")
     print("=" * 60)
 
+
     listen_for_manual_trigger()
     last_status_print = datetime.now()
+
 
     try:
         while True:
