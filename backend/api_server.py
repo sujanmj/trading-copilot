@@ -1,11 +1,9 @@
 """
-API Server v4 - Combined: API + Scheduler in ONE service
-=========================================================
-Runs both:
-- FastAPI server (HTTP endpoints)
-- master_scheduler.py (background thread)
-
-Solves Railway volume sharing issue by running both in same container.
+API Server v5 - API + Scheduler + Telegram Listener
+Three things in one container:
+1. FastAPI HTTP server
+2. master_scheduler (background)  
+3. telegram_listener (background)
 """
 
 import os
@@ -28,7 +26,7 @@ try:
     from fastapi.middleware.cors import CORSMiddleware
     import uvicorn
 except ImportError:
-    print("[ERROR] FastAPI not installed. Run: pip install fastapi uvicorn")
+    print("[ERROR] FastAPI not installed.")
     sys.exit(1)
 
 BASE_DIR = Path(__file__).parent
@@ -49,7 +47,6 @@ try:
     AI_AVAILABLE = True
 except ImportError:
     AI_AVAILABLE = False
-    print("[WARN] ai_router not available")
 
 try:
     from postmortem import analyze_postmortem
@@ -64,9 +61,6 @@ except ImportError:
     CUSTOM_HISTORY_AVAILABLE = False
 
 
-# ============================================================
-# AUTH CONFIG
-# ============================================================
 API_KEY = os.environ.get('API_KEY', '')
 
 if not API_KEY:
@@ -77,26 +71,23 @@ def verify_api_key(x_api_key: Optional[str] = Header(None)):
     if not API_KEY:
         return True
     if x_api_key != API_KEY:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing API key. Set X-API-Key header."
-        )
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
     return True
 
 
 # ============================================================
-# SCHEDULER BACKGROUND THREAD
+# BACKGROUND PROCESSES
 # ============================================================
 
-def run_scheduler_in_background():
-    """Run master_scheduler.py as subprocess in background"""
+def run_subprocess_loop(script_name, label):
+    """Run a Python script as subprocess, auto-restart if crashes"""
     print("=" * 60)
-    print("[BACKGROUND] Starting master_scheduler subprocess...")
+    print(f"[BACKGROUND] Starting {label}...")
     print("=" * 60)
     
-    scheduler_path = BASE_DIR / 'master_scheduler.py'
-    if not scheduler_path.exists():
-        print(f"[ERROR] master_scheduler.py not found at {scheduler_path}")
+    script_path = BASE_DIR / script_name
+    if not script_path.exists():
+        print(f"[ERROR] {script_name} not found at {script_path}")
         return
     
     env = os.environ.copy()
@@ -105,47 +96,59 @@ def run_scheduler_in_background():
     
     while True:
         try:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Launching scheduler...")
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Launching {label}...")
             
-            # Run scheduler as subprocess (auto-restarts if it crashes)
             process = subprocess.Popen(
-                [sys.executable, str(scheduler_path)],
+                [sys.executable, str(script_path)],
                 env=env,
                 stdout=sys.stdout,
                 stderr=sys.stderr,
                 bufsize=1,
-                cwd=str(BASE_DIR.parent)  # Run from project root
+                cwd=str(BASE_DIR.parent)
             )
             
-            # Wait for process to complete (it shouldn't, but if it does, we restart)
             process.wait()
             
-            print(f"[WARN] Scheduler exited with code {process.returncode}, restarting in 30s...")
+            print(f"[WARN] {label} exited with code {process.returncode}, restarting in 30s...")
             time.sleep(30)
         
         except Exception as e:
-            print(f"[ERROR] Scheduler crashed: {e}")
+            print(f"[ERROR] {label} crashed: {e}")
             print(f"[INFO] Restarting in 60s...")
             time.sleep(60)
 
 
-# Start scheduler in background thread (only when run as main, not imported)
-def start_background_scheduler():
-    """Launch scheduler in daemon thread"""
-    if os.environ.get('DISABLE_SCHEDULER') == '1':
-        print("[INFO] Scheduler disabled via DISABLE_SCHEDULER env var")
-        return
+def start_background_processes():
+    """Launch scheduler and telegram listener in daemon threads"""
     
-    thread = threading.Thread(target=run_scheduler_in_background, daemon=True, name='Scheduler')
-    thread.start()
-    print(f"[INFO] Scheduler thread started (daemon)")
+    # Scheduler thread
+    if os.environ.get('DISABLE_SCHEDULER') != '1':
+        scheduler_thread = threading.Thread(
+            target=run_subprocess_loop, 
+            args=('master_scheduler.py', 'Scheduler'),
+            daemon=True, 
+            name='Scheduler'
+        )
+        scheduler_thread.start()
+        print(f"[INFO] Scheduler thread started")
+    
+    # Telegram listener thread
+    if os.environ.get('DISABLE_TELEGRAM_LISTENER') != '1':
+        telegram_thread = threading.Thread(
+            target=run_subprocess_loop, 
+            args=('telegram_listener.py', 'TelegramListener'),
+            daemon=True, 
+            name='TelegramListener'
+        )
+        telegram_thread.start()
+        print(f"[INFO] Telegram listener thread started")
 
 
 # ============================================================
 # APP SETUP
 # ============================================================
 
-app = FastAPI(title="Trading Copilot API + Scheduler", version="4.0.0")
+app = FastAPI(title="Trading Copilot API + Scheduler + Telegram", version="5.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -158,8 +161,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
-    """Start scheduler when FastAPI app starts"""
-    start_background_scheduler()
+    start_background_processes()
 
 
 def load_json_file(filename: str) -> dict:
@@ -181,15 +183,11 @@ def file_age_seconds(filename: str) -> Optional[int]:
     return int(age)
 
 
-# ============================================================
-# PUBLIC ENDPOINTS
-# ============================================================
-
 @app.get("/")
 def root():
     return {
-        "service": "Trading Copilot API + Scheduler",
-        "version": "4.0.0",
+        "service": "Trading Copilot API + Scheduler + Telegram",
+        "version": "5.0.0",
         "status": "running",
         "auth_required": bool(API_KEY)
     }
@@ -228,26 +226,9 @@ def health():
         "ai_available": AI_AVAILABLE,
         "postmortem_available": POSTMORTEM_AVAILABLE,
         "auth_enabled": bool(API_KEY),
-        "scheduler_running": True
+        "background_processes": ["scheduler", "telegram_listener"]
     }
 
-
-@app.get("/api/debug-env")
-def debug_env():
-    """Diagnostic endpoint"""
-    return {
-        "ANTHROPIC_API_KEY": "SET" if os.environ.get('ANTHROPIC_API_KEY') else "MISSING",
-        "GOOGLE_API_KEY": "SET" if os.environ.get('GOOGLE_API_KEY') else "MISSING",
-        "TELEGRAM_BOT_TOKEN": "SET" if os.environ.get('TELEGRAM_BOT_TOKEN') else "MISSING",
-        "TELEGRAM_CHAT_ID": "SET" if os.environ.get('TELEGRAM_CHAT_ID') else "MISSING",
-        "API_KEY": "SET" if os.environ.get('API_KEY') else "MISSING",
-        "anthropic_key_first_chars": os.environ.get('ANTHROPIC_API_KEY', '')[:15] if os.environ.get('ANTHROPIC_API_KEY') else "NOT SET",
-    }
-
-
-# ============================================================
-# AUTHENTICATED ENDPOINTS
-# ============================================================
 
 @app.get("/api/intelligence", dependencies=[Depends(verify_api_key)])
 def get_intelligence(): return load_json_file("unified_intelligence.json")
@@ -392,16 +373,12 @@ if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))
     host = os.environ.get('HOST', '0.0.0.0')
     print("=" * 60)
-    print("TRADING COPILOT API SERVER + SCHEDULER v4")
+    print("TRADING COPILOT API SERVER + SCHEDULER + TELEGRAM v5")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
     print(f"Host: {host}")
     print(f"Port: {port}")
     print(f"AI: {'Available' if AI_AVAILABLE else 'NOT available'}")
-    print(f"Post-Mortem: {'Available' if POSTMORTEM_AVAILABLE else 'NOT available'}")
-    print(f"Custom History: {'Available' if CUSTOM_HISTORY_AVAILABLE else 'NOT available'}")
     print(f"Auth: {'X-API-Key required' if API_KEY else 'OPEN MODE'}")
-    print(f"Background scheduler: {'DISABLED' if os.environ.get('DISABLE_SCHEDULER') == '1' else 'WILL START'}")
-    print(f"Docs: http://localhost:{port}/docs")
     print("=" * 60)
     uvicorn.run(app, host=host, port=port, log_level="info")
