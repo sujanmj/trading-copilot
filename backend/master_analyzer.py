@@ -1,9 +1,6 @@
 """
-MASTER ANALYZER v6.1 - With Context Snapshot Integration
-v6.1 Changes:
-- Context snapshot captured AFTER successful analysis
-- Graceful dotenv import with fallback
-- Snapshot only fires inside __main__ block
+MASTER ANALYZER v7 - Memory-Augmented (Self-Aware AI)
+Reads past performance from learning_engine and feeds it to AI prompt.
 """
 
 import os
@@ -13,12 +10,11 @@ import io
 from datetime import datetime
 from pathlib import Path
 
-# Graceful dotenv import (won't crash if missing)
 try:
     from dotenv import load_dotenv
     DOTENV_AVAILABLE = True
 except ImportError:
-    print("[WARN] python-dotenv not installed. Run: pip install python-dotenv")
+    print("[WARN] python-dotenv not installed.")
     DOTENV_AVAILABLE = False
     def load_dotenv(*args, **kwargs):
         return False
@@ -35,10 +31,19 @@ if sys.platform == 'win32':
 sys.path.insert(0, str(Path(__file__).parent))
 from ai_router import ask_ai
 
+# Import learning engine for memory-augmented predictions
+try:
+    from learning_engine import build_memory_summary
+    LEARNING_AVAILABLE = True
+except ImportError:
+    LEARNING_AVAILABLE = False
+    print("[WARN] learning_engine not available - running without memory")
+
 
 env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
 if DOTENV_AVAILABLE:
-    load_dotenv(env_path)
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
 
 
 def load_json_safe(filepath):
@@ -216,7 +221,6 @@ def format_reddit(data):
         return "REDDIT INTEL: No data available"
     lines = ["=== TIER 7: REDDIT RETAIL SENTIMENT ==="]
     lines.append(f"Posts analyzed: {data.get('total_posts_analyzed', 0)}")
-
     mood = data.get('market_mood', {})
     if mood:
         sentiment = mood.get('sentiment', 'unknown')
@@ -228,7 +232,6 @@ def format_reddit(data):
             lines.append(f"Summary: {summary}")
         if themes:
             lines.append(f"Dominant themes: {', '.join(themes)}")
-
     trending = data.get('trending_tickers', [])
     if trending:
         lines.append("\nTRENDING TICKERS ON REDDIT (retail buzz):")
@@ -239,10 +242,9 @@ def format_reddit(data):
             score = t.get('sentiment_score', 0.5)
             top_post_title = t.get('top_post', {}).get('title', '')[:80]
             lines.append(f"  {ticker}: {mentions} mentions | {sent.upper()} ({score:.2f}) | Top: {top_post_title}")
-
     hot = data.get('hot_discussions', [])
     if hot:
-        lines.append("\nHOT REDDIT DISCUSSIONS (high-engagement):")
+        lines.append("\nHOT REDDIT DISCUSSIONS:")
         for h in hot[:8]:
             title = h.get('title', '')[:120]
             score = h.get('score', 0)
@@ -251,22 +253,19 @@ def format_reddit(data):
             tickers = h.get('tickers', [])
             ticker_str = f" [{', '.join(tickers[:3])}]" if tickers else ""
             lines.append(f"  [{score}up/{comments}c|{sent.upper()[:3]}] {title}{ticker_str}")
-
     return "\n".join(lines)
 
 
 def format_scanner(data):
     if not data:
         return "SCANNER: No data available"
-    lines = ["=== TIER 8: NSE STOCK SCANNER (Real-time Price Action) ==="]
+    lines = ["=== TIER 8: NSE STOCK SCANNER ==="]
     lines.append(f"Universe: {data.get('universe', 'NSE')} | Scanned: {data.get('total_scanned', 0)} stocks | Signals: {data.get('total_signals', 0)}")
-
     summary = data.get('summary', {})
     if summary:
         lines.append("\nSIGNAL BREAKDOWN:")
         for sig_type, count in sorted(summary.items(), key=lambda x: -x[1]):
             lines.append(f"  {sig_type}: {count}")
-
     top = data.get('top_signals', [])
     if top:
         lines.append("\n*** ULTRA/STRONG SIGNALS ***")
@@ -281,10 +280,9 @@ def format_scanner(data):
             price = s.get('price', 0)
             sigs_str = ' + '.join(signals[:4])
             lines.append(f"  [{strength}|{direction}] {ticker} ({sector}) Rs.{price} {change:+.2f}% vol:{volume_ratio:.1f}x | {sigs_str}")
-
     rotation = data.get('sector_rotation', [])
     if rotation:
-        lines.append("\nSECTOR ROTATION (macro signal):")
+        lines.append("\nSECTOR ROTATION:")
         for r in rotation[:10]:
             sector = r.get('sector', '?')
             avg_move = r.get('avg_change_percent', 0)
@@ -293,16 +291,14 @@ def format_scanner(data):
             stocks_count = r.get('stocks_analyzed', 0)
             vol_ratio = r.get('avg_volume_ratio', 0)
             lines.append(f"  [{direction}|{strength}] {sector}: {avg_move:+.2f}% avg ({stocks_count} stocks, vol {vol_ratio:.1f}x)")
-
     breaks = data.get('correlation_breaks', [])
     if breaks:
-        lines.append("\nCORRELATION BREAKS (alpha opportunities):")
+        lines.append("\nCORRELATION BREAKS:")
         for b in breaks[:10]:
             ticker = b.get('ticker', '?')
             sector = b.get('sector', '?')
             note = b.get('note', '')
             lines.append(f"  {ticker} ({sector}): {note}")
-
     by_signal = data.get('by_signal', {})
     if by_signal:
         vs = by_signal.get('volume_spikes', [])
@@ -310,7 +306,6 @@ def format_scanner(data):
             lines.append("\nTOP VOLUME SPIKES:")
             for v in vs[:8]:
                 lines.append(f"  {v.get('ticker', '?')} ({v.get('sector', '?')}): {v.get('volume_ratio', 0):.1f}x vol, {v.get('change_percent', 0):+.2f}%")
-
     return "\n".join(lines)
 
 
@@ -326,6 +321,17 @@ def is_indian_market_open():
 def generate_unified_analysis(all_data):
     print("\n[ANALYSIS] Sending to AI for unified intelligence...")
 
+    # NEW v7: Build memory summary from past performance
+    memory_summary = ""
+    if LEARNING_AVAILABLE:
+        try:
+            print("[LEARNING] Building memory from past predictions...")
+            memory_summary = build_memory_summary(days=30)
+            print(f"[LEARNING] Memory summary: {len(memory_summary)} chars")
+        except Exception as e:
+            print(f"[WARN] Failed to build memory: {e}")
+            memory_summary = ""
+
     govt_str = format_govt(all_data['govt'])
     global_str = format_global_markets(all_data['global_markets'])
     india_str = format_india_markets(all_data['india_markets'])
@@ -338,9 +344,16 @@ def generate_unified_analysis(all_data):
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     market_status = "OPEN" if is_indian_market_open() else "CLOSED"
 
-    prompt = f"""You are an expert Indian stock market analyst with deep cross-market knowledge.
+    # Memory section
+    memory_section = ""
+    if memory_summary:
+        memory_section = f"\n{memory_summary}\n\n"
+
+    prompt = f"""You are an expert Indian stock market analyst with self-awareness of your past performance.
 
 CURRENT TIME: {current_time} (Indian Market: {market_status})
+
+{memory_section}
 
 You have EIGHT real-time data sources. Cross-reference for actionable intelligence.
 
@@ -355,6 +368,7 @@ KEY ANALYSIS PRINCIPLES:
 2. Volume spikes (Tier 8) often PRECEDE news by hours
 3. Correlation breaks = idiosyncratic opportunities
 4. ULTRA strength signals = highest action priority
+5. **USE YOUR PAST PERFORMANCE TO CALIBRATE CONFIDENCE LEVELS**
 
 {govt_str}
 
@@ -385,7 +399,7 @@ Provide UNIFIED INTELLIGENCE in this EXACT format. BE COMPREHENSIVE. CRITICAL: O
 - Likely market reaction:
 - Confidence:
 
-## SCANNER ALERTS (Real-time Price Action)
+## SCANNER ALERTS
 - Top ULTRA/STRONG signals:
 - Sector rotation pattern:
 - Notable correlation breaks:
@@ -400,16 +414,23 @@ Provide UNIFIED INTELLIGENCE in this EXACT format. BE COMPREHENSIVE. CRITICAL: O
 - Retail Mood:
 - Confidence Level:
 
+## SELF-CALIBRATION (NEW)
+Based on your past performance, comment on:
+- Which sectors you're trusting more today (and why)
+- Which you're being skeptical about
+- How you're calibrating today's confidence levels
+
 ## TOP 10 OPPORTUNITIES TODAY/TOMORROW
-[List EXACTLY 10. Order by conviction.]
+[List EXACTLY 10. Order by conviction. APPLY YOUR PAST PERFORMANCE LEARNINGS.]
 
 1. [TICKER] - [Buy/Hold/Watch/Accumulate]
    - Why: [reason]
    - Entry: [price]
    - Target: [price]
    - Stop Loss: [price]
-   - Confidence: [High/Medium/Low]
+   - Confidence: [High/Medium/Low - JUSTIFIED BY YOUR HISTORICAL CALIBRATION]
    - Cross-validation:
+   - Past performance check: [If you've predicted this ticker/sector before, mention it]
 
 2. [Same format]
 3. [Same format]
@@ -422,7 +443,7 @@ Provide UNIFIED INTELLIGENCE in this EXACT format. BE COMPREHENSIVE. CRITICAL: O
 10. [Same format]
 
 ## TOP 10 RISKS / AVOID LIST
-[MANDATORY: List EXACTLY 10. Do not skip this section.]
+[MANDATORY: List EXACTLY 10.]
 
 1. [TICKER] - [Risk reason]
 2. [Same format]
@@ -459,11 +480,14 @@ Provide UNIFIED INTELLIGENCE in this EXACT format. BE COMPREHENSIVE. CRITICAL: O
 
 ---
 RULES:
-- MUST give exactly 10 opportunities AND 10 risks (no exceptions)
+- MUST give exactly 10 opportunities AND 10 risks
 - Use ONLY actual NSE stock tickers (e.g., RELIANCE, TCS, ICICIBANK), NOT sector names
 - Be specific with entry/target/stop-loss
 - ULTRA scanner signals MUST appear in top 5 opportunities or risks
-- For commodities, use ETF tickers (GOLDBEES, SILVERBEES) not "GOLD" or "SILVER\""""
+- For commodities, use ETF tickers (GOLDBEES, SILVERBEES) not "GOLD" or "SILVER"
+- IMPORTANT: Calibrate your confidence levels based on past performance shown above
+- IMPORTANT: Don't repeat tickers from "STILL PENDING" list above
+- IMPORTANT: Mention specifically how past data is influencing today's calls"""
 
     use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
     result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
@@ -480,7 +504,7 @@ RULES:
 
 def run_master_analysis():
     print("\n" + "=" * 60)
-    print("MASTER ANALYZER v6.1 - 8 TIERS + Context Snapshot")
+    print("MASTER ANALYZER v7 - 8 TIERS + Memory-Augmented AI")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -519,6 +543,7 @@ def run_master_analysis():
         'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'market_open': is_indian_market_open(),
         'sources_used': sources_loaded,
+        'memory_augmented': LEARNING_AVAILABLE,
         'analysis': analysis,
         'data_snapshot': {
             'govt_high_impact': all_data['govt'].get('high_impact_count', 0) if all_data['govt'] else 0,
@@ -547,7 +572,7 @@ def run_master_analysis():
 
 
 if __name__ == "__main__":
-    print("Starting master analyzer v6.1...")
+    print("Starting master analyzer v7 (Memory-Augmented)...")
     
     analysis_success = False
     try:
@@ -560,7 +585,6 @@ if __name__ == "__main__":
         print(f"ERROR: {e}")
         traceback.print_exc()
     
-    # Capture context snapshot AFTER successful analysis
     if analysis_success:
         try:
             from context_snapshot import capture_snapshot, init_context_table
@@ -570,4 +594,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[WARN] Context snapshot failed: {e}")
     else:
-        print("[CONTEXT] Skipped snapshot — analysis did not complete successfully")
+        print("[CONTEXT] Skipped snapshot")
