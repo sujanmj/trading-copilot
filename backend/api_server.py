@@ -1,15 +1,19 @@
 """
-API Server v3 - Railway Ready with API Key Auth
-=================================================
-- Requires X-API-Key header for all /api/* endpoints
-- Health check is open (for Railway monitoring)
-- Production-ready CORS
+API Server v4 - Combined: API + Scheduler in ONE service
+=========================================================
+Runs both:
+- FastAPI server (HTTP endpoints)
+- master_scheduler.py (background thread)
+
+Solves Railway volume sharing issue by running both in same container.
 """
 
 import os
 import sys
 import json
 import subprocess
+import threading
+import time
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -20,7 +24,7 @@ except Exception:
     pass
 
 try:
-    from fastapi import FastAPI, HTTPException, Body, Header, Depends, Request
+    from fastapi import FastAPI, HTTPException, Body, Header, Depends
     from fastapi.middleware.cors import CORSMiddleware
     import uvicorn
 except ImportError:
@@ -33,7 +37,8 @@ DATA_DIR = BASE_DIR.parent / 'data'
 try:
     from dotenv import load_dotenv
     env_path = BASE_DIR.parent / 'config' / 'keys.env'
-    load_dotenv(env_path)
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
 except ImportError:
     pass
 
@@ -64,17 +69,13 @@ except ImportError:
 # ============================================================
 API_KEY = os.environ.get('API_KEY', '')
 
-# If no API_KEY in env, generate a warning but allow access (dev mode)
 if not API_KEY:
     print("[WARN] API_KEY not set. Running in OPEN mode (dev only)")
-    print("[WARN] Set API_KEY env variable for production!")
 
 
 def verify_api_key(x_api_key: Optional[str] = Header(None)):
-    """Dependency to verify API key in requests"""
     if not API_KEY:
-        return True  # Dev mode - allow all
-    
+        return True
     if x_api_key != API_KEY:
         raise HTTPException(
             status_code=401,
@@ -84,10 +85,67 @@ def verify_api_key(x_api_key: Optional[str] = Header(None)):
 
 
 # ============================================================
+# SCHEDULER BACKGROUND THREAD
+# ============================================================
+
+def run_scheduler_in_background():
+    """Run master_scheduler.py as subprocess in background"""
+    print("=" * 60)
+    print("[BACKGROUND] Starting master_scheduler subprocess...")
+    print("=" * 60)
+    
+    scheduler_path = BASE_DIR / 'master_scheduler.py'
+    if not scheduler_path.exists():
+        print(f"[ERROR] master_scheduler.py not found at {scheduler_path}")
+        return
+    
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+    env['PYTHONUTF8'] = '1'
+    
+    while True:
+        try:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Launching scheduler...")
+            
+            # Run scheduler as subprocess (auto-restarts if it crashes)
+            process = subprocess.Popen(
+                [sys.executable, str(scheduler_path)],
+                env=env,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                bufsize=1,
+                cwd=str(BASE_DIR.parent)  # Run from project root
+            )
+            
+            # Wait for process to complete (it shouldn't, but if it does, we restart)
+            process.wait()
+            
+            print(f"[WARN] Scheduler exited with code {process.returncode}, restarting in 30s...")
+            time.sleep(30)
+        
+        except Exception as e:
+            print(f"[ERROR] Scheduler crashed: {e}")
+            print(f"[INFO] Restarting in 60s...")
+            time.sleep(60)
+
+
+# Start scheduler in background thread (only when run as main, not imported)
+def start_background_scheduler():
+    """Launch scheduler in daemon thread"""
+    if os.environ.get('DISABLE_SCHEDULER') == '1':
+        print("[INFO] Scheduler disabled via DISABLE_SCHEDULER env var")
+        return
+    
+    thread = threading.Thread(target=run_scheduler_in_background, daemon=True, name='Scheduler')
+    thread.start()
+    print(f"[INFO] Scheduler thread started (daemon)")
+
+
+# ============================================================
 # APP SETUP
 # ============================================================
 
-app = FastAPI(title="Trading Copilot API", version="3.0.0")
+app = FastAPI(title="Trading Copilot API + Scheduler", version="4.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,6 +154,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*", "X-API-Key"],
 )
+
+
+@app.on_event("startup")
+def startup_event():
+    """Start scheduler when FastAPI app starts"""
+    start_background_scheduler()
 
 
 def load_json_file(filename: str) -> dict:
@@ -118,14 +182,14 @@ def file_age_seconds(filename: str) -> Optional[int]:
 
 
 # ============================================================
-# PUBLIC ENDPOINTS (no auth)
+# PUBLIC ENDPOINTS
 # ============================================================
 
 @app.get("/")
 def root():
     return {
-        "service": "Trading Copilot API",
-        "version": "3.0.0",
+        "service": "Trading Copilot API + Scheduler",
+        "version": "4.0.0",
         "status": "running",
         "auth_required": bool(API_KEY)
     }
@@ -133,7 +197,6 @@ def root():
 
 @app.get("/api/health")
 def health():
-    """Open endpoint for Railway healthcheck"""
     files = {
         "intelligence": "unified_intelligence.json",
         "scanner": "scanner_data.json",
@@ -164,12 +227,14 @@ def health():
         "data_freshness": freshness,
         "ai_available": AI_AVAILABLE,
         "postmortem_available": POSTMORTEM_AVAILABLE,
-        "auth_enabled": bool(API_KEY)
+        "auth_enabled": bool(API_KEY),
+        "scheduler_running": True
     }
+
+
 @app.get("/api/debug-env")
 def debug_env():
-    """TEMPORARY: Check if env vars are loaded. REMOVE AFTER FIX."""
-    import os
+    """Diagnostic endpoint"""
     return {
         "ANTHROPIC_API_KEY": "SET" if os.environ.get('ANTHROPIC_API_KEY') else "MISSING",
         "GOOGLE_API_KEY": "SET" if os.environ.get('GOOGLE_API_KEY') else "MISSING",
@@ -178,6 +243,7 @@ def debug_env():
         "API_KEY": "SET" if os.environ.get('API_KEY') else "MISSING",
         "anthropic_key_first_chars": os.environ.get('ANTHROPIC_API_KEY', '')[:15] if os.environ.get('ANTHROPIC_API_KEY') else "NOT SET",
     }
+
 
 # ============================================================
 # AUTHENTICATED ENDPOINTS
@@ -314,7 +380,8 @@ def trigger_refresh():
             [sys.executable, str(script_path)],
             env=env,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
+            cwd=str(BASE_DIR.parent)
         )
         return {"success": True, "message": "Refresh triggered in background"}
     except Exception as e:
@@ -325,7 +392,7 @@ if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))
     host = os.environ.get('HOST', '0.0.0.0')
     print("=" * 60)
-    print("TRADING COPILOT API SERVER v3")
+    print("TRADING COPILOT API SERVER + SCHEDULER v4")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
     print(f"Host: {host}")
@@ -333,7 +400,8 @@ if __name__ == "__main__":
     print(f"AI: {'Available' if AI_AVAILABLE else 'NOT available'}")
     print(f"Post-Mortem: {'Available' if POSTMORTEM_AVAILABLE else 'NOT available'}")
     print(f"Custom History: {'Available' if CUSTOM_HISTORY_AVAILABLE else 'NOT available'}")
-    print(f"Auth: {'X-API-Key required' if API_KEY else 'OPEN MODE (dev only)'}")
+    print(f"Auth: {'X-API-Key required' if API_KEY else 'OPEN MODE'}")
+    print(f"Background scheduler: {'DISABLED' if os.environ.get('DISABLE_SCHEDULER') == '1' else 'WILL START'}")
     print(f"Docs: http://localhost:{port}/docs")
     print("=" * 60)
     uvicorn.run(app, host=host, port=port, log_level="info")
