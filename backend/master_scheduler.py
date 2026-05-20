@@ -19,6 +19,8 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+# Force IST timezone for all scheduling
+IST = pytz.timezone('Asia/Kolkata')
 
 BACKEND_DIR = Path(__file__).parent
 PYTHON_EXE = sys.executable
@@ -35,7 +37,8 @@ if sys.platform == 'win32':
 
 last_runs = {}
 
-
+def get_ist_time():
+    return datetime.now(IST).strftime('%H:%M:%S')
 
 def run_module(module_name, args=None):
     script_path = BACKEND_DIR / f"{module_name}.py"
