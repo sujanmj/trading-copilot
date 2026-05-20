@@ -1,7 +1,17 @@
 import os
 import pyotp
 import requests
+from pathlib import Path
+from dotenv import load_dotenv
 from SmartApi import SmartConnect
+
+# Resolve the absolute path to config/keys.env from the current backend directory context
+BACKEND_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BACKEND_DIR.parent
+ENV_PATH = ROOT_DIR / "config" / "keys.env"
+
+# Load the environment keys (override=False protects existing platform vars on Railway)
+load_dotenv(dotenv_path=ENV_PATH, override=False)
 
 # Global caches to prevent rate-limiting and redundant logins
 _angel_session = None
@@ -24,6 +34,7 @@ def _initialize_angel_one():
         print("[*] Authenticating with Angel One (Auto-TOTP)...")
         obj = SmartConnect(api_key=api_key)
         
+        # Programmatically generate the live 6-digit 2FA token
         live_totp = pyotp.TOTP(totp_secret).now()
         
         data = obj.generateSession(client_id, pin, live_totp)
@@ -87,6 +98,6 @@ def fetch_accurate_nse_price(symbol: str) -> float:
         print(f"[!] Error fetching price for {clean_symbol}: {str(e)}")
         return 0.0
 
-# Keep your old function name alive so the rest of your app doesn't break
 def get_stock_price(symbol):
+    """Keep function namespace uniform across other caller scripts."""
     return fetch_accurate_nse_price(symbol)
