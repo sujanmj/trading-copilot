@@ -94,8 +94,11 @@ intraday_slots = [
     "12:30", "13:00", "13:30", "14:00", "14:30", "15:00"
 ]
 for slot in intraday_slots:
-    schedule.every().monday.to(.friday).at(slot).do(run_all_collectors_parallel)
-
+    schedule.every().monday.at(slot).do(run_all_collectors_parallel)
+    schedule.every().tuesday.at(slot).do(run_all_collectors_parallel)
+    schedule.every().wednesday.at(slot).do(run_all_collectors_parallel)
+    schedule.every().thursday.at(slot).do(run_all_collectors_parallel)
+    schedule.every().friday.at(slot).do(run_all_collectors_parallel)
 # Strategic Core Runs & Automation Pipelines
 schedule.every().day.at("05:00").do(run_strategic_brief, brief_name="Overnight Brief")
 schedule.every().day.at("08:00").do(run_standalone_script, script_name="outcome_tracker.py")
@@ -104,7 +107,11 @@ schedule.every().day.at("12:00").do(run_strategic_brief, brief_name="Midday Eval
 schedule.every().day.at("23:00").do(run_strategic_brief, brief_name="US/Global Pulse")
 
 # The newly integrated, instant-update post-close settlement script
-schedule.every().monday.to(.friday).at("15:45").do(run_post_market_pipeline)
+schedule.every().monday.at(slot).do(run_all_collectors_parallel)
+schedule.every().tuesday.at(slot).do(run_all_collectors_parallel)
+schedule.every().wednesday.at(slot).do(run_all_collectors_parallel)
+schedule.every().thursday.at(slot).do(run_all_collectors_parallel)
+schedule.every().friday.at(slot).do(run_all_collectors_parallel)
 
 # ============================================================================
 # ORCHESTRATION BOOT ENTRY POINT
