@@ -50,7 +50,8 @@ FETCH_MODES = ['hot', 'new']
 POSTS_LIMIT = 50
 
 HEADERS = {
-    'User-Agent': 'TradingCopilot/1.0 (Personal trading research tool)'
+    'User-Agent': 'windows:com.sujan.tradingcopilot:v2.2 (by u/sujan)',
+    'Accept': 'application/json'
 }
 
 OUTPUT_FILE = Path(__file__).parent.parent / 'data' / 'reddit_data.json'
