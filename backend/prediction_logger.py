@@ -31,12 +31,68 @@ except ImportError:
     SECTOR_MAP = {}
 
 # Optional: yfinance for live price fallback
-try:
-    import yfinance as yf
-    YF_AVAILABLE = True
-except ImportError:
-    YF_AVAILABLE = False
+# ============================================================
+# ANGEL ONE LIVE PRICE INTEGRATION
+# ============================================================
+from SmartApi import SmartConnect
+import pyotp
+import urllib.request
 
+# --- FILL THESE WITH YOUR CREDENTIALS ---
+ANGEL_API_KEY="tLzO6vAl"
+ANGEL_CLIENT_ID="M50034699"
+ANGEL_PIN="0369"
+ANGEL_TOTP_SECRET="36IRF7MHDTIDBITRIAB5TLCCUM" # The setup key from Google Authenticator
+# ----------------------------------------
+
+ANGEL_TOKENS = {}
+angel_client = None
+
+def init_angel_one():
+    global angel_client
+    if angel_client is not None: return True
+    
+    try:
+        # Generate TOTP automatically
+        totp = pyotp.TOTP(ANGEL_TOTP_SECRET).now()
+        
+        # Connect to SmartAPI
+        client = SmartConnect(api_key=ANGEL_API_KEY)
+        data = client.generateSession(ANGEL_CLIENT_ID, ANGEL_PIN, totp)
+        
+        if data['status']:
+            angel_client = client
+            safe_print("[DB] Angel One SmartAPI Connected successfully")
+            return True
+        else:
+            safe_print(f"[WARN] Angel One Login Failed: {data.get('message')}")
+            return False
+    except Exception as e:
+        safe_print(f"[WARN] Angel One Connection Error: {e}")
+        return False
+
+def get_angel_token(ticker):
+    """Downloads and caches the Angel One Token Master list to find the exact token ID"""
+    global ANGEL_TOKENS
+    if not ANGEL_TOKENS:
+        try:
+            url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            response = urllib.request.urlopen(req)
+            token_list = json.loads(response.read())
+            
+            for item in token_list:
+                # We only want NSE Equity segment
+                if item['exch_seg'] == 'NSE' and item['symbol'].endswith('-EQ'):
+                    clean_symbol = item['symbol'].replace('-EQ', '')
+                    ANGEL_TOKENS[clean_symbol] = {
+                        'token': item['token'],
+                        'symbol': item['symbol']
+                    }
+        except Exception as e:
+            safe_print(f"[WARN] Failed to load Angel Tokens: {e}")
+            
+    return ANGEL_TOKENS.get(ticker)
 
 def safe_print(text):
     try:
@@ -139,23 +195,35 @@ def is_valid_ticker(ticker):
 
 
 def fetch_live_price(ticker):
-    """Fetch current price from yfinance as fallback"""
-    if not YF_AVAILABLE or not ticker:
+    """Fetch exact LTP from Angel One SmartAPI"""
+    if not ticker: return None
+    
+    # Ensure we are connected
+    if not init_angel_one(): 
         return None
+        
+    # Get exact token for the ticker (e.g., RELIANCE -> 2885)
+    token_info = get_angel_token(ticker)
+    if not token_info:
+        safe_print(f"[WARN] Ticker {ticker} not found in Angel One NSE list")
+        return None
+        
     try:
-        symbol = f"{ticker}.NS" if not ticker.endswith('.NS') else ticker
-        stock = yf.Ticker(symbol)
-        hist = stock.history(period='5d')
-        if hist.empty:
-            return None
-        price = float(hist['Close'].iloc[-1])
-        if 5 <= price <= 1000000:
-            return round(price, 2)
-        return None
-    except Exception:
-        return None
-
-
+        # Fetch Live Price
+        response = angel_client.ltpData(
+            exchange="NSE",
+            tradingsymbol=token_info['symbol'],
+            symboltoken=token_info['token']
+        )
+        
+        if response.get('status') and 'data' in response:
+            ltp = float(response['data']['ltp'])
+            if 5 <= ltp <= 1000000:
+                return round(ltp, 2)
+    except Exception as e:
+        pass
+        
+    return None
 # ============================================================
 # DEDUPLICATION
 # ============================================================
@@ -397,173 +465,104 @@ def parse_risk_item(rank, content):
 # ============================================================
 
 def log_predictions_from_intelligence():
-    safe_print("=" * 60)
-    safe_print("PREDICTION LOGGER v2.0 (Clean & Deduped)")
-    safe_print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    safe_print(f"Universe: {len(VALID_TICKERS)} valid tickers")
-    safe_print(f"yfinance: {'Available' if YF_AVAILABLE else 'NOT installed'}")
-    safe_print("=" * 60)
-    
-    init_db()
-    
-    if not INTELLIGENCE_FILE.exists():
-        safe_print(f"[ERROR] No intelligence file at {INTELLIGENCE_FILE}")
-        return False
-    
-    try:
-        with open(INTELLIGENCE_FILE, 'r', encoding='utf-8') as f:
-            intel = json.load(f)
-    except Exception as e:
-        safe_print(f"[ERROR] Failed to load intelligence: {e}")
-        return False
-    
-    analysis = intel.get('analysis', '')
-    if not analysis:
-        safe_print("[ERROR] Empty analysis in intelligence file")
-        return False
-    
-    timestamp = intel.get('timestamp', datetime.now().isoformat())
-    prediction_date = timestamp[:10]
-    use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
-    run_type = use_case
-    
-    conviction = parse_conviction(analysis)
-    safe_print(f"[INFO] Overall conviction: {conviction}/10")
-    
-    # === OPPORTUNITIES ===
-    opp_section = find_section(analysis, 'OPPORTUNITIES')
-    safe_print(f"[INFO] Opportunities section: {len(opp_section)} chars")
-    
-    opp_items = split_into_numbered_items(opp_section)
-    safe_print(f"[INFO] Found {len(opp_items)} numbered opportunity items")
-    
-    opportunities = []
-    rejected_opps = []
-    for rank, content in opp_items:
-        if rank > 10:
-            continue
-        opp = parse_opportunity_item(rank, content)
-        if opp:
-            opportunities.append(opp)
-        else:
-            first_line = content.split('\n')[0][:60] if content else ''
-            rejected_opps.append(f"#{rank}: {first_line}")
-    
-    safe_print(f"[INFO] Successfully parsed {len(opportunities)} opportunities")
-    if rejected_opps:
-        safe_print(f"[INFO] Rejected (no valid ticker): {len(rejected_opps)}")
-        for r in rejected_opps[:3]:
-            safe_print(f"       {r}")
-    
-    # === RISKS ===
-    risk_section = find_section(analysis, 'RISKS')
-    safe_print(f"[INFO] Risks section: {len(risk_section)} chars")
-    
-    risk_items = split_into_numbered_items(risk_section)
-    safe_print(f"[INFO] Found {len(risk_items)} numbered risk items")
-    
-    risks = []
-    rejected_risks = []
-    for rank, content in risk_items:
-        if rank > 10:
-            continue
-        risk = parse_risk_item(rank, content)
-        if risk:
-            risks.append(risk)
-        else:
-            first_line = content.split('\n')[0][:60] if content else ''
-            rejected_risks.append(f"#{rank}: {first_line}")
-    
-    safe_print(f"[INFO] Successfully parsed {len(risks)} risks")
-    if rejected_risks:
-        safe_print(f"[INFO] Rejected (no valid ticker): {len(rejected_risks)}")
-        for r in rejected_risks[:3]:
-            safe_print(f"       {r}")
-    
-    # === SAVE OPPORTUNITIES (with dedup) ===
+    # Initialize variables to avoid UnboundLocalError
     saved_opps = 0
     skipped_opps = 0
-    for opp in opportunities:
-        ticker = opp['ticker']
-        sector = get_sector_for_ticker(ticker)
+    saved_risks = 0
+    skipped_risks = 0
+    
+    init_db()
+    if not INTELLIGENCE_FILE.exists(): return False
+    
+    with open(INTELLIGENCE_FILE, 'r', encoding='utf-8') as f:
+        intel = json.load(f)
+    
+    prediction_date = intel.get('timestamp', datetime.now().isoformat())[:10]
+    run_type = os.environ.get('AI_USE_CASE', 'manual_refresh')
+    conviction = 6 # Default as it's not explicitly in the JSON root
+    
+    # NEW: Directly read from structured JSON instead of parsing text
+    opportunities = intel.get('top_opportunities', [])
+    risks = intel.get('risks_and_avoids', [])
+
+    safe_print(f"[INFO] Processing {len(opportunities)} opportunities and {len(risks)} risks")
+
+    for i, opp in enumerate(opportunities, 1):
+        ticker = opp.get('symbol')
+        if not is_valid_ticker(ticker): continue
         
         # Dedup check
         if is_duplicate_prediction(ticker, prediction_date, 'opportunity', run_type):
             skipped_opps += 1
             continue
-        
+            
         prediction_data = {
             'prediction_date': prediction_date,
             'run_type': run_type,
-            'use_case': use_case,
             'ticker': ticker,
-            'sector': sector,
-            'recommendation': opp['recommendation'],
+            'sector': get_sector_for_ticker(ticker),
+            'recommendation': opp.get('action', 'BUY'),
             'category': 'opportunity',
-            'rank_in_list': opp['rank'],
-            'entry_price': opp['entry_price'],
-            'target_price': opp['target_price'],
-            'stop_loss': opp['stop_loss'],
-            'confidence': opp['confidence'],
-            'reasoning': opp['reasoning'],
-            'cross_validation': opp['cross_validation'],
+            'rank_in_list': i,
+            'entry_price': parse_price(str(opp.get('entry_zone', ''))),
+            'target_price': parse_price(str(opp.get('target', ''))),
+            'stop_loss': parse_price(str(opp.get('stop_loss', ''))),
+            'confidence': opp.get('confidence', 'MEDIUM'),
+            'reasoning': opp.get('logic', ''),
             'overall_conviction': conviction,
-            'raw_data': opp,
+            'raw_data': opp
         }
         
         if insert_prediction(prediction_data):
-            saved_opps += 1
-    
-    # === SAVE RISKS (with dedup) ===
-    saved_risks = 0
-    skipped_risks = 0
-    for risk in risks:
-        ticker = risk['ticker']
-        sector = get_sector_for_ticker(ticker)
+            # Patch: Create outcome row for grading
+            try:
+                conn_db = sqlite3.connect(DB_PATH)
+                cur = conn_db.cursor()
+                cur.execute("SELECT id FROM predictions WHERE ticker=? AND prediction_date=? ORDER BY id DESC LIMIT 1", (ticker, prediction_date))
+                p_id = cur.fetchone()[0]
+                cur.execute("INSERT INTO outcomes (ticker, prediction_date, entry_price, source_id, source_type, verdict) VALUES (?, ?, ?, ?, ?, 'PENDING')", 
+                            (ticker, prediction_date, prediction_data['entry_price'], p_id, 'prediction'))
+                conn_db.commit(); conn_db.close()
+                saved_opps += 1
+            except: pass
+
+    for i, risk in enumerate(risks, 1):
+        ticker = risk.get('symbol')
+        if not is_valid_ticker(ticker): continue
         
         if is_duplicate_prediction(ticker, prediction_date, 'risk', run_type):
             skipped_risks += 1
             continue
-        
-        prediction_data = {
+            
+        risk_data = {
             'prediction_date': prediction_date,
             'run_type': run_type,
-            'use_case': use_case,
             'ticker': ticker,
-            'sector': sector,
-            'recommendation': risk['recommendation'],
+            'sector': get_sector_for_ticker(ticker),
+            'recommendation': 'AVOID',
             'category': 'risk',
-            'rank_in_list': risk['rank'],
-            'entry_price': risk.get('entry_price'),  # NOW HAS PRICE
-            'target_price': None,
-            'stop_loss': None,
-            'confidence': risk['confidence'],
-            'reasoning': risk['reasoning'],
-            'cross_validation': '',
+            'rank_in_list': i,
+            'entry_price': fetch_live_price(ticker),
+            'confidence': 'MEDIUM',
+            'reasoning': risk.get('logic', ''),
             'overall_conviction': conviction,
-            'raw_data': risk,
+            'raw_data': risk
         }
         
-        if insert_prediction(prediction_data):
-            saved_risks += 1
-    
-    saved_signals = log_scanner_signals(prediction_date)
-    
-    safe_print("")
-    safe_print("-" * 60)
-    safe_print(f"[OK] Saved to database:")
-    safe_print(f"  Opportunities saved:     {saved_opps}")
-    safe_print(f"  Opportunities skipped:   {skipped_opps} (duplicates)")
-    safe_print(f"  Risks saved:             {saved_risks}")
-    safe_print(f"  Risks skipped:           {skipped_risks} (duplicates)")
-    safe_print(f"  Scanner signals:         {saved_signals}")
-    safe_print(f"  Conviction:              {conviction}/10")
-    safe_print(f"  Run type:                {run_type}")
-    safe_print(f"  Date:                    {prediction_date}")
-    safe_print("=" * 60)
-    
-    return True
+        if insert_prediction(risk_data):
+            try:
+                conn_db = sqlite3.connect(DB_PATH)
+                cur = conn_db.cursor()
+                cur.execute("SELECT id FROM predictions WHERE ticker=? AND prediction_date=? ORDER BY id DESC LIMIT 1", (ticker, prediction_date))
+                p_id = cur.fetchone()[0]
+                cur.execute("INSERT INTO outcomes (ticker, prediction_date, entry_price, source_id, source_type, verdict) VALUES (?, ?, ?, ?, ?, 'PENDING')", 
+                            (ticker, prediction_date, risk_data['entry_price'], p_id, 'prediction'))
+                conn_db.commit(); conn_db.close()
+                saved_risks += 1
+            except: pass
 
+    saved_signals = log_scanner_signals(prediction_date)
+    return True
 
 def log_scanner_signals(signal_date):
     if not SCANNER_FILE.exists():

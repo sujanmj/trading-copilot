@@ -1,6 +1,7 @@
 """
-MASTER ANALYZER v7 - Memory-Augmented (Self-Aware AI)
+MASTER ANALYZER v8 - JSON API Engine + Memory-Augmented (Self-Aware AI)
 Reads past performance from learning_engine and feeds it to AI prompt.
+Outputs strict JSON for Luxury GUI integration.
 """
 
 import os
@@ -19,14 +20,12 @@ except ImportError:
     def load_dotenv(*args, **kwargs):
         return False
 
-
 if sys.platform == 'win32':
     try:
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
     except Exception:
         pass
-
 
 sys.path.insert(0, str(Path(__file__).parent))
 from ai_router import ask_ai
@@ -38,7 +37,6 @@ try:
 except ImportError:
     LEARNING_AVAILABLE = False
     print("[WARN] learning_engine not available - running without memory")
-
 
 env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
 if DOTENV_AVAILABLE:
@@ -321,7 +319,6 @@ def is_indian_market_open():
 def generate_unified_analysis(all_data):
     print("\n[ANALYSIS] Sending to AI for unified intelligence...")
 
-    # NEW v7: Build memory summary from past performance
     memory_summary = ""
     if LEARNING_AVAILABLE:
         try:
@@ -344,7 +341,6 @@ def generate_unified_analysis(all_data):
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     market_status = "OPEN" if is_indian_market_open() else "CLOSED"
 
-    # Memory section
     memory_section = ""
     if memory_summary:
         memory_section = f"\n{memory_summary}\n\n"
@@ -371,132 +367,84 @@ KEY ANALYSIS PRINCIPLES:
 5. **USE YOUR PAST PERFORMANCE TO CALIBRATE CONFIDENCE LEVELS**
 
 {govt_str}
-
 {scanner_str}
-
 {global_str}
-
 {india_str}
-
 {news_str}
-
 {inshorts_str}
-
 {youtube_str}
-
 {reddit_str}
 
----
+CRITICAL INSTRUCTION: You are a backend API connecting to a React/Electron frontend. 
+You MUST NOT output any markdown blocks, conversational text, or explanations outside of JSON.
+Your entire response MUST be a valid, minified JSON object matching this exact schema:
 
-Provide UNIFIED INTELLIGENCE in this EXACT format. BE COMPREHENSIVE. CRITICAL: Output BOTH all 10 opportunities AND all 10 risks completely. Do not truncate.
+{{
+  "executive_summary": "2-3 sentences summarizing market bias and macro conditions.",
+  "government_impact": {{
+    "summary": "Brief summary of policy impact",
+    "confidence_score": "5/10"
+  }},
+  "sector_rotation": {{
+    "bullish": ["TELECOM", "PHARMA"],
+    "bearish": ["CHEMICALS", "MEDIA"]
+  }},
+  "market_mood": {{
+    "global_mood": "BEARISH",
+    "india_outlook": "CAUTIOUSLY BULLISH",
+    "retail_mood": "NEUTRAL",
+    "confidence_level": "6.5/10"
+  }},
+  "self_calibration": "Based on past performance, trusting volume spikes over news today...",
+  "top_opportunities": [
+    {{
+      "symbol": "ERIS",
+      "action": "BUY",
+      "entry_zone": "1450-1460",
+      "target": "1580",
+      "stop_loss": "1390",
+      "confidence": "MEDIUM",
+      "logic": "13.0x volume spike + 9.13% breakout + pharma sector strength."
+    }}
+  ],
+  "risks_and_avoids": [
+    {{
+      "symbol": "PIIND",
+      "logic": "8.8x volume spike on breakdown. Institutional exit."
+    }}
+  ],
+  "action_plan": "Place AMO orders for ERIS. Monitor ZYDUSLIFE."
+}}
 
-# UNIFIED MARKET INTELLIGENCE
-
-## EXECUTIVE SUMMARY (3-4 lines)
-
-## GOVERNMENT POLICY IMPACT
-- Affected sectors:
-- Likely market reaction:
-- Confidence:
-
-## SCANNER ALERTS
-- Top ULTRA/STRONG signals:
-- Sector rotation pattern:
-- Notable correlation breaks:
-
-## RETAIL SENTIMENT (REDDIT)
-- Overall retail mood:
-- Top tickers retail is buzzing about:
-
-## MARKET MOOD
-- Global Mood:
-- India Outlook:
-- Retail Mood:
-- Confidence Level:
-
-## SELF-CALIBRATION (NEW)
-Based on your past performance, comment on:
-- Which sectors you're trusting more today (and why)
-- Which you're being skeptical about
-- How you're calibrating today's confidence levels
-
-## TOP 10 OPPORTUNITIES TODAY/TOMORROW
-[List EXACTLY 10. Order by conviction. APPLY YOUR PAST PERFORMANCE LEARNINGS.]
-
-1. [TICKER] - [Buy/Hold/Watch/Accumulate]
-   - Why: [reason]
-   - Entry: [price]
-   - Target: [price]
-   - Stop Loss: [price]
-   - Confidence: [High/Medium/Low - JUSTIFIED BY YOUR HISTORICAL CALIBRATION]
-   - Cross-validation:
-   - Past performance check: [If you've predicted this ticker/sector before, mention it]
-
-2. [Same format]
-3. [Same format]
-4. [Same format]
-5. [Same format]
-6. [Same format]
-7. [Same format]
-8. [Same format]
-9. [Same format]
-10. [Same format]
-
-## TOP 10 RISKS / AVOID LIST
-[MANDATORY: List EXACTLY 10.]
-
-1. [TICKER] - [Risk reason]
-2. [Same format]
-3. [Same format]
-4. [Same format]
-5. [Same format]
-6. [Same format]
-7. [Same format]
-8. [Same format]
-9. [Same format]
-10. [Same format]
-
-## SECTOR ROTATION SIGNAL
-- Sectors showing strength:
-- Sectors showing weakness:
-
-## OVERNIGHT GLOBAL IMPACT
-- US impact:
-- Europe impact:
-- Asia impact:
-- Commodity impact:
-- Currency impact:
-
-## SCANNER + NEWS ALERTS
-[5-7 cross-validated alerts]
-
-## CROSS-VALIDATION SCORE
-- Govt + Scanner alignment: X/10
-- Reddit + Scanner alignment: X/10
-- Overall conviction: X/10
-
-## ACTION PLAN
-[Specific, time-bound actions for IMMEDIATE / INTRADAY / TOMORROW]
-
----
 RULES:
-- MUST give exactly 10 opportunities AND 10 risks
-- Use ONLY actual NSE stock tickers (e.g., RELIANCE, TCS, ICICIBANK), NOT sector names
-- Be specific with entry/target/stop-loss
-- ULTRA scanner signals MUST appear in top 5 opportunities or risks
-- For commodities, use ETF tickers (GOLDBEES, SILVERBEES) not "GOLD" or "SILVER"
-- IMPORTANT: Calibrate your confidence levels based on past performance shown above
-- IMPORTANT: Don't repeat tickers from "STILL PENDING" list above
-- IMPORTANT: Mention specifically how past data is influencing today's calls"""
+- MUST give exactly 10 items in top_opportunities AND 10 in risks_and_avoids.
+- Use ONLY actual NSE stock tickers (e.g., RELIANCE, TCS).
+- Be specific with entry/target/stop-loss.
+- ULTRA scanner signals MUST appear in top 5 opportunities or risks.
+- IMPORTANT: Don't repeat tickers.
+- Output ONLY valid JSON, do not wrap in markdown tags like ```json.
+"""
 
     use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
     result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
 
     if result['success']:
         print(f"  [AI] Used: {result['model']} ({result['provider']})")
-        if 'estimated_cost' in result:
-            print(f"  [AI] Cost: ${result['estimated_cost']}")
-        return result['text']
+        ai_text = result['text']
+        
+        # Clean JSON in case the AI ignored instructions and added markdown wrappers
+        clean_text = ai_text.strip()
+        if "```json" in clean_text:
+            clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in clean_text:
+            clean_text = clean_text.split("```")[1].split("```")[0].strip()
+            
+        try:
+            parsed_json = json.loads(clean_text)
+            return parsed_json
+        except json.JSONDecodeError as e:
+            print(f"  [ERROR] AI did not return valid JSON. Raw output:\n{ai_text}")
+            return None
     else:
         print(f"  ERROR: {result.get('error', 'Unknown')}")
         return None
@@ -504,7 +452,7 @@ RULES:
 
 def run_master_analysis():
     print("\n" + "=" * 60)
-    print("MASTER ANALYZER v7 - 8 TIERS + Memory-Augmented AI")
+    print("MASTER ANALYZER v8 - JSON API Engine + Memory-Augmented")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -526,25 +474,24 @@ def run_master_analysis():
 
     print(f"\n[INFO] {sources_loaded}/8 sources loaded")
 
-    analysis = generate_unified_analysis(all_data)
+    # This now returns a Python Dictionary, not a string
+    analysis_dict = generate_unified_analysis(all_data)
 
-    if not analysis:
-        print("\nERROR: Failed to generate analysis")
+    if not analysis_dict:
+        print("\nERROR: Failed to generate or parse analysis")
         return None
 
     print("\n" + "=" * 60)
-    print("UNIFIED INTELLIGENCE OUTPUT")
-    print("=" * 60)
-    print(analysis)
+    print("UNIFIED INTELLIGENCE JSON PARSED SUCCESSFULLY")
     print("=" * 60)
 
+    # Build the root output framework
     output = {
         'timestamp': datetime.now().isoformat(),
         'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'market_open': is_indian_market_open(),
         'sources_used': sources_loaded,
         'memory_augmented': LEARNING_AVAILABLE,
-        'analysis': analysis,
         'data_snapshot': {
             'govt_high_impact': all_data['govt'].get('high_impact_count', 0) if all_data['govt'] else 0,
             'global_alerts': len(all_data['global_markets'].get('alerts', [])) if all_data['global_markets'] else 0,
@@ -559,10 +506,14 @@ def run_master_analysis():
             'scanner_top_signal': (all_data['scanner'].get('top_signals') or [{}])[0].get('ticker', 'none') if all_data['scanner'] else 'none',
         }
     }
+    
+    # Merge the parsed AI JSON directly into the root dictionary
+    output.update(analysis_dict)
 
     data_dir = Path(__file__).parent.parent / 'data'
     output_file = data_dir / 'unified_intelligence.json'
 
+    # Save cleanly for the GUI
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2, default=str, ensure_ascii=False)
 
@@ -572,7 +523,7 @@ def run_master_analysis():
 
 
 if __name__ == "__main__":
-    print("Starting master analyzer v7 (Memory-Augmented)...")
+    print("Starting master analyzer v8 (JSON Engine)...")
     
     analysis_success = False
     try:

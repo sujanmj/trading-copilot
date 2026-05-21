@@ -230,7 +230,7 @@ def evaluate_pending_outcomes(verbose=True):
             print(f"\n[{i}/{len(pending)}] {ticker} (predicted {pred_date_str}, {days_elapsed}d ago)")
         
         # Skip if too soon (need at least 1 day)
-        if days_elapsed < 1:
+        if days_elapsed < 0:
             if verbose:
                 print(f"  [SKIP] Too recent ({days_elapsed} days)")
             stats['still_pending'] += 1
@@ -393,7 +393,7 @@ def evaluate_signals_outcomes(verbose=True):
             continue
         
         days_elapsed = (today - pred_date).days
-        if days_elapsed < 1:
+        if days_elapsed < 0:
             sig_stats['pending'] += 1
             continue
         

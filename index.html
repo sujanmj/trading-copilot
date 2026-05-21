@@ -44,220 +44,209 @@
     .tab-content::-webkit-scrollbar { width: 4px; }
     .tab-content::-webkit-scrollbar-track { background: #111; }
     .tab-content::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-    .conviction-bar { background: #1a1a2e; padding: 10px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #00ff88; }
-    .conviction-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-    .conviction-value { font-size: 18px; font-weight: bold; color: #00ff88; margin-top: 2px; }
-    .stars { font-size: 11px; color: #ffaa00; margin-top: 2px; }
-    .intel-section { margin-bottom: 14px; background: #0a0a0a; border-radius: 6px; padding: 10px; border: 1px solid #1a1a1a; }
-    .intel-text { font-size: 11px; color: #bbb; line-height: 1.6; white-space: pre-wrap; }
-    .intel-text strong { color: #fff; }
-    .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
-    .market-card { background: #111; padding: 8px; border-radius: 5px; border: 1px solid #1a1a1a; }
-    .market-card-name { font-size: 9px; color: #666; text-transform: uppercase; }
-    .market-card-value { font-size: 12px; font-weight: bold; margin: 2px 0; }
-    .market-card-change { font-size: 10px; }
-    .green { color: #00ff88; }
-    .red { color: #ff4444; }
+    
+    /* --- LUXURY "DARK GLASS" UI SYSTEM --- */
+    .brain-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 10px; }
+    @media (min-width: 800px) { .brain-grid { grid-template-columns: 1.2fr 1fr; } }
+    .glass-card { background: #151A22; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); margin-bottom: 16px; }
+    .glass-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8B949E; margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 8px; }
+    .glass-text { font-size: 12px; color: #E0E6ED; line-height: 1.6; }
+    
+    /* Common Data Items */
+    .trade-item, .govt-item, .news-item, .tv-video, .reddit-ticker, .reddit-discussion, .signal-row, .sector-row, .corr-break { 
+      background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255,255,255,0.03); border-radius: 8px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #444; 
+    }
+    
+    .trade-item.buy, .signal-row.strong { border-left-color: #00E676; }
+    .trade-item.sell, .signal-row.bearish { border-left-color: #FF3D00; }
+    .trade-item.watch, .signal-row.moderate { border-left-color: #ffaa00; }
+    .signal-row.ultra { border-left-color: #cc88ff; }
+    
+    .trade-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .trade-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
+    .trade-badge { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
+    .trade-badge.buy { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .trade-badge.sell { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    .trade-badge.watch { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+    .trade-metrics { display: flex; flex-wrap: wrap; gap: 12px; font-family: monospace; font-size: 11px; color: #A3B3C8; margin-bottom: 8px; }
+    .trade-logic { font-size: 11px; color: #8B949E; line-height: 1.5; margin: 0; }
+    
+    .sector-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sector-tag { font-size: 10px; padding: 4px 10px; border-radius: 12px; font-weight: 600; }
+    .sector-tag.bull { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .sector-tag.bear { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    
+    .mood-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;}
+    .mood-item { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 12px; border: 1px solid rgba(255,255,255,0.02);}
+    .mood-item span { display: block; color: #8B949E; font-size: 9px; text-transform: uppercase; margin-bottom: 4px; }
+    .mood-item strong { color: #E0E6ED; font-weight: 600; }
+    
+    .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .market-card { background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); }
+    .market-card-name { font-size: 9px; color: #8B949E; text-transform: uppercase; }
+    .market-card-value { font-size: 13px; font-weight: bold; margin: 4px 0; }
+    .market-card-change { font-size: 10px; font-family: monospace; }
+    
+    .green { color: #00E676; }
+    .red { color: #FF3D00; }
     .yellow { color: #ffaa00; }
-    .region-header { color: #ffaa00; font-size: 10px; text-transform: uppercase; font-weight: bold; margin: 12px 0 6px 0; letter-spacing: 0.5px; }
-    .news-item { background: #111; padding: 8px; border-radius: 4px; margin-bottom: 6px; border-left: 2px solid #444; font-size: 11px; }
-    .news-item.positive, .news-item.bullish { border-left-color: #00ff88; }
-    .news-item.negative, .news-item.bearish { border-left-color: #ff4444; }
-    .news-item.neutral { border-left-color: #888; }
-    .news-source { color: #00ff88; font-size: 9px; text-transform: uppercase; }
-    .news-title { color: #ccc; margin-top: 3px; line-height: 1.4; }
-    .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: bold; margin-right: 4px; }
-    .badge-green { background: #0d2a0d; color: #00ff88; }
-    .badge-red { background: #2a0d0d; color: #ff4444; }
-    .badge-yellow { background: #2a200d; color: #ffaa00; }
-    .badge-purple { background: #1a0d2a; color: #cc88ff; }
-    .stock-mention { display: inline-block; background: #1a1a2e; padding: 2px 8px; border-radius: 3px; font-size: 10px; margin: 2px; color: #00ff88; }
-    .stock-mention.hot { background: #2a1a0d; color: #ffaa00; }
-    .govt-item { background: #1a1a2e; padding: 12px; border-radius: 6px; margin: 10px 0; }
+    
+    .news-item.positive, .news-item.bullish, .sector-row.bullish, .reddit-ticker.bullish, .reddit-discussion.bullish { border-left-color: #00E676; }
+    .news-item.negative, .news-item.bearish, .sector-row.bearish, .reddit-ticker.bearish, .reddit-discussion.bearish { border-left-color: #FF3D00; }
+    .news-item.neutral, .sector-row.neutral, .reddit-ticker.neutral, .reddit-discussion.neutral { border-left-color: #ffaa00; }
+    
+    .news-source { color: #00E676; font-size: 9px; text-transform: uppercase; }
+    .news-title { color: #E0E6ED; margin-top: 4px; line-height: 1.4; font-size: 12px; }
+    
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; margin-right: 4px; }
+    .badge-green { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .badge-red { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    .badge-yellow { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+    .badge-purple { background: rgba(204, 136, 255, 0.1); color: #cc88ff; border: 1px solid rgba(204, 136, 255, 0.3); }
+    
+    .stock-mention { display: inline-block; background: rgba(0,0,0,0.3); padding: 3px 8px; border-radius: 4px; font-size: 10px; margin: 2px; color: #00E676; border: 1px solid rgba(0,230,118,0.2); }
+    .stock-mention.hot { color: #ffaa00; border-color: rgba(255,170,0,0.3); }
+    
     .govt-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .govt-score { padding: 3px 10px; border-radius: 3px; font-size: 10px; font-weight: bold; }
-    .govt-score.bullish { background: #00ff88; color: #000; }
-    .govt-score.bearish { background: #ff4444; color: #fff; }
-    .govt-score.neutral { background: #ffaa00; color: #000; }
-    .govt-source { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-    .govt-relevance { font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #333; color: #aaa; margin-left: 6px; }
-    .govt-relevance.high { background: #2a0d0d; color: #ff4444; }
-    .govt-relevance.medium { background: #2a200d; color: #ffaa00; }
-    .govt-relevance.low { background: #1a1a2e; color: #888; }
-    .govt-relevance.none { background: #0a0a0a; color: #555; }
+    .govt-score { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+    .govt-score.bullish { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .govt-score.bearish { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    .govt-score.neutral { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+    .govt-source { font-size: 9px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; }
+    .govt-relevance { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
     .govt-headline { font-size: 13px; color: #fff; line-height: 1.4; margin-bottom: 8px; font-weight: 600; }
-    .govt-reasons { font-size: 10px; color: #ffaa00; margin: 6px 0; }
-    .read-link { display: inline-block; padding: 4px 10px; background: #0a0a0a; color: #00ff88; text-decoration: none; border-radius: 4px; font-size: 10px; margin-top: 8px; margin-right: 6px; border: 1px solid #00ff88; transition: all 0.2s; cursor: pointer; }
-    .read-link:hover { background: #00ff88; color: #000; }
-    .tv-video { background: #111; padding: 8px; border-radius: 4px; margin-bottom: 6px; font-size: 11px; border-left: 2px solid #444; }
-    .tv-video.live { border-left-color: #ff4444; }
+    .govt-reasons { font-size: 11px; color: #ffaa00; margin: 6px 0; }
+    
+    .read-link { display: inline-block; padding: 4px 10px; background: rgba(0,0,0,0.3); color: #00E676; text-decoration: none; border-radius: 4px; font-size: 10px; margin-top: 8px; margin-right: 6px; border: 1px solid rgba(0,230,118,0.3); transition: all 0.2s; cursor: pointer; }
+    .read-link:hover { background: #00E676; color: #000; }
+    
+    .tv-video.live { border-left-color: #FF3D00; }
     .tv-channel { color: #ffaa00; font-size: 9px; text-transform: uppercase; font-weight: bold; }
-    .tv-title { color: #ccc; margin-top: 3px; line-height: 1.4; }
-    .live-tag { background: #ff4444; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 8px; font-weight: bold; margin-left: 4px; animation: pulse 1.5s infinite; }
-    .timestamp { font-size: 9px; color: #444; text-align: right; margin-bottom: 8px; }
-    .loading { color: #444; text-align: center; padding: 20px; font-size: 12px; }
-    .ask-bar { border-top: 1px solid #222; padding: 8px 10px; display: flex; gap: 8px; background: #111; flex-shrink: 0; }
-    .ask-input { flex: 1; background: #1a1a1a; border: 1px solid #333; color: #fff; padding: 6px 10px; border-radius: 5px; font-size: 12px; outline: none; }
-    .ask-input:focus { border-color: #00ff88; }
-    .ask-btn { background: #00ff88; color: #000; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold; }
+    .tv-title { color: #E0E6ED; margin-top: 3px; line-height: 1.4; font-size: 12px; }
+    .live-tag { background: rgba(255, 61, 0, 0.2); color: #FF3D00; padding: 1px 6px; border-radius: 4px; font-size: 8px; font-weight: bold; margin-left: 4px; border: 1px solid #FF3D00; animation: pulse 1.5s infinite; }
+    
+    .timestamp { font-size: 10px; color: #8B949E; text-align: right; margin-bottom: 12px; }
+    .loading { color: #8B949E; text-align: center; padding: 20px; font-size: 12px; }
+    
+    .ask-bar { border-top: 1px solid rgba(255,255,255,0.05); padding: 10px; display: flex; gap: 8px; background: #0a0a0a; flex-shrink: 0; }
+    .ask-input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; outline: none; transition: border 0.2s; }
+    .ask-input:focus { border-color: #00E676; }
+    .ask-btn { background: #00E676; color: #000; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; }
     .ask-btn:hover { background: #00cc66; }
-    .ask-btn:disabled { background: #555; cursor: not-allowed; }
-    .mood-card { background: linear-gradient(135deg, #1a1a2e 0%, #0d1a0d 100%); border-radius: 8px; padding: 14px; margin-bottom: 12px; border: 1px solid #222; }
-    .mood-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .mood-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-    .mood-value { font-size: 22px; font-weight: bold; margin: 4px 0; }
-    .mood-value.bullish { color: #00ff88; }
-    .mood-value.bearish { color: #ff4444; }
-    .mood-value.neutral { color: #ffaa00; }
-    .mood-confidence { font-size: 11px; color: #888; }
-    .mood-summary { font-size: 11px; color: #ccc; margin-top: 8px; padding-top: 8px; border-top: 1px solid #222; line-height: 1.5; }
-    .mood-themes { margin-top: 8px; }
-    .theme-tag { display: inline-block; background: #2a1a0d; color: #ffaa00; font-size: 9px; padding: 2px 8px; border-radius: 10px; margin: 2px 4px 2px 0; }
-    .reddit-ticker { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
-    .reddit-ticker.bullish { border-left-color: #00ff88; }
-    .reddit-ticker.bearish { border-left-color: #ff4444; }
-    .reddit-ticker.neutral { border-left-color: #ffaa00; }
+    .ask-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+    
     .reddit-ticker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    .reddit-ticker-name { font-size: 13px; font-weight: bold; color: #fff; }
-    .reddit-ticker-mentions { font-size: 10px; color: #888; }
-    .reddit-sent-pill { font-size: 9px; padding: 2px 7px; border-radius: 10px; font-weight: bold; }
-    .reddit-sent-pill.bullish { background: #0d2a0d; color: #00ff88; }
-    .reddit-sent-pill.bearish { background: #2a0d0d; color: #ff4444; }
-    .reddit-sent-pill.neutral { background: #2a200d; color: #ffaa00; }
-    .reddit-top-post { font-size: 10px; color: #aaa; margin-top: 6px; line-height: 1.4; padding: 6px; background: #0a0a0a; border-radius: 3px; }
-    .reddit-top-post-meta { font-size: 9px; color: #666; margin-top: 4px; }
-    .reddit-discussion { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
-    .reddit-discussion.bullish { border-left-color: #00ff88; }
-    .reddit-discussion.bearish { border-left-color: #ff4444; }
-    .reddit-discussion-title { font-size: 12px; color: #ddd; line-height: 1.4; margin-bottom: 6px; }
-    .reddit-discussion-meta { display: flex; gap: 8px; align-items: center; font-size: 9px; color: #666; }
+    .reddit-ticker-name { font-size: 14px; font-weight: bold; color: #fff; }
+    .reddit-ticker-mentions { font-size: 10px; color: #8B949E; }
+    .reddit-sent-pill { font-size: 9px; padding: 2px 7px; border-radius: 4px; font-weight: bold; }
+    .reddit-top-post { font-size: 11px; color: #E0E6ED; margin-top: 8px; line-height: 1.4; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; }
+    .reddit-top-post-meta { font-size: 9px; color: #8B949E; margin-top: 6px; }
+    .reddit-discussion-title { font-size: 13px; color: #E0E6ED; line-height: 1.4; margin-bottom: 6px; font-weight: 600; }
+    .reddit-discussion-meta { display: flex; gap: 8px; align-items: center; font-size: 10px; color: #8B949E; }
     .reddit-sub { color: #ffaa00; font-weight: bold; }
-    .reddit-stats { color: #00ff88; }
-    .reddit-tickers-inline { margin-top: 4px; }
-    .scanner-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
-    .scanner-stat-card { background: #111; padding: 8px; border-radius: 5px; border: 1px solid #1a1a1a; text-align: center; }
-    .scanner-stat-label { font-size: 9px; color: #666; text-transform: uppercase; }
-    .scanner-stat-value { font-size: 18px; font-weight: bold; color: #00ff88; margin-top: 2px; }
-    .signal-row { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; }
-    .signal-row.ultra { border-left-color: #cc88ff; background: linear-gradient(90deg, #1a0d2a 0%, #111 60%); }
-    .signal-row.strong { border-left-color: #00ff88; }
-    .signal-row.moderate { border-left-color: #ffaa00; }
-    .signal-row.bearish { border-left-color: #ff4444; }
-    .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .signal-ticker { font-size: 14px; font-weight: bold; color: #fff; }
-    .signal-sector { font-size: 9px; color: #888; text-transform: uppercase; margin-left: 6px; }
-    .signal-strength-pill { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
-    .signal-strength-pill.ultra { background: #1a0d2a; color: #cc88ff; border: 1px solid #cc88ff; }
-    .signal-strength-pill.strong { background: #0d2a0d; color: #00ff88; }
-    .signal-strength-pill.moderate { background: #2a200d; color: #ffaa00; }
-    .signal-strength-pill.bearish { background: #2a0d0d; color: #ff4444; }
-    .signal-price-row { display: flex; gap: 12px; align-items: center; font-size: 11px; margin: 4px 0; }
+    .reddit-stats { color: #00E676; }
+    
+    .scanner-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+    .scanner-stat-card { background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); text-align: center; }
+    .scanner-stat-label { font-size: 9px; color: #8B949E; text-transform: uppercase; }
+    .scanner-stat-value { font-size: 20px; font-weight: bold; color: #00E676; margin-top: 4px; }
+    
+    .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .signal-ticker { font-size: 15px; font-weight: bold; color: #fff; }
+    .signal-sector { font-size: 9px; color: #8B949E; text-transform: uppercase; margin-left: 6px; }
+    .signal-strength-pill { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid transparent; }
+    .signal-strength-pill.ultra { background: rgba(204, 136, 255, 0.1); color: #cc88ff; border-color: rgba(204,136,255,0.3); }
+    .signal-strength-pill.strong { background: rgba(0, 230, 118, 0.1); color: #00E676; border-color: rgba(0,230,118,0.3); }
+    .signal-strength-pill.moderate { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border-color: rgba(255,170,0,0.3); }
+    .signal-strength-pill.bearish { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border-color: rgba(255,61,0,0.3); }
+    .signal-price-row { display: flex; gap: 12px; align-items: center; font-size: 12px; margin: 6px 0; font-family: monospace; }
     .signal-price { color: #fff; font-weight: bold; }
     .signal-change { font-weight: bold; }
-    .signal-change.up { color: #00ff88; }
-    .signal-change.down { color: #ff4444; }
     .signal-volume { color: #ffaa00; font-size: 10px; }
-    .signal-tags { margin-top: 6px; }
-    .signal-tag { display: inline-block; background: #1a1a2e; color: #ccc; font-size: 9px; padding: 2px 7px; border-radius: 3px; margin-right: 4px; margin-bottom: 2px; }
-    .signal-tag.volume { background: #2a200d; color: #ffaa00; }
-    .signal-tag.breakout { background: #0d2a0d; color: #00ff88; }
-    .signal-tag.breakdown { background: #2a0d0d; color: #ff4444; }
-    .signal-tag.gap { background: #1a0d2a; color: #cc88ff; }
-    .sector-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #111; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #444; }
-    .sector-row.bullish { border-left-color: #00ff88; }
-    .sector-row.bearish { border-left-color: #ff4444; }
-    .sector-row.neutral { border-left-color: #ffaa00; }
-    .sector-name { font-size: 11px; color: #ddd; font-weight: bold; }
-    .sector-stats { display: flex; gap: 10px; align-items: center; font-size: 10px; }
-    .sector-move { font-weight: bold; }
-    .sector-meta { color: #666; font-size: 9px; }
-    .corr-break { background: #1a0d2a; padding: 8px 10px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #cc88ff; font-size: 11px; }
-    .corr-ticker { color: #cc88ff; font-weight: bold; }
-    .corr-detail { color: #ccc; font-size: 10px; margin-top: 2px; }
-    .stats-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
-    .stat-big-card { background: #111; padding: 12px 8px; border-radius: 6px; border: 1px solid #222; text-align: center; }
-    .stat-big-label { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-big-value { font-size: 22px; font-weight: bold; margin: 6px 0 2px 0; }
-    .stat-big-sub { font-size: 9px; color: #888; }
-    .stat-big-value.green { color: #00ff88; }
-    .stat-big-value.red { color: #ff4444; }
-    .stat-big-value.yellow { color: #ffaa00; }
-    .stat-big-value.purple { color: #cc88ff; }
-    .stat-big-value.blue { color: #88ccff; }
-    .winner-row { background: linear-gradient(90deg, #0d2a0d 0%, #111 70%); padding: 8px 10px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #00ff88; }
-    .loser-row { background: linear-gradient(90deg, #2a0d0d 0%, #111 70%); padding: 8px 10px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid #ff4444; }
-    .pred-ticker { font-size: 12px; font-weight: bold; color: #fff; }
-    .pred-meta { font-size: 9px; color: #888; margin-top: 2px; }
-    .empty-stats { text-align: center; padding: 30px 20px; color: #555; font-size: 12px; line-height: 1.6; }
-    .empty-stats h4 { color: #888; margin-bottom: 10px; font-size: 14px; }
-    .verdict-pill { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
-    .verdict-pill.win { background: #0d2a0d; color: #00ff88; }
-    .verdict-pill.loss { background: #2a0d0d; color: #ff4444; }
-    .verdict-pill.neutral { background: #2a200d; color: #ffaa00; }
-    .verdict-pill.pending { background: #1a1a2e; color: #888; }
-    .period-selector { display: flex; gap: 3px; margin-bottom: 14px; background: #0a0a0a; padding: 4px; border-radius: 6px; flex-wrap: wrap; }
-    .period-btn { flex: 1; min-width: 80px; background: transparent; border: none; color: #888; padding: 7px 4px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; transition: all 0.2s; }
-    .period-btn:hover { background: #1a1a2e; color: #ccc; }
-    .period-btn.active { background: #00ff88; color: #000; }
-    .day-section { background: #0a0a0a; border-radius: 6px; padding: 10px; margin-bottom: 12px; border: 1px solid #1a1a1a; }
-    .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #222; }
-    .day-date { font-size: 12px; color: #00ff88; font-weight: bold; }
-    .day-stats { font-size: 10px; color: #888; }
-    .day-stats .win-rate-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: bold; margin-left: 6px; }
-    .day-stats .win-rate-pill.high { background: #0d2a0d; color: #00ff88; }
-    .day-stats .win-rate-pill.medium { background: #2a200d; color: #ffaa00; }
-    .day-stats .win-rate-pill.low { background: #2a0d0d; color: #ff4444; }
-    .day-stats .win-rate-pill.pending { background: #1a1a2e; color: #888; }
-    .pred-card-history { background: #111; padding: 10px; border-radius: 5px; margin-bottom: 6px; border-left: 3px solid #444; cursor: pointer; transition: all 0.2s; }
-    .pred-card-history:hover { background: #1a1a1a; }
-    .pred-card-history.opportunity { border-left-color: #00ff88; }
-    .pred-card-history.risk { border-left-color: #ff4444; }
-    .pred-card-history.evaluated.win { background: linear-gradient(90deg, #0d2a0d 0%, #111 80%); }
-    .pred-card-history.evaluated.loss { background: linear-gradient(90deg, #2a0d0d 0%, #111 80%); }
+    .signal-tags { margin-top: 8px; }
+    .signal-tag { display: inline-block; background: rgba(0,0,0,0.3); color: #ccc; font-size: 9px; padding: 3px 8px; border-radius: 4px; margin-right: 6px; margin-bottom: 4px; }
+    .signal-tag.volume { color: #ffaa00; border: 1px solid rgba(255,170,0,0.2); }
+    .signal-tag.breakout { color: #00E676; border: 1px solid rgba(0,230,118,0.2); }
+    .signal-tag.breakdown { color: #FF3D00; border: 1px solid rgba(255,61,0,0.2); }
+    
+    .sector-row { display: flex; justify-content: space-between; align-items: center; }
+    .sector-name { font-size: 12px; color: #fff; font-weight: bold; }
+    .sector-meta { color: #8B949E; font-size: 10px; margin-top: 2px; }
+    .sector-stats { font-family: monospace; font-size: 12px; font-weight: bold; }
+    
+    .corr-ticker { color: #cc88ff; font-weight: bold; font-size: 13px; }
+    .corr-detail { color: #A3B3C8; font-size: 11px; margin-top: 4px; line-height: 1.4; }
+    
+    .stats-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    .stat-big-card { background: rgba(0,0,0,0.25); padding: 16px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align: center; }
+    .stat-big-label { font-size: 10px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-big-value { font-size: 24px; font-weight: bold; margin: 8px 0 4px 0; }
+    .stat-big-sub { font-size: 10px; color: #A3B3C8; }
+    
+    .pred-card-history { background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #444; cursor: pointer; transition: all 0.2s; border: 1px solid rgba(255,255,255,0.02); }
+    .pred-card-history:hover { background: rgba(255,255,255,0.05); }
+    .pred-card-history.opportunity { border-left-color: #00E676; }
+    .pred-card-history.risk { border-left-color: #FF3D00; }
+    .pred-card-history.evaluated.win { background: rgba(0, 230, 118, 0.05); border-left-color: #00E676; border-color: rgba(0,230,118,0.2); }
+    .pred-card-history.evaluated.loss { background: rgba(255, 61, 0, 0.05); border-left-color: #FF3D00; border-color: rgba(255,61,0,0.2); }
     .pred-card-row { display: flex; justify-content: space-between; align-items: center; }
-    .pred-card-left { display: flex; flex-direction: column; gap: 2px; }
-    .pred-card-right { text-align: right; display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
-    .pred-card-ticker { font-size: 13px; font-weight: bold; color: #fff; }
-    .pred-card-rec { font-size: 9px; padding: 1px 6px; border-radius: 3px; background: #1a1a2e; color: #ccc; margin-left: 6px; }
-    .pred-card-meta-line { font-size: 9px; color: #888; margin-top: 2px; }
-    .pred-card-prices { font-size: 10px; color: #aaa; }
-    .pred-card-change { font-size: 13px; font-weight: bold; }
-    .pred-card-change.up { color: #00ff88; }
-    .pred-card-change.down { color: #ff4444; }
-    .pred-card-change.neutral { color: #ffaa00; }
-    .pred-card-change.pending { color: #888; }
-    .pred-detail-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; padding: 20px; border-radius: 10px; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; z-index: 1000; box-shadow: 0 0 30px rgba(0,255,136,0.3); border: 1px solid #00ff88; }
+    .pred-card-ticker { font-size: 14px; font-weight: bold; color: #fff; }
+    .pred-card-rec { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.5); color: #ccc; margin-left: 6px; }
+    .pred-card-meta-line { font-size: 10px; color: #8B949E; margin-top: 4px; }
+    .pred-card-prices { font-size: 10px; color: #A3B3C8; font-family: monospace; margin-top: 4px; }
+    .pred-card-change { font-size: 14px; font-weight: bold; font-family: monospace; }
+    
+    .verdict-pill { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+    .verdict-pill.win { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0,230,118,0.3); }
+    .verdict-pill.loss { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255,61,0,0.3); }
+    .verdict-pill.pending { background: rgba(0,0,0,0.4); color: #8B949E; border: 1px solid rgba(255,255,255,0.1); }
+    
+    .period-selector { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+    .period-btn { flex: 1; min-width: 80px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05); color: #8B949E; padding: 8px 4px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s; }
+    .period-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .period-btn.active { background: rgba(0, 230, 118, 0.1); color: #00E676; border-color: #00E676; }
+    
+    .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .day-date { font-size: 13px; color: #00E676; font-weight: bold; }
+    .day-stats { font-size: 11px; color: #8B949E; }
+    .win-rate-pill { display: inline-block; padding: 3px 8px; border-radius: 4px; font-weight: bold; margin-left: 6px; }
+    .win-rate-pill.high { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0,230,118,0.3); }
+    .win-rate-pill.medium { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3); }
+    .win-rate-pill.low { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255,61,0,0.3); }
+    .win-rate-pill.pending { background: rgba(0,0,0,0.4); color: #8B949E; }
+
+    /* Modals & Chat */
+    .pred-detail-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #151A22; padding: 24px; border-radius: 12px; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; z-index: 1000; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid rgba(0,230,118,0.3); }
     .pred-detail-modal.active { display: block; }
-    .pred-detail-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999; }
+    .pred-detail-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 999; backdrop-filter: blur(4px); }
     .pred-detail-overlay.active { display: block; }
-    .pred-detail-close { position: absolute; top: 10px; right: 12px; background: transparent; border: none; color: #888; font-size: 18px; cursor: pointer; }
-    .pred-detail-close:hover { color: #ff4444; }
-    .pred-detail-title { font-size: 16px; color: #00ff88; font-weight: bold; margin-bottom: 4px; }
-    .pred-detail-subtitle { font-size: 11px; color: #888; margin-bottom: 14px; }
-    .pred-detail-section { margin-bottom: 12px; }
-    .pred-detail-label { font-size: 9px; color: #ffaa00; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-    .pred-detail-value { font-size: 12px; color: #ccc; line-height: 1.6; }
-    .pred-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .pred-detail-cell { background: #0a0a0a; padding: 8px 10px; border-radius: 4px; }
-    .pred-detail-cell-label { font-size: 9px; color: #666; }
-    .pred-detail-cell-value { font-size: 13px; color: #fff; font-weight: bold; margin-top: 2px; }
-    .postmortem-btn { background: linear-gradient(135deg, #cc88ff 0%, #00ff88 100%); color: #000; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; margin-top: 10px; width: 100%; transition: all 0.2s; }
-    .postmortem-btn:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,255,136,0.3); }
-    .postmortem-btn:disabled { background: #444; color: #888; cursor: not-allowed; transform: none; }
-    .postmortem-result { margin-top: 14px; padding: 12px; background: #0a0a0a; border-radius: 6px; border: 1px solid #cc88ff; max-height: 400px; overflow-y: auto; }
-    .postmortem-result h2 { color: #cc88ff; font-size: 13px; margin: 10px 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-    .postmortem-result strong { color: #00ff88; }
-    .postmortem-loading { text-align: center; color: #888; padding: 20px; font-style: italic; }
-    .history-summary-card { background: linear-gradient(135deg, #1a1a2e 0%, #0d1a0d 100%); border-radius: 8px; padding: 12px; margin-bottom: 14px; border: 1px solid #222; }
-    .history-empty-day { text-align: center; padding: 14px; color: #555; font-size: 11px; font-style: italic; }
-    .chat-history-block { margin-top: 14px; border-top: 1px dashed #222; padding-top: 12px; }
-    .chat-history-header { font-size: 9px; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
-    .clear-chat-btn { background: #2a0d0d; color: #ff4444; border: 1px solid #ff4444; padding: 2px 8px; border-radius: 3px; font-size: 9px; cursor: pointer; }
-    .clear-chat-btn:hover { background: #ff4444; color: #fff; }
-    .chat-msg-user { padding: 8px; background: #1a1a1a; border-radius: 5px; border-left: 2px solid #00ff88; margin: 6px 0; }
-    .chat-msg-ai { padding: 8px; background: #0d1a0d; border-radius: 5px; border-left: 2px solid #004422; margin: 6px 0; }
-    .chat-msg-meta { color: #00ff88; font-size: 9px; margin-bottom: 4px; }
-    .chat-msg-content { font-size: 11px; color: #ccc; line-height: 1.5; }
+    .pred-detail-close { position: absolute; top: 12px; right: 16px; background: transparent; border: none; color: #8B949E; font-size: 20px; cursor: pointer; }
+    .pred-detail-close:hover { color: #FF3D00; }
+    .pred-detail-title { font-size: 20px; color: #00E676; font-weight: bold; margin-bottom: 6px; }
+    .pred-detail-subtitle { font-size: 12px; color: #A3B3C8; margin-bottom: 16px; }
+    .pred-detail-section { margin-bottom: 16px; }
+    .pred-detail-label { font-size: 10px; color: #ffaa00; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .pred-detail-value { font-size: 13px; color: #E0E6ED; line-height: 1.6; }
+    .pred-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pred-detail-cell { background: rgba(0,0,0,0.3); padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03); }
+    .pred-detail-cell-label { font-size: 10px; color: #8B949E; }
+    .pred-detail-cell-value { font-size: 15px; color: #fff; font-weight: bold; margin-top: 4px; font-family: monospace; }
+    
+    .postmortem-btn { background: rgba(0,230,118,0.1); color: #00E676; border: 1px solid #00E676; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: bold; margin-top: 12px; width: 100%; transition: all 0.2s; }
+    .postmortem-btn:hover { background: #00E676; color: #000; }
+    .postmortem-btn:disabled { background: rgba(255,255,255,0.05); color: #888; border-color: #333; cursor: not-allowed; }
+    .postmortem-result { margin-top: 16px; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(204,136,255,0.3); max-height: 400px; overflow-y: auto; }
+    .postmortem-result h2 { color: #cc88ff; font-size: 14px; margin: 12px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+    .postmortem-result strong { color: #00E676; }
+    
+    .chat-history-block { margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px; }
+    .chat-history-header { font-size: 10px; color: #8B949E; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+    .clear-chat-btn { background: rgba(255,61,0,0.1); color: #FF3D00; border: 1px solid #FF3D00; padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+    .clear-chat-btn:hover { background: #FF3D00; color: #fff; }
+    .chat-msg-user { padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 6px; border-left: 2px solid #00E676; margin: 8px 0; }
+    .chat-msg-ai { padding: 10px 12px; background: rgba(0,230,118,0.05); border-radius: 6px; border-left: 2px solid #00E676; margin: 8px 0; border: 1px solid rgba(0,230,118,0.1); }
+    .chat-msg-meta { color: #00E676; font-size: 10px; margin-bottom: 6px; font-weight: bold; }
+    .chat-msg-content { font-size: 12px; color: #E0E6ED; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -293,7 +282,7 @@
       <div class="loading-bar" id="loadingBar">⏳ Loading...</div>
       <div class="broker-placeholder" id="placeholder">
         <h2>📈 Select Broker or News Source</h2>
-        <p style="color:#444; font-size:12px;">Click any button above to open</p>
+        <p style="color:#8B949E; font-size:12px;">Click any button above to open</p>
       </div>
     </div>
 
@@ -326,7 +315,7 @@
       <div class="tab-content" id="tab-history"><div class="loading">⏳ Loading...</div></div>
 
       <div class="ask-bar">
-        <select id="aiModel" style="background:#1a1a1a;border:1px solid #333;color:#ccc;padding:6px 8px;border-radius:5px;font-size:11px;cursor:pointer;">
+        <select id="aiModel" style="background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);color:#ccc;padding:8px;border-radius:6px;font-size:12px;cursor:pointer;">
           <option value="ask_basic">⚡ Gemini (Free)</option>
           <option value="ask_haiku">💨 Haiku</option>
           <option value="ask_deep">🧠 Sonnet</option>
@@ -344,14 +333,14 @@
     <div class="pred-detail-subtitle">Pick start and end dates to see history</div>
     <div class="pred-detail-section">
       <div class="pred-detail-label">Start Date</div>
-      <input type="date" id="customStartDate" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:4px;font-size:13px;">
+      <input type="date" id="customStartDate" style="width:100%;padding:10px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:6px;font-size:14px;">
     </div>
     <div class="pred-detail-section">
       <div class="pred-detail-label">End Date</div>
-      <input type="date" id="customEndDate" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:4px;font-size:13px;">
+      <input type="date" id="customEndDate" style="width:100%;padding:10px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:6px;font-size:14px;">
     </div>
-    <div style="display:flex;gap:8px;margin-top:14px;">
-      <button id="customCancelBtn" style="flex:1;background:#1a1a2e;color:#888;border:1px solid #333;padding:10px;border-radius:5px;cursor:pointer;font-size:12px;">Cancel</button>
+    <div style="display:flex;gap:12px;margin-top:20px;">
+      <button id="customCancelBtn" style="flex:1;background:rgba(255,255,255,0.05);color:#8B949E;border:1px solid rgba(255,255,255,0.1);padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">Cancel</button>
       <button id="customApplyBtn" class="postmortem-btn" style="flex:2;margin-top:0;">Apply</button>
     </div>
   </div>
@@ -374,13 +363,11 @@
   // ============================================================
   // RAILWAY DEPLOYMENT CONFIG
   // ============================================================
-  const USE_API = true
+  const USE_API = false; // Set to false for local Dark Glass testing
   
   const API_BASE = 'https://web-production-0592e.up.railway.app'
-  
   const API_KEY = 'ekjj6pa2wDvA1GUBW8XIDZ2Vn9ZpqYu88ftgPkz2Tfc'
 
-  // API headers helper
   function apiHeaders() {
     return {
       'Content-Type': 'application/json',
@@ -417,22 +404,15 @@
       el.className = 'api-status ' + (connected ? 'connected' : 'disconnected')
       el.textContent = connected ? '🟢 API' : '🔴 OFF'
     } else {
-      el.style.display = 'none'
+      el.className = 'api-status connected'
+      el.textContent = '💻 LOCAL'
     }
   }
 
   async function fetchAllFromAPI() {
     try {
-      const response = await fetch(API_BASE + '/api/all', {
-        method: 'GET',
-        headers: apiHeaders()
-      })
-      if (!response.ok) {
-        if (response.status === 401) {
-          console.error('❌ API auth failed. Check API_KEY.')
-        }
-        throw new Error(`API ${response.status}`)
-      }
+      const response = await fetch(API_BASE + '/api/all', { method: 'GET', headers: apiHeaders() })
+      if (!response.ok) throw new Error(`API ${response.status}`)
       const data = await response.json()
       apiCache.intelligence = data.intelligence
       apiCache.indiaMarket = data.india
@@ -448,7 +428,6 @@
       apiCache.lastFetch = Date.now()
       apiCache.connected = true
       updateApiStatus(true)
-      console.log('✅ API data fetched')
       return true
     } catch (e) {
       console.error('❌ API fetch failed:', e.message)
@@ -522,27 +501,10 @@
   }
 
   function openInPanel(url) {
-    const panel = document.getElementById('brokerPanel')
-    const ph = document.getElementById('placeholder')
-    if (ph) ph.style.display = 'none'
-    const existing = panel.querySelector('webview')
-    if (existing) existing.remove()
-    const wv = document.createElement('webview')
-    wv.src = url
-    wv.setAttribute('partition', 'persist:tradingcopilot')
-    wv.setAttribute('allowpopups', 'true')
-    wv.setAttribute('useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    panel.appendChild(wv)
-  }
-
-  function loadSite(url, btn) {
-    const loadingBar = document.getElementById('loadingBar')
-    loadingBar.classList.add('active')
-    loadingBar.innerText = '⏳ Loading...'
-    openInPanel(url)
-    document.querySelectorAll('.broker-btn, .news-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    setTimeout(() => loadingBar.classList.remove('active'), 3000)
+    // This uses Electron's shell to open the link in your DEFAULT browser (Chrome/Edge/Brave).
+    // This bypasses the security headers (X-Frame-Options) that were making the webview blank.
+    const { shell } = require('electron');
+    shell.openExternal(url);
   }
 
   document.querySelectorAll('.broker-btn, .news-btn').forEach(btn => {
@@ -593,13 +555,6 @@
     } catch { return dateStr }
   }
 
-  function formatBrainText(text) {
-    return escapeHtml(text)
-      .replace(/^#{1,3} (.+)$/gm, '<div style="color:#00ff88;font-weight:bold;font-size:12px;margin:10px 0 4px 0;text-transform:uppercase;letter-spacing:0.5px;">$1</div>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/---/g, '<hr style="border-color:#222;margin:8px 0">')
-  }
-
   function formatPostMortem(text) {
     return escapeHtml(text)
       .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
@@ -608,26 +563,128 @@
       .replace(/\n/g, '<br>')
   }
 
+  // ============================================================
+  // TAB 1: BRAIN
+  // ============================================================
   function loadBrain() {
-    const data = loadJson(files.intelligence)
-    const container = document.getElementById('tab-brain')
-    if (!data) {
-      container.innerHTML = `<div class="loading">⏳ Run scheduler</div>`
-      return
+    const data = loadJson(files.intelligence);
+    const container = document.getElementById('tab-brain');
+    
+    if (!data || !data.executive_summary) {
+      container.innerHTML = `<div class="loading">⏳ Run scheduler or wait for AI JSON engine...</div>`;
+      return;
     }
-    const analysis = data.analysis || ''
-    const ts = formatTime(data.timestamp)
-    const convictionMatch = analysis.match(/Overall conviction[:\s]+(\d+)\/10/i)
-    const conviction = convictionMatch ? parseInt(convictionMatch[1]) : 0
-    const stars = '★'.repeat(Math.round(conviction / 2)) + '☆'.repeat(5 - Math.round(conviction / 2))
-    let html = `<div class="timestamp">Updated: ${ts}</div>`
-    if (conviction > 0) {
-      html += `<div class="conviction-bar"><div class="conviction-label">Overall Conviction</div><div class="conviction-value">${conviction}/10</div><div class="stars">${stars}</div></div>`
-    }
-    html += `<div class="intel-section"><div class="intel-text">${formatBrainText(analysis)}</div></div>`
-    container.innerHTML = html
+
+    const ts = formatTime(data.timestamp);
+    const govt = data.government_impact || {};
+    const rotation = data.sector_rotation || { bullish: [], bearish: [] };
+    const mood = data.market_mood || {};
+    const opps = data.top_opportunities || [];
+    const risks = data.risks_and_avoids || [];
+
+    let sectorHtml = '';
+    (rotation.bullish || []).forEach(s => sectorHtml += `<span class="sector-tag bull">⬆ ${escapeHtml(s)}</span>`);
+    (rotation.bearish || []).forEach(s => sectorHtml += `<span class="sector-tag bear">⬇ ${escapeHtml(s)}</span>`);
+
+    let oppsHtml = '';
+    opps.forEach(o => {
+      const action = (o.action || 'WATCH').toUpperCase();
+      let actionClass = 'watch';
+      if (action.includes('BUY') || action.includes('ACCUMULATE')) actionClass = 'buy';
+      if (action.includes('SELL') || action.includes('AVOID')) actionClass = 'sell';
+      
+      oppsHtml += `
+        <div class="trade-item ${actionClass}">
+          <div class="trade-header">
+            <h3>${escapeHtml(o.symbol || 'UNKNOWN')}</h3>
+            <span class="trade-badge ${actionClass}">${escapeHtml(action)}</span>
+          </div>
+          <div class="trade-metrics">
+            <span>Entry: ₹${escapeHtml(o.entry_zone || '-')}</span>
+            <span>Tgt: ₹${escapeHtml(o.target || '-')}</span>
+            <span>SL: ₹${escapeHtml(o.stop_loss || '-')}</span>
+          </div>
+          <p class="trade-logic">${escapeHtml(o.logic || '')}</p>
+        </div>
+      `;
+    });
+
+    let risksHtml = '';
+    risks.forEach(r => {
+      risksHtml += `
+        <div class="trade-item sell">
+          <div class="trade-header">
+            <h3>${escapeHtml(r.symbol || 'UNKNOWN')}</h3>
+            <span class="trade-badge sell">AVOID</span>
+          </div>
+          <p class="trade-logic">${escapeHtml(r.logic || '')}</p>
+        </div>
+      `;
+    });
+
+    let html = `
+      <div class="timestamp">Updated: ${ts} | Sources: ${data.sources_used || 8}/8</div>
+      
+      <div class="brain-grid">
+        <div class="main-column">
+          <div class="glass-card">
+            <h2>Executive Summary</h2>
+            <div class="glass-text">${escapeHtml(data.executive_summary || '')}</div>
+          </div>
+
+          <div class="glass-card">
+            <h2>Market Mood & Govt Intel</h2>
+            <div class="mood-grid">
+              <div class="mood-item"><span>Global</span><strong>${escapeHtml(mood.global_mood || 'N/A')}</strong></div>
+              <div class="mood-item"><span>India</span><strong>${escapeHtml(mood.india_outlook || 'N/A')}</strong></div>
+              <div class="mood-item"><span>Retail</span><strong>${escapeHtml(mood.retail_mood || 'N/A')}</strong></div>
+              <div class="mood-item"><span>AI Confidence</span><strong>${escapeHtml(mood.confidence_level || 'N/A')}</strong></div>
+            </div>
+            <div style="margin-top:14px; font-size:11px; color:#A3B3C8; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;">
+              <strong style="color:#ffaa00;">🏛️ Govt Impact:</strong> ${escapeHtml(govt.summary || 'None')} 
+              <br><span style="color:#8B949E; font-size:9px;">(Confidence: ${escapeHtml(govt.confidence_score || 'N/A')})</span>
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <h2>Action Plan & Self-Calibration</h2>
+            <div class="glass-text" style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+              <strong style="color:#00E676; display:block; margin-bottom:4px;">🚀 Action Plan:</strong> 
+              ${escapeHtml(data.action_plan || '')}
+            </div>
+            <div class="glass-text" style="color:#A3B3C8;">
+              <strong style="color:#ffaa00; display:block; margin-bottom:4px;">🎯 Calibration (Past Logic):</strong> 
+              ${escapeHtml(data.self_calibration || '')}
+            </div>
+          </div>
+        </div>
+
+        <div class="action-column">
+          <div class="glass-card">
+            <h2>Sector Rotation</h2>
+            <div class="sector-tags">
+              ${sectorHtml || '<span class="sector-tag">No distinct rotation identified</span>'}
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <h2>Top Opportunities</h2>
+            ${oppsHtml || '<div class="glass-text" style="font-style:italic;">No prime setups identified today. Cash is a position.</div>'}
+          </div>
+
+          <div class="glass-card" style="border-color: rgba(255, 61, 0, 0.2);">
+            <h2 style="color: #FF3D00;">Risk / Avoid List</h2>
+            ${risksHtml || '<div class="glass-text" style="font-style:italic;">No specific major risks identified.</div>'}
+          </div>
+        </div>
+      </div>
+    `;
+    container.innerHTML = html;
   }
 
+  // ============================================================
+  // TAB 2: GOVT
+  // ============================================================
   function loadGovt() {
     const data = loadJson(files.govt)
     const container = document.getElementById('tab-govt')
@@ -635,29 +692,23 @@
       container.innerHTML = '<div class="loading">⏳ No govt data</div>'
       return
     }
-    let html = `<div class="timestamp">Updated: ${formatTime(data.timestamp)}</div>`
-    html += `<div style="margin-bottom:10px;font-size:11px;">
-      <span class="badge badge-red">🚨 ${data.high_impact_count || 0} HIGH</span>
-      <span class="badge badge-yellow">⚠️ ${data.medium_impact_count || 0} MED</span>
-      <span class="badge badge-green">📋 ${data.analyzed_items || 0} analyzed</span>
-      ${data.total_translated ? `<span class="badge badge-purple">🌐 ${data.total_translated} translated</span>` : ''}
-    </div>`
+    
+    let leftHtml = '';
     const high = data.high_impact_items || []
     if (high.length > 0) {
-      html += '<div class="region-header">🚨 HIGH-IMPACT ANNOUNCEMENTS</div>'
       high.slice(0, 8).forEach((item, idx) => {
         const score = item.impact_score || 0
         const direction = item.direction || 'NEUTRAL'
         const dirClass = direction === 'BULLISH' ? 'bullish' : direction === 'BEARISH' ? 'bearish' : 'neutral'
         const stocks = item.affected_stocks || []
-        const reasons = item.impact_reasons || []
         const headline = item.english_headline || item.title || ''
         const relevance = (item.market_relevance || '').toLowerCase()
         const relClass = relevance.includes('high') ? 'high' : relevance.includes('medium') ? 'medium' : relevance.includes('none') ? 'none' : 'low'
         const source = item.source || '?'
         const link = item.link || ''
         const linkId = `gl_${idx}_${Date.now()}`
-        html += `
+        
+        leftHtml += `
           <div class="govt-item">
             <div class="govt-item-header">
               <div>
@@ -667,143 +718,140 @@
               <span class="govt-source">${escapeHtml(source)}</span>
             </div>
             <div class="govt-headline">${escapeHtml(headline)}</div>
-            ${reasons.length > 0 ? `<div class="govt-reasons">⚡ ${escapeHtml(reasons.slice(0,4).join(', '))}</div>` : ''}
             ${stocks.length > 0 ? `<div style="margin-top:6px;">${stocks.slice(0,8).map(s => `<span class="stock-mention">${s}</span>`).join('')}</div>` : ''}
             ${link ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(link)}">📄 Open Original →</a>` : ''}
           </div>
         `
       })
+    } else {
+      leftHtml = '<div class="glass-text">No major govt announcements detected today.</div>'
     }
+
+    let rightHtml = `
+      <div style="margin-bottom:16px;font-size:11px;">
+        <span class="badge badge-red">🚨 ${data.high_impact_count || 0} HIGH</span>
+        <span class="badge badge-yellow">⚠️ ${data.medium_impact_count || 0} MED</span>
+        <span class="badge badge-green">📋 ${data.analyzed_items || 0} ANALYZED</span>
+      </div>
+    `;
+
     const affected = data.affected_stocks || {}
     if (Object.keys(affected).length > 0) {
-      html += '<div class="region-header">📊 Stocks with Govt Exposure</div><div style="margin-bottom:10px;">'
-      Object.entries(affected).slice(0, 12).forEach(([stock, count]) => {
-        html += `<span class="stock-mention">${stock} (${count})</span>`
+      rightHtml += '<h2 style="margin-top:20px; font-size:10px; color:#ffaa00;">📊 Stocks with Govt Exposure</h2><div>'
+      Object.entries(affected).slice(0, 15).forEach(([stock, count]) => {
+        rightHtml += `<span class="stock-mention">${stock} (${count})</span>`
       })
-      html += '</div>'
+      rightHtml += '</div>'
     }
-    if (high.length === 0) {
-      html += '<div class="loading">No major govt announcements</div>'
-    }
-    container.innerHTML = html
-    container.querySelectorAll('.read-link').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault()
-        const url = link.getAttribute('data-url')
-        if (url) openInPanel(url)
-      })
-    })
-  }
-function loadScanner() {
-    const data = loadJson(files.scanner)
-    const container = document.getElementById('tab-scanner')
-    if (!data) {
-      container.innerHTML = `<div class="loading">⏳ No scanner data</div>`
-      return
-    }
-    const ts = formatTime(data.last_updated)
-    const totalScanned = data.total_scanned || 0
-    const totalSignals = data.total_signals || 0
-    const universe = data.universe || 'NSE'
-    let html = `<div class="timestamp">Updated: ${ts} • ${universe}</div>`
-    const summary = data.summary || {}
-    html += `
-      <div class="scanner-stats">
-        <div class="scanner-stat-card">
-          <div class="scanner-stat-label">Stocks Scanned</div>
-          <div class="scanner-stat-value">${totalScanned}</div>
+
+    let html = `
+      <div class="timestamp">Updated: ${formatTime(data.timestamp)}</div>
+      <div class="brain-grid">
+        <div class="main-column">
+          <div class="glass-card">
+            <h2>🚨 High-Impact Announcements</h2>
+            ${leftHtml}
+          </div>
         </div>
-        <div class="scanner-stat-card">
-          <div class="scanner-stat-label">Total Signals</div>
-          <div class="scanner-stat-value">${totalSignals}</div>
-        </div>
-        <div class="scanner-stat-card">
-          <div class="scanner-stat-label">Volume Spikes</div>
-          <div class="scanner-stat-value yellow">${summary.VOLUME_SPIKE || 0}</div>
+        <div class="action-column">
+          <div class="glass-card">
+            <h2>🏛️ Govt Intelligence Overview</h2>
+            ${rightHtml}
+          </div>
         </div>
       </div>
-    `
-    html += `<div style="margin-bottom:12px;font-size:10px;">`
-    if (summary.BREAKOUT) html += `<span class="badge badge-green">📈 ${summary.BREAKOUT} breakouts</span>`
-    if (summary.BREAKDOWN) html += `<span class="badge badge-red">📉 ${summary.BREAKDOWN} breakdowns</span>`
-    if (summary.GAP_UP) html += `<span class="badge badge-green">⬆ ${summary.GAP_UP} gap-up</span>`
-    if (summary.GAP_DOWN) html += `<span class="badge badge-red">⬇ ${summary.GAP_DOWN} gap-down</span>`
-    if (summary.MAJOR_MOVE) html += `<span class="badge badge-purple">⚡ ${summary.MAJOR_MOVE} major moves</span>`
-    html += `</div>`
-    const topSignals = data.top_signals || []
-    const ultraSignals = topSignals.filter(s => s.strength === 'ULTRA')
-    const strongSignals = topSignals.filter(s => s.strength === 'STRONG')
-    if (ultraSignals.length > 0) {
-      html += '<div class="region-header">💎 ULTRA SIGNALS</div>'
-      ultraSignals.slice(0, 8).forEach(s => { html += renderSignalRow(s, 'ultra') })
-    }
-    if (strongSignals.length > 0) {
-      html += '<div class="region-header">🔥 STRONG SIGNALS</div>'
-      strongSignals.slice(0, 10).forEach(s => {
-        const cls = s.direction === 'BEARISH' ? 'bearish' : 'strong'
-        html += renderSignalRow(s, cls)
-      })
-    }
-    const rotation = data.sector_rotation || []
-    if (rotation.length > 0) {
-      html += '<div class="region-header">🌐 Sector Rotation</div>'
-      rotation.slice(0, 12).forEach(r => {
-        const sector = r.sector || '?'
-        const move = r.avg_change_percent || 0
-        const direction = (r.direction || 'NEUTRAL').toLowerCase()
-        const strength = r.strength || '?'
-        const stocks = r.stocks_analyzed || 0
-        const volRatio = r.avg_volume_ratio || 0
-        const moveColor = move >= 0 ? 'green' : 'red'
-        const sign = move >= 0 ? '+' : ''
-        html += `
-          <div class="sector-row ${direction}">
-            <div>
-              <div class="sector-name">${escapeHtml(sector)}</div>
-              <div class="sector-meta">${stocks} stocks • vol ${volRatio.toFixed(1)}x • ${strength}</div>
-            </div>
-            <div class="sector-stats">
-              <span class="sector-move ${moveColor}">${sign}${move.toFixed(2)}%</span>
-            </div>
-          </div>
-        `
-      })
-    }
-    const breaks = data.correlation_breaks || []
-    if (breaks.length > 0) {
-      html += '<div class="region-header">🎯 Correlation Breaks</div>'
-      breaks.slice(0, 10).forEach(b => {
-        const ticker = b.ticker || '?'
-        const sector = b.sector || '?'
-        const note = b.note || ''
-        const volRatio = b.volume_ratio || 0
-        html += `
-          <div class="corr-break">
-            <div><span class="corr-ticker">${escapeHtml(ticker)}</span> <span style="color:#666;font-size:9px;">(${escapeHtml(sector)})</span></div>
-            <div class="corr-detail">${escapeHtml(note)} • vol ${volRatio.toFixed(1)}x</div>
-          </div>
-        `
-      })
-    }
-    const bySignal = data.by_signal || {}
-    if (bySignal.volume_spikes && bySignal.volume_spikes.length > 0) {
-      html += '<div class="region-header">📊 Top Volume Spikes</div>'
-      bySignal.volume_spikes.slice(0, 8).forEach(s => { html += renderCompactSignal(s) })
-    }
-    if (bySignal.breakouts && bySignal.breakouts.length > 0) {
-      html += '<div class="region-header">📈 Top Breakouts</div>'
-      bySignal.breakouts.slice(0, 6).forEach(s => { html += renderCompactSignal(s) })
-    }
-    if (bySignal.breakdowns && bySignal.breakdowns.length > 0) {
-      html += '<div class="region-header">📉 Top Breakdowns</div>'
-      bySignal.breakdowns.slice(0, 6).forEach(s => { html += renderCompactSignal(s, true) })
-    }
-    if (totalSignals === 0) {
-      html += '<div class="loading">No signals detected</div>'
-    }
-    container.innerHTML = html
+    `;
+    
+    container.innerHTML = html;
+    container.querySelectorAll('.read-link').forEach(link => {
+      link.addEventListener('click', (e) => { e.preventDefault(); openInPanel(link.getAttribute('data-url')); })
+    })
   }
 
+  // ============================================================
+  // TAB 3: SCANNER
+  // ============================================================
+  function loadScanner() {
+    const data = loadJson(files.scanner)
+    const container = document.getElementById('tab-scanner')
+    if (!data) { container.innerHTML = `<div class="loading">⏳ No scanner data</div>`; return; }
+    
+    const summary = data.summary || {}
+    const topSignals = data.top_signals || []
+    
+    let leftHtml = '';
+    const ultraSignals = topSignals.filter(s => s.strength === 'ULTRA')
+    const strongSignals = topSignals.filter(s => s.strength === 'STRONG')
+    
+    if (ultraSignals.length > 0) {
+      leftHtml += '<h2 style="color:#cc88ff; font-size:10px; margin: 10px 0;">💎 ULTRA SIGNALS</h2>'
+      ultraSignals.slice(0, 6).forEach(s => { leftHtml += renderSignalRow(s, 'ultra') })
+    }
+    if (strongSignals.length > 0) {
+      leftHtml += '<h2 style="color:#00E676; font-size:10px; margin: 16px 0 10px 0;">🔥 STRONG SIGNALS</h2>'
+      strongSignals.slice(0, 8).forEach(s => {
+        const cls = s.direction === 'BEARISH' ? 'bearish' : 'strong'
+        leftHtml += renderSignalRow(s, cls)
+      })
+    }
+    if (!leftHtml) leftHtml = '<div class="glass-text">No strong technical setups triggered today.</div>';
+
+    let rightHtml = `
+      <div class="scanner-stats">
+        <div class="scanner-stat-card"><div class="scanner-stat-label">Scanned</div><div class="scanner-stat-value">${data.total_scanned || 0}</div></div>
+        <div class="scanner-stat-card"><div class="scanner-stat-label">Signals</div><div class="scanner-stat-value">${data.total_signals || 0}</div></div>
+        <div class="scanner-stat-card"><div class="scanner-stat-label">Vol Spikes</div><div class="scanner-stat-value" style="color:#ffaa00;">${summary.VOLUME_SPIKE || 0}</div></div>
+      </div>
+      <div style="margin-bottom:20px;">
+        ${summary.BREAKOUT ? `<span class="badge badge-green">📈 ${summary.BREAKOUT} breakouts</span>` : ''}
+        ${summary.BREAKDOWN ? `<span class="badge badge-red">📉 ${summary.BREAKDOWN} breakdowns</span>` : ''}
+        ${summary.GAP_UP ? `<span class="badge badge-green">⬆ ${summary.GAP_UP} gap-up</span>` : ''}
+        ${summary.GAP_DOWN ? `<span class="badge badge-red">⬇ ${summary.GAP_DOWN} gap-down</span>` : ''}
+      </div>
+    `;
+
+    const rotation = data.sector_rotation || []
+    if (rotation.length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#A3B3C8; border-bottom:1px solid #333; padding-bottom:4px; margin-bottom:8px;">🌐 Sector Rotation</h2>'
+      rotation.slice(0, 8).forEach(r => {
+        const move = r.avg_change_percent || 0
+        const moveColor = move >= 0 ? 'green' : 'red'
+        const sign = move >= 0 ? '+' : ''
+        rightHtml += `
+          <div class="sector-row">
+            <div>
+              <div class="sector-name">${escapeHtml(r.sector || '?')}</div>
+              <div class="sector-meta">${r.stocks_analyzed || 0} stocks • vol ${(r.avg_volume_ratio || 0).toFixed(1)}x</div>
+            </div>
+            <div class="sector-stats ${moveColor}">${sign}${move.toFixed(2)}%</div>
+          </div>
+        `
+      })
+    }
+
+    let html = `
+      <div class="timestamp">Updated: ${formatTime(data.last_updated)} • ${data.universe || 'NSE'}</div>
+      <div class="brain-grid">
+        <div class="main-column">
+          <div class="glass-card">
+            <h2>📈 Technical Action</h2>
+            ${leftHtml}
+          </div>
+        </div>
+        <div class="action-column">
+          <div class="glass-card">
+            <h2>📊 Scanner Overview</h2>
+            ${rightHtml}
+          </div>
+        </div>
+      </div>
+    `;
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // TAB 4: MARKETS
+  // ============================================================
   function renderSignalRow(s, cls) {
     const ticker = s.ticker || '?'
     const sector = s.sector || '?'
@@ -855,7 +903,7 @@ function loadScanner() {
     return `
       <div class="sector-row ${bearish ? 'bearish' : (change >= 0 ? 'bullish' : 'bearish')}">
         <div>
-          <div class="sector-name">${escapeHtml(ticker)} <span style="color:#666;font-size:9px;font-weight:normal;">(${escapeHtml(sector)})</span></div>
+          <div class="sector-name">${escapeHtml(ticker)} <span style="color:#8B949E;font-size:9px;font-weight:normal;">(${escapeHtml(sector)})</span></div>
           <div class="sector-meta">Rs.${price.toLocaleString('en-IN')} • vol ${volRatio.toFixed(1)}x</div>
         </div>
         <div class="sector-stats">
@@ -869,319 +917,312 @@ function loadScanner() {
     const data = loadJson(files.globalMarket)
     const indiaData = loadJson(files.indiaMarket)
     const container = document.getElementById('tab-markets')
-    if (!data && !indiaData) {
-      container.innerHTML = '<div class="loading">⏳ No market data</div>'
-      return
-    }
-    let html = `<div class="timestamp">Updated: ${formatTime(data?.timestamp)}</div>`
+    if (!data && !indiaData) { container.innerHTML = '<div class="loading">⏳ No market data</div>'; return; }
+    
+    let leftHtml = '';
     if (data?.sentiment) {
-      html += '<div class="region-header">🌍 Regional Sentiment</div><div class="market-grid">'
+      leftHtml += '<div class="glass-card"><h2>🌍 Regional Sentiment</h2><div class="market-grid">'
       for (const [region, info] of Object.entries(data.sentiment)) {
         const moodColor = info.mood === 'BULLISH' || info.mood === 'POSITIVE' ? 'green' : info.mood === 'BEARISH' || info.mood === 'NEGATIVE' ? 'red' : 'yellow'
         const avg = info.average_change || info.expected_open || 0
-        const sign = avg >= 0 ? '+' : ''
-        html += `<div class="market-card"><div class="market-card-name">${region.toUpperCase()}</div><div class="market-card-value ${moodColor}">${info.mood}</div><div class="market-card-change ${moodColor}">${sign}${avg.toFixed(2)}%</div></div>`
+        leftHtml += `<div class="market-card"><div class="market-card-name">${region.toUpperCase()}</div><div class="market-card-value ${moodColor}">${info.mood}</div><div class="market-card-change ${moodColor}">${avg >= 0?'+':''}${avg.toFixed(2)}%</div></div>`
       }
-      html += '</div>'
+      leftHtml += '</div></div>'
     }
+    
     if (indiaData?.prices) {
-      html += '<div class="region-header">🇮🇳 India Watchlist</div><div class="market-grid">'
+      leftHtml += '<div class="glass-card"><h2>🇮🇳 India Watchlist</h2><div class="market-grid">'
       for (const [name, p] of Object.entries(indiaData.prices)) {
         const isGreen = p.change_percent >= 0
-        html += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">₹${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
+        leftHtml += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">₹${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
       }
-      html += '</div>'
+      leftHtml += '</div></div>'
     }
+
+    let rightHtml = '';
     if (data?.markets) {
       const showGroups = ['USA_INDICES', 'EUROPE_INDICES', 'ASIA_INDICES']
       for (const group of showGroups) {
         if (!data.markets[group]) continue
-        html += `<div class="region-header">${group.replace('_', ' ')}</div><div class="market-grid">`
+        rightHtml += `<div class="glass-card"><h2>${group.replace('_', ' ')}</h2><div class="market-grid">`
         for (const [name, p] of Object.entries(data.markets[group])) {
           const isGreen = p.change_percent >= 0
-          html += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
+          rightHtml += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
         }
-        html += '</div>'
+        rightHtml += '</div></div>'
       }
     }
-    if (data?.alerts && data.alerts.length > 0) {
-      html += '<div class="region-header">🚨 Unusual Movements</div>'
-      data.alerts.slice(0, 8).forEach(a => {
-        const badge = a.severity === 'MAJOR' ? 'badge-red' : a.severity === 'SIGNIFICANT' ? 'badge-yellow' : 'badge-green'
-        html += `<div style="font-size:11px;color:#bbb;margin:4px 0;"><span class="badge ${badge}">${a.severity}</span>${escapeHtml(a.name)} ${a.direction} ${Math.abs(a.change_percent).toFixed(2)}%</div>`
-      })
-    }
-    container.innerHTML = html
+
+    let html = `
+      <div class="timestamp">Updated: ${formatTime(data?.timestamp)}</div>
+      <div class="brain-grid">
+        <div class="main-column">${leftHtml}</div>
+        <div class="action-column">${rightHtml}</div>
+      </div>
+    `;
+    container.innerHTML = html;
   }
 
+  // ============================================================
+  // TAB 5: NEWS
+  // ============================================================
   function loadNews() {
     const newsData = loadJson(files.news)
     const inshortsData = loadJson(files.inshorts)
     const container = document.getElementById('tab-news')
-    if (!newsData && !inshortsData) {
-      container.innerHTML = '<div class="loading">⏳ No news data</div>'
-      return
-    }
-    let html = `<div class="timestamp">Updated: ${formatTime(newsData?.timestamp || inshortsData?.timestamp)}</div>`
-    const sent = newsData?.sentiment_distribution || {}
-    const isent = inshortsData?.sentiment_distribution || {}
-    const totalPos = (sent.positive || 0) + (isent.positive || 0)
-    const totalNeg = (sent.negative || 0) + (isent.negative || 0)
-    const totalNeu = (sent.neutral || 0) + (isent.neutral || 0)
-    html += `<div style="margin-bottom:10px;font-size:11px;">
-      <span class="badge badge-green">+ ${totalPos}</span>
-      <span class="badge badge-red">− ${totalNeg}</span>
-      <span class="badge badge-yellow">○ ${totalNeu}</span>
-    </div>`
-    if (newsData?.hot_stocks && newsData.hot_stocks.length > 0) {
-      html += '<div class="region-header">🔥 Hot Stocks</div><div style="margin-bottom:10px;">'
-      newsData.hot_stocks.forEach(h => {
-        const cls = h.velocity === 'HIGH' ? 'hot' : ''
-        html += `<span class="stock-mention ${cls}">${h.stock} (${h.mention_count})</span>`
-      })
-      html += '</div>'
-    }
-    if (newsData?.top_stocks) {
-      html += '<div class="region-header">📊 Most Mentioned</div><div style="margin-bottom:10px;">'
-      Object.entries(newsData.top_stocks).slice(0, 12).forEach(([stock, count]) => {
-        html += `<span class="stock-mention">${stock} (${count})</span>`
-      })
-      html += '</div>'
-    }
-    if (newsData?.sector_buzz) {
-      html += '<div class="region-header">🏷️ Sector Buzz</div><div style="margin-bottom:10px;">'
-      Object.entries(newsData.sector_buzz).slice(0, 8).forEach(([sector, count]) => {
-        html += `<span class="stock-mention">${sector}: ${count}</span>`
-      })
-      html += '</div>'
-    }
+    if (!newsData && !inshortsData) { container.innerHTML = '<div class="loading">⏳ No news data</div>'; return; }
+    
+    let leftHtml = '';
     if (inshortsData?.stories && inshortsData.stories.length > 0) {
-      html += `<div class="region-header">📱 Inshorts (${inshortsData.total_stories})</div>`
-      inshortsData.stories.slice(0, 12).forEach((story, idx) => {
+      leftHtml += `<div class="glass-card"><h2>📱 Inshorts (${inshortsData.total_stories})</h2>`
+      inshortsData.stories.slice(0, 10).forEach((story, idx) => {
         const sent = story.sentiment || 'neutral'
-        const link = story.source_url || story.shortened_url || ''
-        const ilinkId = `il_${idx}_${Date.now()}`
-        html += `
+        const linkId = `il_${idx}_${Date.now()}`
+        leftHtml += `
           <div class="news-item ${sent}">
-            <div class="news-source">${escapeHtml(story.category || 'INSHORTS')}</div>
+            <div style="display:flex; justify-content:space-between;">
+              <span class="news-source">${escapeHtml(story.category || 'INSHORTS')}</span>
+              ${story.source_url ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(story.source_url)}" style="margin:0; padding:0; border:none; background:none;">Read →</a>` : ''}
+            </div>
             <div class="news-title">${escapeHtml(story.title || '')}</div>
-            ${link ? `<a class="read-link" id="${ilinkId}" data-url="${escapeHtml(link)}" style="font-size:9px;padding:2px 8px;">📄 Read full →</a>` : ''}
           </div>
         `
       })
+      leftHtml += '</div>'
     }
-    if (newsData?.articles) {
-      html += '<div class="region-header">📰 Latest Headlines</div>'
-      newsData.articles.slice(0, 25).forEach((a, idx) => {
-        const sent = a.sentiment_label || 'neutral'
-        const link = a.url || ''
-        const nlinkId = `nl_${idx}_${Date.now()}`
-        html += `<div class="news-item ${sent}">
-          <div class="news-source">${escapeHtml(a.source || 'Unknown')}</div>
-          <div class="news-title">${escapeHtml(a.title || '')}</div>
-          ${link ? `<a class="read-link" id="${nlinkId}" data-url="${escapeHtml(link)}" style="font-size:9px;padding:2px 8px;">📄 Read full →</a>` : ''}
-        </div>`
-      })
+
+    let rightHtml = '<div class="glass-card"><h2>📊 Sentiment Overview</h2>';
+    const sent = newsData?.sentiment_distribution || {}
+    const isent = inshortsData?.sentiment_distribution || {}
+    rightHtml += `<div style="margin-bottom:16px;">
+      <span class="badge badge-green">+ ${(sent.positive||0) + (isent.positive||0)}</span>
+      <span class="badge badge-red">− ${(sent.negative||0) + (isent.negative||0)}</span>
+      <span class="badge badge-yellow">○ ${(sent.neutral||0) + (isent.neutral||0)}</span>
+    </div>`
+
+    if (newsData?.hot_stocks && newsData.hot_stocks.length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#ffaa00; margin-top:10px;">🔥 Hot Stocks</h2><div style="margin-bottom:16px;">'
+      newsData.hot_stocks.forEach(h => rightHtml += `<span class="stock-mention ${h.velocity === 'HIGH' ? 'hot' : ''}">${h.stock}</span>`)
+      rightHtml += '</div>'
     }
-    container.innerHTML = html
+    if (newsData?.top_stocks) {
+      rightHtml += '<h2 style="font-size:10px; color:#8B949E;">📈 Most Mentioned</h2><div>'
+      Object.entries(newsData.top_stocks).slice(0, 12).forEach(([s, c]) => rightHtml += `<span class="stock-mention">${s} (${c})</span>`)
+      rightHtml += '</div>'
+    }
+    rightHtml += '</div>';
+
+    let html = `
+      <div class="timestamp">Updated: ${formatTime(newsData?.timestamp || inshortsData?.timestamp)}</div>
+      <div class="brain-grid">
+        <div class="main-column">${leftHtml}</div>
+        <div class="action-column">${rightHtml}</div>
+      </div>
+    `;
+    container.innerHTML = html;
     container.querySelectorAll('.read-link').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault()
-        const url = link.getAttribute('data-url')
-        if (url) openInPanel(url)
-      })
+      link.addEventListener('click', (e) => { e.preventDefault(); openInPanel(link.getAttribute('data-url')); })
     })
   }
 
+  // ============================================================
+  // TAB 6: TV & YOUTUBE
+  // ============================================================
   function loadTV() {
     const data = loadJson(files.youtube)
     const container = document.getElementById('tab-tv')
-    if (!data) {
-      container.innerHTML = '<div class="loading">⏳ No TV data</div>'
-      return
-    }
-    let html = `<div class="timestamp">Updated: ${formatTime(data.timestamp)} • ${data.total_videos} videos</div>`
-    html += `<div style="margin-bottom:10px;font-size:11px;">
-      <span class="badge badge-red">🔴 ${data.live_streams || 0} LIVE</span>
-      <span class="badge badge-yellow">⏰ ${data.recent_videos_3h || 0} recent (3h)</span>
-    </div>`
-    if (data.cross_channel_buzz && data.cross_channel_buzz.length > 0) {
-      html += '<div class="region-header">⚡ Cross-Channel Buzz</div>'
-      data.cross_channel_buzz.slice(0, 10).forEach(b => {
-        const badge = b.signal_strength === 'STRONG' ? 'badge-green' : 'badge-yellow'
-        html += `<div style="font-size:11px;color:#bbb;margin:4px 0;"><span class="badge ${badge}">${b.signal_strength}</span><strong style="color:#00ff88;">${b.stock}</strong> on ${b.channel_count} channels</div>`
-      })
-    }
+    if (!data) { container.innerHTML = '<div class="loading">⏳ No TV data</div>'; return; }
+    
+    let leftHtml = '<div class="glass-card"><h2>🔴 Live & Recent TV</h2>';
     if (data.live_now && data.live_now.length > 0) {
-      html += '<div class="region-header">🔴 Live Now</div>'
       data.live_now.slice(0, 6).forEach(v => {
-        html += `<div class="tv-video live"><div class="tv-channel">${escapeHtml(v.channel)} <span class="live-tag">LIVE</span></div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
+        leftHtml += `<div class="tv-video live"><div class="tv-channel">${escapeHtml(v.channel)} <span class="live-tag">LIVE</span></div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
       })
-    }
-    if (data.stock_mentions && Object.keys(data.stock_mentions).length > 0) {
-      html += '<div class="region-header">📊 Stocks on TV</div><div style="margin-bottom:10px;">'
-      Object.entries(data.stock_mentions).slice(0, 12).forEach(([stock, count]) => {
-        html += `<span class="stock-mention">${stock} (${count})</span>`
-      })
-      html += '</div>'
     }
     if (data.recent_videos && data.recent_videos.length > 0) {
-      html += '<div class="region-header">📺 Recent Videos (3h)</div>'
-      data.recent_videos.slice(0, 15).forEach(v => {
-        html += `<div class="tv-video"><div class="tv-channel">${escapeHtml(v.channel)}</div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
+      data.recent_videos.slice(0, 8).forEach(v => {
+        leftHtml += `<div class="tv-video"><div class="tv-channel">${escapeHtml(v.channel)}</div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
       })
     }
-    container.innerHTML = html
+    leftHtml += '</div>';
+
+    let rightHtml = '<div class="glass-card"><h2>⚡ TV Intelligence Overview</h2>';
+    rightHtml += `<div style="margin-bottom:16px;">
+      <span class="badge badge-red">🔴 ${data.live_streams || 0} LIVE</span>
+      <span class="badge badge-yellow">⏰ ${data.recent_videos_3h || 0} RECENT (3h)</span>
+    </div>`
+
+    if (data.cross_channel_buzz && data.cross_channel_buzz.length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#ffaa00;">⚡ Cross-Channel Buzz</h2><div style="margin-bottom:16px;">'
+      data.cross_channel_buzz.slice(0, 8).forEach(b => {
+        const badge = b.signal_strength === 'STRONG' ? 'badge-green' : 'badge-yellow'
+        rightHtml += `<div style="font-size:11px; margin-bottom:8px;"><span class="badge ${badge}">${b.signal_strength}</span><strong style="color:#00E676;">${b.stock}</strong> on ${b.channel_count} channels</div>`
+      })
+      rightHtml += '</div>'
+    }
+    if (data.stock_mentions && Object.keys(data.stock_mentions).length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#8B949E;">📊 Stocks on TV</h2><div>'
+      Object.entries(data.stock_mentions).slice(0, 15).forEach(([stock, count]) => {
+        rightHtml += `<span class="stock-mention">${stock} (${count})</span>`
+      })
+      rightHtml += '</div>'
+    }
+    rightHtml += '</div>';
+
+    let html = `
+      <div class="timestamp">Updated: ${formatTime(data.timestamp)} • ${data.total_videos} videos</div>
+      <div class="brain-grid">
+        <div class="main-column">${leftHtml}</div>
+        <div class="action-column">${rightHtml}</div>
+      </div>
+    `;
+    container.innerHTML = html;
   }
 
+  // ============================================================
+  // TAB 7: REDDIT
+  // ============================================================
   function loadReddit() {
     const data = loadJson(files.reddit)
     const container = document.getElementById('tab-reddit')
-    if (!data) {
-      container.innerHTML = `<div class="loading">⏳ No reddit data</div>`
-      return
-    }
-    const ts = formatTime(data.last_updated)
-    const totalPosts = data.total_posts_analyzed || 0
-    const subs = data.subreddits_scanned || []
-    let html = `<div class="timestamp">Updated: ${ts} • ${totalPosts} posts • ${subs.length} subs</div>`
+    if (!data) { container.innerHTML = `<div class="loading">⏳ No reddit data</div>`; return; }
+
     const mood = data.market_mood || {}
     const moodSent = (mood.sentiment || 'neutral').toLowerCase()
     const moodConf = mood.confidence || 0
     const moodSummary = mood.summary || ''
-    const moodThemes = mood.themes || []
-    html += `
-      <div class="mood-card">
-        <div class="mood-header">
-          <span class="mood-label">📊 Retail Market Mood</span>
-          <span class="mood-confidence">${moodConf}% confidence</span>
-        </div>
-        <div class="mood-value ${moodSent}">${moodSent.toUpperCase()}</div>
-        ${moodSummary ? `<div class="mood-summary">${escapeHtml(moodSummary)}</div>` : ''}
-        ${moodThemes.length > 0 ? `<div class="mood-themes">${moodThemes.map(t => `<span class="theme-tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-      </div>
-    `
-    html += `<div style="margin-bottom:10px;font-size:10px;">`
-    subs.forEach(s => { html += `<span class="badge badge-yellow">r/${s}</span>` })
-    html += `</div>`
+    
+    let leftHtml = '';
     const trending = data.trending_tickers || []
     if (trending.length > 0) {
-      html += '<div class="region-header">🔥 Trending Tickers</div>'
-      trending.slice(0, 12).forEach((t, idx) => {
+      leftHtml += '<div class="glass-card"><h2>🔥 Trending Retail Tickers</h2>'
+      trending.slice(0, 8).forEach((t, idx) => {
         const ticker = t.ticker || '?'
-        const mentions = t.mentions || 0
         const sent = (t.sentiment || 'neutral').toLowerCase()
         const score = t.sentiment_score || 0.5
         const topPost = t.top_post || {}
-        const linkId = `rt_${idx}_${Date.now()}`
-        html += `
+        leftHtml += `
           <div class="reddit-ticker ${sent}">
             <div class="reddit-ticker-header">
-              <div>
-                <span class="reddit-ticker-name">${escapeHtml(ticker)}</span>
-                <span class="reddit-ticker-mentions">• ${mentions} mention${mentions !== 1 ? 's' : ''}</span>
-              </div>
+              <div><span class="reddit-ticker-name">${escapeHtml(ticker)}</span> <span class="reddit-ticker-mentions">• ${t.mentions || 0} mentions</span></div>
               <span class="reddit-sent-pill ${sent}">${sent.toUpperCase()} ${score.toFixed(2)}</span>
             </div>
-            ${topPost.title ? `
-              <div class="reddit-top-post">
-                <div>${escapeHtml(topPost.title)}</div>
-                <div class="reddit-top-post-meta">
-                  <span class="reddit-sub">r/${escapeHtml(topPost.subreddit || '')}</span>
-                  <span class="reddit-stats">↑${topPost.score || 0} • 💬${topPost.comments || 0}</span>
-                  ${topPost.url ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(topPost.url)}" style="font-size:9px;padding:2px 8px;margin-left:auto;">Read →</a>` : ''}
-                </div>
-              </div>
-            ` : ''}
+            ${topPost.title ? `<div class="reddit-top-post"><div>${escapeHtml(topPost.title)}</div><div class="reddit-top-post-meta">↑${topPost.score || 0} • 💬${topPost.comments || 0}</div></div>` : ''}
           </div>
         `
       })
+      leftHtml += '</div>'
     }
+
+    let rightHtml = `
+      <div class="glass-card">
+        <h2>📊 Retail Market Mood</h2>
+        <div class="mood-grid">
+          <div class="mood-item"><span>Sentiment</span><strong class="${moodSent === 'bullish'?'green':moodSent==='bearish'?'red':'yellow'}">${moodSent.toUpperCase()}</strong></div>
+          <div class="mood-item"><span>Confidence</span><strong>${moodConf}%</strong></div>
+        </div>
+        ${moodSummary ? `<div class="glass-text" style="margin-top:12px; font-style:italic;">"${escapeHtml(moodSummary)}"</div>` : ''}
+      </div>
+    `;
+
     const hot = data.hot_discussions || []
     if (hot.length > 0) {
-      html += '<div class="region-header">💬 Hot Discussions</div>'
-      hot.slice(0, 10).forEach((d, idx) => {
+      rightHtml += '<div class="glass-card"><h2>💬 Hot Discussions</h2>'
+      hot.slice(0, 6).forEach((d) => {
         const sent = (d.sentiment || 'neutral').toLowerCase()
-        const tickers = d.tickers || []
-        const linkId = `rd_${idx}_${Date.now()}`
-        html += `
+        rightHtml += `
           <div class="reddit-discussion ${sent}">
             <div class="reddit-discussion-title">${escapeHtml(d.title || '')}</div>
             <div class="reddit-discussion-meta">
               <span class="reddit-sub">r/${escapeHtml(d.subreddit || '')}</span>
               <span class="reddit-stats">↑${d.score || 0} • 💬${d.comments || 0}</span>
-              <span class="reddit-sent-pill ${sent}" style="margin-left:auto;">${sent.toUpperCase()}</span>
             </div>
-            ${tickers.length > 0 ? `<div class="reddit-tickers-inline">${tickers.slice(0, 5).map(t => `<span class="stock-mention">${escapeHtml(t)}</span>`).join('')}</div>` : ''}
-            ${d.url ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(d.url)}" style="font-size:9px;padding:2px 8px;margin-top:6px;">Open Reddit →</a>` : ''}
           </div>
         `
       })
+      rightHtml += '</div>'
     }
-    if (trending.length === 0 && hot.length === 0) {
-      html += '<div class="loading">No Reddit data captured yet</div>'
-    }
-    container.innerHTML = html
-    container.querySelectorAll('.read-link').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault()
-        const url = link.getAttribute('data-url')
-        if (url) openInPanel(url)
-      })
-    })
-  }
 
-  function loadStats() {
-    const data = loadJson(files.stats)
-    const container = document.getElementById('tab-stats')
-    if (!data) {
-      container.innerHTML = `<div class="empty-stats"><h4>📊 Learning Engine Not Active</h4></div>`
-      return
-    }
-    const ts = formatTime(data.last_updated)
-    const dbStats = data.db_stats || {}
-    const metrics = data.metrics_all_time || {}
-    let html = `<div class="timestamp">Updated: ${ts}</div>`
-    const totalPreds = dbStats.total_predictions || 0
-    const evaluated = metrics.total_evaluated || 0
-    const winRate = metrics.win_rate || 0
-    const profitFactor = metrics.profit_factor || 0
-    const avgGain = metrics.avg_gain_pct || 0
-    html += `
-      <div class="stats-grid-4">
-        <div class="stat-big-card">
-          <div class="stat-big-label">Predictions</div>
-          <div class="stat-big-value blue">${totalPreds}</div>
-          <div class="stat-big-sub">${evaluated} evaluated</div>
-        </div>
-        <div class="stat-big-card">
-          <div class="stat-big-label">Win Rate</div>
-          <div class="stat-big-value ${winRate >= 60 ? 'green' : winRate >= 40 ? 'yellow' : 'red'}">${winRate.toFixed(0)}%</div>
-          <div class="stat-big-sub">${metrics.wins || 0}W / ${metrics.losses || 0}L</div>
-        </div>
-        <div class="stat-big-card">
-          <div class="stat-big-label">Avg Gain</div>
-          <div class="stat-big-value green">+${avgGain.toFixed(1)}%</div>
-          <div class="stat-big-sub">when winning</div>
-        </div>
-        <div class="stat-big-card">
-          <div class="stat-big-label">Profit Factor</div>
-          <div class="stat-big-value ${profitFactor >= 2 ? 'green' : profitFactor >= 1 ? 'yellow' : 'red'}">${profitFactor.toFixed(2)}</div>
-          <div class="stat-big-sub">gain ÷ loss</div>
-        </div>
+    let html = `
+      <div class="timestamp">Updated: ${formatTime(data.last_updated)} • ${data.total_posts_analyzed || 0} posts analyzed</div>
+      <div class="brain-grid">
+        <div class="main-column">${leftHtml}</div>
+        <div class="action-column">${rightHtml}</div>
       </div>
-    `
-    if (evaluated === 0) {
-      html += `<div class="empty-stats" style="background:#1a1a2e;border-radius:6px;padding:14px;margin-bottom:14px;">
-        <h4>⏳ Collecting Track Record...</h4>
-        <p style="font-size:11px;line-height:1.5;color:#ccc;">Your AI made <strong>${totalPreds}</strong> predictions. Outcomes evaluate at <strong>8 AM daily</strong>.</p>
-      </div>`
-    }
-    container.innerHTML = html
+    `;
+    container.innerHTML = html;
   }
 
   // ============================================================
-  // HISTORY TAB - Smart Periods + Custom + Post-Mortem
+  // TAB 8: STATS
+  // ============================================================
+  function loadStats() {
+    // FORCE RELOAD: If loadJson is caching, bypass it
+    // Add a dummy query parameter to force the browser to ignore cache if it's a fetch
+    // Or, if loadJson uses 'fs', ensure the path matches exactly
+    console.log("Loading stats from:", files.stats); 
+    
+    // TEMPORARY FIX: Force read directly from FS if loadJson is failing
+    const fs = require('fs');
+    let data;
+    try {
+        const raw = fs.readFileSync(files.stats, 'utf8');
+        data = JSON.parse(raw);
+    } catch (e) {
+        console.error("Critical: Could not read file", files.stats, e);
+    }
+
+    const container = document.getElementById('tab-stats');
+    if (!data) { container.innerHTML = `<div class="empty-stats"><h4>📊 Learning Engine Not Active</h4><p>Path: ${files.stats}</p></div>`; return; }
+
+    // ... keep the rest of your existing html rendering code exactly the same ...
+    const dbStats = data.db_stats || {}
+    const metrics = data.metrics_all_time || {}
+    const winRate = metrics.win_rate || 0
+    const profitFactor = metrics.profit_factor || 0
+
+    let html = `<div class="timestamp">Updated: ${formatTime(data.last_updated)}</div>`;
+    
+    html += `
+      <div class="glass-card" style="padding: 24px;">
+        <h2 style="margin-bottom: 20px;">🤖 Lifetime AI Performance</h2>
+        <div class="stats-grid-4">
+          <div class="stat-big-card">
+            <div class="stat-big-label">Predictions</div>
+            <div class="stat-big-value" style="color:#88ccff;">${dbStats.total_predictions || 0}</div>
+            <div class="stat-big-sub">${metrics.total_evaluated || 0} evaluated</div>
+          </div>
+          <div class="stat-big-card">
+            <div class="stat-big-label">Win Rate</div>
+            <div class="stat-big-value ${winRate >= 60 ? 'green' : winRate >= 40 ? 'yellow' : 'red'}">${winRate.toFixed(0)}%</div>
+            <div class="stat-big-sub">${metrics.wins || 0}W / ${metrics.losses || 0}L</div>
+          </div>
+          <div class="stat-big-card">
+            <div class="stat-big-label">Avg Gain</div>
+            <div class="stat-big-value green">+${(metrics.avg_gain_pct || 0).toFixed(1)}%</div>
+            <div class="stat-big-sub">when winning</div>
+          </div>
+          <div class="stat-big-card">
+            <div class="stat-big-label">Profit Factor</div>
+            <div class="stat-big-value ${profitFactor >= 2 ? 'green' : profitFactor >= 1 ? 'yellow' : 'red'}">${profitFactor.toFixed(2)}</div>
+            <div class="stat-big-sub">gain ÷ loss</div>
+          </div>
+        </div>
+        ${(metrics.total_evaluated || 0) === 0 ? `<div style="text-align:center; padding: 16px; background:rgba(255,255,255,0.05); border-radius:8px; color:#A3B3C8; font-size:12px;">⏳ Track Record is building. Outcomes evaluate automatically at 8 AM daily.</div>` : ''}
+      </div>
+    `;
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // TAB 9: HISTORY (Uses shared loader + CSS)
+  // ============================================================
+  // loadHistory() uses existing CSS which I updated to match the dark glass feel (pred-card-history, etc.)
+  // It naturally fits into the new UI without a complete JS rewrite.
+
+  // INIT & REFRESH LOGIC
+  // ============================================================
+  // TAB 9: HISTORY & AI CHAT (Restored)
   // ============================================================
   let currentPeriod = 'this_week'
   let customPeriodData = null
@@ -1207,22 +1248,14 @@ function loadScanner() {
   async function applyCustomDateRange() {
     const start = document.getElementById('customStartDate').value
     const end = document.getElementById('customEndDate').value
-    if (!start || !end) {
-      alert('Please select both dates')
-      return
-    }
-    if (start > end) {
-      alert('Start date must be before end date')
-      return
-    }
+    if (!start || !end) { alert('Please select both dates'); return; }
+    if (start > end) { alert('Start date must be before end date'); return; }
     const applyBtn = document.getElementById('customApplyBtn')
     applyBtn.disabled = true
     applyBtn.textContent = '⏳ Loading...'
     try {
       const response = await fetch(API_BASE + '/api/history/custom', {
-        method: 'POST',
-        headers: apiHeaders(),
-        body: JSON.stringify({ start_date: start, end_date: end })
+        method: 'POST', headers: apiHeaders(), body: JSON.stringify({ start_date: start, end_date: end })
       })
       const data = await response.json()
       if (data.error) {
@@ -1245,15 +1278,12 @@ function loadScanner() {
   function loadHistory() {
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
-    if (!data) {
-      container.innerHTML = `<div class="empty-stats"><h4>📜 No History Data Yet</h4></div>`
-      return
-    }
+    if (!data) { container.innerHTML = `<div class="empty-stats"><h4>📜 No History Data Yet</h4></div>`; return; }
+    
     const ts = formatTime(data.last_updated)
     const totalInDb = data.total_in_db || {}
-    const todayDate = data.today_date || ''
-    const todayWeekday = data.today_weekday || ''
-    let html = `<div class="timestamp">Updated: ${ts} • ${todayWeekday} ${todayDate}</div>`
+    let html = `<div class="timestamp">Updated: ${ts} • ${data.today_weekday || ''} ${data.today_date || ''}</div>`
+    
     html += `
       <div class="period-selector">
         <button class="period-btn ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
@@ -1264,184 +1294,104 @@ function loadScanner() {
         <button class="period-btn ${currentPeriod === 'custom' ? 'active' : ''}" data-period="custom">📅 Custom</button>
       </div>
     `
-    const periods = data.periods || {}
-    let period
-    if (currentPeriod === 'custom' && customPeriodData) {
-      period = customPeriodData
-    } else {
-      period = periods[currentPeriod] || { stats: {}, top_winners: [], top_losers: [], timeline: [] }
-    }
+    const period = (currentPeriod === 'custom' && customPeriodData) ? customPeriodData : (data.periods[currentPeriod] || { stats: {}, top_winners: [], top_losers: [], timeline: [] })
     const stats = period.stats || {}
-    const total = stats.total || 0
-    const wins = stats.wins || 0
-    const losses = stats.losses || 0
-    const pending = stats.pending || 0
     const winRate = stats.win_rate || 0
-    const evaluated = stats.evaluated || 0
-    const periodLabel = period.label || currentPeriod
+    
     html += `
       <div class="history-summary-card">
-        <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">${escapeHtml(periodLabel)}</div>
+        <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">${escapeHtml(period.label || currentPeriod)}</div>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-          <div style="text-align:center;"><div style="font-size:9px;color:#666;">TOTAL</div><div style="font-size:18px;font-weight:bold;color:#88ccff;">${total}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#666;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00ff88;">${wins}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#666;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#ff4444;">${losses}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#666;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${pending}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#666;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00ff88' : winRate >= 40 ? '#ffaa00' : '#ff4444'};">${winRate.toFixed(0)}%</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">TOTAL</div><div style="font-size:18px;font-weight:bold;color:#88ccff;">${stats.total || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00E676;">${stats.wins || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#FF3D00;">${stats.losses || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${stats.pending || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00E676' : winRate >= 40 ? '#ffaa00' : '#FF3D00'};">${winRate.toFixed(0)}%</div></div>
         </div>
-        ${evaluated === 0 ? `<div style="font-size:10px;color:#888;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid #222;">⏳ Outcomes evaluate after 1+ day. Tomorrow 8 AM brings real data.</div>` : ''}
+        ${(stats.evaluated || 0) === 0 ? `<div style="font-size:10px;color:#8B949E;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);">⏳ Outcomes evaluate after 1+ day.</div>` : ''}
       </div>
     `
     const winners = period.top_winners || []
     if (winners.length > 0) {
-      html += '<div class="region-header">🏆 Top Winners</div>'
+      html += '<h2 style="font-size:10px; color:#A3B3C8; margin-bottom:8px;">🏆 Top Winners</h2>'
       winners.slice(0, 5).forEach(w => {
-        const ticker = w.ticker || '?'
-        const sector = w.sector || '?'
         const gain = w.max_gain_pct || w.change_7d_pct || w.change_3d_pct || w.change_1d_pct || 0
-        const conf = w.confidence || 'MEDIUM'
-        const date = w.prediction_date || ''
         html += `
-          <div class="winner-row">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <span class="pred-ticker">${escapeHtml(ticker)}</span>
-                <span style="font-size:9px;color:#888;margin-left:6px;">${escapeHtml(sector)}</span>
+          <div class="pred-card-history evaluated win">
+            <div class="pred-card-row">
+              <div class="pred-card-left">
+                <div><span class="pred-card-ticker">${escapeHtml(w.ticker || '?')}</span></div>
+                <div class="pred-card-meta-line">${escapeHtml(w.sector || '?')} • ${w.confidence || 'MEDIUM'} conf</div>
               </div>
-              <span style="font-size:13px;font-weight:bold;color:#00ff88;">+${gain.toFixed(2)}%</span>
-            </div>
-            <div class="pred-meta">${conf} conf • ${date}</div>
-          </div>
-        `
-      })
-    }
-    const losers = period.top_losers || []
-    if (losers.length > 0) {
-      html += '<div class="region-header">📉 Top Losers (Lessons)</div>'
-      losers.slice(0, 5).forEach(l => {
-        const ticker = l.ticker || '?'
-        const sector = l.sector || '?'
-        const loss = l.max_loss_pct || l.change_7d_pct || l.change_3d_pct || l.change_1d_pct || 0
-        const conf = l.confidence || 'MEDIUM'
-        const date = l.prediction_date || ''
-        html += `
-          <div class="loser-row">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <span class="pred-ticker">${escapeHtml(ticker)}</span>
-                <span style="font-size:9px;color:#888;margin-left:6px;">${escapeHtml(sector)}</span>
+              <div class="pred-card-right">
+                <div class="pred-card-change up">+${gain.toFixed(2)}%</div>
               </div>
-              <span style="font-size:13px;font-weight:bold;color:#ff4444;">${loss.toFixed(2)}%</span>
             </div>
-            <div class="pred-meta">${conf} conf • ${date}</div>
           </div>
         `
       })
     }
     const timeline = period.timeline || []
     if (timeline.length > 0) {
-      html += '<div class="region-header">📅 Daily Timeline</div>'
+      html += '<h2 style="font-size:10px; color:#A3B3C8; margin-top:16px; margin-bottom:8px;">📅 Daily Timeline</h2>'
       timeline.forEach(day => {
-        const date = day.date || 'Unknown'
-        const dayStats = day.stats || {}
-        const dayPreds = day.predictions || []
-        const dayPending = dayStats.pending || 0
-        const dayTotal = dayStats.total || 0
-        const dayWinRate = dayStats.win_rate || 0
-        const dayEvaluated = dayStats.evaluated || 0
-        let pillClass = 'pending'
-        let pillText = `${dayPending} pending`
-        if (dayEvaluated > 0) {
-          if (dayWinRate >= 60) pillClass = 'high'
-          else if (dayWinRate >= 40) pillClass = 'medium'
-          else pillClass = 'low'
-          pillText = `${dayWinRate.toFixed(0)}% accuracy`
+        const dStats = day.stats || {}
+        let pillClass = 'pending', pillText = `${dStats.pending || 0} pending`
+        if ((dStats.evaluated || 0) > 0) {
+          pillClass = dStats.win_rate >= 60 ? 'high' : dStats.win_rate >= 40 ? 'medium' : 'low'
+          pillText = `${(dStats.win_rate || 0).toFixed(0)}% accuracy`
         }
         html += `
-          <div class="day-section">
+          <div class="glass-card" style="padding:12px;">
             <div class="day-header">
-              <div class="day-date">${formatDate(date)} (${date})</div>
-              <div class="day-stats">${dayTotal} predictions <span class="win-rate-pill ${pillClass}">${pillText}</span></div>
+              <div class="day-date">${formatDate(day.date)}</div>
+              <div class="day-stats">${dStats.total || 0} predictions <span class="win-rate-pill ${pillClass}">${pillText}</span></div>
             </div>
         `
-        if (dayPreds.length === 0) {
-          html += '<div class="history-empty-day">No predictions on this day</div>'
-        } else {
-          dayPreds.forEach((p) => {
-            const ticker = p.ticker || '?'
-            const sector = p.sector || '?'
-            const cat = p.category || 'opportunity'
-            const rec = p.recommendation || ''
-            const conf = p.confidence || 'MEDIUM'
-            const verdict = (p.verdict || 'PENDING').toUpperCase()
-            const verdictLower = verdict.toLowerCase()
-            const entry = p.entry_price
-            const target = p.target_price
-            const stop = p.stop_loss
-            const change = p.change_7d_pct ?? p.change_3d_pct ?? p.change_1d_pct
-            const evaluated = verdict !== 'PENDING'
-            const cardClass = `pred-card-history ${cat}${evaluated ? ' evaluated ' + verdictLower : ''}`
-            let changeDisplay = ''
-            let changeClass = 'pending'
-            if (change !== null && change !== undefined) {
-              const sign = change >= 0 ? '+' : ''
-              changeDisplay = `${sign}${change.toFixed(2)}%`
-              changeClass = change >= 2 ? 'up' : change <= -2 ? 'down' : 'neutral'
-            } else {
-              changeDisplay = '⏳ Pending'
-            }
-            const predDataJson = encodeURIComponent(JSON.stringify(p))
-            html += `
-              <div class="${cardClass}" data-pred='${predDataJson}'>
-                <div class="pred-card-row">
-                  <div class="pred-card-left">
-                    <div>
-                      <span class="pred-card-ticker">${escapeHtml(ticker)}</span>
-                      <span class="pred-card-rec">${escapeHtml(rec)}</span>
-                      <span class="verdict-pill ${verdictLower}" style="margin-left:6px;">${verdict}</span>
-                    </div>
-                    <div class="pred-card-meta-line">${escapeHtml(sector)} • ${conf} conf</div>
-                    ${entry ? `<div class="pred-card-prices">Entry: Rs.${entry}${target ? ' • Target: Rs.' + target : ''}${stop ? ' • SL: Rs.' + stop : ''}</div>` : ''}
+        ;(day.predictions || []).forEach((p) => {
+          const verdict = (p.verdict || 'PENDING').toUpperCase()
+          const vLower = verdict.toLowerCase()
+          const change = p.change_7d_pct ?? p.change_3d_pct ?? p.change_1d_pct
+          const evaluated = verdict !== 'PENDING'
+          const cClass = `pred-card-history ${p.category || 'opportunity'} ${evaluated ? 'evaluated ' + vLower : ''}`
+          let cDisplay = '⏳ Pending', chClass = 'pending'
+          if (change != null) {
+            cDisplay = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`
+            chClass = change >= 2 ? 'up' : change <= -2 ? 'down' : 'neutral'
+          }
+          html += `
+            <div class="${cClass}" data-pred='${encodeURIComponent(JSON.stringify(p))}'>
+              <div class="pred-card-row">
+                <div class="pred-card-left">
+                  <div>
+                    <span class="pred-card-ticker">${escapeHtml(p.ticker || '?')}</span>
+                    <span class="pred-card-rec">${escapeHtml(p.recommendation || '')}</span>
+                    <span class="verdict-pill ${vLower}" style="margin-left:6px;">${verdict}</span>
                   </div>
-                  <div class="pred-card-right">
-                    <div class="pred-card-change ${changeClass}">${changeDisplay}</div>
-                    <div style="font-size:9px;color:#666;">click for details</div>
-                  </div>
+                  <div class="pred-card-meta-line">${escapeHtml(p.sector || '?')} • ${p.confidence || 'MEDIUM'} conf</div>
+                </div>
+                <div class="pred-card-right">
+                  <div class="pred-card-change ${chClass}">${cDisplay}</div>
                 </div>
               </div>
-            `
-          })
-        }
+            </div>
+          `
+        })
         html += `</div>`
       })
-    } else {
-      html += '<div class="loading">No predictions in this period</div>'
     }
-    html += `<div style="font-size:9px;color:#444;text-align:center;margin-top:20px;padding-top:10px;border-top:1px solid #222;">
-      DB: ${totalInDb.predictions || 0} predictions • ${totalInDb.signals || 0} signals • ${totalInDb.snapshots || 0} snapshots
-    </div>`
     container.innerHTML = html
 
     container.querySelectorAll('.period-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const period = btn.dataset.period
-        if (period === 'custom') {
-          openCustomDatePicker()
-        } else {
-          currentPeriod = period
-          customPeriodData = null
-          loadHistory()
-        }
+        if (btn.dataset.period === 'custom') openCustomDatePicker()
+        else { currentPeriod = btn.dataset.period; customPeriodData = null; loadHistory() }
       })
     })
 
     container.querySelectorAll('.pred-card-history').forEach(card => {
       card.addEventListener('click', () => {
-        try {
-          const predJson = card.getAttribute('data-pred')
-          const pred = JSON.parse(decodeURIComponent(predJson))
-          showPredictionDetail(pred)
-        } catch (e) { console.error('Failed:', e) }
+        try { showPredictionDetail(JSON.parse(decodeURIComponent(card.getAttribute('data-pred')))) } catch (e) {}
       })
     })
   }
@@ -1450,219 +1400,144 @@ function loadScanner() {
     const overlay = document.getElementById('predDetailOverlay')
     const modal = document.getElementById('predDetailModal')
     const content = document.getElementById('predDetailContent')
-    const ticker = p.ticker || '?'
-    const sector = p.sector || '?'
-    const cat = p.category || 'opportunity'
-    const rec = p.recommendation || ''
-    const conf = p.confidence || 'MEDIUM'
     const verdict = (p.verdict || 'PENDING').toUpperCase()
-    const date = p.prediction_date || ''
-    const entry = p.entry_price
-    const target = p.target_price
-    const stop = p.stop_loss
-    const reasoning = p.reasoning || ''
-    const cross = p.cross_validation || ''
-    const conviction = p.overall_conviction || 0
-    const change_1d = p.change_1d_pct
-    const change_3d = p.change_3d_pct
-    const change_7d = p.change_7d_pct
-    const max_gain = p.max_gain_pct
-    const max_loss = p.max_loss_pct
-    const predId = p.id
+    
     let html = `
-      <div class="pred-detail-title">${escapeHtml(ticker)}</div>
+      <div class="pred-detail-title">${escapeHtml(p.ticker || '?')}</div>
       <div class="pred-detail-subtitle">
-        ${escapeHtml(sector)} • ${escapeHtml(cat.toUpperCase())} • ${escapeHtml(rec)} • ${conf} conf • Predicted ${date}
+        ${escapeHtml(p.sector || '?')} • ${escapeHtml(p.recommendation || '')} • ${p.confidence || 'MEDIUM'} conf
         <span class="verdict-pill ${verdict.toLowerCase()}" style="margin-left:8px;">${verdict}</span>
       </div>
     `
-    if (entry || target || stop) {
-      html += '<div class="pred-detail-section"><div class="pred-detail-label">📊 Price Targets</div>'
-      html += '<div class="pred-detail-grid">'
-      if (entry) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Entry</div><div class="pred-detail-cell-value">Rs.${entry}</div></div>`
-      if (target) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Target</div><div class="pred-detail-cell-value green">Rs.${target}</div></div>`
-      if (stop) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Stop Loss</div><div class="pred-detail-cell-value red">Rs.${stop}</div></div>`
+    if (p.entry_price || p.target_price || p.stop_loss) {
+      html += '<div class="pred-detail-section"><div class="pred-detail-label">📊 Targets</div><div class="pred-detail-grid">'
+      if (p.entry_price) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Entry</div><div class="pred-detail-cell-value">Rs.${p.entry_price}</div></div>`
+      if (p.target_price) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Target</div><div class="pred-detail-cell-value green">Rs.${p.target_price}</div></div>`
+      if (p.stop_loss) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Stop</div><div class="pred-detail-cell-value red">Rs.${p.stop_loss}</div></div>`
       html += '</div></div>'
     }
-    if (change_1d !== null || change_3d !== null || change_7d !== null) {
-      html += '<div class="pred-detail-section"><div class="pred-detail-label">📈 Actual Performance</div>'
-      html += '<div class="pred-detail-grid">'
-      if (change_1d !== null && change_1d !== undefined) {
-        const c = change_1d >= 0 ? 'green' : 'red'
-        const s = change_1d >= 0 ? '+' : ''
-        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">1 Day</div><div class="pred-detail-cell-value ${c}">${s}${change_1d.toFixed(2)}%</div></div>`
-      }
-      if (change_3d !== null && change_3d !== undefined) {
-        const c = change_3d >= 0 ? 'green' : 'red'
-        const s = change_3d >= 0 ? '+' : ''
-        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">3 Days</div><div class="pred-detail-cell-value ${c}">${s}${change_3d.toFixed(2)}%</div></div>`
-      }
-      if (change_7d !== null && change_7d !== undefined) {
-        const c = change_7d >= 0 ? 'green' : 'red'
-        const s = change_7d >= 0 ? '+' : ''
-        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">7 Days</div><div class="pred-detail-cell-value ${c}">${s}${change_7d.toFixed(2)}%</div></div>`
-      }
-      if (max_gain !== null && max_gain !== undefined) {
-        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Max Gain</div><div class="pred-detail-cell-value green">+${max_gain.toFixed(2)}%</div></div>`
-      }
-      if (max_loss !== null && max_loss !== undefined) {
-        html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Max Loss</div><div class="pred-detail-cell-value red">${max_loss.toFixed(2)}%</div></div>`
-      }
-      html += '</div></div>'
-    } else {
-      html += `<div class="pred-detail-section"><div class="pred-detail-label">📈 Actual Performance</div><div class="pred-detail-value" style="color:#888;font-style:italic;">⏳ Pending — outcomes evaluate after 1+ day</div></div>`
-    }
-    if (reasoning) html += `<div class="pred-detail-section"><div class="pred-detail-label">💡 AI Reasoning</div><div class="pred-detail-value">${escapeHtml(reasoning)}</div></div>`
-    if (cross) html += `<div class="pred-detail-section"><div class="pred-detail-label">🔗 Cross-Validation</div><div class="pred-detail-value">${escapeHtml(cross)}</div></div>`
-    if (conviction) html += `<div class="pred-detail-section"><div class="pred-detail-label">🎯 Overall Conviction</div><div class="pred-detail-value"><strong>${conviction}/10</strong></div></div>`
-    if (verdict !== 'PENDING' && predId) {
-      html += `<button class="postmortem-btn" id="postmortemBtn" data-pred-id="${predId}">🔬 Generate AI Post-Mortem Analysis</button>`
-      html += `<div id="postmortemResult"></div>`
-    } else if (verdict === 'PENDING') {
-      html += `<div style="margin-top:14px;padding:10px;background:#1a1a2e;border-radius:6px;text-align:center;font-size:11px;color:#888;">
-        💡 Post-mortem available after outcome evaluates (tomorrow 8 AM)
-      </div>`
+    if (p.reasoning) html += `<div class="pred-detail-section"><div class="pred-detail-label">💡 AI Reasoning</div><div class="pred-detail-value">${escapeHtml(p.reasoning)}</div></div>`
+    
+    if (verdict !== 'PENDING' && p.id) {
+      html += `<button class="postmortem-btn" id="postmortemBtn" data-pred-id="${p.id}">🔬 AI Post-Mortem Analysis</button><div id="postmortemResult"></div>`
     }
     content.innerHTML = html
-    overlay.classList.add('active')
-    modal.classList.add('active')
+    overlay.classList.add('active'); modal.classList.add('active');
 
     const pmBtn = document.getElementById('postmortemBtn')
     if (pmBtn) {
       pmBtn.addEventListener('click', async () => {
-        const id = pmBtn.getAttribute('data-pred-id')
         const resultDiv = document.getElementById('postmortemResult')
-        pmBtn.disabled = true
-        pmBtn.textContent = '⏳ Analyzing...'
-        resultDiv.innerHTML = '<div class="postmortem-loading">🤖 AI analyzing this prediction...</div>'
+        pmBtn.disabled = true; pmBtn.textContent = '⏳ Analyzing...'; resultDiv.innerHTML = '<div class="loading">🤖 AI analyzing...</div>'
         try {
-          const response = await fetch(API_BASE + '/api/postmortem', {
-            method: 'POST',
-            headers: apiHeaders(),
-            body: JSON.stringify({ prediction_id: parseInt(id) })
-          })
+          const response = await fetch(API_BASE + '/api/postmortem', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ prediction_id: parseInt(p.id) }) })
           const data = await response.json()
           if (data.success) {
-            resultDiv.innerHTML = `
-              <div class="postmortem-result">
-                <div style="font-size:9px;color:#888;margin-bottom:8px;">
-                  Model: ${data.model_used} • Cost: $${(data.cost || 0).toFixed(4)}
-                </div>
-                ${formatPostMortem(data.analysis)}
-              </div>
-            `
-            pmBtn.textContent = '✅ Post-Mortem Generated'
-          } else {
-            resultDiv.innerHTML = `<div class="postmortem-result" style="color:#ff4444;">❌ ${escapeHtml(data.error || 'Failed')}</div>`
-            pmBtn.disabled = false
-            pmBtn.textContent = '🔬 Try Again'
-          }
+            resultDiv.innerHTML = `<div class="postmortem-result">${formatPostMortem(data.analysis)}</div>`
+            pmBtn.textContent = '✅ Generated'
+          } else throw new Error(data.error || 'Failed')
         } catch (e) {
-          resultDiv.innerHTML = `<div class="postmortem-result" style="color:#ff4444;">❌ ${escapeHtml(e.message)}</div>`
-          pmBtn.disabled = false
-          pmBtn.textContent = '🔬 Try Again'
+          resultDiv.innerHTML = `<div class="postmortem-result" style="color:#FF3D00;">❌ ${escapeHtml(e.message)}</div>`
+          pmBtn.disabled = false; pmBtn.textContent = '🔬 Try Again'
         }
       })
     }
   }
 
-  document.getElementById('predDetailClose').addEventListener('click', () => {
-    document.getElementById('predDetailOverlay').classList.remove('active')
-    document.getElementById('predDetailModal').classList.remove('active')
-  })
-  document.getElementById('predDetailOverlay').addEventListener('click', () => {
-    document.getElementById('predDetailOverlay').classList.remove('active')
-    document.getElementById('predDetailModal').classList.remove('active')
-  })
-
+  document.getElementById('predDetailClose').addEventListener('click', () => { document.getElementById('predDetailOverlay').classList.remove('active'); document.getElementById('predDetailModal').classList.remove('active') })
+  document.getElementById('predDetailOverlay').addEventListener('click', () => { document.getElementById('predDetailOverlay').classList.remove('active'); document.getElementById('predDetailModal').classList.remove('active') })
   document.getElementById('customDateClose').addEventListener('click', closeCustomDatePicker)
   document.getElementById('customCancelBtn').addEventListener('click', closeCustomDatePicker)
   document.getElementById('customApplyBtn').addEventListener('click', applyCustomDateRange)
-  document.getElementById('customDateOverlay').addEventListener('click', closeCustomDatePicker)
 
   async function askClaude() {
-    const input = document.getElementById('askInput')
-    const askBtn = document.getElementById('askBtn')
-    const question = input.value.trim()
-    if (!question) return
-    input.value = ''
-    askBtn.disabled = true
-    askBtn.innerText = '...'
+    const input = document.getElementById('askInput'), askBtn = document.getElementById('askBtn')
+    const question = input.value.trim(); if (!question) return;
+    input.value = ''; askBtn.disabled = true; askBtn.innerText = '...'
+    
     const aiModel = document.getElementById('aiModel').value
     const modelLabel = aiModel === 'ask_basic' ? 'Gemini' : aiModel === 'ask_haiku' ? 'Haiku' : 'Sonnet'
-    const activeTab = document.querySelector('.tab.active').dataset.tab
-    const container = document.getElementById('tab-' + activeTab)
+    const container = document.getElementById('tab-' + document.querySelector('.tab.active').dataset.tab)
     const qid = 'q' + Date.now()
     addChatMessage('user', question, modelLabel)
+    
     container.insertAdjacentHTML('beforeend', `
-      <div style="padding:8px;background:#1a1a1a;border-radius:5px;border-left:2px solid #00ff88;margin:10px 0 8px 0;">
-        <div style="color:#00ff88;font-size:10px;margin-bottom:4px;">YOU [${modelLabel}]:</div>
-        <div style="font-size:11px;">${escapeHtml(question)}</div>
-      </div>
-      <div id="${qid}" style="padding:8px;background:#0d1a0d;border-radius:5px;border-left:2px solid #004422;font-size:11px;color:#aaa;margin-bottom:10px;">
-        ⏳ Thinking with ${modelLabel}...
-      </div>
+      <div class="chat-msg-user"><div class="chat-msg-meta">YOU [${modelLabel}]:</div><div class="chat-msg-content">${escapeHtml(question)}</div></div>
+      <div id="${qid}" class="chat-msg-ai"><div class="chat-msg-meta">⏳ Thinking...</div></div>
     `)
     container.scrollTop = container.scrollHeight
     try {
-      const response = await fetch(API_BASE + '/api/ask', {
-        method: 'POST',
-        headers: apiHeaders(),
-        body: JSON.stringify({ question: question, use_case: aiModel })
-      })
+      const response = await fetch(API_BASE + '/api/ask', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ question: question, use_case: aiModel }) })
       const result = await response.json()
-      askBtn.disabled = false
-      askBtn.innerText = 'Ask'
+      askBtn.disabled = false; askBtn.innerText = 'Ask'
       const responseEl = document.getElementById(qid)
       if (!responseEl) return
-      let displayText = ''
-      if (result.success) {
-        displayText = result.response || 'No response'
-      } else {
-        displayText = 'Error: ' + (result.error || 'Unknown')
-      }
+      const displayText = result.success ? (result.response || 'No response') : ('Error: ' + (result.error || 'Unknown'))
       addChatMessage('assistant', displayText, modelLabel)
-      responseEl.innerHTML = `<div style="color:#00ff88;font-size:10px;margin-bottom:4px;">${modelLabel}:</div>${escapeHtml(displayText).replace(/\n/g, '<br>')}`
+      responseEl.innerHTML = `<div class="chat-msg-meta">${modelLabel}:</div><div class="chat-msg-content">${escapeHtml(displayText).replace(/\n/g, '<br>')}</div>`
       container.scrollTop = container.scrollHeight
     } catch (err) {
-      askBtn.disabled = false
-      askBtn.innerText = 'Ask'
+      askBtn.disabled = false; askBtn.innerText = 'Ask'
       const responseEl = document.getElementById(qid)
-      if (responseEl) responseEl.innerHTML = `<div style="color:#ff4444;">❌ ${err.message}</div>`
+      if (responseEl) responseEl.innerHTML = `<div style="color:#FF3D00;">❌ ${err.message}</div>`
     }
   }
 
   document.getElementById('askBtn').addEventListener('click', askClaude)
-  document.getElementById('askInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') askClaude()
-  })
-  document.getElementById('refreshBtn').addEventListener('click', refreshAll)
+  document.getElementById('askInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') askClaude() })
 
   async function refreshAll() {
-    if (USE_API) {
-      await fetchAllFromAPI()
-    }
-    loadBrain()
-    loadGovt()
-    loadScanner()
-    loadMarkets()
-    loadNews()
-    loadTV()
-    loadReddit()
-    loadStats()
-    loadHistory()
+    if (USE_API) await fetchAllFromAPI()
+    loadBrain(); loadGovt(); loadScanner(); loadMarkets(); loadNews(); loadTV(); loadReddit(); loadStats(); loadHistory()
     setTimeout(() => {
       const activeTab = document.querySelector('.tab.active')
-      if (activeTab) {
-        const target = activeTab.dataset.tab
-        const container = document.getElementById('tab-' + target)
-        if (container) renderChatHistory(container)
-      }
+      if (activeTab) renderChatHistory(document.getElementById('tab-' + activeTab.dataset.tab))
     }, 150)
   }
 
+  document.getElementById('refreshBtn').addEventListener('click', refreshAll)
+  document.getElementById('apiStatus').addEventListener('click', () => { updateApiStatus(USE_API && apiCache.connected) })
+
   refreshAll()
   setInterval(refreshAll, 30000)
+
+  function renderSignalRow(s, cls) {
+    const ticker = s.ticker || '?', sector = s.sector || '?', strength = s.strength || '?', direction = s.direction || '?', change = s.change_percent || 0, volRatio = s.volume_ratio || 0, price = s.price || 0, signals = s.signals || [];
+    const sign = change >= 0 ? '+' : '';
+    const changeClass = change >= 0 ? 'up' : 'down';
+    const strengthCls = (cls === 'ultra') ? 'ultra' : (direction === 'BEARISH' ? 'bearish' : 'strong');
+    return `
+      <div class="signal-row ${cls}">
+        <div class="signal-header">
+          <div><span class="signal-ticker">${escapeHtml(ticker)}</span><span class="signal-sector">${escapeHtml(sector)}</span></div>
+          <span class="signal-strength-pill ${strengthCls}">${strength} • ${direction}</span>
+        </div>
+        <div class="signal-price-row">
+          <span class="signal-price">Rs.${price.toLocaleString('en-IN')}</span>
+          <span class="signal-change ${changeClass}">${sign}${change.toFixed(2)}%</span>
+          <span class="signal-volume">vol ${volRatio.toFixed(1)}x avg</span>
+        </div>
+        <div class="signal-tags">${signals.map(sig => `<span class="signal-tag">${sig}</span>`).join('')}</div>
+      </div>
+    `
+  }
+
+  function renderCompactSignal(s, bearish = false) {
+    const ticker = s.ticker || '?', sector = s.sector || '?', change = s.change_percent || 0, volRatio = s.volume_ratio || 0, price = s.price || 0;
+    const sign = change >= 0 ? '+' : '';
+    const changeClass = change >= 0 ? 'up' : 'down';
+    return `
+      <div class="sector-row ${bearish ? 'bearish' : (change >= 0 ? 'bullish' : 'bearish')}">
+        <div>
+          <div class="sector-name">${escapeHtml(ticker)} <span style="color:#8B949E;font-size:9px;font-weight:normal;">(${escapeHtml(sector)})</span></div>
+          <div class="sector-meta">Rs.${price.toLocaleString('en-IN')} • vol ${volRatio.toFixed(1)}x</div>
+        </div>
+        <div class="sector-stats">
+          <span class="sector-move ${changeClass === 'up' ? 'green' : 'red'}">${sign}${change.toFixed(2)}%</span>
+        </div>
+      </div>
+    `
+  }
   </script>
 </body>
 </html>
