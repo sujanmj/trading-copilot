@@ -50,8 +50,8 @@ FETCH_MODES = ['hot', 'new']
 POSTS_LIMIT = 50
 
 HEADERS = {
-    'User-Agent': 'windows:com.sujan.tradingcopilot:v2.2 (by u/sujan)',
-    'Accept': 'application/json'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json',
 }
 
 OUTPUT_FILE = Path(__file__).parent.parent / 'data' / 'reddit_data.json'
