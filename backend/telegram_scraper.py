@@ -1,12 +1,9 @@
 """
 TELEGRAM SCRAPER (User Client)
-Reads alpha from top Telegram channels.
 """
-
 import os
 import sys
 
-# EARLY EXIT — must be before ALL other imports
 SESSION_STRING = os.environ.get('TELEGRAM_SESSION_STRING', '')
 if not SESSION_STRING or len(SESSION_STRING) < 20:
     print("=" * 60)
@@ -66,41 +63,33 @@ async def main():
     print("=" * 60)
     print("TELEGRAM ALPHA SCRAPER - Retail Sentiment Engine")
     print("=" * 60)
-
     client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
     await client.connect()
-
     if not await client.is_user_authorized():
-        print("[ERROR] Session expired. Generate a new one.")
+        print("[ERROR] Session expired.")
         return
-
     all_messages = []
     for channel in TARGET_CHANNELS:
         print(f"[*] Scraping t.me/{channel}...")
         msgs = await fetch_channel_history(client, channel)
         all_messages.extend(msgs)
         print(f"  -> Found {len(msgs)} recent messages")
-
     ticker_mentions = Counter()
     for msg in all_messages:
         words = re.findall(STOCK_PATTERN, msg['text'])
         for w in words:
             if w not in IGNORE_LIST:
                 ticker_mentions[w] += 1
-
     top_tickers = dict(ticker_mentions.most_common(15))
-
     output = {
         'last_updated': datetime.now(timezone.utc).isoformat(),
         'total_messages_scanned': len(all_messages),
         'top_mentioned_stocks': top_tickers,
         'messages': all_messages[:30]
     }
-
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
-
     print(f"[SUCCESS] Saved {len(all_messages)} messages")
     print("=" * 60)
     await client.disconnect()

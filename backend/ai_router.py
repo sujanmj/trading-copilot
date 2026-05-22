@@ -43,7 +43,7 @@ MODELS = {
     },
     'haiku': {
         'provider': 'anthropic',
-        'model': 'claude-haiku-4-5',
+        'model': 'claude-haiku-3-5-20241022',  # ← FIXED
         'cost_per_1k_input': 0.0008,
         'cost_per_1k_output': 0.004,
         'quality': 'good',
@@ -68,7 +68,6 @@ MODELS = {
         'daily_limit': 1500,
     },
 }
-
 
 USE_CASE_ROUTING = {
     'overnight_brief':    'sonnet',
