@@ -35,6 +35,10 @@ GOVT_SOURCES = {
     'PIB All Releases (English)': 'https://www.pib.gov.in/RssFeeds.aspx?MenuId=8',
     'SEBI Press Releases': 'https://www.sebi.gov.in/sebirss.xml',
     'BSE Announcements': 'https://www.bseindia.com/data/xml/notices.xml',
+    'Economic Times Markets': 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
+    'Moneycontrol News': 'https://www.moneycontrol.com/rss/latestnews.xml',
+    'LiveMint Economy': 'https://www.livemint.com/rss/economy',
+    'Business Standard': 'https://www.business-standard.com/rss/markets-106.rss',
 }
 
 

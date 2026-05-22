@@ -4,7 +4,24 @@ Reads the "Retail Whisper" and Options setups from top Telegram channels.
 Uses StringSession to run headless on Railway.
 """
 
+"""
+TELEGRAM SCRAPER (User Client)
+"""
+
 import os
+import sys
+
+# ─── EARLY EXIT IF NOT CONFIGURED ───
+# Must be BEFORE telethon imports
+SESSION_STRING = os.environ.get('TELEGRAM_SESSION_STRING', '')
+if not SESSION_STRING or len(SESSION_STRING) < 20:
+    print("=" * 60)
+    print("TELEGRAM ALPHA SCRAPER - Retail Sentiment Engine")
+    print("=" * 60)
+    print("[SKIP] TELEGRAM_SESSION_STRING not configured. Skipping.")
+    print("=" * 60)
+    sys.exit(0)
+
 import json
 import asyncio
 import re
@@ -13,6 +30,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from collections import Counter
 
+from telethon.sync import TelegramClient
+from telethon.sessions import StringSession
+
+# Rest of your existing code continues unchanged...
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
 
