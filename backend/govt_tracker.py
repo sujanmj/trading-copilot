@@ -277,7 +277,7 @@ def convert_to_english_link(hindi_url):
 def fetch_rss_feed(url, source_name, hours_back=72):
     try:
         response = requests.get(url, timeout=15, headers={
-            'User-Agent': 'Mozilla/5.0 (compatible; TradingCopilot/1.0)'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
         if response.status_code != 200:
             return []

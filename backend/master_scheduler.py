@@ -15,6 +15,13 @@ IST = pytz.timezone('Asia/Kolkata')
 BACKEND_DIR = Path(__file__).resolve().parent
 PYTHON_EXE = sys.executable
 
+def gather_all_data():
+    data_dir = Path(__file__).parent.parent / 'data'
+    return {
+        # ... your other files ...
+        'twitter': load_json_safe(data_dir / 'twitter_data.json'), # ADD THIS LINE
+    }
+
 def run_standalone_script(script_name: str):
     """Safely executes an isolated backend module as an internal subprocess."""
     timestamp = datetime.now(IST).strftime("%H:%M:%S")
@@ -36,10 +43,13 @@ def run_all_collectors_parallel():
     
     ingestion_scripts = [
         "global_collector.py",
-        "news_aggregator.py",
+        "live_news_tracker.py",
+        "nse_announcements.py",
         "inshorts_tracker.py",
         "youtube_tracker.py",
         "govt_tracker.py",
+        "telegram_scraper.py",
+        "twitter_tracker.py",
         "reddit_tracker.py"
     ]
     
@@ -94,11 +104,11 @@ intraday_slots = [
     "12:30", "13:00", "13:30", "14:00", "14:30", "15:00"
 ]
 for slot in intraday_slots:
-    schedule.every().monday.at(slot).do(run_all_collectors_parallel)
-    schedule.every().tuesday.at(slot).do(run_all_collectors_parallel)
-    schedule.every().wednesday.at(slot).do(run_all_collectors_parallel)
-    schedule.every().thursday.at(slot).do(run_all_collectors_parallel)
-    schedule.every().friday.at(slot).do(run_all_collectors_parallel)
+    schedule.every().monday.at("15:45").do(run_all_collectors_parallel)
+    schedule.every().tuesday.at("15:45").do(run_all_collectors_parallel)
+    schedule.every().wednesday.at("15:45").do(run_all_collectors_parallel)
+    schedule.every().thursday.at("15:45").do(run_all_collectors_parallel)
+    schedule.every().friday.at("15:45").do(run_all_collectors_parallel)
 # Strategic Core Runs & Automation Pipelines
 schedule.every().day.at("05:00").do(run_strategic_brief, brief_name="Overnight Brief")
 schedule.every().day.at("08:00").do(run_standalone_script, script_name="outcome_tracker.py")
@@ -107,11 +117,11 @@ schedule.every().day.at("12:00").do(run_strategic_brief, brief_name="Midday Eval
 schedule.every().day.at("23:00").do(run_strategic_brief, brief_name="US/Global Pulse")
 
 # The newly integrated, instant-update post-close settlement script
-schedule.every().monday.at(slot).do(run_all_collectors_parallel)
-schedule.every().tuesday.at(slot).do(run_all_collectors_parallel)
-schedule.every().wednesday.at(slot).do(run_all_collectors_parallel)
-schedule.every().thursday.at(slot).do(run_all_collectors_parallel)
-schedule.every().friday.at(slot).do(run_all_collectors_parallel)
+schedule.every().monday.at("15:45").do(run_all_collectors_parallel)
+schedule.every().tuesday.at("15:45").do(run_all_collectors_parallel)
+schedule.every().wednesday.at("15:45").do(run_all_collectors_parallel)
+schedule.every().thursday.at("15:45").do(run_all_collectors_parallel)
+schedule.every().friday.at("15:45").do(run_all_collectors_parallel)
 
 # ============================================================================
 # ORCHESTRATION BOOT ENTRY POINT

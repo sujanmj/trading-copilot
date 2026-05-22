@@ -65,6 +65,7 @@ def gather_all_data():
         'govt': load_json_safe(data_dir / 'govt_intelligence.json'),
         'inshorts': load_json_safe(data_dir / 'inshorts_feed.json'),
         'reddit': load_json_safe(data_dir / 'reddit_data.json'),
+        'telegram': load_json_safe(data_dir / 'telegram_sentiment.json'),
         'scanner': load_json_safe(data_dir / 'scanner_data.json'),
     }
 
@@ -253,6 +254,65 @@ def format_reddit(data):
             lines.append(f"  [{score}up/{comments}c|{sent.upper()[:3]}] {title}{ticker_str}")
     return "\n".join(lines)
 
+def format_telegram(data):
+    if not data:
+        return "TELEGRAM INTEL: No data available"
+    lines = ["=== TIER 5: TELEGRAM RETAIL WHISPERS & OPTIONS SETUP ==="]
+    lines.append(f"Messages scanned: {data.get('total_messages_scanned', 0)}")
+    
+    top_stocks = data.get('top_mentioned_stocks', {})
+    if top_stocks:
+        lines.append("\nMOST DISCUSSED TICKERS ON TELEGRAM:")
+        for stock, count in list(top_stocks.items())[:10]:
+            lines.append(f"  {stock}: {count} mentions")
+            
+    msgs = data.get('messages', [])
+    if msgs:
+        lines.append("\nLATEST ALPHA MESSAGES:")
+        for m in msgs[:10]:
+            channel = m.get('channel', 'unknown')
+            text = m.get('text', '').replace('\n', ' ')[:120]
+            lines.append(f"  [{channel}] {text}...")
+            
+    return "\n".join(lines)
+
+def format_nse(data):
+    if not data:
+        return "NSE FILINGS: No data available"
+    lines = ["=== TIER 1: NSE CORPORATE ANNOUNCEMENTS (ZERO-LATENCY) ==="]
+    
+    high_impact = data.get('latest_high_impact', [])
+    if high_impact:
+        lines.append("\n🚨 HIGH IMPACT FILINGS:")
+        for item in high_impact[:5]:
+            symbol = item.get('symbol', '?')
+            category = item.get('impact_category', '?')
+            subject = item.get('subject', '')[:100]
+            lines.append(f"  [{symbol}] {category} | {subject}")
+    else:
+        lines.append("\n  No high impact filings in this cycle.")
+        
+    medium_impact = data.get('latest_medium_impact', [])
+    if medium_impact:
+        lines.append("\n⚠️ MEDIUM IMPACT FILINGS:")
+        for item in medium_impact[:3]:
+            lines.append(f"  [{item.get('symbol', '?')}] {item.get('subject', '')[:80]}")
+            
+    return "\n".join(lines)
+
+def format_twitter(data):
+    if not data:
+        return "TWITTER INTEL: No data available"
+    lines = ["=== TIER 4: X/TWITTER (Official Accounts & Breaking) ==="]
+    lines.append(f"Tweets scanned: {data.get('total_tweets', 0)}")
+    
+    tweets = data.get('tweets', [])
+    if tweets:
+        lines.append("\nLATEST TWEETS:")
+        for t in tweets[:10]:
+            lines.append(f"  [{t['account']}] {t['text']} ({t['published'][:16]})")
+            
+    return "\n".join(lines)
 
 def format_scanner(data):
     if not data:
@@ -336,6 +396,9 @@ def generate_unified_analysis(all_data):
     youtube_str = format_youtube(all_data['youtube'])
     inshorts_str = format_inshorts(all_data['inshorts'])
     reddit_str = format_reddit(all_data['reddit'])
+    telegram_str = format_telegram(all_data['telegram'])
+    nse_str = format_nse(all_data.get('nse_filings', {}))
+    twitter_str = format_twitter(all_data['twitter'])
     scanner_str = format_scanner(all_data['scanner'])
 
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -360,12 +423,13 @@ TIER 2 = News  |  TIER 3 = Inshorts  |  TIER 5 = India Markets
 TIER 6 = Global Markets  |  TIER 4 = TV/YouTube  |  TIER 7 = Reddit
 
 KEY ANALYSIS PRINCIPLES:
-1. Tier 1 + Tier 8 alignment = HIGHEST conviction
-2. Volume spikes (Tier 8) often PRECEDE news by hours
-3. Correlation breaks = idiosyncratic opportunities
-4. ULTRA strength signals = highest action priority
-5. **USE YOUR PAST PERFORMANCE TO CALIBRATE CONFIDENCE LEVELS**
+1. THE GOLDEN SETUP: If a stock has an 'ULTRA' signal in the Scanner (Tier 8) AND is supported by a breaking positive catalyst in Govt Policy (Tier 1) or NSE Announcements (Tier 2), this is a HIGH CONVICTION BUY.
+2. THE FAKE-OUT: If Reddit/YouTube sentiment is wildly BULLISH, but the Scanner shows a 'BREAKDOWN' or 'GAP_DOWN' with high volume, mark as HIGH CONVICTION SELL/AVOID. Do not follow retail hype into a technical breakdown.
+3. TWITTER CATALYSTS: If the RBI or NSE tweets a policy change, immediately cross-reference which sector is affected in the 'Sector Rotation' data. If the sector is currently 'STRONG', the trend will continue.
+4. STOP LOSS GENERATION: For every BUY opportunity, you MUST place the Stop Loss exactly 1% below the 'low_20d' provided in the Scanner data. 
+5. TARGET GENERATION: For every BUY opportunity, target a 1:3 Risk/Reward ratio based on the entry and stop loss.
 
+{nse_str}
 {govt_str}
 {scanner_str}
 {global_str}
@@ -374,6 +438,8 @@ KEY ANALYSIS PRINCIPLES:
 {inshorts_str}
 {youtube_str}
 {reddit_str}
+{telegram_str}
+{twitter_str}
 
 CRITICAL INSTRUCTION: You are a backend API connecting to a React/Electron frontend. 
 You MUST NOT output any markdown blocks, conversational text, or explanations outside of JSON.
@@ -501,6 +567,9 @@ def run_master_analysis():
             'india_stocks': len(all_data['india_markets'].get('prices', {})) if all_data['india_markets'] else 0,
             'reddit_posts': all_data['reddit'].get('total_posts_analyzed', 0) if all_data['reddit'] else 0,
             'reddit_mood': all_data['reddit'].get('market_mood', {}).get('sentiment', 'unknown') if all_data['reddit'] else 'unknown',
+            'telegram_messages': all_data['telegram'].get('total_messages_scanned', 0) if all_data['telegram'] else 0,
+            'nse_filings': len(all_data['nse_filings'].get('latest_high_impact', [])) if all_data.get('nse_filings') else 0,
+            'twitter_tweets': all_data['twitter'].get('total_tweets', 0) if all_data['twitter'] else 0,
             'scanner_stocks': all_data['scanner'].get('total_scanned', 0) if all_data['scanner'] else 0,
             'scanner_signals': all_data['scanner'].get('total_signals', 0) if all_data['scanner'] else 0,
             'scanner_top_signal': (all_data['scanner'].get('top_signals') or [{}])[0].get('ticker', 'none') if all_data['scanner'] else 'none',
