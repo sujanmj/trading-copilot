@@ -158,43 +158,70 @@ def is_relevant(post):
 # ============================================================
 
 def fetch_subreddit_posts(subreddit, mode='hot', limit=50):
-    url = f"https://old.reddit.com/r/{subreddit}/{mode}.json?limit={limit}&raw_json=1"
+    """Fetch with multiple fallback methods"""
     
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        if response.status_code == 429:
-            print(f"[WARN] Rate limited on r/{subreddit}, sleeping 30s...")
-            time.sleep(30)
-            response = requests.get(url, headers=HEADERS, timeout=15)
-        
-        if response.status_code != 200:
-            print(f"[ERROR] r/{subreddit} returned {response.status_code}")
-            return []
-        
-        data = response.json()
-        posts = []
-        
-        for child in data.get('data', {}).get('children', []):
-            p = child.get('data', {})
-            posts.append({
-                'id': p.get('id'),
-                'subreddit': p.get('subreddit'),
-                'title': p.get('title', ''),
-                'selftext': p.get('selftext', '')[:1000],
-                'score': p.get('score', 0),
-                'upvote_ratio': p.get('upvote_ratio', 0),
-                'num_comments': p.get('num_comments', 0),
-                'created_utc': p.get('created_utc', 0),
-                'url': f"https://reddit.com{p.get('permalink', '')}",
-                'author': p.get('author', '[deleted]'),
-                'flair': p.get('link_flair_text', ''),
-            })
-        
-        return posts
+    # Method 1: old.reddit with raw_json
+    urls = [
+        f"https://old.reddit.com/r/{subreddit}/{mode}.json?limit={limit}&raw_json=1",
+        f"https://www.reddit.com/r/{subreddit}/{mode}.json?limit={limit}",
+        f"https://reddit.com/r/{subreddit}.json?limit={limit}",
+    ]
     
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch r/{subreddit}/{mode}: {e}")
-        return []
+    headers_list = [
+        {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+        },
+        {
+            'User-Agent': 'python-requests/2.31.0',
+            'Accept': '*/*',
+        },
+        {
+            'User-Agent': 'curl/7.88.1',
+        }
+    ]
+    
+    for url in urls:
+        for headers in headers_list:
+            try:
+                response = requests.get(url, headers=headers, timeout=15)
+                
+                if response.status_code == 429:
+                    print(f"[WARN] Rate limited, sleeping 30s...")
+                    time.sleep(30)
+                    continue
+                    
+                if response.status_code != 200:
+                    continue
+                
+                data = response.json()
+                posts = []
+                
+                for child in data.get('data', {}).get('children', []):
+                    p = child.get('data', {})
+                    posts.append({
+                        'id': p.get('id'),
+                        'subreddit': p.get('subreddit'),
+                        'title': p.get('title', ''),
+                        'selftext': p.get('selftext', '')[:1000],
+                        'score': p.get('score', 0),
+                        'upvote_ratio': p.get('upvote_ratio', 0),
+                        'num_comments': p.get('num_comments', 0),
+                        'created_utc': p.get('created_utc', 0),
+                        'url': f"https://reddit.com{p.get('permalink', '')}",
+                        'author': p.get('author', '[deleted]'),
+                        'flair': p.get('link_flair_text', ''),
+                    })
+                
+                if posts:
+                    print(f"✅ r/{subreddit}: Got {len(posts)} posts via {url[:50]}")
+                    return posts
+                    
+            except Exception as e:
+                continue
+    
+    print(f"❌ r/{subreddit}: All methods failed - using empty dataset")
+    return []
 
 # ============================================================
 # TICKER EXTRACTION

@@ -385,6 +385,81 @@ def trigger_refresh():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/debug/db-info", dependencies=[Depends(verify_api_key)])
+def db_info():
+    """Show database info and find duplicates"""
+    try:
+        import sqlite3, glob
+        # Find DB file
+        possible_paths = [
+            str(DATA_DIR / 'trading_copilot.db'),
+            '/data/trading_copilot.db',
+        ]
+        # Also search volume mounts
+        db_files = glob.glob('/var/lib/**/*.db', recursive=True)
+        possible_paths.extend(db_files)
+        
+        db_path = None
+        for p in possible_paths:
+            if Path(p).exists():
+                db_path = p
+                break
+        
+        if not db_path:
+            return {"error": "DB not found", "searched": possible_paths}
+        
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [r[0] for r in c.fetchall()]
+        counts = {}
+        for t in tables:
+            c.execute(f"SELECT COUNT(*) FROM {t}")
+            counts[t] = c.fetchone()[0]
+        conn.close()
+        return {"db_path": db_path, "tables": tables, "counts": counts}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/api/debug/dedup", dependencies=[Depends(verify_api_key)])
+def dedup_predictions():
+    """Remove duplicate predictions"""
+    try:
+        import sqlite3, glob
+        possible_paths = [
+            str(DATA_DIR / 'trading_copilot.db'),
+            '/data/trading_copilot.db',
+        ]
+        db_files = glob.glob('/var/lib/**/*.db', recursive=True)
+        possible_paths.extend(db_files)
+        
+        db_path = None
+        for p in possible_paths:
+            if Path(p).exists():
+                db_path = p
+                break
+        
+        if not db_path:
+            return {"error": "DB not found"}
+        
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM predictions")
+        before = c.fetchone()[0]
+        c.execute("""
+            DELETE FROM predictions 
+            WHERE rowid NOT IN (
+                SELECT MIN(rowid) FROM predictions 
+                GROUP BY ticker, recommendation, date(created_at)
+            )
+        """)
+        conn.commit()
+        c.execute("SELECT COUNT(*) FROM predictions")
+        after = c.fetchone()[0]
+        conn.close()
+        return {"success": True, "before": before, "after": after, "removed": before - after}
+    except Exception as e:
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))

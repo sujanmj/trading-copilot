@@ -31,15 +31,14 @@ load_dotenv(env_path)
 
 
 GOVT_SOURCES = {
-    'PIB India': 'https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=3',
-    'PIB All Releases (English)': 'https://www.pib.gov.in/RssFeeds.aspx?MenuId=8',
     'SEBI Press Releases': 'https://www.sebi.gov.in/sebirss.xml',
     'BSE Announcements': 'https://www.bseindia.com/data/xml/notices.xml',
     'Economic Times Markets': 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
-    'Moneycontrol Latest': 'https://www.moneycontrol.com/rss/latestnews.xml',
     'Business Standard Markets': 'https://www.business-standard.com/rss/markets-106.rss',
     'LiveMint Economy': 'https://www.livemint.com/rss/economy',
-    'NDTV Profit': 'https://feeds.feedburner.com/ndtvprofit-latest',
+    'LiveMint Markets': 'https://www.livemint.com/rss/markets',
+    'Financial Express Markets': 'https://www.financialexpress.com/market/feed/',
+    'Hindu BusinessLine': 'https://www.thehindubusinessline.com/markets/?service=rss',
 }
 
 

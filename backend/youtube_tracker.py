@@ -23,7 +23,7 @@ YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 CHANNEL_HANDLES = {
     'NDTV Profit':     '@NDTVProfitIndia',
     'ET Now':          '@ETNOW',
-    'CNBC-TV18':       'UC-xhdmIqKKDVpW1FzRXbFkA',
+    'CNBC-TV18':       '@CNBC-TV18',
     'CNBC Awaaz':      '@CNBCAwaaz',
     'Moneycontrol':    '@moneycontrol',
     'Zee Business':    '@ZeeBusiness',
