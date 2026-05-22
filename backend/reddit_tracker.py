@@ -53,6 +53,7 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json',
     'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
 }
 OUTPUT_FILE = Path(__file__).parent.parent / 'data' / 'reddit_data.json'
 
@@ -157,7 +158,7 @@ def is_relevant(post):
 # ============================================================
 
 def fetch_subreddit_posts(subreddit, mode='hot', limit=50):
-    url = f"https://old.reddit.com/r/{subreddit}/{mode}.json?limit={limit}"
+    url = f"https://old.reddit.com/r/{subreddit}/{mode}.json?limit={limit}&raw_json=1"
     
     try:
         response = requests.get(url, headers=HEADERS, timeout=15)
