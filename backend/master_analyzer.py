@@ -1,7 +1,5 @@
 """
-MASTER ANALYZER v8 - JSON API Engine + Memory-Augmented (Self-Aware AI)
-Reads past performance from learning_engine and feeds it to AI prompt.
-Outputs strict JSON for Luxury GUI integration.
+MASTER ANALYZER v9 - Fixed Import + Clean JSON Engine
 """
 
 import os
@@ -15,7 +13,6 @@ try:
     from dotenv import load_dotenv
     DOTENV_AVAILABLE = True
 except ImportError:
-    print("[WARN] python-dotenv not installed.")
     DOTENV_AVAILABLE = False
     def load_dotenv(*args, **kwargs):
         return False
@@ -30,18 +27,16 @@ if sys.platform == 'win32':
 sys.path.insert(0, str(Path(__file__).parent))
 from ai_router import ask_ai
 
-# Import learning engine for memory-augmented predictions
 try:
     from learning_engine import build_memory_summary
     LEARNING_AVAILABLE = True
 except ImportError:
     LEARNING_AVAILABLE = False
-    print("[WARN] learning_engine not available - running without memory")
+    print("[WARN] learning_engine not available")
 
 env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
-if DOTENV_AVAILABLE:
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
+if DOTENV_AVAILABLE and env_path.exists():
+    load_dotenv(env_path, override=False)
 
 
 def load_json_safe(filepath):
@@ -59,312 +54,157 @@ def gather_all_data():
     data_dir = Path(__file__).parent.parent / 'data'
     return {
         'global_markets': load_json_safe(data_dir / 'global_markets.json'),
-        'india_markets': load_json_safe(data_dir / 'latest_market_data.json'),
-        'news': load_json_safe(data_dir / 'news_feed.json'),
-        'youtube': load_json_safe(data_dir / 'youtube_feed.json'),
-        'govt': load_json_safe(data_dir / 'govt_intelligence.json'),
-        'inshorts': load_json_safe(data_dir / 'inshorts_feed.json'),
-        'reddit': load_json_safe(data_dir / 'reddit_data.json'),
-        'telegram': load_json_safe(data_dir / 'telegram_sentiment.json'),
-        'scanner': load_json_safe(data_dir / 'scanner_data.json'),
+        'india_markets':  load_json_safe(data_dir / 'latest_market_data.json'),
+        'news':           load_json_safe(data_dir / 'news_feed.json'),
+        'youtube':        load_json_safe(data_dir / 'youtube_feed.json'),
+        'govt':           load_json_safe(data_dir / 'govt_intelligence.json'),
+        'inshorts':       load_json_safe(data_dir / 'inshorts_feed.json'),
+        'reddit':         load_json_safe(data_dir / 'reddit_data.json'),
+        'telegram':       load_json_safe(data_dir / 'telegram_sentiment.json'),
+        'scanner':        load_json_safe(data_dir / 'scanner_data.json'),
+        'twitter':        load_json_safe(data_dir / 'twitter_data.json'),
+        'nse_filings':    load_json_safe(data_dir / 'nse_announcements.json'),
     }
 
 
 def format_global_markets(data):
     if not data:
-        return "GLOBAL MARKETS: No data available"
+        return "GLOBAL MARKETS: No data"
     lines = ["=== GLOBAL MARKETS ==="]
-    lines.append(f"Updated: {data.get('collection_time', 'unknown')}")
-    sentiment = data.get('sentiment', {})
-    lines.append("\nREGIONAL SENTIMENT:")
-    for region, info in sentiment.items():
+    for region, info in data.get('sentiment', {}).items():
         avg = info.get('average_change', info.get('expected_open', 0))
-        lines.append(f"  {region.upper()}: {info.get('mood', '?')} (avg {avg:+.2f}%)")
-    lines.append("\nKEY MARKET DATA:")
-    markets = data.get('markets', {})
-    for group_name, symbols in markets.items():
-        lines.append(f"\n[{group_name}]")
-        for name, info in list(symbols.items())[:6]:
+        lines.append(f"  {region.upper()}: {info.get('mood','?')} ({avg:+.2f}%)")
+    for group, symbols in data.get('markets', {}).items():
+        lines.append(f"\n[{group}]")
+        for name, info in list(symbols.items())[:5]:
             change = info.get('change_percent', 0)
-            arrow = '+' if change >= 0 else ''
-            lines.append(f"  {name}: {info.get('price', 0):,.2f} ({arrow}{change:.2f}%)")
-    alerts = data.get('alerts', [])
-    if alerts:
-        lines.append("\nUNUSUAL MOVEMENTS:")
-        for a in alerts[:10]:
-            lines.append(f"  {a['message']}")
+            lines.append(f"  {name}: {info.get('price',0):,.0f} ({change:+.2f}%)")
+    for a in data.get('alerts', [])[:5]:
+        lines.append(f"  ALERT: {a.get('message','')}")
     return "\n".join(lines)
 
 
 def format_india_markets(data):
     if not data:
-        return "INDIA MARKETS: No data available"
-    lines = ["=== INDIA STOCK SNAPSHOT ==="]
-    prices = data.get('prices', {})
-    for name, info in prices.items():
+        return "INDIA MARKETS: No data"
+    lines = ["=== INDIA STOCKS ==="]
+    for name, info in data.get('prices', {}).items():
         change = info.get('change_percent', 0)
-        arrow = '+' if change >= 0 else ''
-        lines.append(f"  {name}: Rs.{info.get('price', 0):,.2f} ({arrow}{change:.2f}%)")
+        lines.append(f"  {name}: Rs.{info.get('price',0):,.2f} ({change:+.2f}%)")
     return "\n".join(lines)
 
 
 def format_news(data):
     if not data:
-        return "NEWS: No data available"
-    lines = ["=== NEWS INTELLIGENCE ==="]
-    lines.append(f"Total articles: {data.get('total_articles', 0)}")
-    sent = data.get('sentiment_distribution', {})
-    if sent:
-        lines.append(f"Sentiment: pos={sent.get('positive', 0)}, neu={sent.get('neutral', 0)}, neg={sent.get('negative', 0)}")
-    top_stocks = data.get('top_stocks', {})
-    if top_stocks:
-        lines.append("\nMOST MENTIONED STOCKS:")
-        for stock, count in list(top_stocks.items())[:15]:
-            lines.append(f"  {stock}: {count} articles")
-    sectors = data.get('sector_buzz', {})
-    if sectors:
-        lines.append("\nSECTOR BUZZ:")
-        for sector, count in list(sectors.items())[:8]:
-            lines.append(f"  {sector}: {count} mentions")
-    hot = data.get('hot_stocks', [])
-    if hot:
-        lines.append("\nHOT STOCKS (high mention velocity):")
-        for h in hot[:8]:
-            lines.append(f"  [{h['velocity']}] {h['stock']}: {h['mention_count']} mentions")
-    articles = data.get('articles', [])
-    if articles:
-        lines.append("\nTOP HEADLINES (latest 25):")
-        for a in articles[:25]:
-            sentiment_tag = a.get('sentiment_label', 'neutral')
-            title = a.get('title', '')[:120]
-            source = a.get('source', '')[:20]
-            lines.append(f"  [{sentiment_tag.upper()[:3]}|{source}] {title}")
+        return "NEWS: No data"
+    lines = ["=== NEWS ==="]
+    lines.append(f"Articles: {data.get('total_articles', 0)}")
+    for stock, count in list(data.get('top_stocks', {}).items())[:10]:
+        lines.append(f"  {stock}: {count} articles")
+    for h in data.get('hot_stocks', [])[:5]:
+        lines.append(f"  HOT [{h.get('velocity','?')}] {h.get('stock','?')}: {h.get('mention_count',0)} mentions")
+    for a in data.get('articles', [])[:15]:
+        lines.append(f"  [{a.get('sentiment_label','?')[:3].upper()}] {a.get('title','')[:100]}")
     return "\n".join(lines)
 
 
 def format_inshorts(data):
     if not data:
         return ""
-    lines = ["=== INSHORTS (Filtered Trading News) ==="]
-    lines.append(f"Stories: {data.get('total_stories', 0)}")
-    mentions = data.get('top_mentions', {})
-    if mentions:
-        lines.append("\nMENTIONED:")
-        for stock, count in list(mentions.items())[:10]:
-            lines.append(f"  {stock}: {count}x")
-    stories = data.get('stories', [])
-    if stories:
-        lines.append("\nLATEST HEADLINES:")
-        for s in stories[:15]:
-            title = s.get('title', '')[:120]
-            cat = s.get('category', '')[:10]
-            lines.append(f"  [{cat}] {title}")
+    lines = ["=== INSHORTS ==="]
+    for s in data.get('stories', [])[:10]:
+        lines.append(f"  [{s.get('category','?')}] {s.get('title','')[:100]}")
     return "\n".join(lines)
 
 
 def format_youtube(data):
     if not data:
-        return "YOUTUBE: No data available"
-    lines = ["=== TV/YOUTUBE INTELLIGENCE ==="]
-    lines.append(f"Videos: {data.get('total_videos', 0)} | Live: {data.get('live_streams', 0)} | Recent (3h): {data.get('recent_videos_3h', 0)}")
-    live = data.get('live_now', [])
-    if live:
-        lines.append("\nLIVE NOW:")
-        for v in live[:6]:
-            lines.append(f"  [{v.get('channel', '?')}] {v.get('title', '')[:90]}")
-    recent = data.get('recent_videos', [])
-    if recent:
-        lines.append("\nRECENT VIDEOS:")
-        for v in recent[:10]:
-            lines.append(f"  [{v.get('channel', '?')}] {v.get('title', '')[:90]}")
-    stocks = data.get('stock_mentions', {})
-    if stocks:
-        lines.append("\nSTOCKS DISCUSSED ON TV:")
-        for stock, count in list(stocks.items())[:10]:
-            lines.append(f"  {stock}: {count} videos")
-    buzz = data.get('cross_channel_buzz', [])
-    if buzz:
-        lines.append("\nCROSS-CHANNEL BUZZ:")
-        for b in buzz[:5]:
-            lines.append(f"  [{b.get('signal_strength', '?')}] {b.get('stock', '?')} on {b.get('channel_count', 0)} channels")
+        return "TV: No data"
+    lines = ["=== TV/YOUTUBE ==="]
+    lines.append(f"Videos: {data.get('total_videos',0)} | Live: {data.get('live_streams',0)}")
+    for v in data.get('live_now', [])[:4]:
+        lines.append(f"  LIVE [{v.get('channel','?')}] {v.get('title','')[:80]}")
+    for v in data.get('recent_videos', [])[:6]:
+        lines.append(f"  [{v.get('channel','?')}] {v.get('title','')[:80]}")
+    for stock, count in list(data.get('stock_mentions', {}).items())[:8]:
+        lines.append(f"  TV mention: {stock} ({count}x)")
     return "\n".join(lines)
 
 
 def format_govt(data):
     if not data:
-        return "GOVERNMENT INTEL: No data available"
-    lines = ["=== TIER 1: OFFICIAL GOVERNMENT INTELLIGENCE ==="]
-    lines.append(f"HIGH IMPACT: {data.get('high_impact_count', 0)} | Medium: {data.get('medium_impact_count', 0)}")
-    high_impact = data.get('high_impact_items', [])
-    if high_impact:
-        lines.append("\n*** HIGH-IMPACT ANNOUNCEMENTS ***")
-        for i, item in enumerate(high_impact[:8], 1):
-            score = item.get('impact_score', 0)
-            direction = item.get('direction', 'NEUTRAL')
-            headline = item.get('english_headline', item.get('title', ''))[:130]
-            source = item.get('source', '?')
-            stocks = item.get('affected_stocks', [])
-            relevance = item.get('market_relevance', '')
-            lines.append(f"\n  {i}. [{score}/10 {direction}] {source} | {relevance}")
-            lines.append(f"     {headline}")
-            if stocks:
-                lines.append(f"     Affects: {', '.join(stocks[:8])}")
-            summary = item.get('english_summary', '')
-            if summary:
-                lines.append(f"     Summary: {summary[:300]}")
+        return "GOVT: No data"
+    lines = ["=== GOVT INTELLIGENCE ==="]
+    lines.append(f"HIGH: {data.get('high_impact_count',0)} | MED: {data.get('medium_impact_count',0)}")
+    for i, item in enumerate(data.get('high_impact_items', [])[:6], 1):
+        headline = item.get('english_headline', item.get('title',''))[:120]
+        stocks = item.get('affected_stocks', [])
+        lines.append(f"  {i}. [{item.get('impact_score',0)}/10 {item.get('direction','?')}] {headline}")
+        if stocks:
+            lines.append(f"     Affects: {', '.join(stocks[:5])}")
     return "\n".join(lines)
 
 
 def format_reddit(data):
     if not data:
-        return "REDDIT INTEL: No data available"
-    lines = ["=== TIER 7: REDDIT RETAIL SENTIMENT ==="]
-    lines.append(f"Posts analyzed: {data.get('total_posts_analyzed', 0)}")
+        return "REDDIT: No data"
+    lines = ["=== REDDIT SENTIMENT ==="]
     mood = data.get('market_mood', {})
-    if mood:
-        sentiment = mood.get('sentiment', 'unknown')
-        confidence = mood.get('confidence', 0)
-        summary = mood.get('summary', '')
-        themes = mood.get('themes', [])
-        lines.append(f"\nOVERALL RETAIL MOOD: {sentiment.upper()} (confidence: {confidence}%)")
-        if summary:
-            lines.append(f"Summary: {summary}")
-        if themes:
-            lines.append(f"Dominant themes: {', '.join(themes)}")
-    trending = data.get('trending_tickers', [])
-    if trending:
-        lines.append("\nTRENDING TICKERS ON REDDIT (retail buzz):")
-        for t in trending[:12]:
-            ticker = t.get('ticker', '?')
-            mentions = t.get('mentions', 0)
-            sent = t.get('sentiment', 'neutral')
-            score = t.get('sentiment_score', 0.5)
-            top_post_title = t.get('top_post', {}).get('title', '')[:80]
-            lines.append(f"  {ticker}: {mentions} mentions | {sent.upper()} ({score:.2f}) | Top: {top_post_title}")
-    hot = data.get('hot_discussions', [])
-    if hot:
-        lines.append("\nHOT REDDIT DISCUSSIONS:")
-        for h in hot[:8]:
-            title = h.get('title', '')[:120]
-            score = h.get('score', 0)
-            comments = h.get('comments', 0)
-            sent = h.get('sentiment', 'neutral')
-            tickers = h.get('tickers', [])
-            ticker_str = f" [{', '.join(tickers[:3])}]" if tickers else ""
-            lines.append(f"  [{score}up/{comments}c|{sent.upper()[:3]}] {title}{ticker_str}")
+    lines.append(f"Mood: {mood.get('sentiment','?').upper()} ({mood.get('confidence',0)}%)")
+    for t in data.get('trending_tickers', [])[:8]:
+        lines.append(f"  {t.get('ticker','?')}: {t.get('mentions',0)} mentions | {t.get('sentiment','?').upper()}")
+    for h in data.get('hot_discussions', [])[:5]:
+        lines.append(f"  [{h.get('score',0)}up] {h.get('title','')[:100]}")
     return "\n".join(lines)
 
-def format_telegram(data):
-    if not data:
-        return "TELEGRAM INTEL: No data available"
-    lines = ["=== TIER 5: TELEGRAM RETAIL WHISPERS & OPTIONS SETUP ==="]
-    lines.append(f"Messages scanned: {data.get('total_messages_scanned', 0)}")
-    
-    top_stocks = data.get('top_mentioned_stocks', {})
-    if top_stocks:
-        lines.append("\nMOST DISCUSSED TICKERS ON TELEGRAM:")
-        for stock, count in list(top_stocks.items())[:10]:
-            lines.append(f"  {stock}: {count} mentions")
-            
-    msgs = data.get('messages', [])
-    if msgs:
-        lines.append("\nLATEST ALPHA MESSAGES:")
-        for m in msgs[:10]:
-            channel = m.get('channel', 'unknown')
-            text = m.get('text', '').replace('\n', ' ')[:120]
-            lines.append(f"  [{channel}] {text}...")
-            
-    return "\n".join(lines)
-
-def format_nse(data):
-    if not data:
-        return "NSE FILINGS: No data available"
-    lines = ["=== TIER 1: NSE CORPORATE ANNOUNCEMENTS (ZERO-LATENCY) ==="]
-    
-    high_impact = data.get('latest_high_impact', [])
-    if high_impact:
-        lines.append("\n🚨 HIGH IMPACT FILINGS:")
-        for item in high_impact[:5]:
-            symbol = item.get('symbol', '?')
-            category = item.get('impact_category', '?')
-            subject = item.get('subject', '')[:100]
-            lines.append(f"  [{symbol}] {category} | {subject}")
-    else:
-        lines.append("\n  No high impact filings in this cycle.")
-        
-    medium_impact = data.get('latest_medium_impact', [])
-    if medium_impact:
-        lines.append("\n⚠️ MEDIUM IMPACT FILINGS:")
-        for item in medium_impact[:3]:
-            lines.append(f"  [{item.get('symbol', '?')}] {item.get('subject', '')[:80]}")
-            
-    return "\n".join(lines)
-
-def format_twitter(data):
-    if not data:
-        return "TWITTER INTEL: No data available"
-    lines = ["=== TIER 4: X/TWITTER (Official Accounts & Breaking) ==="]
-    lines.append(f"Tweets scanned: {data.get('total_tweets', 0)}")
-    
-    tweets = data.get('tweets', [])
-    if tweets:
-        lines.append("\nLATEST TWEETS:")
-        for t in tweets[:10]:
-            lines.append(f"  [{t['account']}] {t['text']} ({t['published'][:16]})")
-            
-    return "\n".join(lines)
 
 def format_scanner(data):
     if not data:
-        return "SCANNER: No data available"
-    lines = ["=== TIER 8: NSE STOCK SCANNER ==="]
-    lines.append(f"Universe: {data.get('universe', 'NSE')} | Scanned: {data.get('total_scanned', 0)} stocks | Signals: {data.get('total_signals', 0)}")
-    summary = data.get('summary', {})
-    if summary:
-        lines.append("\nSIGNAL BREAKDOWN:")
-        for sig_type, count in sorted(summary.items(), key=lambda x: -x[1]):
-            lines.append(f"  {sig_type}: {count}")
-    top = data.get('top_signals', [])
-    if top:
-        lines.append("\n*** ULTRA/STRONG SIGNALS ***")
-        for s in top[:15]:
-            ticker = s.get('ticker', '?')
-            sector = s.get('sector', '?')
-            strength = s.get('strength', '?')
-            direction = s.get('direction', '?')
-            change = s.get('change_percent', 0)
-            volume_ratio = s.get('volume_ratio', 0)
-            signals = s.get('signals', [])
-            price = s.get('price', 0)
-            sigs_str = ' + '.join(signals[:4])
-            lines.append(f"  [{strength}|{direction}] {ticker} ({sector}) Rs.{price} {change:+.2f}% vol:{volume_ratio:.1f}x | {sigs_str}")
-    rotation = data.get('sector_rotation', [])
-    if rotation:
-        lines.append("\nSECTOR ROTATION:")
-        for r in rotation[:10]:
-            sector = r.get('sector', '?')
-            avg_move = r.get('avg_change_percent', 0)
-            direction = r.get('direction', '?')
-            strength = r.get('strength', '?')
-            stocks_count = r.get('stocks_analyzed', 0)
-            vol_ratio = r.get('avg_volume_ratio', 0)
-            lines.append(f"  [{direction}|{strength}] {sector}: {avg_move:+.2f}% avg ({stocks_count} stocks, vol {vol_ratio:.1f}x)")
-    breaks = data.get('correlation_breaks', [])
-    if breaks:
-        lines.append("\nCORRELATION BREAKS:")
-        for b in breaks[:10]:
-            ticker = b.get('ticker', '?')
-            sector = b.get('sector', '?')
-            note = b.get('note', '')
-            lines.append(f"  {ticker} ({sector}): {note}")
-    by_signal = data.get('by_signal', {})
-    if by_signal:
-        vs = by_signal.get('volume_spikes', [])
-        if vs:
-            lines.append("\nTOP VOLUME SPIKES:")
-            for v in vs[:8]:
-                lines.append(f"  {v.get('ticker', '?')} ({v.get('sector', '?')}): {v.get('volume_ratio', 0):.1f}x vol, {v.get('change_percent', 0):+.2f}%")
+        return "SCANNER: No data"
+    lines = ["=== NSE SCANNER ==="]
+    lines.append(f"Scanned: {data.get('total_scanned',0)} | Signals: {data.get('total_signals',0)}")
+    for s in data.get('top_signals', [])[:15]:
+        lines.append(
+            f"  [{s.get('strength','?')}|{s.get('direction','?')}] "
+            f"{s.get('ticker','?')} ({s.get('sector','?')}) "
+            f"Rs.{s.get('price',0)} {s.get('change_percent',0):+.2f}% "
+            f"vol:{s.get('volume_ratio',0):.1f}x | "
+            f"{' + '.join(s.get('signals',[])[:3])}"
+        )
+    for r in data.get('sector_rotation', [])[:8]:
+        lines.append(
+            f"  SECTOR [{r.get('direction','?')}] {r.get('sector','?')}: "
+            f"{r.get('avg_change_percent',0):+.2f}% "
+            f"({r.get('stocks_analyzed',0)} stocks)"
+        )
     return "\n".join(lines)
+
+
+def format_twitter(data):
+    if not data:
+        return ""
+    lines = ["=== TWITTER ==="]
+    for t in data.get('tweets', [])[:8]:
+        lines.append(f"  [{t.get('account','?')}] {t.get('text','')[:100]}")
+    return "\n".join(lines)
+
+
+def format_nse(data):
+    if not data:
+        return ""
+    lines = ["=== NSE FILINGS ==="]
+    for item in data.get('latest_high_impact', [])[:5]:
+        lines.append(f"  [{item.get('symbol','?')}] {item.get('impact_category','?')} | {item.get('subject','')[:80]}")
+    return "\n".join(lines)
+
+
+def build_memory_context():
+    if not LEARNING_AVAILABLE:
+        return "No performance history yet. Using conservative default calibration."
+    try:
+        return build_memory_summary()
+    except Exception as e:
+        return f"Memory unavailable: {e}"
 
 
 def is_indian_market_open():
@@ -377,57 +217,28 @@ def is_indian_market_open():
 
 
 def generate_unified_analysis(all_data):
-    print("\n[ANALYSIS] Sending to AI for unified intelligence...")
+    print("\n[ANALYSIS] Building prompt from all data sources...")
 
-    memory_summary = ""
-    if LEARNING_AVAILABLE:
-        try:
-            print("[LEARNING] Building memory from past predictions...")
-            memory_summary = build_memory_summary(days=30)
-            print(f"[LEARNING] Memory summary: {len(memory_summary)} chars")
-        except Exception as e:
-            print(f"[WARN] Failed to build memory: {e}")
-            memory_summary = ""
+    global_str   = format_global_markets(all_data.get('global_markets'))
+    india_str    = format_india_markets(all_data.get('india_markets'))
+    news_str     = format_news(all_data.get('news'))
+    inshorts_str = format_inshorts(all_data.get('inshorts'))
+    youtube_str  = format_youtube(all_data.get('youtube'))
+    govt_str     = format_govt(all_data.get('govt'))
+    reddit_str   = format_reddit(all_data.get('reddit'))
+    scanner_str  = format_scanner(all_data.get('scanner'))
+    twitter_str  = format_twitter(all_data.get('twitter'))
+    nse_str      = format_nse(all_data.get('nse_filings'))
+    memory_str   = build_memory_context()
 
-    govt_str = format_govt(all_data['govt'])
-    global_str = format_global_markets(all_data['global_markets'])
-    india_str = format_india_markets(all_data['india_markets'])
-    news_str = format_news(all_data['news'])
-    youtube_str = format_youtube(all_data['youtube'])
-    inshorts_str = format_inshorts(all_data['inshorts'])
-    reddit_str = format_reddit(all_data['reddit'])
-    telegram_str = format_telegram(all_data['telegram'])
-    nse_str = format_nse(all_data.get('nse_filings', {}))
-    twitter_str = format_twitter(all_data['twitter'])
-    scanner_str = format_scanner(all_data['scanner'])
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')
 
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    market_status = "OPEN" if is_indian_market_open() else "CLOSED"
+    prompt = f"""You are an institutional-grade Indian market intelligence AI.
+Time: {current_time}
+Market Open: {is_indian_market_open()}
 
-    memory_section = ""
-    if memory_summary:
-        memory_section = f"\n{memory_summary}\n\n"
-
-    prompt = f"""You are an expert Indian stock market analyst with self-awareness of your past performance.
-
-CURRENT TIME: {current_time} (Indian Market: {market_status})
-
-{memory_section}
-
-You have EIGHT real-time data sources. Cross-reference for actionable intelligence.
-
-PRIORITY ORDER:
-TIER 1 = Government (highest reliability)
-TIER 8 = Stock Scanner (most CURRENT signal)
-TIER 2 = News  |  TIER 3 = Inshorts  |  TIER 5 = India Markets
-TIER 6 = Global Markets  |  TIER 4 = TV/YouTube  |  TIER 7 = Reddit
-
-KEY ANALYSIS PRINCIPLES:
-1. THE GOLDEN SETUP: If a stock has an 'ULTRA' signal in the Scanner (Tier 8) AND is supported by a breaking positive catalyst in Govt Policy (Tier 1) or NSE Announcements (Tier 2), this is a HIGH CONVICTION BUY.
-2. THE FAKE-OUT: If Reddit/YouTube sentiment is wildly BULLISH, but the Scanner shows a 'BREAKDOWN' or 'GAP_DOWN' with high volume, mark as HIGH CONVICTION SELL/AVOID. Do not follow retail hype into a technical breakdown.
-3. TWITTER CATALYSTS: If the RBI or NSE tweets a policy change, immediately cross-reference which sector is affected in the 'Sector Rotation' data. If the sector is currently 'STRONG', the trend will continue.
-4. STOP LOSS GENERATION: For every BUY opportunity, you MUST place the Stop Loss exactly 1% below the 'low_20d' provided in the Scanner data. 
-5. TARGET GENERATION: For every BUY opportunity, target a 1:3 Risk/Reward ratio based on the entry and stop loss.
+SELF-CALIBRATION MEMORY:
+{memory_str}
 
 {nse_str}
 {govt_str}
@@ -438,13 +249,11 @@ KEY ANALYSIS PRINCIPLES:
 {inshorts_str}
 {youtube_str}
 {reddit_str}
-{telegram_str}
 {twitter_str}
 
-CRITICAL INSTRUCTION: You are a backend API connecting to a React/Electron frontend. 
-You MUST NOT output any markdown blocks, conversational text, or explanations outside of JSON.
-Your entire response MUST be a valid, minified JSON object matching this exact schema:
+CRITICAL INSTRUCTION: You are a backend API. Output ONLY valid JSON. No markdown. No explanations.
 
+Required JSON schema:
 {{
   "executive_summary": "2-3 sentences summarizing market bias and macro conditions.",
   "government_impact": {{
@@ -461,7 +270,7 @@ Your entire response MUST be a valid, minified JSON object matching this exact s
     "retail_mood": "NEUTRAL",
     "confidence_level": "6.5/10"
   }},
-  "self_calibration": "Based on past performance, trusting volume spikes over news today...",
+  "self_calibration": "Based on past performance...",
   "top_opportunities": [
     {{
       "symbol": "ERIS",
@@ -469,89 +278,99 @@ Your entire response MUST be a valid, minified JSON object matching this exact s
       "entry_zone": "1450-1460",
       "target": "1580",
       "stop_loss": "1390",
-      "confidence": "MEDIUM",
-      "logic": "13.0x volume spike + 9.13% breakout + pharma sector strength."
+      "confidence": "HIGH",
+      "logic": "Reason here."
     }}
   ],
   "risks_and_avoids": [
     {{
       "symbol": "PIIND",
-      "logic": "8.8x volume spike on breakdown. Institutional exit."
+      "logic": "Reason here."
     }}
   ],
-  "action_plan": "Place AMO orders for ERIS. Monitor ZYDUSLIFE."
+  "action_plan": "Actionable steps for today."
 }}
 
 RULES:
-- MUST give exactly 10 items in top_opportunities AND 10 in risks_and_avoids.
-- Use ONLY actual NSE stock tickers (e.g., RELIANCE, TCS).
-- Be specific with entry/target/stop-loss.
-- ULTRA scanner signals MUST appear in top 5 opportunities or risks.
-- IMPORTANT: Don't repeat tickers.
-- Output ONLY valid JSON, do not wrap in markdown tags like ```json.
+- Give exactly 10 items in top_opportunities AND 10 in risks_and_avoids
+- Use ONLY actual NSE tickers
+- ULTRA scanner signals MUST appear in top 5 opportunities
+- No repeated tickers
+- Output ONLY valid JSON, no markdown
 """
 
     use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
     result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
 
-    if result['success']:
-        print(f"  [AI] Used: {result['model']} ({result['provider']})")
-        ai_text = result['text']
-        
-        # Clean JSON in case the AI ignored instructions and added markdown wrappers
-        clean_text = ai_text.strip()
-        if "```json" in clean_text:
-            clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in clean_text:
-            clean_text = clean_text.split("```")[1].split("```")[0].strip()
-            
-        try:
-            parsed_json = json.loads(clean_text)
-            return parsed_json
-        except json.JSONDecodeError as e:
-            print(f"  [ERROR] AI did not return valid JSON. Raw output:\n{ai_text}")
-            return None
-    else:
+    if not result['success']:
         print(f"  ERROR: {result.get('error', 'Unknown')}")
+        return None
+
+    print(f"  [AI] Used: {result['model']} ({result['provider']})")
+    ai_text = result['text']
+
+    clean_text = ai_text.strip()
+    if "```json" in clean_text:
+        clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in clean_text:
+        clean_text = clean_text.split("```")[1].split("```")[0].strip()
+
+    try:
+        parsed = json.loads(clean_text)
+
+        # Validate required fields
+        required = ['executive_summary', 'market_mood', 'top_opportunities',
+                    'risks_and_avoids', 'action_plan', 'sector_rotation']
+        missing = [f for f in required if not parsed.get(f)]
+        if missing:
+            print(f"  [WARN] Missing fields: {missing} — retrying...")
+            return None
+
+        return parsed
+
+    except json.JSONDecodeError as e:
+        print(f"  [ERROR] Invalid JSON: {e}")
+        print(f"  RAW:\n{ai_text[:500]}")
         return None
 
 
 def run_master_analysis():
     print("\n" + "=" * 60)
-    print("MASTER ANALYZER v8 - JSON API Engine + Memory-Augmented")
+    print("MASTER ANALYZER v9 - Clean JSON Engine")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
-    print("\n[STEP 1] Gathering data from all 8 sources...")
-    print("-" * 60)
+    print("\n[STEP 1] Gathering data...")
     all_data = gather_all_data()
 
-    sources_loaded = 0
+    sources_loaded = sum(1 for v in all_data.values() if v)
     for source, data in all_data.items():
-        if data:
-            print(f"  OK   {source}")
-            sources_loaded += 1
-        else:
-            print(f"  MISS {source}")
+        status = "OK  " if data else "MISS"
+        print(f"  {status} {source}")
 
     if sources_loaded == 0:
         print("\nERROR: No data sources available")
         return None
 
-    print(f"\n[INFO] {sources_loaded}/8 sources loaded")
+    print(f"\n[INFO] {sources_loaded}/{len(all_data)} sources loaded")
 
-    # This now returns a Python Dictionary, not a string
-    analysis_dict = generate_unified_analysis(all_data)
+    # Retry up to 3 times for valid JSON
+    analysis_dict = None
+    for attempt in range(3):
+        if attempt > 0:
+            print(f"\n[RETRY {attempt}/2] Retrying analysis...")
+        analysis_dict = generate_unified_analysis(all_data)
+        if analysis_dict:
+            break
 
     if not analysis_dict:
-        print("\nERROR: Failed to generate or parse analysis")
+        print("\nERROR: Failed after 3 attempts")
         return None
 
     print("\n" + "=" * 60)
-    print("UNIFIED INTELLIGENCE JSON PARSED SUCCESSFULLY")
+    print("ANALYSIS COMPLETE")
     print("=" * 60)
 
-    # Build the root output framework
     output = {
         'timestamp': datetime.now().isoformat(),
         'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -559,59 +378,43 @@ def run_master_analysis():
         'sources_used': sources_loaded,
         'memory_augmented': LEARNING_AVAILABLE,
         'data_snapshot': {
-            'govt_high_impact': all_data['govt'].get('high_impact_count', 0) if all_data['govt'] else 0,
-            'global_alerts': len(all_data['global_markets'].get('alerts', [])) if all_data['global_markets'] else 0,
-            'news_articles': all_data['news'].get('total_articles', 0) if all_data['news'] else 0,
-            'inshorts_stories': all_data['inshorts'].get('total_stories', 0) if all_data['inshorts'] else 0,
-            'tv_videos': all_data['youtube'].get('total_videos', 0) if all_data['youtube'] else 0,
-            'india_stocks': len(all_data['india_markets'].get('prices', {})) if all_data['india_markets'] else 0,
-            'reddit_posts': all_data['reddit'].get('total_posts_analyzed', 0) if all_data['reddit'] else 0,
-            'reddit_mood': all_data['reddit'].get('market_mood', {}).get('sentiment', 'unknown') if all_data['reddit'] else 'unknown',
-            'telegram_messages': all_data['telegram'].get('total_messages_scanned', 0) if all_data['telegram'] else 0,
-            'nse_filings': len(all_data['nse_filings'].get('latest_high_impact', [])) if all_data.get('nse_filings') else 0,
-            'twitter_tweets': all_data['twitter'].get('total_tweets', 0) if all_data['twitter'] else 0,
-            'scanner_stocks': all_data['scanner'].get('total_scanned', 0) if all_data['scanner'] else 0,
-            'scanner_signals': all_data['scanner'].get('total_signals', 0) if all_data['scanner'] else 0,
-            'scanner_top_signal': (all_data['scanner'].get('top_signals') or [{}])[0].get('ticker', 'none') if all_data['scanner'] else 'none',
+            'govt_high_impact':   all_data['govt'].get('high_impact_count', 0) if all_data['govt'] else 0,
+            'news_articles':      all_data['news'].get('total_articles', 0) if all_data['news'] else 0,
+            'scanner_stocks':     all_data['scanner'].get('total_scanned', 0) if all_data['scanner'] else 0,
+            'scanner_signals':    all_data['scanner'].get('total_signals', 0) if all_data['scanner'] else 0,
+            'reddit_mood':        all_data['reddit'].get('market_mood', {}).get('sentiment', 'unknown') if all_data['reddit'] else 'unknown',
+            'tv_videos':          all_data['youtube'].get('total_videos', 0) if all_data['youtube'] else 0,
         }
     }
-    
-    # Merge the parsed AI JSON directly into the root dictionary
+
     output.update(analysis_dict)
 
     data_dir = Path(__file__).parent.parent / 'data'
     output_file = data_dir / 'unified_intelligence.json'
 
-    # Save cleanly for the GUI
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2, default=str, ensure_ascii=False)
 
     print(f"\nSaved to: {output_file}")
-    print("=" * 60 + "\n")
     return output
 
 
 if __name__ == "__main__":
-    print("Starting master analyzer v8 (JSON Engine)...")
-    
-    analysis_success = False
+    print("Starting master analyzer v9...")
     try:
         result = run_master_analysis()
         if result:
-            analysis_success = True
             print("Done!")
+            try:
+                from context_snapshot import capture_snapshot, init_context_table
+                init_context_table()
+                snapshot_id = capture_snapshot(run_type='master_analyzer')
+                print(f"[CONTEXT] Snapshot: {snapshot_id}")
+            except Exception as e:
+                print(f"[WARN] Snapshot failed: {e}")
+        else:
+            print("Analysis failed.")
     except Exception as e:
         import traceback
         print(f"ERROR: {e}")
         traceback.print_exc()
-    
-    if analysis_success:
-        try:
-            from context_snapshot import capture_snapshot, init_context_table
-            init_context_table()
-            snapshot_id = capture_snapshot(run_type='master_analyzer')
-            print(f"\n[CONTEXT] Snapshot captured: {snapshot_id}")
-        except Exception as e:
-            print(f"[WARN] Context snapshot failed: {e}")
-    else:
-        print("[CONTEXT] Skipped snapshot")

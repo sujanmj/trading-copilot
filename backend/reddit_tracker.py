@@ -157,71 +157,40 @@ def is_relevant(post):
 # REDDIT JSON FETCHER
 # ============================================================
 
-def fetch_subreddit_posts(subreddit, mode='hot', limit=50):
-    """Fetch with multiple fallback methods"""
-    
-    # Method 1: old.reddit with raw_json
-    urls = [
-        f"https://old.reddit.com/r/{subreddit}/{mode}.json?limit={limit}&raw_json=1",
-        f"https://www.reddit.com/r/{subreddit}/{mode}.json?limit={limit}",
-        f"https://reddit.com/r/{subreddit}.json?limit={limit}",
-    ]
-    
-    headers_list = [
-        {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json',
-        },
-        {
-            'User-Agent': 'python-requests/2.31.0',
-            'Accept': '*/*',
-        },
-        {
-            'User-Agent': 'curl/7.88.1',
+def fetch_subreddit_posts_rss(subreddit, limit=25):
+    """Use RSS feed instead of JSON API - bypasses 403"""
+    try:
+        url = f"https://www.reddit.com/r/{subreddit}/hot/.rss?limit={limit}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
+            'Accept': 'application/rss+xml, application/xml, text/xml',
         }
-    ]
-    
-    for url in urls:
-        for headers in headers_list:
-            try:
-                response = requests.get(url, headers=headers, timeout=15)
-                
-                if response.status_code == 429:
-                    print(f"[WARN] Rate limited, sleeping 30s...")
-                    time.sleep(30)
-                    continue
-                    
-                if response.status_code != 200:
-                    continue
-                
-                data = response.json()
-                posts = []
-                
-                for child in data.get('data', {}).get('children', []):
-                    p = child.get('data', {})
-                    posts.append({
-                        'id': p.get('id'),
-                        'subreddit': p.get('subreddit'),
-                        'title': p.get('title', ''),
-                        'selftext': p.get('selftext', '')[:1000],
-                        'score': p.get('score', 0),
-                        'upvote_ratio': p.get('upvote_ratio', 0),
-                        'num_comments': p.get('num_comments', 0),
-                        'created_utc': p.get('created_utc', 0),
-                        'url': f"https://reddit.com{p.get('permalink', '')}",
-                        'author': p.get('author', '[deleted]'),
-                        'flair': p.get('link_flair_text', ''),
-                    })
-                
-                if posts:
-                    print(f"✅ r/{subreddit}: Got {len(posts)} posts via {url[:50]}")
-                    return posts
-                    
-            except Exception as e:
-                continue
-    
-    print(f"❌ r/{subreddit}: All methods failed - using empty dataset")
-    return []
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            print(f"❌ r/{subreddit} RSS: {response.status_code}")
+            return []
+        import feedparser
+        feed = feedparser.parse(response.content)
+        posts = []
+        for entry in feed.entries[:limit]:
+            posts.append({
+                'id': entry.get('id', ''),
+                'subreddit': subreddit,
+                'title': entry.get('title', ''),
+                'selftext': entry.get('summary', '')[:500],
+                'score': 0,
+                'upvote_ratio': 0,
+                'num_comments': 0,
+                'created_utc': 0,
+                'url': entry.get('link', ''),
+                'author': '',
+                'flair': '',
+            })
+        print(f"✅ r/{subreddit} RSS: Got {len(posts)} posts")
+        return posts
+    except Exception as e:
+        print(f"❌ r/{subreddit} RSS failed: {e}")
+        return []
 
 # ============================================================
 # TICKER EXTRACTION
@@ -361,7 +330,7 @@ def run_reddit_tracker():
     for sub in SUBREDDITS:
         for mode in FETCH_MODES:
             print(f"[FETCH] r/{sub}/{mode}...")
-            posts = fetch_subreddit_posts(sub, mode, POSTS_LIMIT)
+            posts = fetch_subreddit_posts_rss(sub, POSTS_LIMIT)
             all_posts.extend(posts)
             time.sleep(2)
     

@@ -391,19 +391,26 @@ def db_info():
     try:
         import sqlite3, glob
         # Find DB file
-        possible_paths = [
-            str(DATA_DIR / 'trading_copilot.db'),
-            '/data/trading_copilot.db',
-        ]
-        # Also search volume mounts
-        db_files = glob.glob('/var/lib/**/*.db', recursive=True)
-        possible_paths.extend(db_files)
-        
-        db_path = None
-        for p in possible_paths:
-            if Path(p).exists():
-                db_path = p
-                break
+    possible_paths = [
+    str(DATA_DIR / 'trading_copilot.db'),
+    '/data/trading_copilot.db',
+    '/app/data/trading_copilot.db',
+]
+
+# Add Railway volume search
+import glob
+vol_patterns = [
+    '/var/lib/containers/railwayapp/bind-mounts/**/trading_copilot.db',
+    '/var/lib/**/*.db',
+    '/mnt/**/*.db',
+    '/vol/**/*.db',
+]
+for pattern in vol_patterns:
+    try:
+        found = glob.glob(pattern, recursive=True)
+        possible_paths.extend(found)
+    except:
+        pass
         
         if not db_path:
             return {"error": "DB not found", "searched": possible_paths}
