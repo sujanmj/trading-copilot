@@ -30,7 +30,7 @@ if sys.platform == 'win32':
 # CONFIGURATION
 # ============================================================
 
-DB_PATH = Path(__file__).parent.parent / 'data' / 'trading_copilot.db'
+DB_PATH = Path(__file__).parent.parent / 'data' / 'trading_history.db'
 
 # ============================================================
 # SCHEMA - 4 TABLES

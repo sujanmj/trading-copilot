@@ -1,6 +1,6 @@
 """
 Shared database discovery for Railway/local environments.
-Finds trading_copilot.db or trading_history.db via known paths or os.walk.
+Finds trading_history.db (primary) or trading_copilot.db via known paths or os.walk.
 """
 
 import os
@@ -72,7 +72,7 @@ def collect_db_candidates():
             candidates.append(path)
             seen.add(path)
 
-    for extra in ('/data/trading_copilot.db', '/data/trading_history.db', '/app/data/trading_copilot.db'):
+    for extra in ('/app/data/trading_history.db', '/data/trading_history.db', '/app/data/trading_copilot.db', '/data/trading_copilot.db'):
         if extra not in seen:
             candidates.append(extra)
             seen.add(extra)
@@ -116,7 +116,7 @@ def resolve_db_path():
         _resolved_db_path = found
         return found
 
-    default = str(DATA_DIR / 'trading_copilot.db')
+    default = str(DATA_DIR / 'trading_history.db')
     _resolved_db_path = default
     return default
 

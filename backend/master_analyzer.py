@@ -1,21 +1,16 @@
 """
-MASTER ANALYZER v9 - Fixed Import + Clean JSON Engine
+MASTER ANALYZER v10 - Robust logging + safe imports
 """
 
 import os
 import json
 import sys
 import io
+import traceback
 from datetime import datetime
 from pathlib import Path
 
-try:
-    from dotenv import load_dotenv
-    DOTENV_AVAILABLE = True
-except ImportError:
-    DOTENV_AVAILABLE = False
-    def load_dotenv(*args, **kwargs):
-        return False
+print("[BOOT] master_analyzer.py starting...")
 
 if sys.platform == 'win32':
     try:
@@ -25,18 +20,41 @@ if sys.platform == 'win32':
         pass
 
 sys.path.insert(0, str(Path(__file__).parent))
-from ai_router import ask_ai
+
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+    print("[OK] imported dotenv")
+except ImportError as e:
+    DOTENV_AVAILABLE = False
+    def load_dotenv(*args, **kwargs):
+        return False
+    print(f"[FAIL] dotenv not available: {e}")
+
+try:
+    from ai_router import ask_ai
+    AI_ROUTER_AVAILABLE = True
+    print("[OK] imported ai_router")
+except ImportError as e:
+    AI_ROUTER_AVAILABLE = False
+    ask_ai = None
+    print(f"[FAIL] ai_router not available: {e}")
 
 try:
     from learning_engine import build_memory_summary
     LEARNING_AVAILABLE = True
-except ImportError:
+    print("[OK] imported learning_engine")
+except ImportError as e:
     LEARNING_AVAILABLE = False
-    print("[WARN] learning_engine not available")
+    build_memory_summary = None
+    print(f"[FAIL] learning_engine not available: {e}")
 
 env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
 if DOTENV_AVAILABLE and env_path.exists():
     load_dotenv(env_path, override=False)
+    print(f"[OK] loaded env from {env_path}")
+else:
+    print(f"[WARN] env file missing or dotenv unavailable: {env_path}")
 
 
 def load_json_safe(filepath):
@@ -199,11 +217,12 @@ def format_nse(data):
 
 
 def build_memory_context():
-    if not LEARNING_AVAILABLE:
+    if not LEARNING_AVAILABLE or not build_memory_summary:
         return "No performance history yet. Using conservative default calibration."
     try:
         return build_memory_summary()
     except Exception as e:
+        print(f"[WARN] build_memory_summary failed: {e}")
         return f"Memory unavailable: {e}"
 
 
@@ -335,10 +354,19 @@ RULES:
 - Output ONLY valid JSON, no markdown
 """
 
-    use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
-    result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
+    if not AI_ROUTER_AVAILABLE or not ask_ai:
+        print("  [ERROR] ai_router unavailable — cannot call AI")
+        return None
 
-    if not result['success']:
+    use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
+    try:
+        result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
+    except Exception as e:
+        print(f"  [ERROR] ask_ai raised exception: {e}")
+        traceback.print_exc()
+        return None
+
+    if not result or not result.get('success'):
         print(f"  ERROR: {result.get('error', 'Unknown')}")
         return None
 
@@ -354,8 +382,10 @@ RULES:
     try:
         parsed = json.loads(clean_text)
     except json.JSONDecodeError as e:
-        print(f"  [ERROR] Invalid JSON: {e}")
-        print(f"  RAW:\n{ai_text[:500]}")
+        print(f"  [ERROR] JSON parse failed: {e}")
+        print(f"  [ERROR] Line {e.lineno}, col {e.colno}: {e.msg}")
+        print(f"  [ERROR] Clean text preview:\n{clean_text[:800]}")
+        print(f"  [ERROR] Raw AI response preview:\n{ai_text[:800]}")
         return None
 
     ok, problems = validate_analysis_json(parsed)
@@ -367,76 +397,98 @@ RULES:
 
 
 def run_master_analysis():
-    print("\n" + "=" * 60)
-    print("MASTER ANALYZER v9 - Clean JSON Engine")
-    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 60)
+    try:
+        print("\n" + "=" * 60)
+        print("MASTER ANALYZER v10 - Clean JSON Engine")
+        print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"AI Router: {'OK' if AI_ROUTER_AVAILABLE else 'MISSING'}")
+        print(f"Learning Engine: {'OK' if LEARNING_AVAILABLE else 'MISSING'}")
+        print("=" * 60)
 
-    print("\n[STEP 1] Gathering data...")
-    all_data = gather_all_data()
+        print("\n[STEP 1] Gathering data...")
+        all_data = gather_all_data()
 
-    sources_loaded = sum(1 for v in all_data.values() if v)
-    for source, data in all_data.items():
-        status = "OK  " if data else "MISS"
-        print(f"  {status} {source}")
+        sources_loaded = sum(1 for v in all_data.values() if v)
+        for source, data in all_data.items():
+            status = "OK  " if data else "MISS"
+            detail = ""
+            if data and isinstance(data, dict):
+                if 'total_articles' in data:
+                    detail = f" ({data.get('total_articles', 0)} articles)"
+                elif 'prices' in data:
+                    detail = f" ({len(data.get('prices', {}))} prices)"
+                elif 'top_signals' in data:
+                    detail = f" ({data.get('total_signals', 0)} signals)"
+            print(f"  {status} {source}{detail}")
 
-    if sources_loaded == 0:
-        print("\nERROR: No data sources available")
-        return None
+        if sources_loaded == 0:
+            print("\n[ERROR] No data sources available — cannot analyze")
+            return None
 
-    print(f"\n[INFO] {sources_loaded}/{len(all_data)} sources loaded")
+        print(f"\n[INFO] {sources_loaded}/{len(all_data)} sources loaded")
 
-    # Retry up to 3 times for valid JSON
-    analysis_dict = None
-    for attempt in range(3):
-        if attempt > 0:
-            print(f"\n[RETRY {attempt}/2] Retrying analysis...")
-        analysis_dict = generate_unified_analysis(all_data)
-        if analysis_dict:
-            break
+        analysis_dict = None
+        for attempt in range(3):
+            if attempt > 0:
+                print(f"\n[RETRY {attempt}/2] Retrying analysis...")
+            try:
+                analysis_dict = generate_unified_analysis(all_data)
+            except Exception as e:
+                print(f"[ERROR] generate_unified_analysis attempt {attempt + 1} crashed: {e}")
+                traceback.print_exc()
+                analysis_dict = None
+            if analysis_dict:
+                break
 
-    if not analysis_dict:
-        print("\nERROR: Failed after 3 attempts")
-        return None
+        if not analysis_dict:
+            print("\n[ERROR] Failed after 3 attempts — unified_intelligence.json NOT updated")
+            return None
 
-    print("\n" + "=" * 60)
-    print("ANALYSIS COMPLETE")
-    print("=" * 60)
+        print("\n" + "=" * 60)
+        print("ANALYSIS COMPLETE")
+        print("=" * 60)
 
-    output = {
-        'timestamp': datetime.now().isoformat(),
-        'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'market_open': is_indian_market_open(),
-        'sources_used': sources_loaded,
-        'memory_augmented': LEARNING_AVAILABLE,
-        'data_snapshot': {
-            'govt_high_impact':   all_data['govt'].get('high_impact_count', 0) if all_data['govt'] else 0,
-            'news_articles':      all_data['news'].get('total_articles', 0) if all_data['news'] else 0,
-            'scanner_stocks':     all_data['scanner'].get('total_scanned', 0) if all_data['scanner'] else 0,
-            'scanner_signals':    all_data['scanner'].get('total_signals', 0) if all_data['scanner'] else 0,
-            'reddit_mood':        all_data['reddit'].get('market_mood', {}).get('sentiment', 'unknown') if all_data['reddit'] else 'unknown',
-            'tv_videos':          all_data['youtube'].get('total_videos', 0) if all_data['youtube'] else 0,
+        output = {
+            'timestamp': datetime.now().isoformat(),
+            'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'market_open': is_indian_market_open(),
+            'sources_used': sources_loaded,
+            'memory_augmented': LEARNING_AVAILABLE,
+            'data_snapshot': {
+                'govt_high_impact':   all_data['govt'].get('high_impact_count', 0) if all_data.get('govt') else 0,
+                'news_articles':      all_data['news'].get('total_articles', 0) if all_data.get('news') else 0,
+                'scanner_stocks':     all_data['scanner'].get('total_scanned', 0) if all_data.get('scanner') else 0,
+                'scanner_signals':    all_data['scanner'].get('total_signals', 0) if all_data.get('scanner') else 0,
+                'reddit_mood':        all_data['reddit'].get('market_mood', {}).get('sentiment', 'unknown') if all_data.get('reddit') else 'unknown',
+                'tv_videos':          all_data['youtube'].get('total_videos', 0) if all_data.get('youtube') else 0,
+            }
         }
-    }
 
-    output.update(analysis_dict)
+        output.update(analysis_dict)
 
-    data_dir = Path(__file__).parent.parent / 'data'
-    output_file = data_dir / 'unified_intelligence.json'
+        data_dir = Path(__file__).parent.parent / 'data'
+        data_dir.mkdir(parents=True, exist_ok=True)
+        output_file = data_dir / 'unified_intelligence.json'
 
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, default=str, ensure_ascii=False)
 
-    print(f"\nSaved to: {output_file}")
-    return output
+        print(f"\n[SAVED] {output_file}")
+        return output
+
+    except Exception as e:
+        print(f"\n[FATAL] run_master_analysis crashed: {e}")
+        traceback.print_exc()
+        return None
 
 
 if __name__ == "__main__":
-    print("Starting master analyzer v9...")
+    print("Starting master analyzer v10...")
+    result = None
     try:
         result = run_master_analysis()
         if result:
-            print("Done!")
+            print("[DONE] Analysis succeeded")
             try:
                 from context_snapshot import capture_snapshot, init_context_table
                 init_context_table()
@@ -444,9 +496,10 @@ if __name__ == "__main__":
                 print(f"[CONTEXT] Snapshot: {snapshot_id}")
             except Exception as e:
                 print(f"[WARN] Snapshot failed: {e}")
+                traceback.print_exc()
         else:
-            print("Analysis failed.")
+            print("[FAILED] Analysis returned None — check logs above")
     except Exception as e:
-        import traceback
-        print(f"ERROR: {e}")
+        print(f"[FATAL] Unhandled error in __main__: {e}")
         traceback.print_exc()
+    sys.exit(0 if result else 1)

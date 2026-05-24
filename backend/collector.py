@@ -1,4 +1,5 @@
 import os
+import json
 import pyotp
 import requests
 from pathlib import Path
@@ -101,3 +102,112 @@ def fetch_accurate_nse_price(symbol: str) -> float:
 def get_stock_price(symbol):
     """Keep function namespace uniform across other caller scripts."""
     return fetch_accurate_nse_price(symbol)
+
+
+# ============================================================
+# INDIA MARKET DATA (yfinance + Angel One fallback)
+# ============================================================
+
+INDIA_SYMBOLS = {
+    'NIFTY 50': '^NSEI',
+    'SENSEX': '^BSESN',
+    'RELIANCE': 'RELIANCE.NS',
+    'TCS': 'TCS.NS',
+    'HDFCBANK': 'HDFCBANK.NS',
+    'INFY': 'INFY.NS',
+    'ICICIBANK': 'ICICIBANK.NS',
+    'SBIN': 'SBIN.NS',
+    'BHARTIARTL': 'BHARTIARTL.NS',
+    'ITC': 'ITC.NS',
+    'LT': 'LT.NS',
+    'AXISBANK': 'AXISBANK.NS',
+    'KOTAKBANK': 'KOTAKBANK.NS',
+    'TATAMOTORS': 'TATAMOTORS.NS',
+    'MARUTI': 'MARUTI.NS',
+}
+
+OUTPUT_FILE = ROOT_DIR / 'data' / 'latest_market_data.json'
+
+
+def fetch_symbol_yfinance(name, ticker):
+    """Fetch latest price via yfinance with explicit logging."""
+    try:
+        import yfinance as yf
+        print(f"  [FETCH] {name} ({ticker}) via yfinance...")
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period='5d')
+        if hist is None or hist.empty or len(hist) < 1:
+            print(f"  [FAIL] {name}: no yfinance history")
+            return None
+        close = float(hist['Close'].iloc[-1])
+        prev = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else close
+        change_pct = ((close - prev) / prev * 100) if prev else 0.0
+        print(f"  [OK] {name}: Rs.{close:,.2f} ({change_pct:+.2f}%)")
+        return {
+            'price': round(close, 2),
+            'change_percent': round(change_pct, 2),
+            'source': 'yfinance',
+        }
+    except Exception as e:
+        print(f"  [FAIL] {name} yfinance error: {e}")
+        return None
+
+
+def collect_india_market_data():
+    """Collect India prices — save partial results even if some symbols fail."""
+    print("=" * 60)
+    print("INDIA MARKET COLLECTOR")
+    print(f"Time: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+
+    prices = {}
+    ok_count = 0
+    fail_count = 0
+
+    for name, ticker in INDIA_SYMBOLS.items():
+        row = fetch_symbol_yfinance(name, ticker)
+        if row:
+            prices[name] = row
+            ok_count += 1
+            continue
+
+        # Angel One fallback for NSE equities (not indices)
+        clean = ticker.replace('.NS', '').replace('^', '')
+        if '.NS' in ticker or ticker.endswith('-EQ'):
+            print(f"  [RETRY] {name} via Angel One...")
+            angel_price = fetch_accurate_nse_price(clean)
+            if angel_price and angel_price > 0:
+                prices[name] = {
+                    'price': round(angel_price, 2),
+                    'change_percent': 0.0,
+                    'source': 'angel_one',
+                }
+                print(f"  [OK] {name}: Rs.{angel_price:,.2f} (Angel One)")
+                ok_count += 1
+            else:
+                print(f"  [FAIL] {name}: Angel One also failed")
+                fail_count += 1
+        else:
+            fail_count += 1
+
+    output = {
+        'last_updated': __import__('datetime').datetime.now().isoformat(),
+        'prices': prices,
+        'symbols_ok': ok_count,
+        'symbols_failed': fail_count,
+        'total_symbols': len(INDIA_SYMBOLS),
+    }
+
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+
+    print("-" * 60)
+    print(f"[SAVED] {OUTPUT_FILE}")
+    print(f"  OK: {ok_count} | Failed: {fail_count} | Total in file: {len(prices)}")
+    print("=" * 60)
+    return output
+
+
+if __name__ == '__main__':
+    collect_india_market_data()

@@ -374,7 +374,9 @@ def build_export():
 
         return output
     except Exception as e:
+        import traceback
         print(f"[WARN] History export failed: {e}")
+        traceback.print_exc()
         output = empty_history_output()
         OUTPUT_FILE.parent.mkdir(exist_ok=True)
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:

@@ -51,6 +51,9 @@
     .glass-card { background: #151A22; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); margin-bottom: 16px; }
     .glass-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8B949E; margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 8px; }
     .glass-text { font-size: 12px; color: #E0E6ED; line-height: 1.6; }
+    .section-title { font-size: 13px; font-weight: 700; color: #00E676; margin: 10px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .brain-list { margin: 6px 0 6px 18px; padding: 0; }
+    .brain-list li { margin-bottom: 4px; color: #C9D1D9; }
     
     /* Common Data Items */
     .trade-item, .govt-item, .news-item, .tv-video, .reddit-ticker, .reddit-discussion, .signal-row, .sector-row, .corr-break { 
@@ -597,11 +600,27 @@
   }
 
   function formatPostMortem(text) {
-    return escapeHtml(text)
-      .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/^-\s+(.+)$/gm, '• $1')
-      .replace(/\n/g, '<br>')
+    return formatBrainMarkdown(text)
+  }
+
+  function formatBrainMarkdown(text) {
+    if (!text) return ''
+    let t = escapeHtml(String(text).replace(/\r\n/g, '\n'))
+    t = t.replace(/```[\s\S]*?```/g, '')
+    t = t.replace(/^#{1,6}\s+(.+)$/gm, '<div class="section-title">$1</div>')
+    t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    t = t.replace(/__(.+?)__/g, '<strong>$1</strong>')
+    t = t.replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
+    t = t.replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
+    t = t.replace(/\n\n+/g, '<br><br>')
+    t = t.replace(/\n/g, '<br>')
+    return t
+  }
+
+  function brainHtml(text, fallback) {
+    const raw = displayText(text, fallback)
+    if (!raw || raw === fallback) return escapeHtml(fallback)
+    return formatBrainMarkdown(raw)
   }
 
   // ============================================================
@@ -660,7 +679,7 @@
             <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
             <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
           </div>
-          <p class="trade-logic">${escapeHtml(displayText(o.logic, 'No rationale provided.'))}</p>
+          <p class="trade-logic">${brainHtml(o.logic, 'No rationale provided.')}</p>
         </div>
       `;
     });
@@ -677,7 +696,7 @@
             <h3>${escapeHtml(r.symbol || 'UNKNOWN')}</h3>
             <span class="trade-badge sell">AVOID</span>
           </div>
-          <p class="trade-logic">${escapeHtml(displayText(r.logic, 'No risk rationale provided.'))}</p>
+          <p class="trade-logic">${brainHtml(r.logic, 'No risk rationale provided.')}</p>
         </div>
       `;
     });
@@ -690,7 +709,7 @@
         <div class="main-column">
           <div class="glass-card">
             <h2>Executive Summary</h2>
-            <div class="glass-text">${escapeHtml(displayText(data.executive_summary, 'Waiting for analysis...'))}</div>
+            <div class="glass-text">${brainHtml(data.executive_summary, 'Waiting for analysis...')}</div>
           </div>
 
           <div class="glass-card">
@@ -711,11 +730,11 @@
             <h2>Action Plan & Self-Calibration</h2>
             <div class="glass-text" style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
               <strong style="color:#00E676; display:block; margin-bottom:4px;">🚀 Action Plan:</strong> 
-              ${escapeHtml(displayText(data.action_plan, 'Waiting for action plan...'))}
+              ${brainHtml(data.action_plan, 'Waiting for action plan...')}
             </div>
             <div class="glass-text" style="color:#A3B3C8;">
               <strong style="color:#ffaa00; display:block; margin-bottom:4px;">🎯 Calibration (Past Logic):</strong> 
-              ${escapeHtml(displayText(data.self_calibration, 'Waiting for calibration data...'))}
+              ${brainHtml(data.self_calibration, 'Waiting for calibration data...')}
             </div>
           </div>
         </div>

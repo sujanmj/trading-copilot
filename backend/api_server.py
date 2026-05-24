@@ -421,12 +421,13 @@ def db_info():
         import glob as glob_module
 
         possible_paths = [
+            str(DATA_DIR / 'trading_history.db'),
+            '/app/data/trading_history.db',
+            '/data/trading_history.db',
             str(DATA_DIR / 'trading_copilot.db'),
-            '/data/trading_copilot.db',
-            '/app/data/trading_copilot.db',
         ]
         vol_patterns = [
-            '/var/lib/containers/railwayapp/bind-mounts/**/trading_copilot.db',
+            '/var/lib/containers/railwayapp/bind-mounts/**/trading_history.db',
             '/var/lib/**/*.db',
             '/mnt/**/*.db',
             '/vol/**/*.db',
@@ -465,8 +466,9 @@ def dedup_predictions():
     try:
         import sqlite3, glob
         possible_paths = [
-            str(DATA_DIR / 'trading_copilot.db'),
-            '/data/trading_copilot.db',
+            str(DATA_DIR / 'trading_history.db'),
+            '/app/data/trading_history.db',
+            '/data/trading_history.db',
         ]
         db_files = glob.glob('/var/lib/**/*.db', recursive=True)
         possible_paths.extend(db_files)

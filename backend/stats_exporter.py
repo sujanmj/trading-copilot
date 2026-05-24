@@ -234,72 +234,60 @@ def export_stats():
     safe_print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     safe_print("=" * 60)
 
+    output = empty_stats_output()
+
     try:
         from db_finder import resolve_db_path
         safe_print(f"[DB] Using: {resolve_db_path()}")
 
-        init_db()
+        try:
+            init_db()
+        except Exception as e:
+            safe_print(f"[WARN] init_db failed: {e}")
 
-        metrics = calculate_accuracy_metrics('all_time')
-        weekly = calculate_accuracy_metrics('weekly')
-        daily = calculate_accuracy_metrics('daily')
+        try:
+            output['db_stats'] = get_db_stats()
+        except Exception as e:
+            safe_print(f"[WARN] get_db_stats failed: {e}")
 
-        db_stats = get_db_stats()
+        db_stats = output['db_stats']
         if db_stats.get('total_predictions', 0) == 0:
-            safe_print("[INFO] No predictions yet — writing empty stats JSON")
-            output = empty_stats_output()
-            write_stats_output(output)
-            safe_print(f"\n[OK] Saved {OUTPUT_FILE}")
-            return output
+            safe_print("[INFO] No predictions yet — writing valid empty stats JSON")
+        else:
+            for label, fn, key in [
+                ('all_time', lambda: calculate_accuracy_metrics('all_time'), 'metrics_all_time'),
+                ('weekly', lambda: calculate_accuracy_metrics('weekly'), 'metrics_weekly'),
+                ('daily', lambda: calculate_accuracy_metrics('daily'), 'metrics_daily'),
+            ]:
+                try:
+                    output[key] = fn() or output[key]
+                except Exception as e:
+                    safe_print(f"[WARN] {label} metrics failed: {e}")
+            try:
+                output['recent_predictions'] = get_recent_predictions_simple(15)
+                output['top_winners'] = get_top_winners(10)
+                output['top_losers'] = get_top_losers(10)
+                output['by_sector'] = get_predictions_by_sector()
+                output['by_run_type'] = get_predictions_by_run_type()
+                output['by_date'] = get_predictions_by_date()
+                output['signals_summary'] = get_signals_summary()
+            except Exception as e:
+                safe_print(f"[WARN] detail queries failed: {e}")
 
-        recent = get_recent_predictions_simple(15)
-        winners = get_top_winners(10)
-        losers = get_top_losers(10)
-        by_sector = get_predictions_by_sector()
-        by_run_type = get_predictions_by_run_type()
-        by_date = get_predictions_by_date()
-        signals_summary = get_signals_summary()
-
-        output = {
-            'last_updated': datetime.now(timezone.utc).isoformat(),
-            'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'db_stats': db_stats,
-            'metrics_all_time': metrics or {'win_rate': 0},
-            'metrics_weekly': weekly or {'win_rate': 0},
-            'metrics_daily': daily or {'win_rate': 0},
-            'recent_predictions': recent,
-            'top_winners': winners,
-            'top_losers': losers,
-            'by_sector': by_sector,
-            'by_run_type': by_run_type,
-            'by_date': by_date,
-            'signals_summary': signals_summary,
-        }
-
+        output['last_updated'] = datetime.now(timezone.utc).isoformat()
+        output['generation_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         write_stats_output(output)
-
         safe_print(f"\n[OK] Saved {OUTPUT_FILE}")
-        safe_print(f"\nDatabase Summary:")
-        safe_print(f"  Predictions:       {db_stats['total_predictions']}")
-        safe_print(f"  Outcomes:          {db_stats['total_outcomes']}")
-        safe_print(f"  Evaluated:         {db_stats['evaluated_outcomes']}")
-        safe_print(f"  Signals:           {db_stats['total_signals']}")
-        safe_print(f"  DB size:           {db_stats['db_size_kb']} KB")
-
-        if metrics and metrics.get('total_evaluated', 0) > 0:
-            safe_print(f"\nAll-time Accuracy:")
-            safe_print(f"  Win rate:          {metrics['win_rate']}%")
-            safe_print(f"  Avg gain:          {metrics['avg_gain_pct']}%")
-            safe_print(f"  Avg loss:          {metrics['avg_loss_pct']}%")
-            safe_print(f"  Profit factor:     {metrics['profit_factor']}")
-
+        safe_print(f"  Predictions: {db_stats.get('total_predictions', 0)}")
         safe_print("=" * 60)
         return output
+
     except Exception as e:
+        import traceback
         safe_print(f"[WARN] Stats export failed: {e}")
-        output = empty_stats_output()
+        traceback.print_exc()
         write_stats_output(output)
-        safe_print(f"[OK] Wrote fallback empty stats to {OUTPUT_FILE}")
+        safe_print(f"[OK] Wrote fallback stats to {OUTPUT_FILE}")
         return output
 
 

@@ -9,7 +9,7 @@ Logic:
 - Determine WIN/LOSS/NEUTRAL based on:
   * For 'opportunity' (BUY): target hit = WIN, stop hit = LOSS
   * For 'risk' (AVOID): if stock dropped = WIN (correctly avoided), if rose = LOSS
-- Updates outcomes table in trading_copilot.db
+- Updates outcomes table in trading_history.db
 """
 
 import os
