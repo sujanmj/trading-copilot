@@ -385,6 +385,72 @@ def trigger_refresh():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+def _run_backend_script(script_name: str, timeout: int):
+    """Run a backend script synchronously and return captured output."""
+    script_path = BASE_DIR / script_name
+    if not script_path.exists():
+        raise HTTPException(status_code=404, detail=f"{script_name} not found")
+
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+    env['PYTHONUTF8'] = '1'
+
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(script_path)],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+            cwd=str(BASE_DIR.parent),
+        )
+        stdout = completed.stdout or ''
+        stderr = completed.stderr or ''
+        return {
+            'success': completed.returncode == 0,
+            'returncode': completed.returncode,
+            'stdout': stdout[-8000:] if len(stdout) > 8000 else stdout,
+            'stderr': stderr[-8000:] if len(stderr) > 8000 else stderr,
+        }
+    except subprocess.TimeoutExpired as e:
+        stdout = (e.stdout or '') if isinstance(e.stdout, str) else (e.stdout.decode('utf-8', errors='replace') if e.stdout else '')
+        stderr = (e.stderr or '') if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if e.stderr else '')
+        return {
+            'success': False,
+            'returncode': -1,
+            'stdout': stdout[-8000:] if len(stdout) > 8000 else stdout,
+            'stderr': (stderr + f'\n[TIMEOUT] Exceeded {timeout}s limit')[-8000:],
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'returncode': -1,
+            'stdout': '',
+            'stderr': str(e),
+        }
+
+
+@app.post("/api/debug/force-collect", dependencies=[Depends(verify_api_key)])
+def force_collect():
+    """Run collector.py synchronously (debug)."""
+    return _run_backend_script('collector.py', timeout=120)
+
+
+@app.post("/api/debug/force-analyze", dependencies=[Depends(verify_api_key)])
+def force_analyze():
+    """Run master_analyzer.py synchronously (debug)."""
+    env_backup = os.environ.get('AI_USE_CASE')
+    os.environ['AI_USE_CASE'] = 'manual_refresh'
+    try:
+        return _run_backend_script('master_analyzer.py', timeout=180)
+    finally:
+        if env_backup is None:
+            os.environ.pop('AI_USE_CASE', None)
+        else:
+            os.environ['AI_USE_CASE'] = env_backup
+
+
 @app.get("/api/debug/find-db", dependencies=[Depends(verify_api_key)])
 def find_db_files():
     """Find all .db files on the filesystem."""
