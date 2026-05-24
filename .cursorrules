@@ -1,0 +1,54 @@
+This is a Python/Electron trading copilot project deployed on Railway.
+
+PROJECT STRUCTURE:
+- backend/ → All Python scripts
+- data/ → JSON data files (created at runtime)
+- config/keys.env → API keys
+- index.html → Electron GUI
+- main.js → Electron entry point
+
+KEY FILES:
+- backend/master_analyzer.py → Main AI analysis engine (v9)
+- backend/master_scheduler.py → Schedules all jobs with IST timezone
+- backend/ai_router.py → Routes between Gemini/Claude/Haiku
+- backend/telegram_brain_pusher.py → Sends alerts to Telegram
+- backend/telegram_listener.py → Handles Telegram bot commands
+- backend/api_server.py → FastAPI server on Railway
+- backend/collector.py → Fetches NSE stock prices
+- backend/stock_scanner.py → Scans NSE 500 for signals
+- backend/prediction_logger.py → Logs AI predictions to SQLite
+- backend/outcome_tracker.py → Evaluates WIN/LOSS daily at 8am
+- backend/learning_engine.py → RAG calibration from past performance
+- backend/reddit_tracker.py → Reddit sentiment (uses old.reddit.com RSS)
+- backend/govt_tracker.py → Govt/SEBI/BSE RSS feeds
+- backend/youtube_tracker.py → YouTube TV channel tracking
+- backend/telegram_scraper.py → Telegram channel scraping (optional)
+
+CRITICAL RULES:
+1. NEVER use "from core.builders" - that module does not exist
+2. NEVER use "from core." anything - core/ directory does not exist
+3. Data directory: Path(__file__).parent.parent / 'data'
+4. Config: Path(__file__).parent.parent / 'config' / 'keys.env'
+5. Always use IST timezone (pytz Asia/Kolkata) for scheduling
+6. Model names must be exact:
+   - claude-sonnet-4-5 (NOT claude-sonnet-4-5-20241022)
+   - claude-haiku-3-5-20241022 (NOT claude-haiku-4-5)
+   - gemini-2.0-flash (NOT gemini-1.5-flash)
+7. Railway volume auto-mounts to the data directory
+8. All scripts must handle None returns gracefully
+9. Reddit: use old.reddit.com RSS feeds (JSON API returns 403)
+10. Telegram scraper: exit(0) gracefully if SESSION_STRING missing
+
+DEPLOYMENT:
+- Platform: Railway
+- Entry: backend/api_server.py
+- Background threads: master_scheduler.py + telegram_listener.py
+- Volume: mounted at data directory
+
+CURRENT BUGS TO FIX:
+1. master_analyzer.py has broken import "from core.builders.market_state_builder"
+2. master_analyzer.py has duplicate generate_unified_analysis function
+3. master_scheduler.py intraday loop uses wrong variable (always schedules 15:45)
+4. intelligence.json is 56h stale because analyzer crashes on import
+5. Duplicate predictions in DB (75 on same day)
+6. Reddit tracker returns 403 (need RSS fallback)

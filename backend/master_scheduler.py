@@ -45,13 +45,13 @@ def run_all_collectors_parallel():
 
     print("[+] Parallel data ingestion complete.")
     run_standalone_script("stock_scanner.py")
+    run_standalone_script("master_analyzer.py")
+    run_standalone_script("telegram_brain_pusher.py")
 
 def run_full_cycle(brief_name: str = "Scheduled"):
     """Collect data + run analyzer + push to Telegram"""
     print(f"\n[*] Full Cycle: {brief_name} @ {datetime.now(IST).strftime('%H:%M:%S IST')}")
     run_all_collectors_parallel()
-    run_standalone_script("master_analyzer.py")
-    run_standalone_script("telegram_brain_pusher.py")
 
 def run_post_market_pipeline():
     print("\n" + "="*60)
@@ -73,11 +73,14 @@ intraday_slots = [
     "14:30", "15:00", "15:30"
 ]
 
+def _schedule_intraday_job(day: str, slot: str):
+    getattr(schedule.every(), day).at(slot).do(
+        run_full_cycle, brief_name=f"Intraday {slot}"
+    )
+
 for slot in intraday_slots:
     for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-        getattr(schedule.every(), day).at(slot).do(
-            run_full_cycle, brief_name=f"Intraday {slot}"
-        )
+        _schedule_intraday_job(day, slot)
 
 # ── Post-market settlement
 for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
@@ -90,7 +93,7 @@ schedule.every().day.at("08:45").do(run_full_cycle, brief_name="Pre-Market")
 schedule.every().day.at("12:00").do(run_full_cycle, brief_name="Midday")
 schedule.every().day.at("23:00").do(run_full_cycle, brief_name="US Pulse")
 
-# ── Overnight data collection every 30 mins (no analyzer, saves API cost)
+# ── Overnight data collection every 30 mins (collect + analyze + push)
 schedule.every(30).minutes.do(run_all_collectors_parallel)
 
 # ============================================================

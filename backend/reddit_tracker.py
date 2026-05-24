@@ -1,11 +1,7 @@
 """
-Reddit Sentiment Tracker v2.1 - Bug fixes
-Uses Reddit's public JSON endpoints (no API key needed)
+Reddit Sentiment Tracker v2.2 - RSS feed ingestion
+Uses Reddit public RSS feeds (no API key; avoids JSON 403)
 Tracks Indian stock market subreddits for retail sentiment
-
-v2.1 Fixes:
-- Force UTF-8 stdout (Windows console fix)
-- Fix AI sentiment dict-vs-string bug
 """
 
 import sys
@@ -19,6 +15,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
+import feedparser
 import requests
 import json
 import re
@@ -46,7 +43,6 @@ SUBREDDITS = [
     'StockMarketIndia',
 ]
 
-FETCH_MODES = ['hot', 'new']
 POSTS_LIMIT = 50
 
 HEADERS = {
@@ -149,7 +145,9 @@ def is_relevant(post):
     text = (post.get('title', '') + ' ' + post.get('selftext', '')).lower()
     if any(kw in text for kw in IRRELEVANT_KEYWORDS):
         return False
-    if post.get('score', 0) < 3:
+    # RSS entries have no score; only apply threshold when score is present
+    score = post.get('score', 0)
+    if score > 0 and score < 3:
         return False
     return True
 
@@ -158,18 +156,17 @@ def is_relevant(post):
 # ============================================================
 
 def fetch_subreddit_posts_rss(subreddit, limit=25):
-    """Use RSS feed instead of JSON API - bypasses 403"""
+    """Fetch hot posts via Reddit RSS (bypasses JSON API 403)."""
     try:
-        url = f"https://www.reddit.com/r/{subreddit}/hot/.rss?limit={limit}"
+        url = f"https://www.reddit.com/r/{subreddit}/hot/.rss"
         headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; RSS reader)',
+            'User-Agent': 'Mozilla/5.0 (compatible; trading-copilot/2.2)',
             'Accept': 'application/rss+xml, application/xml, text/xml',
         }
         response = requests.get(url, headers=headers, timeout=15)
         if response.status_code != 200:
             print(f"❌ r/{subreddit} RSS: {response.status_code}")
             return []
-        import feedparser
         feed = feedparser.parse(response.content)
         posts = []
         for entry in feed.entries[:limit]:
@@ -328,11 +325,10 @@ def run_reddit_tracker():
     all_posts = []
     
     for sub in SUBREDDITS:
-        for mode in FETCH_MODES:
-            print(f"[FETCH] r/{sub}/{mode}...")
-            posts = fetch_subreddit_posts_rss(sub, POSTS_LIMIT)
-            all_posts.extend(posts)
-            time.sleep(2)
+        print(f"[FETCH] r/{sub}/hot (RSS)...")
+        posts = fetch_subreddit_posts_rss(sub, POSTS_LIMIT)
+        all_posts.extend(posts)
+        time.sleep(2)
     
     seen = set()
     unique_posts = []

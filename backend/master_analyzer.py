@@ -216,6 +216,42 @@ def is_indian_market_open():
     return market_open <= now <= market_close
 
 
+REQUIRED_JSON_FIELDS = [
+    'executive_summary',
+    'government_impact',
+    'sector_rotation',
+    'market_mood',
+    'self_calibration',
+    'top_opportunities',
+    'risks_and_avoids',
+    'action_plan',
+]
+
+
+def validate_analysis_json(parsed):
+    """Return (ok, missing_or_invalid_fields)."""
+    if not isinstance(parsed, dict):
+        return False, ['root (not an object)']
+
+    problems = []
+    for field in REQUIRED_JSON_FIELDS:
+        if field not in parsed or parsed[field] in (None, ''):
+            problems.append(field)
+
+    if 'government_impact' in parsed and not isinstance(parsed['government_impact'], dict):
+        problems.append('government_impact (not an object)')
+    if 'sector_rotation' in parsed and not isinstance(parsed['sector_rotation'], dict):
+        problems.append('sector_rotation (not an object)')
+    if 'market_mood' in parsed and not isinstance(parsed['market_mood'], dict):
+        problems.append('market_mood (not an object)')
+    if 'top_opportunities' in parsed and not isinstance(parsed['top_opportunities'], list):
+        problems.append('top_opportunities (not a list)')
+    if 'risks_and_avoids' in parsed and not isinstance(parsed['risks_and_avoids'], list):
+        problems.append('risks_and_avoids (not a list)')
+
+    return len(problems) == 0, problems
+
+
 def generate_unified_analysis(all_data):
     print("\n[ANALYSIS] Building prompt from all data sources...")
 
@@ -317,21 +353,17 @@ RULES:
 
     try:
         parsed = json.loads(clean_text)
-
-        # Validate required fields
-        required = ['executive_summary', 'market_mood', 'top_opportunities',
-                    'risks_and_avoids', 'action_plan', 'sector_rotation']
-        missing = [f for f in required if not parsed.get(f)]
-        if missing:
-            print(f"  [WARN] Missing fields: {missing} — retrying...")
-            return None
-
-        return parsed
-
     except json.JSONDecodeError as e:
         print(f"  [ERROR] Invalid JSON: {e}")
         print(f"  RAW:\n{ai_text[:500]}")
         return None
+
+    ok, problems = validate_analysis_json(parsed)
+    if not ok:
+        print(f"  [WARN] Invalid or missing fields: {problems}")
+        return None
+
+    return parsed
 
 
 def run_master_analysis():
