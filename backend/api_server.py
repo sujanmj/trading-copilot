@@ -385,6 +385,34 @@ def trigger_refresh():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/debug/find-db", dependencies=[Depends(verify_api_key)])
+def find_db_files():
+    """Find all .db files on the filesystem."""
+    try:
+        from db_finder import find_all_db_files
+        databases = find_all_db_files('/')
+        return {"databases": databases, "count": len(databases)}
+    except Exception as e:
+        return {"error": str(e), "databases": []}
+
+
+@app.post("/api/debug/dedup-smart", dependencies=[Depends(verify_api_key)])
+def dedup_smart():
+    """Find DB with predictions and deduplicate rows."""
+    try:
+        from db_finder import find_predictions_db, run_predictions_dedup
+
+        db_path, count = find_predictions_db()
+        if not db_path:
+            return {"error": "No database with predictions table found"}
+        if count == 0:
+            return {"error": "Predictions table exists but is empty", "db_path": db_path, "before": 0, "after": 0, "removed": 0}
+
+        before, after, removed = run_predictions_dedup(db_path)
+        return {"db_path": db_path, "before": before, "after": after, "removed": removed}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/debug/db-info", dependencies=[Depends(verify_api_key)])
 def db_info():
     """Show database info and find duplicates"""

@@ -186,8 +186,10 @@ CREATE INDEX IF NOT EXISTS idx_metrics_date ON accuracy_metrics(metric_date);
 
 def get_connection():
     """Get a database connection"""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    from db_finder import resolve_db_path
+    db_path = Path(resolve_db_path())
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row  # Allow dict-like access
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -195,7 +197,9 @@ def get_connection():
 
 def init_db():
     """Create all tables if they don't exist"""
-    print(f"[DB] Initializing database at: {DB_PATH}")
+    from db_finder import resolve_db_path
+    db_path = resolve_db_path()
+    print(f"[DB] Initializing database at: {db_path}")
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
@@ -577,6 +581,8 @@ def get_top_losers(limit=10):
 
 def get_db_stats():
     """Quick overview stats"""
+    from db_finder import resolve_db_path
+    db_path = Path(resolve_db_path())
     conn = get_connection()
     try:
         stats = {}
@@ -584,7 +590,7 @@ def get_db_stats():
         stats['total_signals'] = conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
         stats['total_outcomes'] = conn.execute("SELECT COUNT(*) FROM outcomes").fetchone()[0]
         stats['evaluated_outcomes'] = conn.execute("SELECT COUNT(*) FROM outcomes WHERE verdict != 'PENDING'").fetchone()[0]
-        stats['db_size_kb'] = round(DB_PATH.stat().st_size / 1024, 1) if DB_PATH.exists() else 0
+        stats['db_size_kb'] = round(Path(resolve_db_path()).stat().st_size / 1024, 1) if Path(resolve_db_path()).exists() else 0
         return stats
     finally:
         conn.close()

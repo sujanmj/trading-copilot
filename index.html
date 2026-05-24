@@ -526,7 +526,11 @@
   function loadJson(filePath) {
     if (USE_API) {
       for (const [key, fileP] of Object.entries(files)) {
-        if (fileP === filePath) return apiCache[key]
+        if (fileP === filePath) {
+          const cached = apiCache[key]
+          if (!cached || cached.error) return null
+          return cached.data !== undefined ? cached.data : cached
+        }
       }
       return null
     }
@@ -534,6 +538,43 @@
       if (!fs.existsSync(filePath)) return null
       return JSON.parse(fs.readFileSync(filePath, 'utf8'))
     } catch (e) { return null }
+  }
+
+  function normalizeBrainData(raw) {
+    if (!raw || raw.error) return null
+    const data = raw.data !== undefined ? raw.data : raw
+    if (!data || typeof data !== 'object') return null
+
+    const mood = data.market_mood || {}
+    const mergedMood = {
+      global_mood: mood.global_mood || data.market_bias || null,
+      india_outlook: mood.india_outlook || null,
+      retail_mood: mood.retail_mood || null,
+      confidence_level: mood.confidence_level || data.confidence_score || null,
+    }
+
+    const opps = data.top_opportunities || data.opportunities || []
+    const risks = data.risks_and_avoids || data.risks || []
+    const summary = data.executive_summary || data.analysis || null
+
+    return {
+      ...data,
+      executive_summary: summary,
+      top_opportunities: Array.isArray(opps) ? opps : [],
+      risks_and_avoids: Array.isArray(risks) ? risks : [],
+      market_mood: mergedMood,
+      sector_rotation: data.sector_rotation || { bullish: [], bearish: [] },
+      government_impact: data.government_impact || {},
+      action_plan: data.action_plan || null,
+      self_calibration: data.self_calibration || null,
+    }
+  }
+
+  function displayText(value, fallback) {
+    if (value === null || value === undefined) return fallback
+    const text = String(value).trim()
+    if (!text || text.toLowerCase() === 'none') return fallback
+    return text
   }
 
   function escapeHtml(text) {
@@ -567,15 +608,27 @@
   // TAB 1: BRAIN
   // ============================================================
   function loadBrain() {
-    const data = loadJson(files.intelligence);
+    const raw = loadJson(files.intelligence);
+    const data = normalizeBrainData(raw);
     const container = document.getElementById('tab-brain');
-    
-    if (!data || !data.executive_summary) {
-      container.innerHTML = `<div class="loading">⏳ Run scheduler or wait for AI JSON engine...</div>`;
+
+    if (!data) {
+      container.innerHTML = `<div class="loading">⏳ Waiting for analysis...</div>`;
       return;
     }
 
-    const ts = formatTime(data.timestamp);
+    const summary = displayText(data.executive_summary, '');
+    const hasContent = summary ||
+      (data.top_opportunities && data.top_opportunities.length) ||
+      (data.risks_and_avoids && data.risks_and_avoids.length) ||
+      displayText(data.action_plan, '');
+
+    if (!hasContent) {
+      container.innerHTML = `<div class="loading">⏳ Waiting for analysis...</div>`;
+      return;
+    }
+
+    const ts = formatTime(data.timestamp || data.generation_time);
     const govt = data.government_impact || {};
     const rotation = data.sector_rotation || { bullish: [], bearish: [] };
     const mood = data.market_mood || {};
@@ -587,6 +640,9 @@
     (rotation.bearish || []).forEach(s => sectorHtml += `<span class="sector-tag bear">⬇ ${escapeHtml(s)}</span>`);
 
     let oppsHtml = '';
+    if (opps.length === 0) {
+      oppsHtml = '<div class="glass-text" style="font-style:italic;">No signals yet</div>';
+    } else {
     opps.forEach(o => {
       const action = (o.action || 'WATCH').toUpperCase();
       let actionClass = 'watch';
@@ -600,16 +656,20 @@
             <span class="trade-badge ${actionClass}">${escapeHtml(action)}</span>
           </div>
           <div class="trade-metrics">
-            <span>Entry: ₹${escapeHtml(o.entry_zone || '-')}</span>
-            <span>Tgt: ₹${escapeHtml(o.target || '-')}</span>
-            <span>SL: ₹${escapeHtml(o.stop_loss || '-')}</span>
+            <span>Entry: ₹${escapeHtml(displayText(o.entry_zone, '-'))}</span>
+            <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
+            <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
           </div>
-          <p class="trade-logic">${escapeHtml(o.logic || '')}</p>
+          <p class="trade-logic">${escapeHtml(displayText(o.logic, 'No rationale provided.'))}</p>
         </div>
       `;
     });
+    }
 
     let risksHtml = '';
+    if (risks.length === 0) {
+      risksHtml = '<div class="glass-text" style="font-style:italic;">No risks identified yet</div>';
+    } else {
     risks.forEach(r => {
       risksHtml += `
         <div class="trade-item sell">
@@ -617,10 +677,11 @@
             <h3>${escapeHtml(r.symbol || 'UNKNOWN')}</h3>
             <span class="trade-badge sell">AVOID</span>
           </div>
-          <p class="trade-logic">${escapeHtml(r.logic || '')}</p>
+          <p class="trade-logic">${escapeHtml(displayText(r.logic, 'No risk rationale provided.'))}</p>
         </div>
       `;
     });
+    }
 
     let html = `
       <div class="timestamp">Updated: ${ts} | Sources: ${data.sources_used || 8}/8</div>
@@ -629,20 +690,20 @@
         <div class="main-column">
           <div class="glass-card">
             <h2>Executive Summary</h2>
-            <div class="glass-text">${escapeHtml(data.executive_summary || '')}</div>
+            <div class="glass-text">${escapeHtml(displayText(data.executive_summary, 'Waiting for analysis...'))}</div>
           </div>
 
           <div class="glass-card">
             <h2>Market Mood & Govt Intel</h2>
             <div class="mood-grid">
-              <div class="mood-item"><span>Global</span><strong>${escapeHtml(mood.global_mood || 'N/A')}</strong></div>
-              <div class="mood-item"><span>India</span><strong>${escapeHtml(mood.india_outlook || 'N/A')}</strong></div>
-              <div class="mood-item"><span>Retail</span><strong>${escapeHtml(mood.retail_mood || 'N/A')}</strong></div>
-              <div class="mood-item"><span>AI Confidence</span><strong>${escapeHtml(mood.confidence_level || 'N/A')}</strong></div>
+              <div class="mood-item"><span>Global</span><strong>${escapeHtml(displayText(mood.global_mood, 'Unknown'))}</strong></div>
+              <div class="mood-item"><span>India</span><strong>${escapeHtml(displayText(mood.india_outlook, 'Unknown'))}</strong></div>
+              <div class="mood-item"><span>Retail</span><strong>${escapeHtml(displayText(mood.retail_mood, 'Unknown'))}</strong></div>
+              <div class="mood-item"><span>AI Confidence</span><strong>${escapeHtml(displayText(mood.confidence_level, 'N/A'))}</strong></div>
             </div>
             <div style="margin-top:14px; font-size:11px; color:#A3B3C8; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;">
-              <strong style="color:#ffaa00;">🏛️ Govt Impact:</strong> ${escapeHtml(govt.summary || 'None')} 
-              <br><span style="color:#8B949E; font-size:9px;">(Confidence: ${escapeHtml(govt.confidence_score || 'N/A')})</span>
+              <strong style="color:#ffaa00;">🏛️ Govt Impact:</strong> ${escapeHtml(displayText(govt.summary, 'No government impact data'))} 
+              <br><span style="color:#8B949E; font-size:9px;">(Confidence: ${escapeHtml(displayText(govt.confidence_score, 'N/A'))})</span>
             </div>
           </div>
 
@@ -650,11 +711,11 @@
             <h2>Action Plan & Self-Calibration</h2>
             <div class="glass-text" style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
               <strong style="color:#00E676; display:block; margin-bottom:4px;">🚀 Action Plan:</strong> 
-              ${escapeHtml(data.action_plan || '')}
+              ${escapeHtml(displayText(data.action_plan, 'Waiting for action plan...'))}
             </div>
             <div class="glass-text" style="color:#A3B3C8;">
               <strong style="color:#ffaa00; display:block; margin-bottom:4px;">🎯 Calibration (Past Logic):</strong> 
-              ${escapeHtml(data.self_calibration || '')}
+              ${escapeHtml(displayText(data.self_calibration, 'Waiting for calibration data...'))}
             </div>
           </div>
         </div>
@@ -1157,27 +1218,15 @@
   // TAB 8: STATS
   // ============================================================
   function loadStats() {
-    // FORCE RELOAD: If loadJson is caching, bypass it
-    // Add a dummy query parameter to force the browser to ignore cache if it's a fetch
-    // Or, if loadJson uses 'fs', ensure the path matches exactly
-    console.log("Loading stats from:", files.stats); 
-    
-    // TEMPORARY FIX: Force read directly from FS if loadJson is failing
-    const fs = require('fs');
-    let data;
-    try {
-        const raw = fs.readFileSync(files.stats, 'utf8');
-        data = JSON.parse(raw);
-    } catch (e) {
-        console.error("Critical: Could not read file", files.stats, e);
+    const data = loadJson(files.stats);
+    const container = document.getElementById('tab-stats');
+    if (!data) {
+      container.innerHTML = `<div class="empty-stats"><h4>📊 Waiting for stats...</h4><p>Run outcome_tracker or wait for first predictions.</p></div>`;
+      return;
     }
 
-    const container = document.getElementById('tab-stats');
-    if (!data) { container.innerHTML = `<div class="empty-stats"><h4>📊 Learning Engine Not Active</h4><p>Path: ${files.stats}</p></div>`; return; }
-
-    // ... keep the rest of your existing html rendering code exactly the same ...
-    const dbStats = data.db_stats || {}
-    const metrics = data.metrics_all_time || {}
+    const dbStats = data.db_stats || { total_predictions: 0 };
+    const metrics = data.metrics_all_time || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
     const winRate = metrics.win_rate || 0
     const profitFactor = metrics.profit_factor || 0
 
@@ -1278,7 +1327,10 @@
   function loadHistory() {
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
-    if (!data) { container.innerHTML = `<div class="empty-stats"><h4>📜 No History Data Yet</h4></div>`; return; }
+    if (!data || !data.periods) {
+      container.innerHTML = `<div class="empty-stats"><h4>📜 Waiting for history...</h4><p>Predictions will appear after the first analysis run.</p></div>`
+      return
+    }
     
     const ts = formatTime(data.last_updated)
     const totalInDb = data.total_in_db || {}

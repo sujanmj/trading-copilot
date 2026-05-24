@@ -17,8 +17,46 @@ except Exception:
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR.parent / 'data'
-DB_PATH = DATA_DIR / 'trading_history.db'
 OUTPUT_FILE = DATA_DIR / 'history_data.json'
+
+
+def get_db_path():
+    from db_finder import resolve_db_path
+    return Path(resolve_db_path())
+
+
+def empty_history_output():
+    empty_period = {
+        'name': 'today',
+        'label': 'Today',
+        'start_date': date.today().isoformat(),
+        'end_date': date.today().isoformat(),
+        'days_count': 1,
+        'stats': {'total': 0, 'wins': 0, 'losses': 0, 'neutral': 0, 'pending': 0, 'evaluated': 0, 'win_rate': 0},
+        'top_winners': [],
+        'top_losers': [],
+        'timeline': [],
+        'signals_count': 0,
+        'opportunities_count': 0,
+        'risks_count': 0,
+    }
+    return {
+        'last_updated': datetime.now().isoformat(),
+        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'today_date': date.today().isoformat(),
+        'today_weekday': date.today().strftime('%A'),
+        'periods': {
+            'today': empty_period,
+            'yesterday': {**empty_period, 'name': 'yesterday', 'label': 'Yesterday'},
+            'this_week': {**empty_period, 'name': 'this_week', 'label': 'This Week'},
+            'last_week': {**empty_period, 'name': 'last_week', 'label': 'Last Week'},
+            '15d': {**empty_period, 'name': '15d', 'label': 'Last 15 Days'},
+        },
+        'by_sector': [],
+        'by_confidence': [],
+        'context_snapshots': [],
+        'total_in_db': {'predictions': 0, 'signals': 0, 'snapshots': 0},
+    }
 
 
 def get_today_range():
@@ -60,10 +98,11 @@ def get_days_back_range(days):
 
 
 def get_predictions_in_range(start_date, end_date):
-    if not DB_PATH.exists():
-        print(f"[ERROR] Database not found: {DB_PATH}")
+    db_path = get_db_path()
+    if not db_path.exists():
+        print(f"[WARN] Database not found: {db_path}")
         return []
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     query = '''
@@ -91,9 +130,10 @@ def get_predictions_in_range(start_date, end_date):
 
 
 def get_signals_in_range(start_date, end_date):
-    if not DB_PATH.exists():
+    db_path = get_db_path()
+    if not db_path.exists():
         return []
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('''
@@ -110,9 +150,10 @@ def get_signals_in_range(start_date, end_date):
 
 
 def get_context_snapshots(days=30):
-    if not DB_PATH.exists():
+    db_path = get_db_path()
+    if not db_path.exists():
         return []
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='context_snapshots'")
@@ -216,108 +257,130 @@ def build_export():
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
-    today = date.today()
-    weekday_name = today.strftime('%A')
-    print(f"\nToday is: {today.isoformat()} ({weekday_name})")
+    try:
+        from db_finder import resolve_db_path
+        db_path = resolve_db_path()
+        print(f"[DB] Using: {db_path}")
 
-    periods = {}
+        today = date.today()
+        weekday_name = today.strftime('%A')
+        print(f"\nToday is: {today.isoformat()} ({weekday_name})")
 
-    start, end = get_today_range()
-    periods['today'] = build_period('today', start, end, 'Today')
-    print(f"\n[TODAY]      ({start})            {periods['today']['stats']['total']} predictions")
+        periods = {}
 
-    start, end = get_yesterday_range()
-    periods['yesterday'] = build_period('yesterday', start, end, 'Yesterday')
-    print(f"[YESTERDAY]  ({start})            {periods['yesterday']['stats']['total']} predictions")
+        start, end = get_today_range()
+        periods['today'] = build_period('today', start, end, 'Today')
+        print(f"\n[TODAY]      ({start})            {periods['today']['stats']['total']} predictions")
 
-    start, end = get_this_week_range()
-    label = f'This Week ({start.strftime("%a %d %b")} - {end.strftime("%a %d %b")})'
-    periods['this_week'] = build_period('this_week', start, end, label)
-    print(f"[THIS WEEK]  ({start} to {end}) {periods['this_week']['stats']['total']} predictions")
+        start, end = get_yesterday_range()
+        periods['yesterday'] = build_period('yesterday', start, end, 'Yesterday')
+        print(f"[YESTERDAY]  ({start})            {periods['yesterday']['stats']['total']} predictions")
 
-    start, end = get_last_week_range()
-    label = f'Last Week ({start.strftime("%a %d %b")} - {end.strftime("%a %d %b")})'
-    periods['last_week'] = build_period('last_week', start, end, label)
-    print(f"[LAST WEEK]  ({start} to {end}) {periods['last_week']['stats']['total']} predictions")
+        start, end = get_this_week_range()
+        label = f'This Week ({start.strftime("%a %d %b")} - {end.strftime("%a %d %b")})'
+        periods['this_week'] = build_period('this_week', start, end, label)
+        print(f"[THIS WEEK]  ({start} to {end}) {periods['this_week']['stats']['total']} predictions")
 
-    start, end = get_days_back_range(15)
-    periods['15d'] = build_period('15d', start, end, 'Last 15 Days')
-    print(f"[15D]                              {periods['15d']['stats']['total']} predictions")
+        start, end = get_last_week_range()
+        label = f'Last Week ({start.strftime("%a %d %b")} - {end.strftime("%a %d %b")})'
+        periods['last_week'] = build_period('last_week', start, end, label)
+        print(f"[LAST WEEK]  ({start} to {end}) {periods['last_week']['stats']['total']} predictions")
 
-    # All-time data for breakdowns (last 90 days max)
-    start_all = today - timedelta(days=90)
-    all_predictions = get_predictions_in_range(start_all, today)
+        start, end = get_days_back_range(15)
+        periods['15d'] = build_period('15d', start, end, 'Last 15 Days')
+        print(f"[15D]                              {periods['15d']['stats']['total']} predictions")
 
-    sector_stats = defaultdict(lambda: {'total': 0, 'wins': 0, 'losses': 0, 'pending': 0})
-    for p in all_predictions:
-        sector = p.get('sector') or 'UNKNOWN'
-        sector_stats[sector]['total'] += 1
-        verdict = p.get('verdict')
-        if verdict == 'WIN':
-            sector_stats[sector]['wins'] += 1
-        elif verdict == 'LOSS':
-            sector_stats[sector]['losses'] += 1
-        else:
-            sector_stats[sector]['pending'] += 1
+        start_all = today - timedelta(days=90)
+        all_predictions = get_predictions_in_range(start_all, today)
 
-    sectors_list = []
-    for sector, stats in sector_stats.items():
-        evaluated = stats['wins'] + stats['losses']
-        win_rate = (stats['wins'] / evaluated * 100) if evaluated > 0 else 0
-        sectors_list.append({
-            'sector': sector, 'total': stats['total'],
-            'wins': stats['wins'], 'losses': stats['losses'],
-            'pending': stats['pending'], 'win_rate': round(win_rate, 1)
-        })
-    sectors_list.sort(key=lambda x: x['total'], reverse=True)
+        if not all_predictions:
+            print("[INFO] No predictions yet — writing empty history JSON")
+            output = empty_history_output()
+            OUTPUT_FILE.parent.mkdir(exist_ok=True)
+            with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+                json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+            print(f"\n[SAVED] {OUTPUT_FILE}")
+            print("=" * 60)
+            return output
 
-    conf_stats = defaultdict(lambda: {'total': 0, 'wins': 0, 'losses': 0})
-    for p in all_predictions:
-        conf = (p.get('confidence') or 'UNKNOWN').upper()
-        conf_stats[conf]['total'] += 1
-        verdict = p.get('verdict')
-        if verdict == 'WIN':
-            conf_stats[conf]['wins'] += 1
-        elif verdict == 'LOSS':
-            conf_stats[conf]['losses'] += 1
+        sector_stats = defaultdict(lambda: {'total': 0, 'wins': 0, 'losses': 0, 'pending': 0})
+        for p in all_predictions:
+            sector = p.get('sector') or 'UNKNOWN'
+            sector_stats[sector]['total'] += 1
+            verdict = p.get('verdict')
+            if verdict == 'WIN':
+                sector_stats[sector]['wins'] += 1
+            elif verdict == 'LOSS':
+                sector_stats[sector]['losses'] += 1
+            else:
+                sector_stats[sector]['pending'] += 1
 
-    conf_list = []
-    for conf, stats in conf_stats.items():
-        evaluated = stats['wins'] + stats['losses']
-        win_rate = (stats['wins'] / evaluated * 100) if evaluated > 0 else 0
-        conf_list.append({
-            'confidence': conf, 'total': stats['total'],
-            'wins': stats['wins'], 'losses': stats['losses'],
-            'win_rate': round(win_rate, 1)
-        })
+        sectors_list = []
+        for sector, stats in sector_stats.items():
+            evaluated = stats['wins'] + stats['losses']
+            win_rate = (stats['wins'] / evaluated * 100) if evaluated > 0 else 0
+            sectors_list.append({
+                'sector': sector, 'total': stats['total'],
+                'wins': stats['wins'], 'losses': stats['losses'],
+                'pending': stats['pending'], 'win_rate': round(win_rate, 1)
+            })
+        sectors_list.sort(key=lambda x: x['total'], reverse=True)
 
-    snapshots = get_context_snapshots(90)
+        conf_stats = defaultdict(lambda: {'total': 0, 'wins': 0, 'losses': 0})
+        for p in all_predictions:
+            conf = (p.get('confidence') or 'UNKNOWN').upper()
+            conf_stats[conf]['total'] += 1
+            verdict = p.get('verdict')
+            if verdict == 'WIN':
+                conf_stats[conf]['wins'] += 1
+            elif verdict == 'LOSS':
+                conf_stats[conf]['losses'] += 1
 
-    output = {
-        'last_updated': datetime.now().isoformat(),
-        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'today_date': today.isoformat(),
-        'today_weekday': weekday_name,
-        'periods': periods,
-        'by_sector': sectors_list,
-        'by_confidence': conf_list,
-        'context_snapshots': snapshots[:30],
-        'total_in_db': {
-            'predictions': len(all_predictions),
-            'signals': sum(p['signals_count'] for p in periods.values()),
-            'snapshots': len(snapshots)
+        conf_list = []
+        for conf, stats in conf_stats.items():
+            evaluated = stats['wins'] + stats['losses']
+            win_rate = (stats['wins'] / evaluated * 100) if evaluated > 0 else 0
+            conf_list.append({
+                'confidence': conf, 'total': stats['total'],
+                'wins': stats['wins'], 'losses': stats['losses'],
+                'win_rate': round(win_rate, 1)
+            })
+
+        snapshots = get_context_snapshots(90)
+
+        output = {
+            'last_updated': datetime.now().isoformat(),
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'today_date': today.isoformat(),
+            'today_weekday': weekday_name,
+            'periods': periods,
+            'by_sector': sectors_list,
+            'by_confidence': conf_list,
+            'context_snapshots': snapshots[:30],
+            'total_in_db': {
+                'predictions': len(all_predictions),
+                'signals': sum(p['signals_count'] for p in periods.values()),
+                'snapshots': len(snapshots)
+            }
         }
-    }
 
-    OUTPUT_FILE.parent.mkdir(exist_ok=True)
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+        OUTPUT_FILE.parent.mkdir(exist_ok=True)
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, default=str, ensure_ascii=False)
 
-    print(f"\n[SAVED] {OUTPUT_FILE}")
-    print(f"  File size: {OUTPUT_FILE.stat().st_size / 1024:.1f} KB")
-    print("=" * 60)
+        print(f"\n[SAVED] {OUTPUT_FILE}")
+        print(f"  File size: {OUTPUT_FILE.stat().st_size / 1024:.1f} KB")
+        print("=" * 60)
 
-    return output
+        return output
+    except Exception as e:
+        print(f"[WARN] History export failed: {e}")
+        output = empty_history_output()
+        OUTPUT_FILE.parent.mkdir(exist_ok=True)
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+        print(f"[SAVED] fallback empty history to {OUTPUT_FILE}")
+        return output
 
 
 def build_custom_period(start_date_str, end_date_str):

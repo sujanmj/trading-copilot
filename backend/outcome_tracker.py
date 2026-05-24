@@ -25,9 +25,10 @@ try:
 except Exception:
     pass
 
+from db_finder import resolve_db_path, find_predictions_db
+
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR.parent / 'data'
-DB_PATH = Path(__file__).parent.parent / 'data' / 'trading_copilot.db'
 
 # Thresholds for verdict (when no specific target/SL)
 WIN_THRESHOLD_PCT = 2.0      # +2% = WIN
@@ -169,14 +170,34 @@ def determine_verdict(prediction, outcome_data):
 
 def evaluate_pending_outcomes(verbose=True):
     """Main function: evaluate all pending outcomes"""
-    
-    if not DB_PATH.exists():
-        print(f"[ERROR] Database not found: {DB_PATH}")
-        return
-    
-    conn = sqlite3.connect(DB_PATH)
+    db_path = resolve_db_path()
+    print("=" * 60)
+    print("OUTCOME TRACKER v2")
+    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"DB path: {db_path}")
+    print("=" * 60)
+
+    if not Path(db_path).exists():
+        found_path, pred_count = find_predictions_db()
+        if found_path:
+            db_path = found_path
+            print(f"[INFO] Resolved alternate DB: {db_path} ({pred_count} predictions)")
+        else:
+            print(f"[ERROR] Database not found: {db_path}")
+            print("No predictions to evaluate")
+            return
+
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
+    cursor.execute('SELECT COUNT(*) FROM predictions')
+    total_predictions = cursor.fetchone()[0]
+    print(f"Total predictions in DB: {total_predictions}")
+    if total_predictions == 0:
+        print("No predictions to evaluate")
+        conn.close()
+        return
     
     # Get all pending outcomes that link to predictions
     cursor.execute('''
@@ -194,18 +215,14 @@ def evaluate_pending_outcomes(verbose=True):
     ''')
     
     pending = [dict(r) for r in cursor.fetchall()]
-    
-    print("=" * 60)
-    print(f"OUTCOME TRACKER v2")
-    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 60)
+
     print(f"\nFound {len(pending)} PENDING outcomes to evaluate")
-    
+
     if not pending:
-        print("Nothing to evaluate!")
+        print("No predictions to evaluate")
         conn.close()
         return
-    
+
     today = datetime.now().date()
     stats = {'evaluated': 0, 'wins': 0, 'losses': 0, 'neutrals': 0, 'still_pending': 0, 'errors': 0}
     
@@ -372,11 +389,11 @@ def evaluate_pending_outcomes(verbose=True):
 
 def evaluate_signals_outcomes(verbose=True):
     """Also evaluate scanner signal outcomes"""
-    
-    if not DB_PATH.exists():
+    db_path = resolve_db_path()
+    if not Path(db_path).exists():
         return
-    
-    conn = sqlite3.connect(DB_PATH)
+
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     

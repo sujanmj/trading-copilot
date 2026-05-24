@@ -117,12 +117,49 @@ def _dict(value):
     return value if isinstance(value, dict) else {}
 
 
-def _join_list(items, default='None identified'):
+def _join_list(items, default='Not identified'):
     if not isinstance(items, list):
         return default
     cleaned = [_text(x, '') for x in items]
     cleaned = [x for x in cleaned if x and x != 'N/A']
     return ', '.join(cleaned) if cleaned else default
+
+
+def normalize_intel(intel):
+    """Map old and new unified_intelligence.json field names to canonical keys."""
+    if not intel or intel.get('error'):
+        return {}
+
+    mood = _dict(intel.get('market_mood'))
+    if intel.get('market_bias') and not mood.get('global_mood'):
+        mood['global_mood'] = intel.get('market_bias')
+    if intel.get('confidence_score') and not mood.get('confidence_level'):
+        mood['confidence_level'] = intel.get('confidence_score')
+
+    summary = intel.get('executive_summary')
+    if summary is None:
+        summary = intel.get('analysis')
+
+    opps = intel.get('top_opportunities')
+    if opps is None:
+        opps = intel.get('opportunities')
+
+    risks = intel.get('risks_and_avoids')
+    if risks is None:
+        risks = intel.get('risks')
+
+    return {
+        'generation_time': intel.get('generation_time') or intel.get('timestamp'),
+        'sources_used': intel.get('sources_used'),
+        'executive_summary': summary,
+        'government_impact': _dict(intel.get('government_impact')),
+        'market_mood': mood,
+        'sector_rotation': _dict(intel.get('sector_rotation')),
+        'action_plan': intel.get('action_plan'),
+        'self_calibration': intel.get('self_calibration'),
+        'top_opportunities': _list(opps),
+        'risks_and_avoids': _list(risks),
+    }
 
 # ============================================================
 # FORMATTING HELPERS FOR JSON
@@ -131,7 +168,7 @@ def _join_list(items, default='None identified'):
 def format_opps(opps_list):
     opps_list = _list(opps_list)
     if not opps_list:
-        return "<i>No opportunities found in analysis.</i>"
+        return "<i>No signals yet</i>"
     res = []
     for i, o in enumerate(opps_list, 1):
         o = _dict(o)
@@ -164,6 +201,7 @@ def format_risks(risks_list):
 # ============================================================
 
 def build_msg1_header(intel):
+    intel = normalize_intel(intel)
     ts_str = _text(intel.get('generation_time'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     mood = _dict(intel.get('market_mood'))
     confidence = _text(mood.get('confidence_level'), 'N/A')
@@ -181,7 +219,8 @@ def build_msg1_header(intel):
 
 
 def build_msg2_summary_govt(intel):
-    summary = _text(intel.get('executive_summary'), 'No summary available.')
+    intel = normalize_intel(intel)
+    summary = _text(intel.get('executive_summary'), 'Analysis pending...')
     govt = _dict(intel.get('government_impact'))
 
     govt_text = f"<b>Impact:</b> {_text(govt.get('summary'), 'No government impact data available.')}\n"
@@ -191,6 +230,7 @@ def build_msg2_summary_govt(intel):
 
 
 def build_msg3_scanner_sentiment(intel):
+    intel = normalize_intel(intel)
     mood = _dict(intel.get('market_mood'))
 
     parts = [
@@ -202,6 +242,7 @@ def build_msg3_scanner_sentiment(intel):
     return "\n\n".join(parts)
 
 def build_msg4_calibration_opps_top5(intel):
+    intel = normalize_intel(intel)
     cal = _text(intel.get('self_calibration'), 'No calibration data available.')
     opps = _list(intel.get('top_opportunities'))
 
@@ -211,6 +252,7 @@ def build_msg4_calibration_opps_top5(intel):
 
 
 def build_msg5_opps_top10_risks(intel):
+    intel = normalize_intel(intel)
     opps = _list(intel.get('top_opportunities'))
     risks = _list(intel.get('risks_and_avoids'))
 
@@ -221,6 +263,7 @@ def build_msg5_opps_top10_risks(intel):
 
 
 def build_msg6_sectors_global_action(intel):
+    intel = normalize_intel(intel)
     sectors = _dict(intel.get('sector_rotation'))
     bullish = _join_list(sectors.get('bullish'))
     bearish = _join_list(sectors.get('bearish'))
@@ -240,7 +283,7 @@ def build_msg6_sectors_global_action(intel):
 
 
 def push_full_brain():
-    intel = load_intel()
+    intel = normalize_intel(load_intel())
     if not intel:
         send_message("❌ No brain data yet. Run /refresh first.")
         return False
@@ -271,37 +314,39 @@ def push_full_brain():
 # ============================================================
 
 def push_summary():
-    intel = load_intel()
-    if intel: send_chunked(build_msg2_summary_govt(intel))
+    intel = normalize_intel(load_intel())
+    if intel:
+        send_chunked(build_msg2_summary_govt(intel))
+
 
 def push_opps():
-    intel = load_intel()
+    intel = normalize_intel(load_intel())
     if intel:
         opps = _list(intel.get('top_opportunities'))
         send_chunked(f"💎 <b>TOP OPPORTUNITIES</b>\n\n{format_opps(opps)}")
 
 
 def push_risks():
-    intel = load_intel()
+    intel = normalize_intel(load_intel())
     if intel:
         risks = _list(intel.get('risks_and_avoids'))
         send_chunked(f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}")
 
 
 def push_action():
-    intel = load_intel()
+    intel = normalize_intel(load_intel())
     if intel:
         send_chunked(f"🚀 <b>ACTION PLAN</b>\n\n{_text(intel.get('action_plan'), 'No action plan provided.')}")
 
 
 def push_calibration():
-    intel = load_intel()
+    intel = normalize_intel(load_intel())
     if intel:
         send_chunked(f"🎯 <b>SELF-CALIBRATION</b>\n\n{_text(intel.get('self_calibration'), 'No calibration data available.')}")
 
 
 def push_sectors():
-    intel = load_intel()
+    intel = normalize_intel(load_intel())
     if intel:
         sectors = _dict(intel.get('sector_rotation'))
         bullish = _join_list(sectors.get('bullish'))
