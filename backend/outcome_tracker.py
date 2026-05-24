@@ -9,7 +9,7 @@ Logic:
 - Determine WIN/LOSS/NEUTRAL based on:
   * For 'opportunity' (BUY): target hit = WIN, stop hit = LOSS
   * For 'risk' (AVOID): if stock dropped = WIN (correctly avoided), if rose = LOSS
-- Updates outcomes table in trading_history.db
+- Updates outcomes table in trading_copilot.db
 """
 
 import os
@@ -27,7 +27,7 @@ except Exception:
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR.parent / 'data'
-DB_PATH = DATA_DIR / 'trading_history.db'
+DB_PATH = Path(__file__).parent.parent / 'data' / 'trading_copilot.db'
 
 # Thresholds for verdict (when no specific target/SL)
 WIN_THRESHOLD_PCT = 2.0      # +2% = WIN
@@ -225,16 +225,30 @@ def evaluate_pending_outcomes(verbose=True):
             continue
         
         days_elapsed = (today - pred_date).days
-        
+
         if verbose:
             print(f"\n[{i}/{len(pending)}] {ticker} (predicted {pred_date_str}, {days_elapsed}d ago)")
-        
-        # Skip if too soon (need at least 1 day)
-        if days_elapsed < 0:
+
+        # Need at least 1 full trading day before evaluating
+        if days_elapsed < 1:
             if verbose:
-                print(f"  [SKIP] Too recent ({days_elapsed} days)")
+                print("  [SKIP] Too recent — waiting for 1d price data")
             stats['still_pending'] += 1
             continue
+
+        # Backfill missing entry price from market data on prediction date
+        if not entry:
+            entry, _ = fetch_price_for_date(ticker, pred_date)
+            if entry:
+                cursor.execute(
+                    'UPDATE outcomes SET entry_price = ? WHERE id = ?',
+                    (entry, outcome['outcome_id'])
+                )
+            else:
+                if verbose:
+                    print("  [SKIP] No entry price available")
+                stats['errors'] += 1
+                continue
         
         # Fetch prices for 1d, 3d, 7d windows
         price_1d, date_1d = fetch_price_for_date(ticker, pred_date + timedelta(days=1))
@@ -274,12 +288,19 @@ def evaluate_pending_outcomes(verbose=True):
         }
         
         verdict_result = determine_verdict(outcome, outcome_data)
-        
+
         if isinstance(verdict_result, tuple):
             verdict, target_hit, stop_hit = verdict_result
         else:
             verdict = verdict_result
             target_hit, stop_hit = 0, 0
+
+        # Keep PENDING if we still lack usable price movement data
+        if verdict == 'PENDING' and change_1d is None and change_3d is None and change_7d is None:
+            if verbose:
+                print("  [SKIP] Price data not available yet")
+            stats['still_pending'] += 1
+            continue
         
         # Update DB
         cursor.execute('''

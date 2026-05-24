@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from db_manager import insert_prediction, insert_signal, init_db
+from db_manager import insert_prediction, insert_signal, init_db, DB_PATH
 
 try:
     from nse_top500 import get_all_tickers, get_ticker_to_sector_map
@@ -111,7 +111,6 @@ def safe_print(text):
 DATA_DIR = Path(__file__).parent.parent / 'data'
 INTELLIGENCE_FILE = DATA_DIR / 'unified_intelligence.json'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
-DB_PATH = DATA_DIR / 'trading_history.db'
 
 COMMODITY_TICKERS = {
     'GOLDBEES', 'SILVERBEES', 'HDFCGOLD', 'SBIGOLD', 'AXISGOLD',
@@ -228,16 +227,15 @@ def fetch_live_price(ticker):
 # DEDUPLICATION
 # ============================================================
 
-def is_duplicate_prediction(ticker, prediction_date, category, run_type):
-    """Check if this exact prediction already exists"""
+def is_duplicate_prediction(ticker, recommendation, prediction_date):
+    """Skip if same ticker + recommendation + date already exists."""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT COUNT(*) FROM predictions 
-            WHERE ticker = ? AND prediction_date = ? 
-              AND category = ? AND run_type = ?
-        ''', (ticker, prediction_date, category, run_type))
+            SELECT COUNT(*) FROM predictions
+            WHERE ticker = ? AND recommendation = ? AND prediction_date = ?
+        ''', (ticker, recommendation, prediction_date))
         count = cursor.fetchone()[0]
         conn.close()
         return count > 0
@@ -489,19 +487,21 @@ def log_predictions_from_intelligence():
 
     for i, opp in enumerate(opportunities, 1):
         ticker = opp.get('symbol')
-        if not is_valid_ticker(ticker): continue
-        
-        # Dedup check
-        if is_duplicate_prediction(ticker, prediction_date, 'opportunity', run_type):
+        if not is_valid_ticker(ticker):
+            continue
+
+        recommendation = normalize_recommendation(opp.get('action', 'BUY'))
+
+        if is_duplicate_prediction(ticker, recommendation, prediction_date):
             skipped_opps += 1
             continue
-            
+
         prediction_data = {
             'prediction_date': prediction_date,
             'run_type': run_type,
             'ticker': ticker,
             'sector': get_sector_for_ticker(ticker),
-            'recommendation': opp.get('action', 'BUY'),
+            'recommendation': recommendation,
             'category': 'opportunity',
             'rank_in_list': i,
             'entry_price': parse_price(str(opp.get('entry_zone', ''))),
@@ -528,18 +528,21 @@ def log_predictions_from_intelligence():
 
     for i, risk in enumerate(risks, 1):
         ticker = risk.get('symbol')
-        if not is_valid_ticker(ticker): continue
-        
-        if is_duplicate_prediction(ticker, prediction_date, 'risk', run_type):
+        if not is_valid_ticker(ticker):
+            continue
+
+        recommendation = 'AVOID'
+
+        if is_duplicate_prediction(ticker, recommendation, prediction_date):
             skipped_risks += 1
             continue
-            
+
         risk_data = {
             'prediction_date': prediction_date,
             'run_type': run_type,
             'ticker': ticker,
             'sector': get_sector_for_ticker(ticker),
-            'recommendation': 'AVOID',
+            'recommendation': recommendation,
             'category': 'risk',
             'rank_in_list': i,
             'entry_price': fetch_live_price(ticker),

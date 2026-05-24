@@ -99,28 +99,64 @@ def load_intel():
         safe_print(f"[ERROR] Loading intel: {e}")
         return {}
 
+
+def _text(value, default='N/A'):
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text or text.lower() == 'none':
+        return default
+    return text
+
+
+def _list(value):
+    return value if isinstance(value, list) else []
+
+
+def _dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _join_list(items, default='None identified'):
+    if not isinstance(items, list):
+        return default
+    cleaned = [_text(x, '') for x in items]
+    cleaned = [x for x in cleaned if x and x != 'N/A']
+    return ', '.join(cleaned) if cleaned else default
+
 # ============================================================
 # FORMATTING HELPERS FOR JSON
 # ============================================================
 
 def format_opps(opps_list):
+    opps_list = _list(opps_list)
     if not opps_list:
         return "<i>No opportunities found in analysis.</i>"
     res = []
     for i, o in enumerate(opps_list, 1):
-        icon = "🟢" if str(o.get('action', '')).upper() == "BUY" else "🟡"
-        res.append(f"{i}. {icon} <b>{o.get('symbol', 'UNKNOWN')}</b> [{o.get('action', 'WATCH')}]\n"
-                   f"   💰 Entry: {o.get('entry_zone', 'N/A')} | Tgt: {o.get('target', 'N/A')} | SL: {o.get('stop_loss', 'N/A')}\n"
-                   f"   📊 Conf: <b>{o.get('confidence', 'MEDIUM')}</b>\n"
-                   f"   <i>{o.get('logic', '')}</i>")
+        o = _dict(o)
+        action = _text(o.get('action'), 'WATCH').upper()
+        icon = "🟢" if action == "BUY" else "🟡"
+        res.append(
+            f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b> [{action}]\n"
+            f"   💰 Entry: {_text(o.get('entry_zone'))} | Tgt: {_text(o.get('target'))} | SL: {_text(o.get('stop_loss'))}\n"
+            f"   📊 Conf: <b>{_text(o.get('confidence'), 'MEDIUM')}</b>\n"
+            f"   <i>{_text(o.get('logic'), 'No rationale provided.')}</i>"
+        )
     return "\n\n".join(res)
 
+
 def format_risks(risks_list):
+    risks_list = _list(risks_list)
     if not risks_list:
         return "<i>No risks found in analysis.</i>"
     res = []
     for i, r in enumerate(risks_list, 1):
-        res.append(f"{i}. 🔴 <b>{r.get('symbol', 'UNKNOWN')}</b>\n   <i>{r.get('logic', '')}</i>")
+        r = _dict(r)
+        res.append(
+            f"{i}. 🔴 <b>{_text(r.get('symbol'), 'UNKNOWN')}</b>\n"
+            f"   <i>{_text(r.get('logic'), 'No risk rationale provided.')}</i>"
+        )
     return "\n\n".join(res)
 
 # ============================================================
@@ -128,62 +164,68 @@ def format_risks(risks_list):
 # ============================================================
 
 def build_msg1_header(intel):
-    ts_str = intel.get('generation_time', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-    mood = intel.get('market_mood', {})
-    confidence = mood.get('confidence_level', 'N/A')
-    
+    ts_str = _text(intel.get('generation_time'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    mood = _dict(intel.get('market_mood'))
+    confidence = _text(mood.get('confidence_level'), 'N/A')
+    sources_used = intel.get('sources_used')
+    sources_text = str(sources_used) if sources_used is not None else '8'
+
     return f"""🧠 <b>UNIFIED MARKET INTELLIGENCE</b>
 ━━━━━━━━━━━━━━━━━━━━
 
 📅 <i>{ts_str}</i>
 📊 System Confidence: <b>{confidence}</b>
-📡 Sources Parsed: <b>{intel.get('sources_used', 8)}/8</b>
+📡 Sources Parsed: <b>{sources_text}/8</b>
 
 <i>📨 Sending full JSON-parsed analysis...</i>"""
 
+
 def build_msg2_summary_govt(intel):
-    summary = intel.get('executive_summary', 'No summary available.')
-    govt = intel.get('government_impact', {})
-    
-    govt_text = f"<b>Impact:</b> {govt.get('summary', 'None')}\n"
-    govt_text += f"<b>Confidence:</b> {govt.get('confidence_score', 'N/A')}"
-    
+    summary = _text(intel.get('executive_summary'), 'No summary available.')
+    govt = _dict(intel.get('government_impact'))
+
+    govt_text = f"<b>Impact:</b> {_text(govt.get('summary'), 'No government impact data available.')}\n"
+    govt_text += f"<b>Confidence:</b> {_text(govt.get('confidence_score'), 'N/A')}"
+
     return f"📋 <b>EXECUTIVE SUMMARY</b>\n\n{summary}\n\n━━━━━━━━━━━━━━━━━━━━\n\n🏛️ <b>GOVT POLICY IMPACT</b>\n\n{govt_text}"
 
+
 def build_msg3_scanner_sentiment(intel):
-    mood = intel.get('market_mood', {})
-    
+    mood = _dict(intel.get('market_mood'))
+
     parts = [
         "💬 <b>MARKET MOOD & SENTIMENT</b>",
-        f"🌍 <b>Global:</b> {mood.get('global_mood', 'N/A')}",
-        f"🇮🇳 <b>India:</b> {mood.get('india_outlook', 'N/A')}",
-        f"🛒 <b>Retail:</b> {mood.get('retail_mood', 'N/A')}"
+        f"🌍 <b>Global:</b> {_text(mood.get('global_mood'), 'Unknown')}",
+        f"🇮🇳 <b>India:</b> {_text(mood.get('india_outlook'), 'Unknown')}",
+        f"🛒 <b>Retail:</b> {_text(mood.get('retail_mood'), 'Unknown')}",
     ]
     return "\n\n".join(parts)
 
 def build_msg4_calibration_opps_top5(intel):
-    cal = intel.get('self_calibration', 'No calibration data available.')
-    opps = intel.get('top_opportunities', [])
-    
+    cal = _text(intel.get('self_calibration'), 'No calibration data available.')
+    opps = _list(intel.get('top_opportunities'))
+
     opps_text = format_opps(opps[:5])
-    
+
     return f"🎯 <b>SELF-CALIBRATION</b>\n\n{cal}\n\n━━━━━━━━━━━━━━━━━━━━\n\n💎 <b>TOP OPPORTUNITIES (1-5)</b>\n\n{opps_text}"
 
+
 def build_msg5_opps_top10_risks(intel):
-    opps = intel.get('top_opportunities', [])
-    risks = intel.get('risks_and_avoids', [])
-    
+    opps = _list(intel.get('top_opportunities'))
+    risks = _list(intel.get('risks_and_avoids'))
+
     opps_text = format_opps(opps[5:10]) if len(opps) > 5 else "<i>No additional opportunities.</i>"
     risks_text = format_risks(risks)
-    
+
     return f"💎 <b>TOP OPPORTUNITIES (6-10)</b>\n\n{opps_text}\n\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{risks_text}"
 
+
 def build_msg6_sectors_global_action(intel):
-    sectors = intel.get('sector_rotation', {})
-    bullish = ", ".join(sectors.get('bullish', ['None']))
-    bearish = ", ".join(sectors.get('bearish', ['None']))
-    action = intel.get('action_plan', 'No action plan provided.')
-    
+    sectors = _dict(intel.get('sector_rotation'))
+    bullish = _join_list(sectors.get('bullish'))
+    bearish = _join_list(sectors.get('bearish'))
+    action = _text(intel.get('action_plan'), 'No action plan provided.')
+
     parts = [
         "🔄 <b>SECTOR ROTATION</b>",
         f"🟢 <b>Bullish:</b> {bullish}",
@@ -192,7 +234,7 @@ def build_msg6_sectors_global_action(intel):
         "🚀 <b>ACTION PLAN</b>",
         action,
         "━━━━━━━━━━━━━━━━━━━━",
-        "📌 <b>QUICK COMMANDS</b>\n\n/brain — Full brain\n/elite — ML Filtered Setups\n/opps — Opportunities\n/risks — Avoid list\n/action — Action plan\n/sectors — Sector rotation\n\n<i>Brain auto-pushes after each strategic run.</i>"
+        "📌 <b>QUICK COMMANDS</b>\n\n/brain — Full brain\n/elite — ML Filtered Setups\n/opps — Opportunities\n/risks — Avoid list\n/action — Action plan\n/sectors — Sector rotation\n\n<i>Brain auto-pushes after each strategic run.</i>",
     ]
     return "\n\n".join(parts)
 
@@ -234,30 +276,36 @@ def push_summary():
 
 def push_opps():
     intel = load_intel()
-    if intel: 
-        opps = intel.get('top_opportunities', [])
+    if intel:
+        opps = _list(intel.get('top_opportunities'))
         send_chunked(f"💎 <b>TOP OPPORTUNITIES</b>\n\n{format_opps(opps)}")
+
 
 def push_risks():
     intel = load_intel()
-    if intel: 
-        risks = intel.get('risks_and_avoids', [])
+    if intel:
+        risks = _list(intel.get('risks_and_avoids'))
         send_chunked(f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}")
+
 
 def push_action():
     intel = load_intel()
-    if intel: send_chunked(f"🚀 <b>ACTION PLAN</b>\n\n{intel.get('action_plan', 'No plan found.')}")
+    if intel:
+        send_chunked(f"🚀 <b>ACTION PLAN</b>\n\n{_text(intel.get('action_plan'), 'No action plan provided.')}")
+
 
 def push_calibration():
     intel = load_intel()
-    if intel: send_chunked(f"🎯 <b>SELF-CALIBRATION</b>\n\n{intel.get('self_calibration', 'No calibration data.')}")
+    if intel:
+        send_chunked(f"🎯 <b>SELF-CALIBRATION</b>\n\n{_text(intel.get('self_calibration'), 'No calibration data available.')}")
+
 
 def push_sectors():
     intel = load_intel()
-    if intel: 
-        sectors = intel.get('sector_rotation', {})
-        bullish = ", ".join(sectors.get('bullish', ['None']))
-        bearish = ", ".join(sectors.get('bearish', ['None']))
+    if intel:
+        sectors = _dict(intel.get('sector_rotation'))
+        bullish = _join_list(sectors.get('bullish'))
+        bearish = _join_list(sectors.get('bearish'))
         send_chunked(f"🔄 <b>SECTOR ROTATION</b>\n\n🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}")
 
 
