@@ -49,12 +49,29 @@ except ImportError as e:
     build_memory_summary = None
     print(f"[FAIL] learning_engine not available: {e}")
 
-env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
-if DOTENV_AVAILABLE and env_path.exists():
-    load_dotenv(env_path, override=False)
-    print(f"[OK] loaded env from {env_path}")
-else:
-    print(f"[WARN] env file missing or dotenv unavailable: {env_path}")
+def _load_env_keys():
+    """Railway: /app/config/keys.env or os.environ. Local: config/keys.env."""
+    loaded = False
+    if DOTENV_AVAILABLE:
+        for env_path in (
+            Path('/app/config/keys.env'),
+            Path(__file__).parent.parent / 'config' / 'keys.env',
+        ):
+            if env_path.exists():
+                load_dotenv(env_path, override=False)
+                print(f"[OK] loaded env from {env_path}")
+                loaded = True
+                break
+    has_keys = bool(
+        os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+    )
+    if not loaded and has_keys:
+        print("[OK] API keys present in environment (no keys.env file needed)")
+    elif not loaded and not has_keys:
+        print("[INFO] No keys.env file and no API keys in environment yet")
+
+
+_load_env_keys()
 
 
 def load_json_safe(filepath):
@@ -366,12 +383,30 @@ RULES:
         traceback.print_exc()
         return None
 
-    if not result or not result.get('success'):
+    if isinstance(result, str):
+        print("  [WARN] ask_ai returned str — wrapping as dict")
+        result = {
+            'success': True,
+            'text': result,
+            'model': 'unknown',
+            'provider': 'unknown',
+            'estimated_cost': 0,
+            'error': None,
+        }
+
+    if not isinstance(result, dict):
+        print(f"  [ERROR] ask_ai returned invalid type: {type(result).__name__}")
+        return None
+
+    if not result.get('success'):
         print(f"  ERROR: {result.get('error', 'Unknown')}")
         return None
 
-    print(f"  [AI] Used: {result['model']} ({result['provider']})")
-    ai_text = result['text']
+    print(f"  [AI] Used: {result.get('model', '?')} ({result.get('provider', '?')})")
+    ai_text = result.get('text') or ''
+    if not ai_text:
+        print("  [ERROR] AI returned empty text")
+        return None
 
     clean_text = ai_text.strip()
     if "```json" in clean_text:

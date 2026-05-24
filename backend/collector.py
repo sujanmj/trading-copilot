@@ -122,34 +122,54 @@ INDIA_SYMBOLS = {
     'LT': 'LT.NS',
     'AXISBANK': 'AXISBANK.NS',
     'KOTAKBANK': 'KOTAKBANK.NS',
-    'TATAMOTORS': 'TATAMOTORS.NS',
+    'TATAMOTORS': 'TATAMOTORS.BO',
     'MARUTI': 'MARUTI.NS',
 }
 
 OUTPUT_FILE = ROOT_DIR / 'data' / 'latest_market_data.json'
 
 
+def _fetch_yfinance_once(name, ticker):
+    """Single yfinance attempt for one ticker symbol."""
+    import yfinance as yf
+    print(f"  [FETCH] {name} ({ticker}) via yfinance...")
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period='5d')
+    if hist is None or hist.empty or len(hist) < 1:
+        print(f"  [FAIL] {name} ({ticker}): no yfinance history")
+        return None
+    close = float(hist['Close'].iloc[-1])
+    prev = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else close
+    change_pct = ((close - prev) / prev * 100) if prev else 0.0
+    print(f"  [OK] {name} ({ticker}): Rs.{close:,.2f} ({change_pct:+.2f}%)")
+    return {
+        'price': round(close, 2),
+        'change_percent': round(change_pct, 2),
+        'source': f'yfinance:{ticker}',
+    }
+
+
 def fetch_symbol_yfinance(name, ticker):
-    """Fetch latest price via yfinance with explicit logging."""
+    """Fetch via yfinance; retry with .BO if .NS fails (404 / empty data)."""
     try:
-        import yfinance as yf
-        print(f"  [FETCH] {name} ({ticker}) via yfinance...")
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period='5d')
-        if hist is None or hist.empty or len(hist) < 1:
-            print(f"  [FAIL] {name}: no yfinance history")
-            return None
-        close = float(hist['Close'].iloc[-1])
-        prev = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else close
-        change_pct = ((close - prev) / prev * 100) if prev else 0.0
-        print(f"  [OK] {name}: Rs.{close:,.2f} ({change_pct:+.2f}%)")
-        return {
-            'price': round(close, 2),
-            'change_percent': round(change_pct, 2),
-            'source': 'yfinance',
-        }
+        row = _fetch_yfinance_once(name, ticker)
+        if row:
+            return row
+        if ticker.endswith('.NS'):
+            bo_ticker = ticker[:-3] + '.BO'
+            print(f"  [RETRY] {name}: .NS failed, trying BSE {bo_ticker}...")
+            return _fetch_yfinance_once(name, bo_ticker)
+        return None
     except Exception as e:
-        print(f"  [FAIL] {name} yfinance error: {e}")
+        err = str(e).lower()
+        print(f"  [FAIL] {name} ({ticker}) yfinance error: {e}")
+        if ticker.endswith('.NS') or '404' in err or 'not found' in err:
+            bo_ticker = ticker.replace('.NS', '.BO') if '.NS' in ticker else f"{ticker}.BO"
+            try:
+                print(f"  [RETRY] {name}: trying BSE {bo_ticker}...")
+                return _fetch_yfinance_once(name, bo_ticker)
+            except Exception as e2:
+                print(f"  [FAIL] {name} ({bo_ticker}) also failed: {e2}")
         return None
 
 
@@ -172,8 +192,8 @@ def collect_india_market_data():
             continue
 
         # Angel One fallback for NSE equities (not indices)
-        clean = ticker.replace('.NS', '').replace('^', '')
-        if '.NS' in ticker or ticker.endswith('-EQ'):
+        clean = ticker.replace('.NS', '').replace('.BO', '').replace('^', '')
+        if '.NS' in ticker or '.BO' in ticker or ticker.endswith('-EQ'):
             print(f"  [RETRY] {name} via Angel One...")
             angel_price = fetch_accurate_nse_price(clean)
             if angel_price and angel_price > 0:

@@ -15,11 +15,13 @@ from collections import Counter
 import re
 
 RSS_FEEDS = {
-    'Moneycontrol (Top News)': 'https://www.moneycontrol.com/rss/MCtopnews.xml',
-    'Economic Times (Markets)': 'https://economictimes.indiatimes.com/markets/rssfeeds/2146842.cms',
+    'Economic Times (Markets)': 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
+    'Economic Times (Markets Alt)': 'https://economictimes.indiatimes.com/markets/rssfeeds/2146842.cms',
+    'Business Standard Markets': 'https://www.business-standard.com/rss/markets-106.rss',
+    'NDTV Profit': 'https://feeds.feedburner.com/ndtvprofit-latest',
     'LiveMint (Companies)': 'https://www.livemint.com/rss/companies',
     'Yahoo Finance (Global US)': 'https://finance.yahoo.com/news/rssindex',
-    'Investing.com (Global Macro)': 'https://in.investing.com/rss/news_285.rss'
+    'Investing.com (Global Macro)': 'https://in.investing.com/rss/news_285.rss',
 }
 
 DATA_DIR = Path(__file__).parent.parent / 'data'

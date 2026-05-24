@@ -37,8 +37,6 @@ GOVT_SOURCES = {
     'Business Standard Markets': 'https://www.business-standard.com/rss/markets-106.rss',
     'LiveMint Economy': 'https://www.livemint.com/rss/economy',
     'LiveMint Markets': 'https://www.livemint.com/rss/markets',
-    'Financial Express Markets': 'https://www.financialexpress.com/market/feed/',
-    'Hindu BusinessLine': 'https://www.thehindubusinessline.com/markets/?service=rss',
 }
 
 

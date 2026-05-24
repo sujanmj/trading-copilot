@@ -2,6 +2,8 @@
 history_exporter.py v2.2 - Removed 30d (replaced with Custom in GUI)
 """
 
+print("[HISTORY] history_exporter.py starting...")
+
 import os
 import sys
 import json
@@ -402,4 +404,17 @@ def build_custom_period(start_date_str, end_date_str):
 
 
 if __name__ == "__main__":
-    build_export()
+    print("[HISTORY] history_exporter.py __main__ running build_export()")
+    try:
+        build_export()
+    except Exception as e:
+        import traceback
+        print(f"[HISTORY] FATAL: {e}")
+        traceback.print_exc()
+        try:
+            OUTPUT_FILE.parent.mkdir(exist_ok=True)
+            with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+                json.dump(empty_history_output(), f, indent=2, default=str, ensure_ascii=False)
+            print(f"[HISTORY] Wrote emergency empty history to {OUTPUT_FILE}")
+        except Exception:
+            pass

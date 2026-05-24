@@ -6,6 +6,8 @@ Generates: data/stats_data.json
 Auto-runs after outcome_tracker (or manually)
 """
 
+print("[STATS] stats_exporter.py starting...")
+
 import os
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
@@ -292,6 +294,7 @@ def export_stats():
 
 
 if __name__ == "__main__":
+    print("[STATS] stats_exporter.py __main__ running export_stats()")
     try:
         export_stats()
     except Exception as e:
@@ -299,5 +302,10 @@ if __name__ == "__main__":
         safe_print(f"[FATAL] {e}")
         try:
             traceback.print_exc()
+        except Exception:
+            pass
+        try:
+            write_stats_output(empty_stats_output())
+            safe_print(f"[STATS] Wrote emergency empty stats to {OUTPUT_FILE}")
         except Exception:
             pass
