@@ -13,7 +13,7 @@ KEY FILES:
 - backend/ai_router.py → Routes between Gemini/Claude/Haiku
 - backend/telegram_brain_pusher.py → Sends alerts to Telegram
 - backend/telegram_listener.py → Handles Telegram bot commands
-- backend/api_server.py → FastAPI server on Railway
+- backend/api/api_server.py → FastAPI server on Railway (uvicorn entry)
 - backend/collector.py → Fetches NSE stock prices
 - backend/stock_scanner.py → Scans NSE 500 for signals
 - backend/prediction_logger.py → Logs AI predictions to SQLite
@@ -41,7 +41,7 @@ CRITICAL RULES:
 
 DEPLOYMENT:
 - Platform: Railway
-- Entry: backend/api_server.py
+- Entry: uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT
 - Background threads: master_scheduler.py + telegram_listener.py
 - Volume: mounted at data directory
 

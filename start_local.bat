@@ -26,7 +26,7 @@ mkdir data 2>nul
 mkdir logs 2>nul
 mkdir config 2>nul
 
-start "Copilot-Backend-Local" cmd /k "set PYTHONPATH=.&& %PYTHON% -m backend.api_server"
+start "Copilot-Backend-Local" cmd /k "set TZ=Asia/Kolkata&& %PYTHON% -m uvicorn backend.api.api_server:app --host 127.0.0.1 --port %PORT%"
 timeout /t 5 /nobreak >nul
 where npm >nul 2>&1 && start "Copilot-GUI" cmd /k "set API_BASE_URL=http://localhost:8000&& npm start"
 echo Local dev started. Set API_BASE_URL=http://localhost:8000 in config\keys.env for GUI.

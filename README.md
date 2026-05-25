@@ -23,7 +23,7 @@ AI-powered Indian stock market intelligence system with real-time scanner, multi
 ┌─────────────────────────────────────────────────────────────┐
 │ RAILWAY.APP (24/7 Cloud) │
 │ ┌─────────────────────────────────────────────────────┐ │
-│ │ api_server.py (FastAPI - main process) │ │
+│ │ backend/api/api_server.py (FastAPI - main process) │ │
 │ │ ├── HTTP endpoints (X-API-Key auth) │ │
 │ │ ├── Background thread → master_scheduler.py │ │
 │ │ └── Background thread → telegram_listener.py │ │
@@ -50,7 +50,7 @@ AI-powered Indian stock market intelligence system with real-time scanner, multi
 ## 📦 Backend Modules
 
 ### Orchestration
-- `api_server.py` — FastAPI server + scheduler/listener thread spawner (Railway entry point)
+- `backend/api/api_server.py` — FastAPI server + scheduler/listener thread spawner (Railway entry point)
 - `master_scheduler.py` v7.2 — Orchestrates 5 strategic + 11 intraday runs/day with auto brain push
 - `telegram_listener.py` v3 — Polls Telegram for 18+ commands (brain, scan, ask, etc.)
 - `telegram_brain_pusher.py` — Reads brain JSON and sends 6-message analysis to phone
@@ -127,7 +127,7 @@ git push origin main
 #    - Select repo
 #    - Add persistent volume mounted at /app/data
 #    - Set all environment variables from keys.env
-#    - Set start command: python backend/api_server.py
+#    - Start command (Procfile): uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT
 
 # 3. Set billing limit to $15/month for safety
 
@@ -208,7 +208,7 @@ __pycache__/
 
 trading-copilot/
 ├── backend/
-│   ├── api_server.py              # FastAPI + thread spawner (Railway entry)
+│   ├── api/api_server.py          # FastAPI + thread spawner (Railway entry)
 │   ├── master_scheduler.py        # v7.2 - Orchestrator with brain push
 │   ├── master_analyzer.py         # v7 - Memory-augmented AI
 │   ├── learning_engine.py         # RAG calibration logic
