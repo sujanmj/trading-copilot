@@ -1,1 +1,1 @@
-web: TZ=Asia/Kolkata python backend/api_server.py
+web: TZ=Asia/Kolkata PYTHONPATH=. uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT
