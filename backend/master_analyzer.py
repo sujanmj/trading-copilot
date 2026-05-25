@@ -21,6 +21,8 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from json_io import atomic_write_json
+
 try:
     from dotenv import load_dotenv
     DOTENV_AVAILABLE = True
@@ -53,25 +55,18 @@ except ImportError as e:
     print(f"[FAIL] learning_engine not available: {e}")
 
 def _load_env_keys():
-    """Railway: /app/config/keys.env or os.environ. Local: config/keys.env."""
-    loaded = False
-    if DOTENV_AVAILABLE:
-        for env_path in (
-            Path('/app/config/keys.env'),
-            Path(__file__).parent.parent / 'config' / 'keys.env',
-        ):
-            if env_path.exists():
-                load_dotenv(env_path, override=False)
-                print(f"[OK] loaded env from {env_path}")
-                loaded = True
-                break
-    has_keys = bool(
-        os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('GOOGLE_API_KEY')
-    )
-    if not loaded and has_keys:
-        print("[OK] API keys present in environment (no keys.env file needed)")
-    elif not loaded and not has_keys:
-        print("[INFO] No keys.env file and no API keys in environment yet")
+    """Load env via config (Railway /app/config/keys.env or config/keys.env)."""
+    from config import load_env, get_env, IS_RAILWAY, CONFIG_DIR
+    load_env()
+    has_keys = bool(get_env('ANTHROPIC_API_KEY') or get_env('GOOGLE_API_KEY') or get_env('GEMINI_API_KEY'))
+    if IS_RAILWAY:
+        print("[OK] Railway deployment — using platform environment")
+    elif (CONFIG_DIR / 'keys.env').exists():
+        print(f"[OK] loaded env from {CONFIG_DIR / 'keys.env'}")
+    elif has_keys:
+        print("[OK] API keys present in environment")
+    else:
+        print("[INFO] No API keys in environment yet")
 
 
 _load_env_keys()
@@ -773,11 +768,9 @@ def run_master_analysis():
         output.update(analysis_dict)
 
         data_dir = Path(__file__).parent.parent / 'data'
-        data_dir.mkdir(parents=True, exist_ok=True)
         output_file = data_dir / 'unified_intelligence.json'
 
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+        atomic_write_json(output_file, output)
 
         print(f"\n[SAVED] {output_file}")
         return output
@@ -789,12 +782,24 @@ def run_master_analysis():
 
 
 if __name__ == "__main__":
+    from process_lock import try_acquire_lock, release_lock
+    from local_logging import setup_logger
+
+    analyzer_log = setup_logger('analyzer', 'analyzer.log')
+
+    if not try_acquire_lock('master_analyzer'):
+        print("[SKIP] master_analyzer already running")
+        analyzer_log.warning("Duplicate run blocked by process lock")
+        sys.exit(0)
+
     print("Starting master analyzer v10...")
+    analyzer_log.info("master_analyzer starting")
     result = None
     try:
         result = run_master_analysis()
         if result:
             print("[DONE] Analysis succeeded")
+            analyzer_log.info("Analysis succeeded")
             try:
                 from context_snapshot import capture_snapshot, init_context_table
                 init_context_table()
@@ -805,7 +810,11 @@ if __name__ == "__main__":
                 traceback.print_exc()
         else:
             print("[FAILED] Analysis returned None — check logs above")
+            analyzer_log.error("Analysis returned None")
     except Exception as e:
         print(f"[FATAL] Unhandled error in __main__: {e}")
+        analyzer_log.exception("Fatal error: %s", e)
         traceback.print_exc()
+    finally:
+        release_lock('master_analyzer')
     sys.exit(0 if result else 1)

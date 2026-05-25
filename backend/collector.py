@@ -5,6 +5,7 @@ import requests
 from pathlib import Path
 from dotenv import load_dotenv
 from SmartApi import SmartConnect
+from json_io import atomic_write_json
 
 # Resolve the absolute path to config/keys.env from the current backend directory context
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -201,8 +202,7 @@ def collect_india_market_data():
     }
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+    atomic_write_json(OUTPUT_FILE, output)
 
     print("-" * 60)
     print(f"[SAVED] {OUTPUT_FILE}")

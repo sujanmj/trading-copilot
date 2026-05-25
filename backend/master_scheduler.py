@@ -100,14 +100,23 @@ schedule.every(30).minutes.do(run_all_collectors_parallel)
 # BOOT
 # ============================================================
 if __name__ == "__main__":
+    sys.path.insert(0, str(BACKEND_DIR))
+    from process_lock import try_acquire_lock, release_lock
+
+    if not try_acquire_lock('master_scheduler'):
+        print("[SKIP] master_scheduler already running")
+        sys.exit(0)
+
     print("="*60)
     print("TRADING COPILOT - MASTER ORCHESTRATOR LAUNCHED")
     print(f"Boot Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}")
     print("="*60)
 
-    # On boot: collect + analyze immediately
-    run_full_cycle("Boot Startup")
+    try:
+        run_full_cycle("Boot Startup")
 
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
+    finally:
+        release_lock('master_scheduler')

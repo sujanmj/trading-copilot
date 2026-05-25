@@ -1,6 +1,5 @@
 """
-Shared database discovery for Railway/local environments.
-Finds trading_history.db (primary) or trading_copilot.db via known paths or os.walk.
+Shared database discovery for Railway and standalone environments.
 """
 
 import os
@@ -8,7 +7,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent / 'data'
+from config import DATA_DIR, DB_PATH, IS_RAILWAY, PROJECT_ROOT
 
 SKIP_PREFIXES = ('/proc', '/sys', '/dev')
 
@@ -72,16 +71,28 @@ def collect_db_candidates():
             candidates.append(path)
             seen.add(path)
 
-    for extra in ('/app/data/trading_history.db', '/data/trading_history.db', '/app/data/trading_copilot.db', '/data/trading_copilot.db'):
+    for extra in (
+        '/app/data/trading_history.db',
+        '/data/trading_history.db',
+        '/app/data/trading_copilot.db',
+        '/data/trading_copilot.db',
+    ):
         if extra not in seen:
             candidates.append(extra)
             seen.add(extra)
 
-    for entry in find_all_db_files('/'):
+    for entry in find_all_db_files(str(PROJECT_ROOT)):
         path = entry['path']
         if path not in seen:
             candidates.append(path)
             seen.add(path)
+
+    if IS_RAILWAY:
+        for entry in find_all_db_files('/'):
+            path = entry['path']
+            if path not in seen:
+                candidates.append(path)
+                seen.add(path)
 
     return candidates
 
@@ -116,13 +127,13 @@ def resolve_db_path():
         _resolved_db_path = found
         return found
 
-    default = str(DATA_DIR / 'trading_history.db')
+    default = str(DB_PATH)
     _resolved_db_path = default
     return default
 
 
 def run_predictions_dedup(db_path: str):
-    """Remove duplicate predictions,        keeping earliest row per ticker+recommendation+date."""
+    """Remove duplicate predictions, keeping earliest row per ticker+recommendation+date."""
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute('SELECT COUNT(*) FROM predictions')

@@ -20,18 +20,9 @@ except ImportError:
 
 
 def _load_env_files():
-    """Load keys.env from Railway or local paths if present (silent if missing)."""
-    try:
-        from dotenv import load_dotenv
-    except ImportError:
-        return
-    for env_path in (
-        Path('/app/config/keys.env'),
-        Path(__file__).parent.parent / 'config' / 'keys.env',
-    ):
-        if env_path.exists():
-            load_dotenv(env_path, override=False)
-            return
+    """Load .env and keys.env via central config."""
+    from config import load_env
+    load_env()
 
 
 _load_env_files()

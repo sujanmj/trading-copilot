@@ -30,7 +30,9 @@ if sys.platform == 'win32':
 # CONFIGURATION
 # ============================================================
 
-DB_PATH = Path(__file__).parent.parent / 'data' / 'trading_history.db'
+from config import DB_PATH, ensure_dirs
+
+ensure_dirs()
 
 # ============================================================
 # SCHEMA - 4 TABLES

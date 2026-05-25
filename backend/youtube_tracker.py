@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from collections import Counter
 import re
 
+from json_io import atomic_write_json
+
 env_path = Path(__file__).parent.parent / 'config' / 'keys.env'
 load_dotenv(env_path)
 
@@ -289,8 +291,7 @@ def collect_all_youtube():
     data_dir.mkdir(exist_ok=True)
     output_file = data_dir / 'youtube_feed.json'
 
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, default=str, ensure_ascii=True)
+    atomic_write_json(output_file, output)
 
     print(f"\nSaved to: {output_file}")
     print("=" * 60 + "\n")

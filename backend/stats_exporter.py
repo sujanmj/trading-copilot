@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from json_io import atomic_write_json
 from db_manager import (
     get_connection,
     get_db_stats,
@@ -60,9 +61,7 @@ def empty_stats_output():
 
 
 def write_stats_output(output):
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+    atomic_write_json(OUTPUT_FILE, output)
 
 
 def get_predictions_by_sector():

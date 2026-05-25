@@ -14,6 +14,8 @@ from pathlib import Path
 from collections import Counter
 import re
 
+from json_io import atomic_write_json
+
 RSS_FEEDS = {
     'Economic Times (Markets)': 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
     'Economic Times (Markets Alt)': 'https://economictimes.indiatimes.com/markets/rssfeeds/2146842.cms',
@@ -98,8 +100,7 @@ def save_news_output(all_articles, feed_results):
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     for path in (OUTPUT_FILE, OUTPUT_FILE_ALT):
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(output, f, indent=2, ensure_ascii=False)
+        atomic_write_json(path, output)
         print(f"[SAVED] {path}")
 
 

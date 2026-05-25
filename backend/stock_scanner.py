@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from collections import defaultdict
 import warnings
+
+from json_io import atomic_write_json
 warnings.filterwarnings('ignore')
 
 # Add current dir to path for imports
@@ -520,9 +522,7 @@ def run_scanner():
     }
     
     # Save
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, ensure_ascii=False, default=str)
+    atomic_write_json(OUTPUT_FILE, output)
     
     # ============================================================
     # PRINT SUMMARY

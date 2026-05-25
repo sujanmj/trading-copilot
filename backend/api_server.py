@@ -16,6 +16,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
+import requests
+
 try:
     sys.stdout.reconfigure(encoding='utf-8')
 except Exception:
@@ -30,17 +32,32 @@ except ImportError:
     sys.exit(1)
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR.parent / 'data'
-
-try:
-    from dotenv import load_dotenv
-    env_path = BASE_DIR.parent / 'config' / 'keys.env'
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
-except ImportError:
-    pass
-
 sys.path.insert(0, str(BASE_DIR))
+
+from config import (
+    IS_RAILWAY,
+    PROJECT_ROOT,
+    DATA_DIR,
+    LOGS_DIR,
+    API_HOST,
+    API_PORT,
+    DB_PATH,
+    STALE_THRESHOLD_SECONDS,
+    WATCHDOG_CHECK_INTERVAL,
+    WATCHDOG_TRIGGER_COOLDOWN,
+    get_env,
+)
+from local_logging import setup_logger
+from process_lock import lock_status
+
+backend_log = setup_logger('backend', 'backend.log')
+watchdog_log = setup_logger('watchdog', 'watchdog.log')
+
+TELEGRAM_BOT_TOKEN = get_env('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = get_env('TELEGRAM_CHAT_ID')
+
+_watchdog_last_trigger = 0.0
+_analyzer_running = False
 
 try:
     from ai_router import ask_ai
@@ -61,10 +78,12 @@ except ImportError:
     CUSTOM_HISTORY_AVAILABLE = False
 
 
-API_KEY = os.environ.get('API_KEY', '')
+API_KEY = get_env('API_KEY')
 
 if not API_KEY:
     print("[WARN] API_KEY not set. Running in OPEN mode (dev only)")
+if IS_RAILWAY:
+    print("[INFO] Railway deployment detected")
 
 
 def verify_api_key(x_api_key: Optional[str] = Header(None)):
@@ -118,19 +137,89 @@ def run_subprocess_loop(script_name, label):
             time.sleep(60)
 
 
+def send_watchdog_alert(message):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        requests.post(url, json={
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': f"🤖 WATCHDOG: {message}",
+            'parse_mode': 'HTML',
+        }, timeout=10)
+    except Exception as e:
+        print(f"[WATCHDOG] Telegram alert failed: {e}")
+
+
+def stale_data_watchdog():
+    """Background loop: auto-run master_analyzer if intelligence file is stale."""
+    global _watchdog_last_trigger, _analyzer_running
+
+    while True:
+        time.sleep(WATCHDOG_CHECK_INTERVAL)
+        try:
+            age = file_age_seconds('unified_intelligence.json')
+            if age and age > STALE_THRESHOLD_SECONDS:
+                now = time.time()
+                if now - _watchdog_last_trigger < WATCHDOG_TRIGGER_COOLDOWN:
+                    continue
+                if _analyzer_running:
+                    watchdog_log.info("Analyzer subprocess already active — skip")
+                    continue
+                locks = lock_status()
+                if locks.get('master_analyzer', {}).get('alive'):
+                    watchdog_log.info("Analyzer lock held — skip auto-refresh")
+                    continue
+
+                _watchdog_last_trigger = now
+                hours = age // 3600
+                msg = f"Intelligence {hours}h stale! Auto-recovering..."
+                print(f"[WATCHDOG] {msg}")
+                watchdog_log.warning(msg)
+                send_watchdog_alert(
+                    f"Market intelligence is <b>{hours}h stale</b>. Auto-refresh triggered."
+                )
+
+                script_path = BASE_DIR / 'master_analyzer.py'
+                env = os.environ.copy()
+                env['PYTHONIOENCODING'] = 'utf-8'
+                env['PYTHONUTF8'] = '1'
+                _analyzer_running = True
+
+                def _run_analyzer():
+                    global _analyzer_running
+                    try:
+                        subprocess.run(
+                            [sys.executable, str(script_path)],
+                            env=env,
+                            cwd=str(PROJECT_ROOT),
+                        )
+                    finally:
+                        _analyzer_running = False
+
+                threading.Thread(target=_run_analyzer, daemon=True, name='WatchdogAnalyzer').start()
+                watchdog_log.info("Auto-refresh triggered")
+                print("[WATCHDOG] Auto-refresh triggered")
+        except Exception as e:
+            print(f"[WATCHDOG] Error: {e}")
+            watchdog_log.error("Watchdog error: %s", e)
+
+
 def start_background_processes():
     """Launch scheduler and telegram listener in daemon threads"""
-    
+    backend_log.info("Starting background processes (railway=%s)", IS_RAILWAY)
+
     # Scheduler thread
     if os.environ.get('DISABLE_SCHEDULER') != '1':
         scheduler_thread = threading.Thread(
-            target=run_subprocess_loop, 
+            target=run_subprocess_loop,
             args=('master_scheduler.py', 'Scheduler'),
-            daemon=True, 
-            name='Scheduler'
+            daemon=True,
+            name='Scheduler',
         )
         scheduler_thread.start()
-        print(f"[INFO] Scheduler thread started")
+        print("[INFO] Scheduler thread started")
+        backend_log.info("Scheduler thread started")
     
     # Telegram listener thread
     if os.environ.get('DISABLE_TELEGRAM_LISTENER') != '1':
@@ -142,6 +231,14 @@ def start_background_processes():
         )
         telegram_thread.start()
         print(f"[INFO] Telegram listener thread started")
+
+    watchdog_thread = threading.Thread(
+        target=stale_data_watchdog,
+        daemon=True,
+        name='Watchdog',
+    )
+    watchdog_thread.start()
+    print("[INFO] Watchdog thread started")
 
 
 # ============================================================
@@ -161,6 +258,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
+    backend_log.info("API server startup — host=%s port=%s railway=%s", API_HOST, API_PORT, IS_RAILWAY)
     start_background_processes()
 
 
@@ -206,7 +304,19 @@ def root():
         "service": "Trading Copilot API + Scheduler + Telegram",
         "version": "5.0.0",
         "status": "running",
-        "auth_required": bool(API_KEY)
+        "railway": IS_RAILWAY,
+        "auth_required": bool(API_KEY),
+    }
+
+
+@app.get("/api/config")
+def api_config():
+    """Public deployment info for GUI bootstrap."""
+    return {
+        "railway": IS_RAILWAY,
+        "auth_required": bool(API_KEY),
+        "data_dir": str(DATA_DIR),
+        "db_path": str(DB_PATH),
     }
 
 
@@ -226,24 +336,53 @@ def health():
         "history": "history_data.json",
     }
     freshness = {}
+    source_status = {}
     for key, filename in files.items():
         age = file_age_seconds(filename)
+        filepath = DATA_DIR / filename
         if age is None:
             freshness[key] = "missing"
+            source_status[key] = {"file": filename, "status": "missing", "age_seconds": None}
         elif age < 60:
             freshness[key] = f"{age}s ago"
+            source_status[key] = {"file": filename, "status": "ok", "age_seconds": age}
         elif age < 3600:
             freshness[key] = f"{age // 60}m ago"
+            source_status[key] = {"file": filename, "status": "ok", "age_seconds": age}
         else:
             freshness[key] = f"{age // 3600}h ago"
+            stale = age > STALE_THRESHOLD_SECONDS
+            source_status[key] = {
+                "file": filename,
+                "status": "stale" if stale else "ok",
+                "age_seconds": age,
+                "exists": filepath.exists(),
+            }
+
+    try:
+        from ai_router import check_keys_status
+        keys = check_keys_status()
+    except Exception:
+        keys = {}
+
     return {
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
+        "railway": IS_RAILWAY,
+        "db_path": str(DB_PATH),
         "data_freshness": freshness,
+        "source_status": source_status,
+        "running_jobs": lock_status(),
+        "ai_status": {
+            "router_available": AI_AVAILABLE,
+            "anthropic_configured": keys.get('anthropic', False),
+            "google_configured": keys.get('google', False),
+        },
         "ai_available": AI_AVAILABLE,
         "postmortem_available": POSTMORTEM_AVAILABLE,
         "auth_enabled": bool(API_KEY),
-        "background_processes": ["scheduler", "telegram_listener"]
+        "background_processes": ["scheduler", "telegram_listener", "watchdog"],
+        "logs_dir": str(LOGS_DIR),
     }
 
 
@@ -453,11 +592,12 @@ def force_analyze():
 
 @app.get("/api/debug/find-db", dependencies=[Depends(verify_api_key)])
 def find_db_files():
-    """Find all .db files on the filesystem."""
+    """Find .db files under project (local) or filesystem (cloud)."""
     try:
         from db_finder import find_all_db_files
-        databases = find_all_db_files('/')
-        return {"databases": databases, "count": len(databases)}
+        start = '/' if IS_RAILWAY else str(PROJECT_ROOT)
+        databases = find_all_db_files(start)
+        return {"databases": databases, "count": len(databases), "railway": IS_RAILWAY}
     except Exception as e:
         return {"error": str(e), "databases": []}
 
@@ -481,37 +621,14 @@ def dedup_smart():
 
 @app.get("/api/debug/db-info", dependencies=[Depends(verify_api_key)])
 def db_info():
-    """Show database info and find duplicates"""
+    """Show database info and table counts."""
     try:
         import sqlite3
-        import glob as glob_module
+        from db_finder import resolve_db_path
 
-        possible_paths = [
-            str(DATA_DIR / 'trading_history.db'),
-            '/app/data/trading_history.db',
-            '/data/trading_history.db',
-            str(DATA_DIR / 'trading_copilot.db'),
-        ]
-        vol_patterns = [
-            '/var/lib/containers/railwayapp/bind-mounts/**/trading_history.db',
-            '/var/lib/**/*.db',
-            '/mnt/**/*.db',
-            '/vol/**/*.db',
-        ]
-        for pattern in vol_patterns:
-            try:
-                possible_paths.extend(glob_module.glob(pattern, recursive=True))
-            except Exception:
-                pass
-
-        db_path = None
-        for p in possible_paths:
-            if Path(p).exists():
-                db_path = p
-                break
-
-        if not db_path:
-            return {"error": "DB not found", "searched": possible_paths}
+        db_path = resolve_db_path()
+        if not Path(db_path).exists():
+            return {"error": "DB not found", "searched": [str(DB_PATH)]}
 
         conn = sqlite3.connect(db_path)
         c = conn.cursor()
@@ -522,61 +639,38 @@ def db_info():
             c.execute(f"SELECT COUNT(*) FROM {t}")
             counts[t] = c.fetchone()[0]
         conn.close()
-        return {"db_path": db_path, "tables": tables, "counts": counts}
+        return {"db_path": db_path, "tables": tables, "counts": counts, "railway": IS_RAILWAY}
     except Exception as e:
         return {"error": str(e)}
 
 @app.post("/api/debug/dedup", dependencies=[Depends(verify_api_key)])
 def dedup_predictions():
-    """Remove duplicate predictions"""
+    """Remove duplicate predictions."""
     try:
-        import sqlite3, glob
-        possible_paths = [
-            str(DATA_DIR / 'trading_history.db'),
-            '/app/data/trading_history.db',
-            '/data/trading_history.db',
-        ]
-        db_files = glob.glob('/var/lib/**/*.db', recursive=True)
-        possible_paths.extend(db_files)
-        
-        db_path = None
-        for p in possible_paths:
-            if Path(p).exists():
-                db_path = p
-                break
-        
-        if not db_path:
-            return {"error": "DB not found"}
-        
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM predictions")
-        before = c.fetchone()[0]
-        c.execute("""
-            DELETE FROM predictions 
-            WHERE rowid NOT IN (
-                SELECT MIN(rowid) FROM predictions 
-                GROUP BY ticker, recommendation, date(created_at)
-            )
-        """)
-        conn.commit()
-        c.execute("SELECT COUNT(*) FROM predictions")
-        after = c.fetchone()[0]
-        conn.close()
-        return {"success": True, "before": before, "after": after, "removed": before - after}
+        from db_finder import resolve_db_path, run_predictions_dedup
+
+        db_path = resolve_db_path()
+        if not Path(db_path).exists():
+            return {"error": "DB not found", "path": db_path}
+
+        before, after, removed = run_predictions_dedup(db_path)
+        return {"success": True, "db_path": db_path, "before": before, "after": after, "removed": removed}
     except Exception as e:
         return {"error": str(e)}
 
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 8000))
-    host = os.environ.get('HOST', '0.0.0.0')
+    port = API_PORT
+    host = API_HOST
     print("=" * 60)
     print("TRADING COPILOT API SERVER + SCHEDULER + TELEGRAM v5")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
+    print(f"Railway: {'yes' if IS_RAILWAY else 'no'}")
     print(f"Host: {host}")
     print(f"Port: {port}")
+    print(f"DB:   {DB_PATH}")
     print(f"AI: {'Available' if AI_AVAILABLE else 'NOT available'}")
     print(f"Auth: {'X-API-Key required' if API_KEY else 'OPEN MODE'}")
     print("=" * 60)
+    backend_log.info("Uvicorn starting host=%s port=%s railway=%s", host, port, IS_RAILWAY)
     uvicorn.run(app, host=host, port=port, log_level="info")

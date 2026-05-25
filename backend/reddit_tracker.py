@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from collections import Counter
 from pathlib import Path
 
+from json_io import atomic_write_json
+
 # Import AI router for sentiment analysis
 try:
     from ai_router import ask_ai
@@ -406,9 +408,7 @@ def run_reddit_tracker():
         'hot_discussions': hot_list,
     }
     
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+    atomic_write_json(OUTPUT_FILE, output)
     
     print(f"[OK] Saved {OUTPUT_FILE}")
     print(f"[INFO] Top 5 trending: {[t['ticker'] for t in trending_tickers[:5]]}")

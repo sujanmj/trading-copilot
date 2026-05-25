@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from collections import defaultdict
 
+from json_io import atomic_write_json
+
 try:
     sys.stdout.reconfigure(encoding='utf-8')
 except Exception:
@@ -298,9 +300,7 @@ def build_export():
         if not all_predictions:
             print("[INFO] No predictions yet — writing empty history JSON")
             output = empty_history_output()
-            OUTPUT_FILE.parent.mkdir(exist_ok=True)
-            with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-                json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+            atomic_write_json(OUTPUT_FILE, output)
             print(f"\n[SAVED] {OUTPUT_FILE}")
             print("=" * 60)
             return output
@@ -366,9 +366,7 @@ def build_export():
             }
         }
 
-        OUTPUT_FILE.parent.mkdir(exist_ok=True)
-        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+        atomic_write_json(OUTPUT_FILE, output)
 
         print(f"\n[SAVED] {OUTPUT_FILE}")
         print(f"  File size: {OUTPUT_FILE.stat().st_size / 1024:.1f} KB")
@@ -380,9 +378,7 @@ def build_export():
         print(f"[WARN] History export failed: {e}")
         traceback.print_exc()
         output = empty_history_output()
-        OUTPUT_FILE.parent.mkdir(exist_ok=True)
-        with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+        atomic_write_json(OUTPUT_FILE, output)
         print(f"[SAVED] fallback empty history to {OUTPUT_FILE}")
         return output
 
@@ -412,9 +408,7 @@ if __name__ == "__main__":
         print(f"[HISTORY] FATAL: {e}")
         traceback.print_exc()
         try:
-            OUTPUT_FILE.parent.mkdir(exist_ok=True)
-            with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-                json.dump(empty_history_output(), f, indent=2, default=str, ensure_ascii=False)
+            atomic_write_json(OUTPUT_FILE, empty_history_output())
             print(f"[HISTORY] Wrote emergency empty history to {OUTPUT_FILE}")
         except Exception:
             pass

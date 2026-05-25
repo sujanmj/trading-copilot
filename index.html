@@ -364,18 +364,17 @@
   dotenv.config({ path: envPath })
 
   // ============================================================
-  // RAILWAY DEPLOYMENT CONFIG
+  // API CONFIG — Railway production (override via keys.env / env vars)
   // ============================================================
-  const USE_API = true; // Set to false for local Dark Glass testing
-  
-  const API_BASE = 'https://web-production-0592e.up.railway.app'
-  const API_KEY = 'ekjj6pa2wDvA1GUBW8XIDZ2Vn9ZpqYu88ftgPkz2Tfc'
+  const DEFAULT_API_BASE = 'https://web-production-0592e.up.railway.app'
+  const USE_API = true
+  const API_BASE = process.env.API_BASE_URL || DEFAULT_API_BASE
+  const API_KEY = process.env.API_KEY || ''
 
   function apiHeaders() {
-    return {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY
-    }
+    const headers = { 'Content-Type': 'application/json' }
+    if (API_KEY) headers['X-API-Key'] = API_KEY
+    return headers
   }
 
   let apiCache = {

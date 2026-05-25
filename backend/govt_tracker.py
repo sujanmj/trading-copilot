@@ -19,6 +19,8 @@ from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from json_io import atomic_write_json
+
 # Force UTF-8 (Windows fix)
 try:
     sys.stdout.reconfigure(encoding='utf-8')
@@ -760,8 +762,7 @@ def collect_govt_intelligence():
     data_dir.mkdir(exist_ok=True)
     output_file = data_dir / 'govt_intelligence.json'
 
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(output, f, indent=2, default=str, ensure_ascii=False)
+    atomic_write_json(output_file, output)
 
     print(f"\nSaved to: {output_file}")
     print("=" * 60 + "\n")
