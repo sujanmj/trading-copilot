@@ -584,8 +584,44 @@ def _load_cycle_files(cycle_id: Optional[str] = None) -> dict:
         'routing_decision.json',
         'quality_metrics.json',
     ):
-        files[name.replace('.json', '')] = _load_json(cycle_dir / name)
+        loaded = _load_json(cycle_dir / name)
+        files[name.replace('.json', '')] = loaded if isinstance(loaded, dict) else {}
     return {'cycle_id': cid, 'files': files, 'index': index}
+
+
+def _as_dict(value: Any, default: Optional[dict] = None) -> dict:
+    if isinstance(value, dict):
+        return value
+    return dict(default or {})
+
+
+def _as_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    return []
+
+
+def _safe_join(items: Any, sep: str = ', ') -> str:
+    return sep.join(str(x) for x in _as_list(items) if x is not None)
+
+
+def _safe_delta(metrics: dict, prev_metrics: dict, key: str, cast=float):
+    try:
+        current = cast(metrics.get(key, 0) or 0)
+        previous = cast(prev_metrics.get(key, 0) or 0)
+        return round(current - previous, 4)
+    except (TypeError, ValueError):
+        return None
+
+
+def _debug_degraded(endpoint: str, reason: str, **extra: Any) -> dict:
+    payload = {
+        'status': 'degraded',
+        'reason': reason,
+        'endpoint': endpoint,
+    }
+    payload.update(extra)
+    return payload
 
 
 def get_observability_summary() -> dict:
@@ -667,23 +703,29 @@ def get_observability_summary() -> dict:
 # ── Debug API payload builders ────────────────────────────────────────────────
 
 def debug_preservation(cycle_id: Optional[str] = None) -> dict:
-    snap = _load_cycle_files(cycle_id)
-    files = snap.get('files') or {}
-    preserved = files.get('preserved_signals') or {}
-    contradictions = files.get('contradictions') or {}
-    quality = files.get('quality_metrics') or {}
-    return {
-        'cycle_id': snap.get('cycle_id'),
-        'raw_signals_preserved': preserved.get('raw_evidence_block'),
-        'contradiction_blocks': contradictions,
-        'regime': preserved.get('regime'),
-        'compression_profile': preserved.get('compression_profile'),
-        'confidence_scores': preserved.get('scored_signals'),
-        'bypassed_compression_items': preserved.get('bypass_items'),
-        'quality_metrics': quality.get('quality'),
-        'preservation_reasoning': preserved.get('preservation_reasoning'),
-        'explanations': quality.get('explanations'),
-    }
+    try:
+        snap = _load_cycle_files(cycle_id)
+        files = _as_dict(snap.get('files'))
+        preserved = _as_dict(files.get('preserved_signals'))
+        contradictions = _as_dict(files.get('contradictions'))
+        quality = _as_dict(files.get('quality_metrics'))
+        return {
+            'status': 'ok',
+            'cycle_id': snap.get('cycle_id'),
+            'snapshot_error': snap.get('error'),
+            'raw_signals_preserved': preserved.get('raw_evidence_block'),
+            'contradiction_blocks': contradictions,
+            'regime': preserved.get('regime'),
+            'compression_profile': preserved.get('compression_profile'),
+            'confidence_scores': preserved.get('scored_signals'),
+            'bypassed_compression_items': preserved.get('bypass_items'),
+            'quality_metrics': quality.get('quality'),
+            'preservation_reasoning': preserved.get('preservation_reasoning'),
+            'explanations': quality.get('explanations'),
+        }
+    except Exception as e:
+        _log('DEBUG DEGRADED', f'preservation: {e}')
+        return _debug_degraded('preservation', str(e), cycle_id=cycle_id)
 
 
 def debug_compression(cycle_id: Optional[str] = None) -> dict:
@@ -752,79 +794,112 @@ def debug_ai_routing(cycle_id: Optional[str] = None) -> dict:
 
 
 def debug_delta_analysis(cycle_id: Optional[str] = None) -> dict:
-    snap = _load_cycle_files(cycle_id)
-    routing = (snap.get('files') or {}).get('routing_decision') or {}
-    raw = (snap.get('files') or {}).get('raw_input_snapshot') or {}
-    decision = routing.get('decision') or {}
-    state = _load_json(ANALYSIS_STATE_FILE)
-    metrics = decision.get('metrics') or raw.get('metrics') or state.get('metrics') or {}
-    prev_metrics = state.get('metrics') or {}
+    try:
+        snap = _load_cycle_files(cycle_id)
+        files = _as_dict(snap.get('files'))
+        routing = _as_dict(files.get('routing_decision'))
+        raw = _as_dict(files.get('raw_input_snapshot'))
+        decision = _as_dict(routing.get('decision'))
+        state = _as_dict(_load_json(ANALYSIS_STATE_FILE))
+        metrics = _as_dict(
+            decision.get('metrics') or raw.get('metrics') or state.get('metrics')
+        )
+        prev_metrics = _as_dict(state.get('metrics'))
+        source_hashes = _as_dict(decision.get('source_hashes'))
+        prev_source_hashes = _as_dict(state.get('source_hashes'))
+        delta_reasons = _as_list(decision.get('delta_reasons'))
+        reuse = bool(routing.get('reuse', False))
 
-    def _delta(key, cast=float):
-        try:
-            return round(cast(metrics.get(key, 0)) - cast(prev_metrics.get(key, 0)), 4)
-        except (TypeError, ValueError):
-            return None
+        if snap.get('error'):
+            return {
+                'status': 'degraded',
+                'reason': snap.get('error'),
+                'cycle_id': snap.get('cycle_id'),
+                'deltas': delta_reasons,
+                'analysis_ran': False,
+                'reuse_previous': reuse,
+            }
 
-    return {
-        'cycle_id': snap.get('cycle_id'),
-        'analysis_ran': not routing.get('reuse', False),
-        'reuse_previous': routing.get('reuse', False),
-        'why_ran_or_skipped': (
-            'Reused prior intelligence — no meaningful delta'
-            if routing.get('reuse')
-            else ', '.join(decision.get('delta_reasons') or []) or 'hash or delta change'
-        ),
-        'hash_changed': decision.get('hash_changed'),
-        'delta_reasons': decision.get('delta_reasons'),
-        'source_hashes': {
-            'current_composite': (decision.get('source_hashes') or {}).get('composite'),
-            'previous_composite': (state.get('source_hashes') or {}).get('composite'),
-            'current_semantic': decision.get('semantic_hash') or state.get('semantic_hash'),
-            'previous_semantic': state.get('semantic_hash'),
-            'semantic_changed': decision.get('semantic_changed'),
-        },
-        'market_movement_pct_delta': _delta('india_avg_change'),
-        'news_count_delta': _delta('news_count', int),
-        'scanner_signals_delta': _delta('scanner_signals', int),
-        'reddit_sentiment_change': metrics.get('reddit_sentiment') != prev_metrics.get('reddit_sentiment'),
-        'reddit_confidence_delta': _delta('reddit_confidence', int),
-        'current_metrics': metrics,
-        'previous_metrics': prev_metrics,
-    }
+        return {
+            'status': 'ok',
+            'cycle_id': snap.get('cycle_id'),
+            'analysis_ran': not reuse,
+            'reuse_previous': reuse,
+            'why_ran_or_skipped': (
+                'Reused prior intelligence — no meaningful delta'
+                if reuse
+                else _safe_join(delta_reasons) or 'hash or delta change'
+            ),
+            'hash_changed': decision.get('hash_changed'),
+            'delta_reasons': delta_reasons,
+            'deltas': delta_reasons,
+            'source_hashes': {
+                'current_composite': source_hashes.get('composite'),
+                'previous_composite': prev_source_hashes.get('composite'),
+                'current_semantic': decision.get('semantic_hash') or state.get('semantic_hash'),
+                'previous_semantic': state.get('semantic_hash'),
+                'semantic_changed': decision.get('semantic_changed'),
+            },
+            'market_movement_pct_delta': _safe_delta(metrics, prev_metrics, 'india_avg_change'),
+            'news_count_delta': _safe_delta(metrics, prev_metrics, 'news_count', int),
+            'scanner_signals_delta': _safe_delta(metrics, prev_metrics, 'scanner_signals', int),
+            'reddit_sentiment_change': metrics.get('reddit_sentiment') != prev_metrics.get('reddit_sentiment'),
+            'reddit_confidence_delta': _safe_delta(metrics, prev_metrics, 'reddit_confidence', int),
+            'current_metrics': metrics,
+            'previous_metrics': prev_metrics,
+        }
+    except Exception as e:
+        _log('DEBUG DEGRADED', f'delta-analysis: {e}')
+        return _debug_degraded(
+            'delta-analysis',
+            str(e),
+            cycle_id=cycle_id,
+            deltas=[],
+            analysis_ran=False,
+            reuse_previous=False,
+        )
 
 
 def debug_quality(cycle_id: Optional[str] = None) -> dict:
-    snap = _load_cycle_files(cycle_id)
-    quality_file = (snap.get('files') or {}).get('quality_metrics') or {}
-    store = _load_json(ANALYSIS_EXPLANATIONS_FILE)
-    state = _load_json(ANALYSIS_STATE_FILE)
-    q = quality_file.get('quality') or (store.get('latest') or {}).get('quality') or {}
-    return {
-        'cycle_id': snap.get('cycle_id'),
-        'information_retention_score': q.get('information_retention_score'),
-        'contradiction_retention_score': q.get('contradiction_retention_score'),
-        'sentiment_preservation_score': q.get('sentiment_preservation_score'),
-        'intelligence_quality_score': q.get('intelligence_quality_score'),
-        'compression_ratio': q.get('compression_ratio'),
-        'truncation_severity': q.get('truncation_severity'),
-        'sentiment_diversity_score': q.get('sentiment_diversity_score'),
-        'minority_signal_retention_score': q.get('minority_signal_retention_score'),
-        'novelty_avg_score': q.get('novelty_avg_score'),
-        'repetition_suppressed_count': q.get('repetition_suppressed_count'),
-        'cache_normalization': {
-            'semantic_hash': state.get('semantic_hash'),
-            'full_hash': (state.get('source_hashes') or {}).get('composite'),
-        },
-        'quality_history': (store.get('quality_history') or [])[:25],
-        'recent_warnings': (store.get('quality_warnings') or [])[-10:],
-        'thresholds': {
-            'quality_score_warn': QUALITY_SCORE_WARN,
-            'contradiction_retention_warn': CONTRADICTION_RETENTION_WARN,
-            'compression_ratio_warn': COMPRESSION_RATIO_WARN,
-            'sentiment_preservation_warn': SENTIMENT_PRESERVATION_WARN,
-        },
-    }
+    try:
+        snap = _load_cycle_files(cycle_id)
+        quality_file = _as_dict(_as_dict(snap.get('files')).get('quality_metrics'))
+        store = _as_dict(_load_json(ANALYSIS_EXPLANATIONS_FILE))
+        state = _as_dict(_load_json(ANALYSIS_STATE_FILE))
+        latest = _as_dict(store.get('latest'))
+        q = _as_dict(
+            quality_file.get('quality') or latest.get('quality') or state.get('quality_metrics')
+        )
+        return {
+            'status': 'ok',
+            'cycle_id': snap.get('cycle_id'),
+            'snapshot_error': snap.get('error'),
+            'information_retention_score': q.get('information_retention_score'),
+            'contradiction_retention_score': q.get('contradiction_retention_score'),
+            'sentiment_preservation_score': q.get('sentiment_preservation_score'),
+            'intelligence_quality_score': q.get('intelligence_quality_score'),
+            'compression_ratio': q.get('compression_ratio'),
+            'truncation_severity': q.get('truncation_severity'),
+            'sentiment_diversity_score': q.get('sentiment_diversity_score'),
+            'minority_signal_retention_score': q.get('minority_signal_retention_score'),
+            'novelty_avg_score': q.get('novelty_avg_score'),
+            'repetition_suppressed_count': q.get('repetition_suppressed_count'),
+            'cache_normalization': {
+                'semantic_hash': state.get('semantic_hash'),
+                'full_hash': _as_dict(state.get('source_hashes')).get('composite'),
+            },
+            'quality_history': _as_list(store.get('quality_history'))[:25],
+            'recent_warnings': _as_list(store.get('quality_warnings'))[-10:],
+            'thresholds': {
+                'quality_score_warn': QUALITY_SCORE_WARN,
+                'contradiction_retention_warn': CONTRADICTION_RETENTION_WARN,
+                'compression_ratio_warn': COMPRESSION_RATIO_WARN,
+                'sentiment_preservation_warn': SENTIMENT_PRESERVATION_WARN,
+            },
+        }
+    except Exception as e:
+        _log('DEBUG DEGRADED', f'quality: {e}')
+        return _debug_degraded('quality', str(e), cycle_id=cycle_id)
 
 
 def _cache_directory_stats() -> dict:

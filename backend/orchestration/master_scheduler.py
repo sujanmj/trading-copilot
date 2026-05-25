@@ -153,12 +153,14 @@ def main():
 
     if not try_acquire_lock('master_scheduler'):
         print("[SKIP] master_scheduler already running")
+        print("[SCHEDULER SINGLETON ACTIVE] Guard exit — primary scheduler lock held")
         sys.exit(0)
 
     print("="*60)
     print("TRADING COPILOT - MASTER ORCHESTRATOR LAUNCHED")
     print(f"Boot Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}")
     print("="*60)
+    print("[SCHEDULER HEALTHY] Lock acquired — orchestrator running")
 
     try:
         run_full_cycle("Boot Startup")

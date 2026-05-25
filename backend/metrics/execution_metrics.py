@@ -213,13 +213,25 @@ def get_execution_summary() -> dict:
 
 
 def get_reliability_debug() -> dict:
-    summary = get_execution_summary()
-    with _lock:
-        data = _load()
-    return {
-        'execution': summary,
-        'recent_logs': (data.get('recent_logs') or [])[-15:],
-        'confidence_histogram': data.get('confidence_histogram') or {},
-        'validation_status': 'operational',
-        'ai_reliability_score': summary.get('last_reliability_score'),
-    }
+    try:
+        summary = get_execution_summary()
+        with _lock:
+            data = _load()
+        return {
+            'status': 'ok',
+            'execution': summary,
+            'recent_logs': (data.get('recent_logs') or [])[-15:],
+            'confidence_histogram': data.get('confidence_histogram') or {},
+            'validation_status': 'operational',
+            'ai_reliability_score': summary.get('last_reliability_score'),
+        }
+    except Exception as e:
+        return {
+            'status': 'degraded',
+            'reason': str(e),
+            'execution': {},
+            'recent_logs': [],
+            'confidence_histogram': {},
+            'validation_status': 'degraded',
+            'ai_reliability_score': None,
+        }

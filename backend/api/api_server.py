@@ -61,6 +61,12 @@ TELEGRAM_CHAT_ID = get_env('TELEGRAM_CHAT_ID')
 
 _watchdog_last_trigger = 0.0
 _analyzer_running = False
+_subprocess_restart_log_at: dict = {}
+
+SCHEDULER_SCRIPT = 'master_scheduler.py'
+SCHEDULER_SINGLETON_POLL_SECONDS = 120
+SCHEDULER_CRASH_RESTART_SECONDS = 30
+SUBPROCESS_WARN_COOLDOWN_SECONDS = 300
 
 try:
     from backend.ai.ai_router import ask_ai
@@ -101,8 +107,34 @@ def verify_api_key(x_api_key: Optional[str] = Header(None)):
 # BACKGROUND PROCESSES
 # ============================================================
 
+def _scheduler_singleton_active() -> bool:
+    info = lock_status().get('master_scheduler') or {}
+    return bool(info.get('alive'))
+
+
+def _log_subprocess_event(label: str, message: str, *, force: bool = False):
+    """Throttle repetitive subprocess restart warnings."""
+    now = time.time()
+    last = _subprocess_restart_log_at.get(label, 0.0)
+    if force or (now - last) >= SUBPROCESS_WARN_COOLDOWN_SECONDS:
+        print(message)
+        _subprocess_restart_log_at[label] = now
+
+
+def _wait_scheduler_singleton_health():
+    """Poll singleton scheduler health instead of spawning duplicates."""
+    polls = max(1, SCHEDULER_SINGLETON_POLL_SECONDS // 30)
+    for _ in range(polls):
+        time.sleep(30)
+        if not _scheduler_singleton_active():
+            print("[SCHEDULER CRASH DETECTED] Singleton lock lost — recovery launch")
+            return
+    print("[SCHEDULER HEALTHY] Singleton scheduler still active")
+    _log_subprocess_event('Scheduler', "[WATCHDOG NO-RESTART] Scheduler singleton healthy")
+
+
 def run_subprocess_loop(script_name, label):
-    """Run a Python module as subprocess, auto-restart if crashes"""
+    """Run a Python module as subprocess; restart only on real crashes."""
     print("=" * 60)
     print(f"[BACKGROUND] Starting {label}...")
     print("=" * 60)
@@ -116,14 +148,64 @@ def run_subprocess_loop(script_name, label):
                 stderr=sys.stderr,
             )
             process.wait()
-            print(f"[WARN] {label} exited with code {process.returncode}, restarting in 30s...")
+            rc = process.returncode if process.returncode is not None else -1
+
+            if script_name == SCHEDULER_SCRIPT:
+                if rc == 0 and _scheduler_singleton_active():
+                    print("[SCHEDULER SINGLETON ACTIVE] Primary scheduler already running")
+                    _log_subprocess_event(
+                        'Scheduler',
+                        "[WATCHDOG NO-RESTART] Singleton guard — skip duplicate launch",
+                        force=True,
+                    )
+                    _wait_scheduler_singleton_health()
+                    continue
+
+                if rc == 0:
+                    print("[SCHEDULER CRASH DETECTED] Scheduler exited cleanly but lock is free")
+                    _log_subprocess_event(
+                        'Scheduler',
+                        f"[SCHEDULER RECOVERY TRIGGERED] Unexpected clean exit — restart in "
+                        f"{SCHEDULER_CRASH_RESTART_SECONDS}s",
+                        force=True,
+                    )
+                    time.sleep(SCHEDULER_CRASH_RESTART_SECONDS)
+                    continue
+
+                _log_subprocess_event(
+                    'Scheduler',
+                    f"[SCHEDULER CRASH DETECTED] exit code {rc} — recovery in "
+                    f"{SCHEDULER_CRASH_RESTART_SECONDS}s",
+                    force=True,
+                )
+                print(f"[SCHEDULER RECOVERY TRIGGERED] Restarting scheduler in "
+                      f"{SCHEDULER_CRASH_RESTART_SECONDS}s...")
+                time.sleep(SCHEDULER_CRASH_RESTART_SECONDS)
+                continue
+
+            if rc == 0:
+                _log_subprocess_event(label, f"[INFO] {label} exited cleanly — restart in 30s")
+            else:
+                _log_subprocess_event(
+                    label,
+                    f"[WARN] {label} exited with code {rc}, restarting in 30s...",
+                    force=True,
+                )
             time.sleep(30)
         except FileNotFoundError as e:
             print(f"[ERROR] {e}")
             return
         except Exception as e:
-            print(f"[ERROR] {label} crashed: {e}")
-            print(f"[INFO] Restarting in 60s...")
+            if script_name == SCHEDULER_SCRIPT:
+                print(f"[SCHEDULER CRASH DETECTED] {label} launcher error: {e}")
+                _log_subprocess_event(
+                    'Scheduler',
+                    f"[SCHEDULER RECOVERY TRIGGERED] Launcher error — restart in 60s",
+                    force=True,
+                )
+            else:
+                print(f"[ERROR] {label} crashed: {e}")
+                print(f"[INFO] Restarting in 60s...")
             time.sleep(60)
 
 
@@ -320,6 +402,30 @@ def sanitize_json_value(obj):
             return None
         return obj
     return obj
+
+
+def _safe_debug_response(endpoint: str, builder, cycle_id: Optional[str] = None):
+    """Never raise from debug endpoints — return degraded payload on failure."""
+    try:
+        if cycle_id is not None:
+            payload = builder(cycle_id)
+        else:
+            payload = builder()
+        if not isinstance(payload, dict):
+            payload = {'status': 'ok', 'data': payload}
+        elif 'status' not in payload:
+            payload['status'] = 'ok'
+        return sanitize_json_value(payload)
+    except Exception as e:
+        backend_log.warning("Debug endpoint %s degraded: %s", endpoint, e)
+        fallback = {
+            'status': 'degraded',
+            'reason': str(e),
+            'endpoint': endpoint,
+        }
+        if 'delta' in endpoint:
+            fallback['deltas'] = []
+        return sanitize_json_value(fallback)
 
 
 def load_json_file(filename: str) -> dict:
@@ -705,31 +811,31 @@ def debug_snapshots_list():
 @app.get("/api/debug/preservation", dependencies=[Depends(verify_api_key)])
 def api_debug_preservation(cycle_id: Optional[str] = Query(None)):
     from backend.ai.pipeline_observability import debug_preservation as get_preservation_debug
-    return get_preservation_debug(cycle_id)
+    return _safe_debug_response('preservation', get_preservation_debug, cycle_id)
 
 
 @app.get("/api/debug/compression", dependencies=[Depends(verify_api_key)])
 def api_debug_compression(cycle_id: Optional[str] = Query(None)):
     from backend.ai.pipeline_observability import debug_compression as get_compression_debug
-    return get_compression_debug(cycle_id)
+    return _safe_debug_response('compression', get_compression_debug, cycle_id)
 
 
 @app.get("/api/debug/ai-routing", dependencies=[Depends(verify_api_key)])
 def api_debug_ai_routing(cycle_id: Optional[str] = Query(None)):
     from backend.ai.pipeline_observability import debug_ai_routing as get_routing_debug
-    return get_routing_debug(cycle_id)
+    return _safe_debug_response('ai-routing', get_routing_debug, cycle_id)
 
 
 @app.get("/api/debug/delta-analysis", dependencies=[Depends(verify_api_key)])
 def api_debug_delta_analysis(cycle_id: Optional[str] = Query(None)):
     from backend.ai.pipeline_observability import debug_delta_analysis as get_delta_debug
-    return get_delta_debug(cycle_id)
+    return _safe_debug_response('delta-analysis', get_delta_debug, cycle_id)
 
 
 @app.get("/api/debug/quality", dependencies=[Depends(verify_api_key)])
 def api_debug_quality(cycle_id: Optional[str] = Query(None)):
     from backend.ai.pipeline_observability import debug_quality as get_quality_debug
-    return get_quality_debug(cycle_id)
+    return _safe_debug_response('quality', get_quality_debug, cycle_id)
 
 
 @app.get("/api/debug/telegram-alerts", dependencies=[Depends(verify_api_key)])
@@ -743,18 +849,27 @@ def api_debug_explanations():
     from backend.utils.config import ANALYSIS_EXPLANATIONS_FILE
     path = ANALYSIS_EXPLANATIONS_FILE
     if not path.exists():
-        return {"latest": None, "quality_history": []}
+        return sanitize_json_value({"status": "degraded", "reason": "file_missing", "latest": None, "quality_history": []})
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        if not isinstance(data, dict):
+            data = {"latest": None, "quality_history": []}
+        data.setdefault('status', 'ok')
+        return sanitize_json_value(data)
     except Exception as e:
-        return {"error": str(e)}
+        return sanitize_json_value({
+            "status": "degraded",
+            "reason": str(e),
+            "latest": None,
+            "quality_history": [],
+        })
 
 
 @app.get("/api/debug/reliability", dependencies=[Depends(verify_api_key)])
 def api_debug_reliability():
     from backend.metrics.execution_metrics import get_reliability_debug
-    return get_reliability_debug()
+    return _safe_debug_response('reliability', get_reliability_debug)
 
 
 def main():
