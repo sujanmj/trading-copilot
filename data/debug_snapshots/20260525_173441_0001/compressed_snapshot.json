@@ -1,0 +1,116 @@
+{
+  "compression": {
+    "original_chars": 692,
+    "compressed_bulk_chars": 692,
+    "final_context_chars": 1970,
+    "preserved_block_chars": 1067,
+    "discarded_chars_estimate": 0,
+    "original_tokens": 173,
+    "final_tokens": 492,
+    "token_reduction_pct": -184.39,
+    "sections": {
+      "global": {
+        "original_chars": 58,
+        "compressed_chars": 57,
+        "discarded_chars": 1,
+        "protected": false,
+        "limit_chars": 3550
+      },
+      "india": {
+        "original_chars": 51,
+        "compressed_chars": 51,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 3550
+      },
+      "news": {
+        "original_chars": 62,
+        "compressed_chars": 62,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 3550
+      },
+      "inshorts": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "youtube": {
+        "original_chars": 11,
+        "compressed_chars": 11,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 3550
+      },
+      "govt": {
+        "original_chars": 96,
+        "compressed_chars": 96,
+        "discarded_chars": 0,
+        "protected": true,
+        "limit_chars": 5147
+      },
+      "reddit": {
+        "original_chars": 44,
+        "compressed_chars": 44,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 3550
+      },
+      "scanner": {
+        "original_chars": 102,
+        "compressed_chars": 102,
+        "discarded_chars": 0,
+        "protected": true,
+        "limit_chars": 5147
+      },
+      "twitter": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "nse": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "telegram": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "ranked_signals": {
+        "original_chars": 130,
+        "compressed_chars": 130,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 3550
+      }
+    },
+    "gemini": {
+      "used": false,
+      "skipped": false,
+      "passthrough": true,
+      "decision_reason": "Bulk input under 800 tokens — no Gemini compression",
+      "input_tokens": 173
+    },
+    "sections_compressed": [
+      "global"
+    ],
+    "sections_expanded": [
+      "govt",
+      "scanner"
+    ],
+    "preservation_reasoning": [
+      "Regime=regime_transition volatility=1.0 compression_mode=PRESERVE",
+      "Bypass: scanner TATASTEEL impact=7.09",
+      "Bypass: govt NIFTY impact=9.5",
+      "Bypass: news NEWS impact=5.5",
+      "Bypass: news NEWS impact=5.5",
+      "Section 'govt' expanded limit (5147 chars)",
+      "Section 'scanner' expanded limit (5147 chars)"
+    ]
+  },
+  "raw_blob_preview": "=== GLOBAL ===\n=== GLOBAL MARKETS ===\n[SPX]\n  change_percent: 0 (+0.00%)\n\n=== INDIA ===\n=== INDIA STOCKS ===\n  NIFTY: Rs.22,000.00 (+0.80%)\n\n=== NEWS ===\n=== NEWS ===\nArticles: 2\n  [BEA] SEBI probe\n  [BUL] RBI steady\n\n=== YOUTUBE ===\nTV: No data\n\n=== GOVT ===\n=== GOVT INTELLIGENCE ===\nHIGH: 1 | MED: 0\n  1. [8/10 BEARISH] SEBI circular\n     Affects: NIFTY\n\n=== REDDIT ===\n=== REDDIT SENTIMENT ===\nMood: BULLISH (72%)\n\n=== SCANNER ===\n=== NSE SCANNER ===\nScanned: 100 | Signals: 1\n  [ULTRA|UP] TATASTEEL (METAL) Rs.140 +6.20% vol:4.1x | \n\n=== RANKED_SIGNALS ===\n=== RANKED SIGNALS ===\nSCANNER [ULTRA] TATASTEEL +6.2% vol:4.1x\nGOVT [8] SEBI circular\nNEWS [BEA] SEBI probe\nNEWS [BUL] RBI steady",
+  "compressed_bulk_preview": "=== GLOBAL ===\n=== GLOBAL MARKETS ===\n[SPX]\n  change_percent: 0 (+0.00%)\n\n=== INDIA ===\n=== INDIA STOCKS ===\n  NIFTY: Rs.22,000.00 (+0.80%)\n\n=== NEWS ===\n=== NEWS ===\nArticles: 2\n  [BEA] SEBI probe\n  [BUL] RBI steady\n\n=== YOUTUBE ===\nTV: No data\n\n=== GOVT ===\n=== GOVT INTELLIGENCE ===\nHIGH: 1 | MED: 0\n  1. [8/10 BEARISH] SEBI circular\n     Affects: NIFTY\n\n=== REDDIT ===\n=== REDDIT SENTIMENT ===\nMood: BULLISH (72%)\n\n=== SCANNER ===\n=== NSE SCANNER ===\nScanned: 100 | Signals: 1\n  [ULTRA|UP] TATASTEEL (METAL) Rs.140 +6.20% vol:4.1x | \n\n=== RANKED_SIGNALS ===\n=== RANKED SIGNALS ===\nSCANNER [ULTRA] TATASTEEL +6.2% vol:4.1x\nGOVT [8] SEBI circular\nNEWS [BEA] SEBI probe\nNEWS [BUL] RBI steady",
+  "final_context_preview": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nHEADLINE | [BEARISH] SEBI probe | source=?\nHEADLINE | [BULLISH] RBI steady | source=?\nGOVT ALERT | [8/10 BEARISH] SEBI circular | affects: NIFTY\nSCANNER ANOMALY | [ULTRA|UP] TATASTEEL Rs.140 +6.20% vol=4.1x | \n\n=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [global_india_divergence] disagreement=0.67 | Global/India divergence: global avg -1.20% vs India avg +0.80%\n  [scanner_anomaly] disagreement=0.62 | Anomaly TATASTEEL ULTRA move +6.20%\n\n=== MARKET REGIME ===\n  Primary: REGIME TRANSITION | volatility=1.00\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.35)\n  Signals: news_shock=0.25 sentiment_instability=0.76 scanner_anomaly=0.98\n\n=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 9.5] SEBI circular | conf=0.88 sources=1 agree=0.70 impact=9.5 [BYPASS]\n  [ULTRA|UP] TATASTEEL +6.20% | conf=0.92 sources=1 agree=1.00 impact=7.1 [BYPASS]\n  [BEARISH] SEBI probe | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [BULLISH] RBI steady | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n\n=== COMPRESSED MARKET CONTEXT (bulk sections) ===\n\n=== GLOBAL ===\n=== GLOBAL MARKETS ===\n[SPX]\n  change_percent: 0 (+0.00%)\n\n=== INDIA ===\n=== INDIA STOCKS ===\n  NIFTY: Rs.22,000.00 (+0.80%)\n\n=== NEWS ===\n=== NEWS ===\nArticles: 2\n  [BEA] SEBI probe\n  [BUL] RBI steady\n\n=== YOUTUBE ===\nTV: No data\n\n=== GOVT ===\n=== GOVT INTELLIGENCE ===\nHIGH: 1 | MED: 0\n  1. [8/10 BEARISH] SEBI circular\n     Affects: NIFTY\n\n=== REDDIT ===\n=== REDDIT SENTIMENT ===\nMood: BULLISH (72%)\n\n=== SCANNER ===\n=== NSE SCANNER ===\nScanned: 100 | Signals: 1\n  [ULTRA|UP] TATASTEEL (METAL) Rs.140 +6.20% vol:4.1x | \n\n=== RANKED_SIGNALS ===\n=== RANKED SIGNALS ===\nSCANNER [ULTRA] TATASTEEL +6.2% vol:4.1x\nGOVT [8] SEBI circular\nNEWS [BEA] SEBI probe\nNEWS [BUL] RBI steady\n\nINSTRUCTION: Preserve contradictions above — do NOT flatten opposing views. Weight RAW HIGH-IMPACT EVIDENCE heavily in opportunities, risks, and mood."
+}

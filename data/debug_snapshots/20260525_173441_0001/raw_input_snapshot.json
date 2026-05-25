@@ -1,0 +1,57 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "india_markets": "961e6154192cad1d0d47",
+    "global_markets": "a0c01baaed90f7bcbace",
+    "news": "e169eaf66142ba701cb0",
+    "scanner": "36cda0577cf7e3cf9935",
+    "govt": "a11e4a7d28cf2ba1af7f",
+    "reddit": "b49a696afb95a22e8174",
+    "youtube": "empty",
+    "inshorts": "empty",
+    "twitter": "empty",
+    "nse_filings": "empty",
+    "telegram": "empty",
+    "composite": "f4c81e4d5bcc861e26a7"
+  },
+  "metrics": {
+    "india_avg_change": 0.8,
+    "news_count": 2,
+    "govt_high_impact": 1,
+    "scanner_signals": 1,
+    "top_scanner_tickers": [
+      "TATASTEEL"
+    ],
+    "reddit_sentiment": "BULLISH",
+    "reddit_confidence": 72
+  },
+  "india_markets_counts": {
+    "prices": 1
+  },
+  "news_counts": {
+    "articles": 2
+  },
+  "scanner_counts": {
+    "top_signals": 1
+  },
+  "govt_counts": {
+    "high_impact_items": 1
+  },
+  "youtube_type": "NoneType",
+  "inshorts_type": "NoneType",
+  "twitter_type": "NoneType",
+  "nse_filings_type": "NoneType",
+  "telegram_type": "NoneType"
+}

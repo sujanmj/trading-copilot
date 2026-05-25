@@ -250,6 +250,107 @@
     .chat-msg-ai { padding: 10px 12px; background: rgba(0,230,118,0.05); border-radius: 6px; border-left: 2px solid #00E676; margin: 8px 0; border: 1px solid rgba(0,230,118,0.1); }
     .chat-msg-meta { color: #00E676; font-size: 10px; margin-bottom: 6px; font-weight: bold; }
     .chat-msg-content { font-size: 12px; color: #E0E6ED; line-height: 1.5; }
+
+    /* --- AI OPS DRAWER (operator console) --- */
+    .ai-ops-btn {
+      position: relative;
+      background: rgba(20, 28, 40, 0.9);
+      border: 1px solid rgba(100, 180, 255, 0.25);
+      color: #7eb8ff;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .ai-ops-btn:hover { border-color: rgba(100, 180, 255, 0.55); color: #a8d4ff; box-shadow: 0 0 8px rgba(59, 130, 246, 0.15); }
+    .ai-ops-btn.has-alert::after {
+      content: '';
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ffaa00;
+      box-shadow: 0 0 6px rgba(255, 170, 0, 0.8);
+    }
+    .ai-ops-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 2000;
+      backdrop-filter: blur(2px);
+    }
+    .ai-ops-backdrop.open { display: block; }
+    .ai-ops-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(400px, 92vw);
+      height: 100%;
+      background: #0d1117;
+      border-left: 1px solid rgba(100, 180, 255, 0.15);
+      z-index: 2001;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
+    }
+    .ai-ops-drawer.open { transform: translateX(0); }
+    .ai-ops-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid #222;
+      background: #111;
+      flex-shrink: 0;
+    }
+    .ai-ops-head h2 { margin: 0; font-size: 12px; color: #7eb8ff; letter-spacing: 0.06em; text-transform: uppercase; }
+    .ai-ops-close { background: transparent; border: 1px solid #333; color: #888; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 14px; }
+    .ai-ops-close:hover { color: #fff; border-color: #555; }
+    .ai-ops-body { flex: 1; overflow-y: auto; padding: 10px 12px 16px; }
+    .ai-ops-body::-webkit-scrollbar { width: 4px; }
+    .ai-ops-body::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .ai-ops-section { margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.04); border-radius: 8px; background: rgba(0,0,0,0.2); }
+    .ai-ops-section summary {
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #8B949E;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      list-style: none;
+    }
+    .ai-ops-section summary::-webkit-details-marker { display: none; }
+    .ai-ops-section[open] summary { color: #7eb8ff; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .ai-ops-section-body { padding: 8px 10px 10px; }
+    .ai-ops-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .ai-ops-stat { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; padding: 6px 8px; }
+    .ai-ops-stat-label { display: block; font-size: 8px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+    .ai-ops-stat-value { display: block; font-size: 11px; color: #E0E6ED; margin-top: 2px; font-family: monospace; }
+    .ai-ops-stat-value.ai-ops-warn { color: #ffaa00; }
+    .ai-ops-stat-value.ai-ops-ok { color: #00E676; }
+    .ai-ops-timeline-row { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .ai-ops-timeline-row:last-child { border-bottom: none; }
+    .ai-ops-time { font-size: 9px; color: #555; min-width: 42px; font-family: monospace; }
+    .ai-ops-timeline-label { font-size: 10px; color: #ccc; font-weight: 600; }
+    .ai-ops-timeline-detail { font-size: 9px; color: #777; margin-top: 2px; line-height: 1.35; }
+    .ai-ops-list { margin: 0; padding-left: 16px; font-size: 10px; color: #A3B3C8; line-height: 1.45; }
+    .ai-ops-list li { margin-bottom: 4px; }
+    .ai-ops-empty { font-size: 10px; color: #555; padding: 4px 0; }
+    .ai-ops-subhead { font-size: 9px; color: #666; text-transform: uppercase; margin: 8px 0 4px; letter-spacing: 0.05em; }
+    .ai-ops-warnings { display: none; flex-wrap: wrap; gap: 4px; padding: 0 12px 8px; }
+    .ai-ops-warning-chip { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(255,170,0,0.1); color: #ffaa00; border: 1px solid rgba(255,170,0,0.25); }
+    .ai-ops-footer { padding: 8px 12px; border-top: 1px solid #222; font-size: 9px; color: #555; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; }
+    .ai-ops-load { color: #7eb8ff; font-size: 9px; }
   </style>
 </head>
 <body>
@@ -275,6 +376,7 @@
     <button class="news-btn" data-url="https://www.youtube.com/@CNBC-TV18">CNBC</button>
     <button class="news-btn" data-url="https://www.nseindia.com">NSE</button>
     <div class="right-status">
+      <button type="button" class="ai-ops-btn" id="aiOpsBtn" title="AI Ops / Logs">OPS</button>
       <span class="api-status" id="apiStatus">⏳</span>
       <span class="live-badge">🔴 LIVE</span>
     </div>
@@ -354,6 +456,46 @@
     <div id="predDetailContent"></div>
   </div>
 
+  <div class="ai-ops-backdrop" id="aiOpsBackdrop"></div>
+  <aside class="ai-ops-drawer" id="aiOpsDrawer" aria-label="AI Ops console">
+    <div class="ai-ops-head">
+      <h2>⚙ AI Ops</h2>
+      <button type="button" class="ai-ops-close" id="aiOpsClose" title="Close">×</button>
+    </div>
+    <div class="ai-ops-warnings" id="aiOpsWarnings"></div>
+    <div class="ai-ops-body">
+      <details class="ai-ops-section" open>
+        <summary>System Status</summary>
+        <div class="ai-ops-section-body"><div class="ai-ops-stat-grid" id="aiOpsStatusGrid"></div></div>
+      </details>
+      <details class="ai-ops-section" open>
+        <summary>Live AI Timeline</summary>
+        <div class="ai-ops-section-body" id="aiOpsTimeline"></div>
+      </details>
+      <details class="ai-ops-section">
+        <summary>Preservation Inspector</summary>
+        <div class="ai-ops-section-body" id="aiOpsPreservation"></div>
+      </details>
+      <details class="ai-ops-section">
+        <summary>AI Routing</summary>
+        <div class="ai-ops-section-body" id="aiOpsRouting"></div>
+      </details>
+      <details class="ai-ops-section">
+        <summary>Telegram Alerts</summary>
+        <div class="ai-ops-section-body" id="aiOpsTelegram"></div>
+      </details>
+      <details class="ai-ops-section">
+        <summary>Watchdog / Health</summary>
+        <div class="ai-ops-section-body" id="aiOpsHealth"></div>
+      </details>
+    </div>
+    <div class="ai-ops-footer">
+      <span id="aiOpsFooter">—</span>
+      <span class="ai-ops-load" id="aiOpsLoadStatus"></span>
+    </div>
+  </aside>
+
+  <script src="frontend/components/AIOpsPanel.js"></script>
   <script>
   const fs = require('fs')
   const path = require('path')
@@ -430,6 +572,7 @@
       apiCache.lastFetch = Date.now()
       apiCache.connected = true
       updateApiStatus(true)
+      if (window.AIOpsPanel && AIOpsPanel.checkAlerts) AIOpsPanel.checkAlerts()
       return true
     } catch (e) {
       console.error('❌ API fetch failed:', e.message)
@@ -1605,6 +1748,13 @@
 
   refreshAll()
   setInterval(refreshAll, 30000)
+
+  if (window.AIOpsPanel) {
+    AIOpsPanel.init({
+      getApiBase: () => API_BASE,
+      getHeaders: apiHeaders,
+    })
+  }
 
   function renderSignalRow(s, cls) {
     const ticker = s.ticker || '?', sector = s.sector || '?', strength = s.strength || '?', direction = s.direction || '?', change = s.change_percent || 0, volRatio = s.volume_ratio || 0, price = s.price || 0, signals = s.signals || [];

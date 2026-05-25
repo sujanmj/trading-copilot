@@ -1,0 +1,40 @@
+{
+  "claude": null,
+  "routing_events": [],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "delta_reasons": [
+      "initial_run"
+    ],
+    "metrics": {
+      "india_avg_change": 0.8,
+      "news_count": 2,
+      "govt_high_impact": 1,
+      "scanner_signals": 1,
+      "top_scanner_tickers": [
+        "TATASTEEL"
+      ],
+      "reddit_sentiment": "BULLISH",
+      "reddit_confidence": 72
+    },
+    "source_hashes": {
+      "india_markets": "961e6154192cad1d0d47",
+      "global_markets": "a0c01baaed90f7bcbace",
+      "news": "e169eaf66142ba701cb0",
+      "scanner": "36cda0577cf7e3cf9935",
+      "govt": "a11e4a7d28cf2ba1af7f",
+      "reddit": "b49a696afb95a22e8174",
+      "youtube": "empty",
+      "inshorts": "empty",
+      "twitter": "empty",
+      "nse_filings": "empty",
+      "telegram": "empty",
+      "composite": "f4c81e4d5bcc861e26a7"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

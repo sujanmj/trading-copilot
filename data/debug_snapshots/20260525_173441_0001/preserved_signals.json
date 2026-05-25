@@ -1,0 +1,170 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nHEADLINE | [BEARISH] SEBI probe | source=?\nHEADLINE | [BULLISH] RBI steady | source=?\nGOVT ALERT | [8/10 BEARISH] SEBI circular | affects: NIFTY\nSCANNER ANOMALY | [ULTRA|UP] TATASTEEL Rs.140 +6.20% vol=4.1x | ",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "scanner",
+        "ticker": "TATASTEEL",
+        "label": "[ULTRA|UP] TATASTEEL +6.20%",
+        "confidence": 0.919,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.09,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "NIFTY",
+        "label": "[GOVT 9.5] SEBI circular",
+        "confidence": 0.881,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 9.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[BEARISH] SEBI probe",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[BULLISH] RBI steady",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 9.5] SEBI circular | conf=0.88 sources=1 agree=0.70 impact=9.5 [BYPASS]\n  [ULTRA|UP] TATASTEEL +6.20% | conf=0.92 sources=1 agree=1.00 impact=7.1 [BYPASS]\n  [BEARISH] SEBI probe | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [BULLISH] RBI steady | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]",
+    "bypass_items": [
+      {
+        "kind": "scanner",
+        "ticker": "TATASTEEL",
+        "label": "[ULTRA|UP] TATASTEEL +6.20%",
+        "confidence": 0.919,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.09,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "NIFTY",
+        "label": "[GOVT 9.5] SEBI circular",
+        "confidence": 0.881,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 9.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[BEARISH] SEBI probe",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[BULLISH] RBI steady",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "scanner",
+      "ticker": "TATASTEEL",
+      "label": "[ULTRA|UP] TATASTEEL +6.20%",
+      "confidence": 0.919,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.09,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "NIFTY",
+      "label": "[GOVT 9.5] SEBI circular",
+      "confidence": 0.881,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 9.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[BEARISH] SEBI probe",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[BULLISH] RBI steady",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=regime_transition volatility=1.0 compression_mode=PRESERVE",
+    "Bypass: scanner TATASTEEL impact=7.09",
+    "Bypass: govt NIFTY impact=9.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Section 'govt' expanded limit (5147 chars)",
+    "Section 'scanner' expanded limit (5147 chars)"
+  ],
+  "regime": {
+    "primary_regime": "regime_transition",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.0,
+      "panic_volatile": 0.55,
+      "macro_uncertainty": 0.0,
+      "regime_transition": 0.607
+    },
+    "volatility_index": 1.0,
+    "sentiment_instability": 0.763,
+    "news_shock_intensity": 0.25,
+    "scanner_anomaly_strength": 0.975,
+    "compression_aggressiveness": 0.35,
+    "regime_shift": false,
+    "previous_regime": null,
+    "summary_block": "=== MARKET REGIME ===\n  Primary: REGIME TRANSITION | volatility=1.00\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.35)\n  Signals: news_shock=0.25 sentiment_instability=0.76 scanner_anomaly=0.98"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.35,
+    "max_per_section": 3550,
+    "max_prompt_chars": 29800,
+    "gemini_word_cap": 1215,
+    "skip_gemini": true,
+    "preserve_contradictions": true,
+    "volatility_index": 1.0,
+    "disagreement_score": 0.643,
+    "news_shock_intensity": 0.25
+  }
+}

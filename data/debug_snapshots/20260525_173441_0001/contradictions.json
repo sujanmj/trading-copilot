@@ -1,0 +1,20 @@
+{
+  "contradictions": [
+    {
+      "type": "global_india_divergence",
+      "summary": "Global/India divergence: global avg -1.20% vs India avg +0.80%",
+      "disagreement_score": 0.667,
+      "global_avg": -1.2,
+      "india_avg": 0.8
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly TATASTEEL ULTRA move +6.20%",
+      "disagreement_score": 0.62,
+      "ticker": "TATASTEEL"
+    }
+  ],
+  "overall_disagreement_score": 0.643,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [global_india_divergence] disagreement=0.67 | Global/India divergence: global avg -1.20% vs India avg +0.80%\n  [scanner_anomaly] disagreement=0.62 | Anomaly TATASTEEL ULTRA move +6.20%",
+  "count": 2
+}
