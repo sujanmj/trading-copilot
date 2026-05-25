@@ -1,10 +1,12 @@
 """
-AI ROUTER v3 - Normalized dict responses (never returns plain strings)
+AI ROUTER v4 - Guaranteed dict responses via response_validator
 Uses gemini-2.0-flash (higher free quota: 1500/day vs 20/day)
 """
 
 import os
 from pathlib import Path
+
+from response_validator import validate_ai_response
 
 
 def _load_env_files():
@@ -33,66 +35,73 @@ def get_google_key():
     return os.environ.get('GOOGLE_API_KEY', '').strip()
 
 
-def _ai_result(success, text='', model='', provider='', estimated_cost=0, error=None, **extra):
-    """Standard response shape — every ask_ai/call_* path must use this."""
-    out = {
-        'success': bool(success),
-        'text': text if text is not None else '',
-        'model': model if model is not None else '',
-        'provider': provider if provider is not None else '',
-        'estimated_cost': estimated_cost if estimated_cost is not None else 0,
-        'error': error,
-    }
-    out.update(extra)
-    return out
-
-
-def _normalize_ai_dict(raw, default_model='', default_provider=''):
-    """Coerce any partial/legacy return into the standard dict."""
-    if isinstance(raw, str):
-        return _ai_result(True, text=raw, model=default_model or 'unknown',
-                          provider=default_provider or 'unknown', estimated_cost=0)
-
-    if not isinstance(raw, dict):
-        return _ai_result(
-            False,
-            model=default_model,
-            provider=default_provider,
-            error=f'Invalid AI response type: {type(raw).__name__}',
-        )
-
-    success = bool(raw.get('success'))
-    text = raw.get('text', '')
-    if text is None:
-        text = ''
-    if not text and success and raw.get('response'):
-        text = str(raw.get('response', ''))
-    if not text and success and isinstance(raw.get('content'), str):
-        text = raw.get('content', '')
-
-    estimated_cost = raw.get('estimated_cost', 0)
-    if estimated_cost is None:
-        estimated_cost = 0
-
-    err = raw.get('error')
-    if not success and err is None:
-        err = 'Unknown AI error'
-
-    result = _ai_result(
-        success,
-        text=str(text) if text is not None else '',
-        model=raw.get('model') or default_model or '',
-        provider=raw.get('provider') or default_provider or '',
-        estimated_cost=estimated_cost,
-        error=err if not success else None,
+def _ai_result(success, text='', model='', provider='', estimated_cost=0.0, error=None):
+    """Build standard dict — always pass through validate_ai_response before returning to callers."""
+    return validate_ai_response(
+        {
+            'success': bool(success),
+            'text': text if text is not None else '',
+            'model': model if model is not None else '',
+            'provider': provider if provider is not None else '',
+            'estimated_cost': float(estimated_cost or 0),
+            'error': error if not success else None,
+        },
+        source=provider or 'ai_router',
     )
 
-    if 'input_tokens' in raw:
-        result['input_tokens'] = raw['input_tokens']
-    if 'output_tokens' in raw:
-        result['output_tokens'] = raw['output_tokens']
 
-    return result
+def _safe_return(text, model, provider, cost=0.0):
+    """Final safety wrapper — never return a plain string from ask_ai()."""
+    if isinstance(text, dict):
+        return validate_ai_response(text, source=provider or 'ai_router')
+    return validate_ai_response(
+        {
+            'success': bool(text),
+            'text': str(text) if text else '',
+            'model': model or 'unknown',
+            'provider': provider or 'unknown',
+            'estimated_cost': float(cost or 0),
+            'error': None if text else 'Empty response',
+        },
+        source=provider or 'ai_router',
+    )
+
+
+def _extract_gemini_text(response):
+    """Extract text from Gemini response object without returning a bare string upstream."""
+    text = ''
+    try:
+        text = getattr(response, 'text', None) or ''
+    except Exception:
+        text = ''
+
+    if text:
+        return str(text)
+
+    try:
+        candidates = getattr(response, 'candidates', None) or []
+        if candidates:
+            content = getattr(candidates[0], 'content', None)
+            parts = getattr(content, 'parts', None) or []
+            if parts:
+                part_text = getattr(parts[0], 'text', None)
+                if part_text:
+                    return str(part_text)
+    except Exception:
+        pass
+
+    try:
+        if isinstance(response, dict):
+            return str(
+                response.get('candidates', [{}])[0]
+                .get('content', {})
+                .get('parts', [{}])[0]
+                .get('text', '')
+            )
+    except Exception:
+        pass
+
+    return ''
 
 
 MODELS = {
@@ -101,34 +110,24 @@ MODELS = {
         'model': 'claude-sonnet-4-5',
         'cost_per_1k_input': 0.003,
         'cost_per_1k_output': 0.015,
-        'quality': 'best',
-        'speed': 'medium',
     },
     'haiku': {
         'provider': 'anthropic',
         'model': 'claude-haiku-3-5-20241022',
         'cost_per_1k_input': 0.0008,
         'cost_per_1k_output': 0.004,
-        'quality': 'good',
-        'speed': 'fast',
     },
     'gemini': {
         'provider': 'google',
         'model': 'gemini-2.0-flash',
         'cost_per_1k_input': 0,
         'cost_per_1k_output': 0,
-        'quality': 'good',
-        'speed': 'fast',
-        'daily_limit': 1500,
     },
     'gemini_lite': {
         'provider': 'google',
         'model': 'gemini-2.0-flash-lite',
         'cost_per_1k_input': 0,
         'cost_per_1k_output': 0,
-        'quality': 'okay',
-        'speed': 'very_fast',
-        'daily_limit': 1500,
     },
 }
 
@@ -150,26 +149,17 @@ USE_CASE_ROUTING = {
 
 
 def call_anthropic(model_name, prompt, max_tokens=2500):
+    provider = 'anthropic'
     try:
         import anthropic
 
         api_key = get_anthropic_key()
-
         if not api_key:
-            return _ai_result(
-                False,
-                model=model_name,
-                provider='anthropic',
-                error='ANTHROPIC_API_KEY not set in environment',
-            )
-
+            return _ai_result(False, model=model_name, provider=provider,
+                              error='ANTHROPIC_API_KEY not set in environment')
         if not api_key.startswith('sk-ant-'):
-            return _ai_result(
-                False,
-                model=model_name,
-                provider='anthropic',
-                error=f'Invalid ANTHROPIC_API_KEY format. Got: {api_key[:10]}...',
-            )
+            return _ai_result(False, model=model_name, provider=provider,
+                              error=f'Invalid ANTHROPIC_API_KEY format. Got: {api_key[:10]}...')
 
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
@@ -177,38 +167,31 @@ def call_anthropic(model_name, prompt, max_tokens=2500):
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        return _ai_result(
-            True,
-            text=message.content[0].text,
-            model=model_name,
-            provider='anthropic',
-            estimated_cost=0,
-            input_tokens=message.usage.input_tokens,
-            output_tokens=message.usage.output_tokens,
-        )
+        raw = {
+            'success': True,
+            'text': message.content[0].text,
+            'model': model_name,
+            'provider': provider,
+            'estimated_cost': 0.0,
+            'error': None,
+            'input_tokens': message.usage.input_tokens,
+            'output_tokens': message.usage.output_tokens,
+        }
+        return validate_ai_response(raw, source=provider)
     except Exception as e:
-        return _ai_result(
-            False,
-            model=model_name,
-            provider='anthropic',
-            error=str(e),
-        )
+        return _ai_result(False, model=model_name, provider=provider, error=str(e))
 
 
 def call_gemini(model_name, prompt, max_tokens=2500):
+    provider = 'google'
     try:
         from google import genai
         from google.genai import types
 
         api_key = get_google_key()
-
         if not api_key:
-            return _ai_result(
-                False,
-                model=model_name,
-                provider='google',
-                error='GOOGLE_API_KEY not set in environment',
-            )
+            return _ai_result(False, model=model_name, provider=provider,
+                              error='GOOGLE_API_KEY not set in environment')
 
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
@@ -223,17 +206,19 @@ def call_gemini(model_name, prompt, max_tokens=2500):
         usage = getattr(response, 'usage_metadata', None)
         input_tokens = getattr(usage, 'prompt_token_count', 0) if usage else 0
         output_tokens = getattr(usage, 'candidates_token_count', 0) if usage else 0
-        text = response.text or ''
+        text = _extract_gemini_text(response)
 
-        return _ai_result(
-            True,
-            text=text,
-            model=model_name,
-            provider='google',
-            estimated_cost=0,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-        )
+        raw = {
+            'success': bool(text),
+            'text': text,
+            'model': model_name,
+            'provider': provider,
+            'estimated_cost': 0.0,
+            'error': None if text else 'Empty Gemini response',
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+        }
+        return validate_ai_response(raw, source=provider)
     except Exception as e:
         error_str = str(e)
 
@@ -252,29 +237,27 @@ def call_gemini(model_name, prompt, max_tokens=2500):
                         temperature=0.7,
                     ),
                 )
-                return _ai_result(
-                    True,
-                    text=response.text or '',
-                    model='gemini-2.0-flash-lite (fallback)',
-                    provider='google',
-                    estimated_cost=0,
-                    input_tokens=0,
-                    output_tokens=0,
-                )
+                text = _extract_gemini_text(response)
+                raw = {
+                    'success': bool(text),
+                    'text': text,
+                    'model': 'gemini-2.0-flash-lite (fallback)',
+                    'provider': provider,
+                    'estimated_cost': 0.0,
+                    'error': None if text else 'Empty Gemini lite response',
+                    'input_tokens': 0,
+                    'output_tokens': 0,
+                }
+                return validate_ai_response(raw, source=provider)
             except Exception as e2:
                 return _ai_result(
                     False,
                     model=model_name,
-                    provider='google',
+                    provider=provider,
                     error=f'Both Gemini models failed: {str(e2)[:200]}',
                 )
 
-        return _ai_result(
-            False,
-            model=model_name,
-            provider='google',
-            error=error_str,
-        )
+        return _ai_result(False, model=model_name, provider=provider, error=error_str)
 
 
 def ask_ai(prompt, use_case='ask_basic', model_override=None, max_tokens=2500):
@@ -284,7 +267,10 @@ def ask_ai(prompt, use_case='ask_basic', model_override=None, max_tokens=2500):
         model_key = USE_CASE_ROUTING.get(use_case, 'gemini')
 
     if model_key not in MODELS:
-        return _ai_result(False, error=f'Unknown model: {model_key}')
+        return validate_ai_response(
+            {'success': False, 'error': f'Unknown model: {model_key}', 'text': ''},
+            source='ai_router',
+        )
 
     model_config = MODELS[model_key]
     provider = model_config['provider']
@@ -297,23 +283,21 @@ def ask_ai(prompt, use_case='ask_basic', model_override=None, max_tokens=2500):
         elif provider == 'google':
             raw = call_gemini(model_name, prompt, max_tokens)
         else:
-            return _ai_result(False, error=f"Unknown provider: {provider}")
+            raw = _ai_result(False, error=f"Unknown provider: {provider}", provider=provider)
     except Exception as e:
-        return _ai_result(
-            False,
-            model=model_name,
-            provider=provider,
-            error=str(e),
-        )
+        raw = _ai_result(False, model=model_name, provider=provider, error=str(e))
 
-    result = _normalize_ai_dict(raw, default_model=model_name, default_provider=provider)
+    result = validate_ai_response(raw, source=f'{provider}/{model_name}')
 
-    if result['success'] and result.get('input_tokens'):
-        input_cost = (result['input_tokens'] / 1000) * model_config['cost_per_1k_input']
-        output_cost = (result['output_tokens'] / 1000) * model_config['cost_per_1k_output']
-        result['estimated_cost'] = round(input_cost + output_cost, 4)
+    if result['success'] and isinstance(raw, dict):
+        input_tokens = raw.get('input_tokens', 0) or 0
+        output_tokens = raw.get('output_tokens', 0) or 0
+        if input_tokens or output_tokens:
+            input_cost = (input_tokens / 1000) * model_config['cost_per_1k_input']
+            output_cost = (output_tokens / 1000) * model_config['cost_per_1k_output']
+            result['estimated_cost'] = round(input_cost + output_cost, 4)
 
-    return result
+    return _safe_return(result, model_name, provider, result.get('estimated_cost', 0))
 
 
 def check_keys_status():
@@ -326,25 +310,10 @@ def check_keys_status():
 
 
 if __name__ == "__main__":
-    print("Testing AI Router v3...")
-    print("=" * 60)
-
-    status = check_keys_status()
-    print(f"\nKey Status:")
-    print(f"  Anthropic: {'SET' if status['anthropic'] else 'MISSING'}")
-    print(f"  Google: {'SET' if status['google'] else 'MISSING'}")
-
+    print("Testing AI Router v4...")
     test_prompt = "In one sentence, what is the Indian stock market?"
-
     for model in ['gemini', 'haiku', 'sonnet']:
-        print(f"\nTesting {model.upper()}...")
         result = ask_ai(test_prompt, model_override=model, max_tokens=200)
-        print(f"  type={type(result).__name__} success={result.get('success')}")
-        if result['success']:
-            print(f"  Response: {result['text'][:200]}")
-            print(f"  Cost: ${result.get('estimated_cost', 0)}")
-        else:
-            print(f"  ERROR: {result.get('error', 'Unknown')[:200]}")
-
-    print("\n" + "=" * 60)
-    print("Test complete!")
+        assert isinstance(result, dict), f"ask_ai returned {type(result)}"
+        assert 'success' in result and 'text' in result
+        print(f"{model}: type={type(result).__name__} success={result['success']}")

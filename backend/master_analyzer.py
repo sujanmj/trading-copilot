@@ -33,11 +33,14 @@ except ImportError as e:
 
 try:
     from ai_router import ask_ai
+    from response_validator import validate_ai_response
     AI_ROUTER_AVAILABLE = True
     print("[OK] imported ai_router")
+    print("[OK] imported response_validator")
 except ImportError as e:
     AI_ROUTER_AVAILABLE = False
     ask_ai = None
+    validate_ai_response = None
     print(f"[FAIL] ai_router not available: {e}")
 
 try:
@@ -85,21 +88,46 @@ def load_json_safe(filepath):
         return None
 
 
+def _coerce_source_data(data, source_name):
+    """Ensure each data source is a dict (not a raw JSON string)."""
+    if data is None:
+        return None
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, str):
+        print(f"[WARN] {source_name} returned str not dict, trying json.loads()")
+        try:
+            parsed = json.loads(data)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+        print(f"[WARN] {source_name} still not dict after json.loads()")
+        return None
+    print(f"[WARN] {source_name} returned {type(data).__name__} not dict")
+    return None
+
+
 def gather_all_data():
     data_dir = Path(__file__).parent.parent / 'data'
-    return {
-        'global_markets': load_json_safe(data_dir / 'global_markets.json'),
-        'india_markets':  load_json_safe(data_dir / 'latest_market_data.json'),
-        'news':           load_json_safe(data_dir / 'news_feed.json'),
-        'youtube':        load_json_safe(data_dir / 'youtube_feed.json'),
-        'govt':           load_json_safe(data_dir / 'govt_intelligence.json'),
-        'inshorts':       load_json_safe(data_dir / 'inshorts_feed.json'),
-        'reddit':         load_json_safe(data_dir / 'reddit_data.json'),
-        'telegram':       load_json_safe(data_dir / 'telegram_sentiment.json'),
-        'scanner':        load_json_safe(data_dir / 'scanner_data.json'),
-        'twitter':        load_json_safe(data_dir / 'twitter_data.json'),
-        'nse_filings':    load_json_safe(data_dir / 'nse_announcements.json'),
+    sources = {
+        'global_markets': data_dir / 'global_markets.json',
+        'india_markets':  data_dir / 'latest_market_data.json',
+        'news':           data_dir / 'news_feed.json',
+        'youtube':        data_dir / 'youtube_feed.json',
+        'govt':           data_dir / 'govt_intelligence.json',
+        'inshorts':       data_dir / 'inshorts_feed.json',
+        'reddit':         data_dir / 'reddit_data.json',
+        'telegram':       data_dir / 'telegram_sentiment.json',
+        'scanner':        data_dir / 'scanner_data.json',
+        'twitter':        data_dir / 'twitter_data.json',
+        'nse_filings':    data_dir / 'nse_announcements.json',
     }
+    result = {}
+    for name, path in sources.items():
+        raw = load_json_safe(path)
+        result[name] = _coerce_source_data(raw, name)
+    return result
 
 
 def format_global_markets(data):
@@ -377,16 +405,17 @@ RULES:
 
     use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
     try:
-        result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
+        raw_result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
+        result = validate_ai_response(raw_result, source='master_analyzer') if validate_ai_response else raw_result
     except Exception as e:
         print(f"  [ERROR] ask_ai raised exception: {e}")
         traceback.print_exc()
         return None
 
     if isinstance(result, str):
-        print("  [WARN] ask_ai returned str — wrapping as dict")
+        print(f"[WARN] ai_router returned string instead of dict: {result[:100]}")
         result = {
-            'success': True,
+            'success': bool(result),
             'text': result,
             'model': 'unknown',
             'provider': 'unknown',
@@ -395,7 +424,7 @@ RULES:
         }
 
     if not isinstance(result, dict):
-        print(f"  [ERROR] ask_ai returned invalid type: {type(result).__name__}")
+        print(f"[ERROR] ai_router returned {type(result)}: {result}")
         return None
 
     if not result.get('success'):

@@ -20,7 +20,7 @@ import sys
 import json
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -125,6 +125,59 @@ def _join_list(items, default='Not identified'):
     return ', '.join(cleaned) if cleaned else default
 
 
+def get_opportunities(intel):
+    """Read opportunities from either field name used by analyzer versions."""
+    if not isinstance(intel, dict):
+        return []
+    opps = intel.get('top_opportunities')
+    if opps is None:
+        opps = intel.get('opportunities')
+    if not isinstance(opps, list):
+        return []
+    return opps
+
+
+def debug_intel_fields(intel):
+    """Log field types/counts to diagnose empty Telegram buy/sell lists."""
+    if not isinstance(intel, dict):
+        safe_print(f"[DEBUG] intel is {type(intel).__name__}, not dict")
+        return
+    safe_print(f"[DEBUG] top_opportunities type: {type(intel.get('top_opportunities'))}")
+    safe_print(f"[DEBUG] top_opportunities count: {len(intel.get('top_opportunities') or [])}")
+    safe_print(f"[DEBUG] opportunities type: {type(intel.get('opportunities'))}")
+    safe_print(f"[DEBUG] opportunities count: {len(intel.get('opportunities') or [])}")
+    opps = get_opportunities(intel)
+    safe_print(f"[BRAIN PUSH] Sending {len(opps)} opportunities to Telegram")
+
+
+def intel_age_hours(intel):
+    """Return hours since last intel update, or None if unknown."""
+    if not isinstance(intel, dict):
+        return None
+    ts = intel.get('timestamp') or intel.get('generation_time')
+    if not ts:
+        return None
+    try:
+        if isinstance(ts, str) and 'T' in ts:
+            dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+        else:
+            dt = datetime.strptime(str(ts)[:19], '%Y-%m-%d %H:%M:%S')
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - dt
+        return age.total_seconds() / 3600
+    except Exception:
+        return None
+
+
+def stale_warning(intel):
+    hours = intel_age_hours(intel)
+    if hours is not None and hours > 2:
+        return f"⚠️ Analysis may be stale — last updated {hours:.1f} hours ago\n\n"
+    return ''
+
+
 def normalize_intel(intel):
     """Map old and new unified_intelligence.json field names to canonical keys."""
     if not intel or intel.get('error'):
@@ -140,15 +193,13 @@ def normalize_intel(intel):
     if summary is None:
         summary = intel.get('analysis')
 
-    opps = intel.get('top_opportunities')
-    if opps is None:
-        opps = intel.get('opportunities')
-
+    opps = get_opportunities(intel)
     risks = intel.get('risks_and_avoids')
     if risks is None:
         risks = intel.get('risks')
 
     return {
+        'timestamp': intel.get('timestamp'),
         'generation_time': intel.get('generation_time') or intel.get('timestamp'),
         'sources_used': intel.get('sources_used'),
         'executive_summary': summary,
@@ -159,6 +210,7 @@ def normalize_intel(intel):
         'self_calibration': intel.get('self_calibration'),
         'top_opportunities': _list(opps),
         'risks_and_avoids': _list(risks),
+        'opportunities': _list(opps),
     }
 
 # ============================================================
@@ -168,7 +220,7 @@ def normalize_intel(intel):
 def format_opps(opps_list):
     opps_list = _list(opps_list)
     if not opps_list:
-        return "<i>No signals yet</i>"
+        return "<i>📊 Scanner running — no high conviction signals right now</i>"
     res = []
     for i, o in enumerate(opps_list, 1):
         o = _dict(o)
@@ -202,13 +254,14 @@ def format_risks(risks_list):
 
 def build_msg1_header(intel):
     intel = normalize_intel(intel)
+    stale = stale_warning(intel)
     ts_str = _text(intel.get('generation_time'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     mood = _dict(intel.get('market_mood'))
     confidence = _text(mood.get('confidence_level'), 'N/A')
     sources_used = intel.get('sources_used')
     sources_text = str(sources_used) if sources_used is not None else '8'
 
-    return f"""🧠 <b>UNIFIED MARKET INTELLIGENCE</b>
+    return f"""{stale}🧠 <b>UNIFIED MARKET INTELLIGENCE</b>
 ━━━━━━━━━━━━━━━━━━━━
 
 📅 <i>{ts_str}</i>
@@ -244,7 +297,7 @@ def build_msg3_scanner_sentiment(intel):
 def build_msg4_calibration_opps_top5(intel):
     intel = normalize_intel(intel)
     cal = _text(intel.get('self_calibration'), 'No calibration data available.')
-    opps = _list(intel.get('top_opportunities'))
+    opps = get_opportunities(intel)
 
     opps_text = format_opps(opps[:5])
 
@@ -253,7 +306,7 @@ def build_msg4_calibration_opps_top5(intel):
 
 def build_msg5_opps_top10_risks(intel):
     intel = normalize_intel(intel)
-    opps = _list(intel.get('top_opportunities'))
+    opps = get_opportunities(intel)
     risks = _list(intel.get('risks_and_avoids'))
 
     opps_text = format_opps(opps[5:10]) if len(opps) > 5 else "<i>No additional opportunities.</i>"
@@ -283,10 +336,16 @@ def build_msg6_sectors_global_action(intel):
 
 
 def push_full_brain():
-    intel = normalize_intel(load_intel())
+    raw_intel = load_intel()
+    debug_intel_fields(raw_intel)
+    intel = normalize_intel(raw_intel)
     if not intel:
         send_message("❌ No brain data yet. Run /refresh first.")
         return False
+
+    opps = get_opportunities(intel)
+    if not opps:
+        safe_print("[BRAIN] No opportunities in intel — pushing analysis with scanner notice")
     
     builders = [
         ('1/6 Header',                 build_msg1_header),
@@ -320,9 +379,11 @@ def push_summary():
 
 
 def push_opps():
-    intel = normalize_intel(load_intel())
+    raw = load_intel()
+    debug_intel_fields(raw)
+    intel = normalize_intel(raw)
     if intel:
-        opps = _list(intel.get('top_opportunities'))
+        opps = get_opportunities(intel)
         send_chunked(f"💎 <b>TOP OPPORTUNITIES</b>\n\n{format_opps(opps)}")
 
 
