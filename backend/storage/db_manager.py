@@ -181,6 +181,54 @@ CREATE TABLE IF NOT EXISTS accuracy_metrics (
 CREATE INDEX IF NOT EXISTS idx_metrics_date ON accuracy_metrics(metric_date);
 """
 
+SIGNAL_TRACKING_SCHEMA = """
+-- Outcome learning: unified signal event tracking
+CREATE TABLE IF NOT EXISTS signal_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    event_ts TEXT NOT NULL,
+    event_date DATE NOT NULL,
+    signal_type TEXT NOT NULL,
+    source TEXT,
+    ticker TEXT,
+    direction TEXT,
+    confidence REAL,
+    confidence_band TEXT,
+    regime TEXT,
+    sector TEXT,
+    reasoning_summary TEXT,
+    contradiction_severity REAL,
+    source_consensus REAL,
+    entry_price REAL,
+    dedupe_key TEXT,
+    metadata TEXT,
+    UNIQUE(event_date, signal_type, source, ticker, dedupe_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_se_date ON signal_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_se_type ON signal_events(signal_type);
+CREATE INDEX IF NOT EXISTS idx_se_ticker ON signal_events(ticker);
+CREATE INDEX IF NOT EXISTS idx_se_regime ON signal_events(regime);
+
+CREATE TABLE IF NOT EXISTS signal_horizons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    horizon TEXT NOT NULL,
+    due_at TEXT,
+    evaluated_at TEXT,
+    price REAL,
+    change_pct REAL,
+    mfe_pct REAL,
+    mae_pct REAL,
+    hit_miss TEXT DEFAULT 'PENDING',
+    UNIQUE(event_id, horizon)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sh_event ON signal_horizons(event_id);
+CREATE INDEX IF NOT EXISTS idx_sh_horizon ON signal_horizons(horizon);
+CREATE INDEX IF NOT EXISTS idx_sh_hit ON signal_horizons(hit_miss);
+"""
+
 
 # ============================================================
 # DATABASE CONNECTION
@@ -205,6 +253,7 @@ def init_db():
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
+        conn.executescript(SIGNAL_TRACKING_SCHEMA)
         conn.commit()
         print("[DB] Schema initialized successfully")
     except Exception as e:

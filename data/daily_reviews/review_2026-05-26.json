@@ -1,0 +1,108 @@
+{
+  "status": "ok",
+  "date": "2026-05-26",
+  "generated_at": "2026-05-26T02:12:20.684039",
+  "market_day_classification": {
+    "label": "MIXED SESSION",
+    "confidence": 0.5,
+    "reason": "No dominant day archetype — blended signals",
+    "regime": "unknown",
+    "drivers": {
+      "volatility": 0.4,
+      "contradiction_intensity": 0.0,
+      "scanner_dispersion": 15.49,
+      "breadth": 0.73,
+      "macro_pressure": 0.0,
+      "avg_volume_ratio": 3.89
+    }
+  },
+  "performance_summary": {
+    "signals_generated": 4,
+    "high_confidence_signals": 1,
+    "useful_signals": 0,
+    "failed_signals": 0,
+    "false_positives": 0,
+    "suppressed_alerts": 0,
+    "missed_opportunities": 0,
+    "telegram_precision_pct": null,
+    "evaluated_signals": 0,
+    "confidence_calibration_quality": "insufficient_data"
+  },
+  "highlights": {
+    "best_bullish": null,
+    "best_bearish": null,
+    "biggest_miss": null,
+    "highest_confidence_winner": null,
+    "worst_false_positive": null,
+    "strongest_contradiction": {
+      "summary": "low_intelligence_quality",
+      "detail": "0.527"
+    }
+  },
+  "regime_analysis": {
+    "timeline": [
+      {
+        "time": "—",
+        "transition": "unknown",
+        "note": "Stable regime through session (no intraday shift logged)"
+      },
+      {
+        "time": "—",
+        "transition": "regime shift",
+        "note": "Stable regime: regime_transition"
+      }
+    ],
+    "final_regime": "unknown",
+    "contradiction_intensity": 0.0,
+    "sentiment_diversity": 0.5
+  },
+  "warnings": [
+    {
+      "code": "low_intelligence_quality",
+      "message": "low intelligence quality",
+      "severity": "medium"
+    },
+    {
+      "code": "weak_sentiment_preservation",
+      "message": "weak sentiment preservation",
+      "severity": "medium"
+    },
+    {
+      "code": "fallback_activations",
+      "message": "Safe fallback used 1 time(s) — degraded intelligence served",
+      "severity": "high"
+    },
+    {
+      "code": "hallucination_detections",
+      "message": "Hallucination guard triggered 3 time(s)",
+      "severity": "medium"
+    },
+    {
+      "code": "schema_failures",
+      "message": "Schema validation failures: 2",
+      "severity": "medium"
+    }
+  ],
+  "telegram": {
+    "alerts_sent": 0,
+    "alerts_suppressed": 0,
+    "duplicate_blocks": 0,
+    "low_confidence_skips": 0,
+    "cooldown_blocks": 0,
+    "emergency_alerts": 0,
+    "estimated_useful_alerts": null,
+    "telegram_precision_pct": null
+  },
+  "daily_summary": {
+    "regime": "unknown",
+    "quality_iq": 0.53,
+    "day_type": "MIXED SESSION",
+    "best_signal": null,
+    "failed_signal": null,
+    "telegram_sent": 0,
+    "telegram_useful_est": null,
+    "warnings_count": 5
+  },
+  "observation": "Mixed session — selective signal filtering outperformed broad aggression.",
+  "copy_text": "DAILY INTELLIGENCE REVIEW — 2026-05-26\n\nDAY TYPE: MIXED SESSION\nREGIME: unknown\nQUALITY IQ: 0.53\n\nPERFORMANCE\nSignals: 4 | Useful: 0 | False positives: 0 | Suppressed alerts: 0\nTelegram precision: —%\n\nHIGHLIGHTS\n\nTELEGRAM\nSent: 0 | Useful est: None\n\nWARNINGS\n- low intelligence quality\n- weak sentiment preservation\n- Safe fallback used 1 time(s) — degraded intelligence served\n- Hallucination guard triggered 3 time(s)\n- Schema validation failures: 2\n\nOBSERVATION\nMixed session — selective signal filtering outperformed broad aggression."
+}

@@ -362,6 +362,52 @@
         )}`;
     }
 
+    const cal = data.calibration || {};
+    const calEl = $('aiOpsCalibration');
+    if (calEl) {
+      const bands = ((cal.confidence_calibration || {}).bands || []).slice(0, 6);
+      const regimes = ((cal.regime_performance || {}).regimes || []).slice(0, 6);
+      const types = ((cal.signal_quality || {}).signal_types || []).slice(0, 6);
+      const bandLines = bands.map(
+        (b) => `${b.confidence_band}: ${b.precision_pct}% precision (n=${b.samples}, move ${b.avg_move_pct}%)`
+      );
+      const regimeLines = regimes.map(
+        (r) => `${r.regime}: ${r.alert_precision_pct}% alert precision (n=${r.samples})`
+      );
+      const typeLines = types.map(
+        (t) => `${t.signal_type}: ${t.precision_pct}% precision (n=${t.samples})`
+      );
+      const memory = cal.intelligence_memory || {};
+      calEl.innerHTML =
+        renderStatGrid([
+          {
+            label: 'Signal accuracy',
+            value: cal.signal_accuracy_pct != null ? `${cal.signal_accuracy_pct}%` : '—',
+            cls: cal.signal_accuracy_pct != null && cal.signal_accuracy_pct < 50 ? 'ai-ops-warn' : '',
+          },
+          {
+            label: 'TG precision',
+            value: cal.telegram_precision_proxy != null ? `${cal.telegram_precision_proxy}%` : '—',
+          },
+          {
+            label: 'Min samples',
+            value: String(cal.min_samples_global ?? '—'),
+          },
+          {
+            label: 'Status',
+            value: cal.status || '—',
+            cls: cal.status === 'degraded' ? 'ai-ops-warn' : '',
+          },
+        ]) +
+        `<div class="ai-ops-subhead">Confidence calibration</div>${renderList(bandLines, 'Insufficient samples — collecting outcomes')}` +
+        `<div class="ai-ops-subhead">Regime performance</div>${renderList(regimeLines, 'No regime stats yet')}` +
+        `<div class="ai-ops-subhead">Top signal types</div>${renderList(typeLines, 'No signal type stats yet')}` +
+        `<div class="ai-ops-subhead">What AI gets right</div>${renderList(
+          (memory.successful_patterns || []).slice(0, 4),
+          'Patterns will appear after enough evaluated outcomes'
+        )}`;
+    }
+
     const intelAge = intelFresh.age_seconds;
     const intelStale = intelFresh.status === 'stale';
     const staleThreshold = health.watchdog_stale_threshold_seconds ?? obs.watchdog_stale_threshold_seconds;
@@ -413,7 +459,7 @@
     const statusEl = $('aiOpsLoadStatus');
     if (statusEl) statusEl.textContent = 'Syncing…';
     try {
-      const [health, preservation, compression, routing, delta, quality, explanations, telegram, reliability] = await Promise.all([
+      const [health, preservation, compression, routing, delta, quality, explanations, telegram, reliability, calibration] = await Promise.all([
         fetchJson('/api/health', false),
         fetchJson('/api/debug/preservation', true),
         fetchJson('/api/debug/compression', true),
@@ -423,9 +469,10 @@
         fetchJson('/api/debug/explanations', true),
         fetchJson('/api/debug/telegram-alerts', true).catch(() => ({})),
         fetchJson('/api/debug/reliability', true).catch(() => ({})),
+        fetchJson('/api/debug/calibration', true).catch(() => ({})),
       ]);
 
-      const data = { health, preservation, compression, routing, delta, quality, explanations, telegram, reliability };
+      const data = { health, preservation, compression, routing, delta, quality, explanations, telegram, reliability, calibration };
       renderPanel(data);
       markAlertsSeen(data);
       if (statusEl) statusEl.textContent = '';

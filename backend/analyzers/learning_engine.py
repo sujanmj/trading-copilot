@@ -407,6 +407,25 @@ def build_memory_summary(days=30):
     
     if patterns:
         lines.append("- Apply the failure patterns above when generating today's predictions.")
+
+    try:
+        from backend.analytics.signal_outcomes import get_confidence_calibration, get_regime_performance
+        live_cal = get_confidence_calibration()
+        for band in live_cal.get('bands') or []:
+            if band.get('statistically_meaningful'):
+                lines.append(
+                    f"- Live {band['confidence_band']} band precision {band['precision_pct']}% "
+                    f"(n={band['samples']}, avg move {band['avg_move_pct']}%)"
+                )
+        regime_perf = get_regime_performance()
+        for row in (regime_perf.get('regimes') or [])[:3]:
+            if row.get('statistically_meaningful'):
+                lines.append(
+                    f"- Regime {row['regime']}: alert precision {row['alert_precision_pct']}% "
+                    f"(n={row['samples']})"
+                )
+    except Exception:
+        pass
     
     lines.append("- Use sector performance to weight your conviction.")
     lines.append("- Don't repeat tickers from pending list above.")

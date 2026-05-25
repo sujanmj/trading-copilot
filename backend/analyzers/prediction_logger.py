@@ -522,6 +522,30 @@ def log_scanner_signals(signal_date):
         
         if insert_signal(signal_data):
             saved += 1
+            try:
+                from backend.analytics.signal_outcomes import (
+                    create_pending_outcome_for_signal,
+                    track_scanner_signal,
+                )
+                conn_db = sqlite3.connect(DB_PATH)
+                cur = conn_db.cursor()
+                cur.execute(
+                    "SELECT id FROM signals WHERE signal_date=? AND ticker=? AND strength=?",
+                    (signal_date, signal_data['ticker'], strength),
+                )
+                row = cur.fetchone()
+                conn_db.close()
+                if row:
+                    sig_id = row[0]
+                    create_pending_outcome_for_signal(
+                        sig_id,
+                        signal_data['ticker'],
+                        signal_date,
+                        signal_data.get('price'),
+                    )
+                track_scanner_signal(sig, signal_date)
+            except Exception as e:
+                safe_print(f"[WARN] Signal outcome tracking: {e}")
     
     return saved
 

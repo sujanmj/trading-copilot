@@ -872,6 +872,22 @@ def api_debug_reliability():
     return _safe_debug_response('reliability', get_reliability_debug)
 
 
+@app.get("/api/debug/calibration", dependencies=[Depends(verify_api_key)])
+def api_debug_calibration():
+    from backend.analytics.signal_outcomes import get_ops_calibration_payload
+    return _safe_debug_response('calibration', get_ops_calibration_payload)
+
+
+@app.get("/api/daily-review", dependencies=[Depends(verify_api_key)])
+def api_daily_review(
+    date: Optional[str] = Query(None),
+    rebuild: bool = Query(False),
+):
+    from backend.analytics.daily_review_engine import get_daily_review
+    review = get_daily_review(date, rebuild=rebuild)
+    return sanitize_json_value(review)
+
+
 def main():
     port = API_PORT
     host = API_HOST

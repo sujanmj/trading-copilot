@@ -351,6 +351,196 @@
     .ai-ops-warning-chip { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(255,170,0,0.1); color: #ffaa00; border: 1px solid rgba(255,170,0,0.25); }
     .ai-ops-footer { padding: 8px 12px; border-top: 1px solid #222; font-size: 9px; color: #555; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; }
     .ai-ops-load { color: #7eb8ff; font-size: 9px; }
+
+    /* --- DAILY REVIEW (strategic journal) --- */
+    .ai-review-btn {
+      position: relative;
+      background: rgba(28, 24, 16, 0.92);
+      border: 1px solid rgba(212, 168, 83, 0.28);
+      color: #d4a853;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Segoe UI', sans-serif;
+      margin-right: 4px;
+    }
+    .ai-review-btn:hover {
+      border-color: rgba(212, 168, 83, 0.55);
+      color: #f0c878;
+      box-shadow: 0 0 8px rgba(212, 168, 83, 0.12);
+    }
+    .ai-review-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 2000;
+      backdrop-filter: blur(2px);
+    }
+    .ai-review-backdrop.open { display: block; }
+    .ai-review-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(440px, 94vw);
+      height: 100%;
+      background: #0f0e0c;
+      border-left: 1px solid rgba(212, 168, 83, 0.18);
+      z-index: 2001;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+    }
+    .ai-review-drawer.open { transform: translateX(0); }
+    .ai-review-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #2a2418;
+      background: #12100c;
+      flex-shrink: 0;
+    }
+    .ai-review-head h2 {
+      margin: 0;
+      font-size: 11px;
+      color: #d4a853;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      flex: 1;
+    }
+    .ai-review-actions { display: flex; gap: 6px; align-items: center; }
+    .ai-review-copy-btn, .ai-review-refresh-btn {
+      background: rgba(212, 168, 83, 0.08);
+      border: 1px solid rgba(212, 168, 83, 0.35);
+      color: #d4a853;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .ai-review-copy-btn:hover, .ai-review-refresh-btn:hover { background: rgba(212, 168, 83, 0.15); }
+    .ai-review-close {
+      background: transparent;
+      border: 1px solid #333;
+      color: #888;
+      border-radius: 4px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .ai-review-body { flex: 1; overflow-y: auto; padding: 12px 14px 16px; }
+    .ai-review-section {
+      margin-bottom: 14px;
+      border: 1px solid rgba(212, 168, 83, 0.08);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 10px 12px;
+    }
+    .ai-review-section-title {
+      font-size: 9px;
+      font-weight: 700;
+      color: #8a7350;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .ai-review-day-badge {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #f0c878;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+    .ai-review-hero-sub { font-size: 11px; color: #b8a88a; line-height: 1.45; margin-bottom: 8px; }
+    .ai-review-hero-meta { font-size: 10px; color: #777; margin-bottom: 8px; }
+    .ai-review-hero-meta strong { color: #ccc; }
+    .ai-review-observation {
+      font-size: 10px;
+      color: #9a8b6e;
+      line-height: 1.5;
+      padding: 8px;
+      border-left: 2px solid rgba(212, 168, 83, 0.35);
+      background: rgba(212, 168, 83, 0.04);
+      border-radius: 0 6px 6px 0;
+    }
+    .ai-review-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .ai-review-stat {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+    .ai-review-stat-label {
+      display: block;
+      font-size: 8px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .ai-review-stat-value {
+      display: block;
+      font-size: 11px;
+      color: #e8dcc8;
+      margin-top: 2px;
+      font-family: monospace;
+    }
+    .ai-review-stat-value.ai-review-ok { color: #00E676; }
+    .ai-review-stat-value.ai-review-warn { color: #ffaa00; }
+    .ai-review-list { margin: 0; padding-left: 16px; font-size: 10px; color: #c9b896; line-height: 1.5; }
+    .ai-review-list li { margin-bottom: 5px; }
+    .ai-review-empty { font-size: 10px; color: #555; }
+    .ai-review-timeline-row {
+      display: flex;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .ai-review-time { font-size: 9px; color: #666; min-width: 42px; font-family: monospace; }
+    .ai-review-timeline-label { font-size: 10px; color: #d4c4a0; font-weight: 600; }
+    .ai-review-timeline-note { font-size: 9px; color: #777; margin-top: 2px; line-height: 1.35; }
+    .ai-review-warning-chip {
+      font-size: 9px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      margin-bottom: 5px;
+      line-height: 1.35;
+    }
+    .ai-review-sev-high { background: rgba(255, 80, 80, 0.1); color: #ff8888; border: 1px solid rgba(255, 80, 80, 0.2); }
+    .ai-review-sev-medium { background: rgba(255, 170, 0, 0.08); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.2); }
+    .ai-review-sev-low { background: rgba(100, 180, 255, 0.08); color: #7eb8ff; border: 1px solid rgba(100, 180, 255, 0.15); }
+    .ai-review-summary-block {
+      font-family: monospace;
+      font-size: 9px;
+      color: #a89878;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(212, 168, 83, 0.1);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .ai-review-footer {
+      padding: 8px 12px;
+      border-top: 1px solid #2a2418;
+      font-size: 9px;
+      color: #555;
+      flex-shrink: 0;
+      display: flex;
+      justify-content: space-between;
+    }
   </style>
 </head>
 <body>
@@ -376,6 +566,7 @@
     <button class="news-btn" data-url="https://www.youtube.com/@CNBC-TV18">CNBC</button>
     <button class="news-btn" data-url="https://www.nseindia.com">NSE</button>
     <div class="right-status">
+      <button type="button" class="ai-review-btn" id="reviewBtn" title="Daily Intelligence Review">REVIEW</button>
       <button type="button" class="ai-ops-btn" id="aiOpsBtn" title="AI Ops / Logs">OPS</button>
       <span class="api-status" id="apiStatus">⏳</span>
       <span class="live-badge">🔴 LIVE</span>
@@ -489,6 +680,10 @@
         <div class="ai-ops-section-body" id="aiOpsReliability"></div>
       </details>
       <details class="ai-ops-section">
+        <summary>Outcome Learning</summary>
+        <div class="ai-ops-section-body" id="aiOpsCalibration"></div>
+      </details>
+      <details class="ai-ops-section">
         <summary>Watchdog / Health</summary>
         <div class="ai-ops-section-body" id="aiOpsHealth"></div>
       </details>
@@ -499,6 +694,50 @@
     </div>
   </aside>
 
+  <div class="ai-review-backdrop" id="reviewBackdrop"></div>
+  <aside class="ai-review-drawer" id="reviewDrawer" aria-label="Daily Intelligence Review">
+    <div class="ai-review-head">
+      <h2>📓 Daily Review</h2>
+      <div class="ai-review-actions">
+        <button type="button" class="ai-review-copy-btn" id="reviewCopyBtn">COPY REVIEW</button>
+        <button type="button" class="ai-review-refresh-btn" id="reviewRefreshBtn" title="Rebuild">↻</button>
+        <button type="button" class="ai-review-close" id="reviewClose" title="Close">×</button>
+      </div>
+    </div>
+    <div class="ai-review-body">
+      <section class="ai-review-section" id="reviewHero"></section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">AI Performance</div>
+        <div id="reviewPerformance"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Winners &amp; Failures</div>
+        <div id="reviewHighlights"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Regime Transitions</div>
+        <div id="reviewRegime"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Quality Warnings</div>
+        <div id="reviewWarnings"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Telegram Effectiveness</div>
+        <div id="reviewTelegram"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Compact Summary</div>
+        <pre class="ai-review-summary-block" id="reviewSummaryBlock">—</pre>
+      </section>
+    </div>
+    <div class="ai-review-footer">
+      <span id="reviewFooter">—</span>
+      <span id="reviewLoadStatus"></span>
+    </div>
+  </aside>
+
+  <script src="components/DailyReviewPanel.js"></script>
   <script src="components/AIOpsPanel.js"></script>
   <script>
   const fs = require('fs')
@@ -1755,6 +1994,12 @@
 
   if (window.AIOpsPanel) {
     AIOpsPanel.init({
+      getApiBase: () => API_BASE,
+      getHeaders: apiHeaders,
+    })
+  }
+  if (window.DailyReviewPanel) {
+    DailyReviewPanel.init({
       getApiBase: () => API_BASE,
       getHeaders: apiHeaders,
     })

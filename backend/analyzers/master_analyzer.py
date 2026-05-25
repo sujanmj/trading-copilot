@@ -858,6 +858,11 @@ def run_master_analysis():
         atomic_write_json(output_file, safe_output)
 
         print(f"\n[SAVED] {output_file}")
+        try:
+            from backend.analytics.signal_outcomes import track_intelligence_snapshot
+            track_intelligence_snapshot(safe_output)
+        except Exception as e:
+            print(f"[WARN] Outcome tracking skipped: {e}")
         return safe_output
 
     except Exception as e:

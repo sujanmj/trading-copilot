@@ -151,13 +151,28 @@ def _send(text: str) -> bool:
 
 def _dispatch(category: str, text: str, confidence: float, detail: str, *,
               ticker: str = '', dedupe_key: str = '', regime: str = 'sideways',
-              volatility: float = 0.0) -> bool:
+              volatility: float = 0.0, direction: str = 'NEUTRAL') -> bool:
     ok, reason = should_send_alert(
         category, confidence, ticker=ticker, dedupe_key=dedupe_key,
         regime=regime, volatility=volatility,
     )
     if not ok:
         return False
+
+    try:
+        from backend.analytics.signal_outcomes import get_historical_accuracy_hint
+        conf_band = 'HIGH' if confidence >= 0.75 else ('LOW' if confidence <= 0.45 else 'MEDIUM')
+        hint = get_historical_accuracy_hint(
+            signal_type='telegram',
+            direction=direction,
+            regime=regime,
+            confidence_band=conf_band,
+        )
+        if hint:
+            text = f"{text}\n\n<i>{hint}</i>"
+    except Exception:
+        pass
+
     if not _send(text):
         return False
     mark_alert_sent(category, ticker=ticker, dedupe_key=dedupe_key)
@@ -165,6 +180,20 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
     try:
         from backend.metrics.execution_metrics import record_reliability_event
         record_reliability_event('telegram_sent')
+    except Exception:
+        pass
+    try:
+        from backend.analytics.signal_outcomes import track_telegram_alert
+        state = _load_analysis_state()
+        track_telegram_alert(
+            category=category,
+            ticker=ticker,
+            confidence=confidence,
+            regime=regime,
+            direction=direction,
+            reasoning=detail,
+            contradiction_severity=float(state.get('disagreement_score') or 0),
+        )
     except Exception:
         pass
     return True
@@ -291,6 +320,7 @@ def try_open_opportunity() -> int:
         if _dispatch(
             INTRADAY_OPPORTUNITY, text, confidence, f'open {ticker}',
             ticker=ticker, dedupe_key=dedupe, regime=regime, volatility=vol,
+            direction=str(signal.get('direction') or 'NEUTRAL'),
         ):
             sent += 1
             if sent >= 2:

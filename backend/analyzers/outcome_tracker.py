@@ -500,5 +500,13 @@ if __name__ == "__main__":
     
     print("\n[STAGE 2] Evaluating signal outcomes...")
     evaluate_signals_outcomes(verbose=False)
+
+    print("\n[STAGE 3] Evaluating horizon outcomes (15m/1h/intraday)...")
+    try:
+        from backend.analytics.signal_outcomes import evaluate_due_horizons
+        hr = evaluate_due_horizons()
+        print(f"  Horizon evaluations: {hr.get('evaluated', 0)}")
+    except Exception as e:
+        print(f"  [WARN] Horizon evaluation skipped: {e}")
     
     print("\n[DONE] All pending outcomes processed.")

@@ -91,6 +91,12 @@ def run_post_market_pipeline():
     run_standalone_script("outcome_tracker.py")
     run_standalone_script("stats_exporter.py")
     run_standalone_script("history_exporter.py")
+    try:
+        from backend.analytics.daily_review_engine import build_daily_review
+        build_daily_review()
+        print("[DAILY REVIEW] End-of-day snapshot saved")
+    except Exception as e:
+        print(f"[!] Daily review snapshot failed: {e}")
     run_full_cycle("Post-Market")
 
 # ============================================================
@@ -142,8 +148,23 @@ def run_scheduled_collection():
 # ── After-hours / overnight ingestion (market hours use intraday slots below)
 schedule.every(30).minutes.do(run_scheduled_collection)
 
+def run_outcome_horizon_tick():
+    """Evaluate 15m/1h/intraday signal horizons during market hours."""
+    try:
+        from backend.utils.market_hours import get_market_period
+        from backend.analytics.signal_outcomes import evaluate_due_horizons
+        if get_market_period() != 'market':
+            return
+        result = evaluate_due_horizons()
+        if result.get('evaluated'):
+            print(f"[OUTCOME LEARN] evaluated {result['evaluated']} horizons")
+    except Exception as e:
+        print(f"[!] Outcome horizon tick failed: {e}")
+
+
 # ── Smart Telegram alert scheduler (event-driven, anti-spam)
 schedule.every(1).minutes.do(run_alert_scheduler_tick)
+schedule.every(15).minutes.do(run_outcome_horizon_tick)
 
 # ============================================================
 # BOOT
