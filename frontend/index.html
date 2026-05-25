@@ -352,6 +352,39 @@
     .ai-ops-footer { padding: 8px 12px; border-top: 1px solid #222; font-size: 9px; color: #555; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; }
     .ai-ops-load { color: #7eb8ff; font-size: 9px; }
 
+    /* --- CALIBRATION + JOURNAL (Stats / Hist evolution) --- */
+    .calib-section { margin-bottom: 14px; }
+    .calib-section-title { font-size: 10px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .calib-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: rgba(0,0,0,0.22); border-radius: 6px; margin-bottom: 5px; border: 1px solid rgba(255,255,255,0.03); font-size: 11px; }
+    .calib-row-label { color: #C9D1D9; flex: 1; padding-right: 8px; }
+    .calib-row-value { font-family: monospace; font-weight: bold; white-space: nowrap; }
+    .calib-row-value.good { color: #00E676; }
+    .calib-row-value.mid { color: #ffaa00; }
+    .calib-row-value.bad { color: #FF3D00; }
+    .calib-row-value.muted { color: #8B949E; }
+    .calib-health-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 8px; }
+    .calib-health-chip { background: rgba(0,0,0,0.25); border: 1px solid rgba(136,204,255,0.12); border-radius: 8px; padding: 10px; text-align: center; }
+    .calib-health-chip .lbl { font-size: 9px; color: #8B949E; text-transform: uppercase; }
+    .calib-health-chip .val { font-size: 18px; font-weight: bold; margin-top: 4px; color: #88ccff; }
+    .calib-insufficient { font-size: 10px; color: #8B949E; text-align: center; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px; }
+    .journal-card { background: rgba(0,0,0,0.28); border: 1px solid rgba(212,168,83,0.15); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    .journal-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; }
+    .journal-date { font-size: 13px; font-weight: bold; color: #d4a853; }
+    .journal-day-badge { font-size: 9px; padding: 3px 8px; border-radius: 4px; background: rgba(212,168,83,0.12); color: #f0c878; border: 1px solid rgba(212,168,83,0.25); white-space: nowrap; }
+    .journal-kv { display: grid; grid-template-columns: 88px 1fr; gap: 4px 10px; font-size: 11px; margin-bottom: 8px; }
+    .journal-k { color: #8B949E; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .journal-v { color: #E0E6ED; }
+    .journal-v.win { color: #00E676; }
+    .journal-v.loss { color: #FF3D00; }
+    .journal-obs { font-size: 11px; color: #A3B3C8; line-height: 1.45; margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 2px solid rgba(212,168,83,0.35); }
+    .journal-details { margin-top: 8px; }
+    .journal-details summary { font-size: 10px; color: #8B949E; cursor: pointer; user-select: none; }
+    .journal-timeline-item { font-size: 10px; color: #A3B3C8; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .journal-warn { font-size: 10px; color: #ffaa00; padding: 4px 0; }
+    .journal-copy-btn { background: rgba(212,168,83,0.1); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); padding: 6px 10px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; margin-top: 8px; width: 100%; }
+    .journal-copy-btn:hover { background: rgba(212,168,83,0.2); }
+    .journal-copy-btn.copied { color: #00E676; border-color: #00E676; }
+
     /* --- DAILY REVIEW (strategic journal) --- */
     .ai-review-btn {
       position: relative;
@@ -596,8 +629,8 @@
         <div class="tab" data-tab="news">📰 News</div>
         <div class="tab" data-tab="tv">📺 TV</div>
         <div class="tab" data-tab="reddit">🤖 Rdt</div>
-        <div class="tab" data-tab="stats">📊 Stats</div>
-        <div class="tab" data-tab="history">📜 Hist</div>
+        <div class="tab" data-tab="stats">📊 Calib</div>
+        <div class="tab" data-tab="history">📜 Journal</div>
       </div>
 
       <div class="tab-content active" id="tab-brain"><div class="loading">⏳ Loading...</div></div>
@@ -1653,14 +1686,34 @@
     container.innerHTML = html;
   }
 
+  function pctClass(pct, invert) {
+    if (pct == null || pct === '—') return 'muted'
+    const v = Number(pct)
+    if (Number.isNaN(v)) return 'muted'
+    const good = invert ? v <= 35 : v >= 65
+    const mid = invert ? v <= 55 : v >= 45
+    return good ? 'good' : mid ? 'mid' : 'bad'
+  }
+
+  function calibRow(label, value, cls) {
+    return `<div class="calib-row"><span class="calib-row-label">${escapeHtml(label)}</span><span class="calib-row-value ${cls || 'muted'}">${escapeHtml(String(value))}</span></div>`
+  }
+
+  async function copyTextToClipboard(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text)
+      if (btn) { const o = btn.textContent; btn.textContent = '✓ Copied'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = o; btn.classList.remove('copied') }, 1600) }
+    } catch (e) { alert('Copy failed') }
+  }
+
   // ============================================================
-  // TAB 8: STATS
+  // TAB: AI CALIBRATION DASHBOARD (Stats evolution)
   // ============================================================
   function loadStats() {
     const data = loadJson(files.stats);
     const container = document.getElementById('tab-stats');
     if (!data) {
-      container.innerHTML = `<div class="empty-stats"><h4>📊 Waiting for stats...</h4><p>Run outcome_tracker or wait for first predictions.</p></div>`;
+      container.innerHTML = `<div class="empty-stats"><h4>📊 Calibration building...</h4><p>Run outcome_tracker or wait for signal evaluations.</p></div>`;
       return;
     }
 
@@ -1668,12 +1721,13 @@
     const metrics = data.metrics_all_time || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
     const winRate = metrics.win_rate || 0
     const profitFactor = metrics.profit_factor || 0
+    const cal = data.calibration_dashboard || {}
 
     let html = `<div class="timestamp">Updated: ${formatTime(data.last_updated)}</div>`;
     
     html += `
-      <div class="glass-card" style="padding: 24px;">
-        <h2 style="margin-bottom: 20px;">🤖 Lifetime AI Performance</h2>
+      <div class="glass-card" style="padding: 20px;">
+        <h2 style="margin-bottom: 16px; font-size: 14px;">🎯 AI Calibration Dashboard</h2>
         <div class="stats-grid-4">
           <div class="stat-big-card">
             <div class="stat-big-label">Predictions</div>
@@ -1696,9 +1750,75 @@
             <div class="stat-big-sub">gain ÷ loss</div>
           </div>
         </div>
-        ${(metrics.total_evaluated || 0) === 0 ? `<div style="text-align:center; padding: 16px; background:rgba(255,255,255,0.05); border-radius:8px; color:#A3B3C8; font-size:12px;">⏳ Track Record is building. Outcomes evaluate automatically at 8 AM daily.</div>` : ''}
+        ${(metrics.total_evaluated || 0) === 0 ? `<div class="calib-insufficient">⏳ Track record building — outcomes evaluate automatically.</div>` : ''}
       </div>
     `;
+
+    const dayTypes = (cal.market_day_performance || {}).day_types || []
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Regime / Day-Type Performance</div>`
+    if (dayTypes.length === 0) {
+      html += `<div class="calib-insufficient">Need ${(cal.market_day_performance || {}).min_samples_required || 4}+ evaluated signals per day type.</div>`
+    } else {
+      dayTypes.forEach(d => {
+        html += calibRow(d.day_type, `${d.signal_accuracy_pct}% acc · FP ${d.false_positive_rate_pct}%`, pctClass(d.signal_accuracy_pct))
+      })
+    }
+    html += `</div>`
+
+    const conf = cal.confidence_calibration || {}
+    const numBuckets = conf.numeric_buckets || []
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Confidence Calibration</div>`
+    if (numBuckets.every(b => !b.statistically_meaningful)) {
+      html += `<div class="calib-insufficient">Collecting confidence vs outcome samples...</div>`
+    } else {
+      numBuckets.forEach(b => {
+        const val = b.statistically_meaningful ? `${b.accuracy_pct}% accurate (n=${b.samples})` : `${b.bucket} — insufficient`
+        html += calibRow(b.bucket + ' confidence', val, b.statistically_meaningful ? pctClass(b.accuracy_pct) : 'muted')
+      })
+    }
+    html += `</div>`
+
+    const sigPerf = (cal.signal_type_performance || {}).categories || []
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Signal-Type Performance</div>`
+    if (sigPerf.length === 0) {
+      html += `<div class="calib-insufficient">Signal categories appear after horizon evaluations.</div>`
+    } else {
+      sigPerf.slice(0, 8).forEach(s => {
+        html += calibRow(s.category, `${s.accuracy_pct}% · avg ${s.avg_move_pct >= 0 ? '+' : ''}${s.avg_move_pct}%`, pctClass(s.accuracy_pct))
+      })
+    }
+    html += `</div>`
+
+    const tg = cal.telegram_precision || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Telegram Precision</div>`
+    html += calibRow('Useful alerts', tg.useful_alerts_pct != null ? `${tg.useful_alerts_pct}%` : '—', pctClass(tg.useful_alerts_pct))
+    html += calibRow('Suppression effectiveness', tg.suppression_effectiveness_pct != null ? `${tg.suppression_effectiveness_pct}% blocked` : '—', 'muted')
+    html += calibRow('Duplicate prevention', tg.duplicate_prevention || 0, 'muted')
+    html += calibRow('Low-confidence filter', tg.low_confidence_filter || 0, 'muted')
+    html += calibRow('Spam avoided (est)', tg.spam_avoided_est || 0, 'good')
+    html += `</div>`
+
+    const health = cal.calibration_health || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">AI Calibration Health</div>`
+    html += `<div class="calib-health-grid">`
+    const healthItems = [
+      ['Confidence realism', health.confidence_realism_score],
+      ['Contradiction handling', health.contradiction_handling_score],
+      ['Sentiment preservation', health.sentiment_preservation_score],
+      ['Regime adaptation', health.regime_adaptation_score],
+    ]
+    healthItems.forEach(([lbl, val]) => {
+      html += `<div class="calib-health-chip"><div class="lbl">${escapeHtml(lbl)}</div><div class="val">${val != null ? val : '—'}</div></div>`
+    })
+    html += `</div>`
+    const iqTrend = health.reliability_iq_trend || []
+    if (iqTrend.length) {
+      html += calibRow('Reliability IQ trend', iqTrend.map(x => `${x.date.slice(5)}:${x.quality_iq}`).join(' · '), 'muted')
+    }
+    if (health.fallback_activations) html += calibRow('Fallback activations', health.fallback_activations, 'mid')
+    if (health.hallucination_detections) html += calibRow('Hallucination detections', health.hallucination_detections, 'bad')
+    html += `</div>`
+
     container.innerHTML = html;
   }
 
@@ -1763,20 +1883,74 @@
     }
   }
 
+  function renderJournalCard(entry, idx) {
+    if (!entry || entry.status === 'degraded') {
+      return `<div class="journal-card"><div class="journal-date">${escapeHtml(entry.date || '?')}</div><div class="calib-insufficient">${escapeHtml(entry.reason || 'Review unavailable')}</div></div>`
+    }
+    const copyId = `journalCopy${idx}`
+    let html = `<div class="journal-card" data-date="${escapeHtml(entry.date || '')}">`
+    html += `<div class="journal-card-head"><div><div class="journal-date">${formatDate(entry.date)}</div></div>`
+    html += `<span class="journal-day-badge">${escapeHtml(entry.day_type || '—')}</span></div>`
+    html += `<div class="journal-kv">`
+    html += `<span class="journal-k">Regime</span><span class="journal-v">${escapeHtml(entry.regime || '—')}</span>`
+    html += `<span class="journal-k">Best signal</span><span class="journal-v win">${escapeHtml(entry.best_signal || '—')}</span>`
+    if (entry.best_bearish) html += `<span class="journal-k">Best bearish</span><span class="journal-v loss">${escapeHtml(entry.best_bearish)}</span>`
+    if (entry.false_positive || entry.biggest_miss) html += `<span class="journal-k">False positive</span><span class="journal-v loss">${escapeHtml(entry.false_positive || entry.biggest_miss || '—')}</span>`
+    html += `<span class="journal-k">Quality IQ</span><span class="journal-v">${entry.quality_iq != null ? entry.quality_iq : '—'}</span>`
+    html += `<span class="journal-k">Telegram</span><span class="journal-v">${escapeHtml(entry.telegram_summary || '—')}</span>`
+    html += `</div>`
+    if (entry.observation) html += `<div class="journal-obs">${escapeHtml(entry.observation)}</div>`
+    const timeline = entry.regime_timeline || []
+    const warnings = entry.warnings || []
+    const hl = entry.highlights || {}
+    if (timeline.length || warnings.length || hl.highest_confidence_winner || hl.strongest_contradiction) {
+      html += `<details class="journal-details"><summary>Regime · warnings · wins/failures</summary>`
+      timeline.forEach(t => {
+        html += `<div class="journal-timeline-item"><strong>${escapeHtml(t.time || '—')}</strong> ${escapeHtml(t.transition || '')}${t.note ? `<br><span style="color:#8B949E;">${escapeHtml(t.note)}</span>` : ''}</div>`
+      })
+      if (hl.highest_confidence_winner) html += `<div class="journal-timeline-item">🏆 Highest-confidence winner: <span class="journal-v win">${escapeHtml(hl.highest_confidence_winner.label || '')}</span></div>`
+      if (hl.strongest_contradiction) html += `<div class="journal-timeline-item">⚡ Strongest contradiction: ${escapeHtml(hl.strongest_contradiction.summary || hl.strongest_contradiction.detail || '')}</div>`
+      warnings.forEach(w => { html += `<div class="journal-warn">⚠ ${escapeHtml(w.message || w.code || '')}</div>` })
+      html += `</details>`
+    }
+    html += `<button type="button" class="journal-copy-btn" id="${copyId}" data-copy="${encodeURIComponent(entry.copy_text || '')}">COPY DAILY REVIEW</button>`
+    html += `</div>`
+    return html
+  }
+
   function loadHistory() {
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
-    if (!data || !data.periods) {
-      container.innerHTML = `<div class="empty-stats"><h4>📜 Waiting for history...</h4><p>Predictions will appear after the first analysis run.</p></div>`
+    if (!data) {
+      container.innerHTML = `<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>Daily reviews appear after market close snapshot.</p></div>`
       return
     }
-    
+
+    const journal = data.intelligence_journal || {}
+    const entries = journal.entries || []
     const ts = formatTime(data.last_updated)
-    const totalInDb = data.total_in_db || {}
     let html = `<div class="timestamp">Updated: ${ts} • ${data.today_weekday || ''} ${data.today_date || ''}</div>`
-    
+    html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`
+
+    if (entries.length === 0) {
+      html += `<div class="calib-insufficient">No daily review snapshots yet. Post-market pipeline builds reviews at ~15:45.</div>`
+    } else {
+      entries.forEach((entry, idx) => { html += renderJournalCard(entry, idx) })
+    }
+
+    html += `<details class="journal-details" style="margin-top:16px;"><summary style="font-size:11px;color:#8B949E;">Legacy prediction timeline</summary>`
+
+    if (!data.periods) {
+      html += `<div class="calib-insufficient">Prediction history unavailable.</div></details>`
+      container.innerHTML = html
+      container.querySelectorAll('.journal-copy-btn').forEach(btn => {
+        btn.addEventListener('click', () => copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn))
+      })
+      return
+    }
+
     html += `
-      <div class="period-selector">
+      <div class="period-selector" style="margin-top:12px;">
         <button class="period-btn ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
         <button class="period-btn ${currentPeriod === 'yesterday' ? 'active' : ''}" data-period="yesterday">Yesterday</button>
         <button class="period-btn ${currentPeriod === 'this_week' ? 'active' : ''}" data-period="this_week">This Week</button>
@@ -1799,90 +1973,25 @@
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${stats.pending || 0}</div></div>
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00E676' : winRate >= 40 ? '#ffaa00' : '#FF3D00'};">${winRate.toFixed(0)}%</div></div>
         </div>
-        ${(stats.evaluated || 0) === 0 ? `<div style="font-size:10px;color:#8B949E;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05);">⏳ Outcomes evaluate after 1+ day.</div>` : ''}
       </div>
     `
-    const winners = period.top_winners || []
-    if (winners.length > 0) {
-      html += '<h2 style="font-size:10px; color:#A3B3C8; margin-bottom:8px;">🏆 Top Winners</h2>'
-      winners.slice(0, 5).forEach(w => {
-        const gain = w.max_gain_pct || w.change_7d_pct || w.change_3d_pct || w.change_1d_pct || 0
-        html += `
-          <div class="pred-card-history evaluated win">
-            <div class="pred-card-row">
-              <div class="pred-card-left">
-                <div><span class="pred-card-ticker">${escapeHtml(w.ticker || '?')}</span></div>
-                <div class="pred-card-meta-line">${escapeHtml(w.sector || '?')} • ${w.confidence || 'MEDIUM'} conf</div>
-              </div>
-              <div class="pred-card-right">
-                <div class="pred-card-change up">+${gain.toFixed(2)}%</div>
-              </div>
-            </div>
-          </div>
-        `
-      })
-    }
     const timeline = period.timeline || []
     if (timeline.length > 0) {
-      html += '<h2 style="font-size:10px; color:#A3B3C8; margin-top:16px; margin-bottom:8px;">📅 Daily Timeline</h2>'
-      timeline.forEach(day => {
+      timeline.slice(0, 5).forEach(day => {
         const dStats = day.stats || {}
-        let pillClass = 'pending', pillText = `${dStats.pending || 0} pending`
-        if ((dStats.evaluated || 0) > 0) {
-          pillClass = dStats.win_rate >= 60 ? 'high' : dStats.win_rate >= 40 ? 'medium' : 'low'
-          pillText = `${(dStats.win_rate || 0).toFixed(0)}% accuracy`
-        }
-        html += `
-          <div class="glass-card" style="padding:12px;">
-            <div class="day-header">
-              <div class="day-date">${formatDate(day.date)}</div>
-              <div class="day-stats">${dStats.total || 0} predictions <span class="win-rate-pill ${pillClass}">${pillText}</span></div>
-            </div>
-        `
-        ;(day.predictions || []).forEach((p) => {
-          const verdict = (p.verdict || 'PENDING').toUpperCase()
-          const vLower = verdict.toLowerCase()
-          const change = p.change_7d_pct ?? p.change_3d_pct ?? p.change_1d_pct
-          const evaluated = verdict !== 'PENDING'
-          const cClass = `pred-card-history ${p.category || 'opportunity'} ${evaluated ? 'evaluated ' + vLower : ''}`
-          let cDisplay = '⏳ Pending', chClass = 'pending'
-          if (change != null) {
-            cDisplay = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`
-            chClass = change >= 2 ? 'up' : change <= -2 ? 'down' : 'neutral'
-          }
-          html += `
-            <div class="${cClass}" data-pred='${encodeURIComponent(JSON.stringify(p))}'>
-              <div class="pred-card-row">
-                <div class="pred-card-left">
-                  <div>
-                    <span class="pred-card-ticker">${escapeHtml(p.ticker || '?')}</span>
-                    <span class="pred-card-rec">${escapeHtml(p.recommendation || '')}</span>
-                    <span class="verdict-pill ${vLower}" style="margin-left:6px;">${verdict}</span>
-                  </div>
-                  <div class="pred-card-meta-line">${escapeHtml(p.sector || '?')} • ${p.confidence || 'MEDIUM'} conf</div>
-                </div>
-                <div class="pred-card-right">
-                  <div class="pred-card-change ${chClass}">${cDisplay}</div>
-                </div>
-              </div>
-            </div>
-          `
-        })
-        html += `</div>`
+        html += `<div class="glass-card" style="padding:10px;margin-bottom:8px;"><div class="day-header"><div class="day-date">${formatDate(day.date)}</div><div class="day-stats">${dStats.total || 0} predictions</div></div></div>`
       })
     }
+    html += `</details>`
     container.innerHTML = html
 
+    container.querySelectorAll('.journal-copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn))
+    })
     container.querySelectorAll('.period-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         if (btn.dataset.period === 'custom') openCustomDatePicker()
         else { currentPeriod = btn.dataset.period; customPeriodData = null; loadHistory() }
-      })
-    })
-
-    container.querySelectorAll('.pred-card-history').forEach(card => {
-      card.addEventListener('click', () => {
-        try { showPredictionDetail(JSON.parse(decodeURIComponent(card.getAttribute('data-pred')))) } catch (e) {}
       })
     })
   }

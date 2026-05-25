@@ -58,6 +58,14 @@ def empty_stats_output():
         'by_run_type': [],
         'by_date': [],
         'signals_summary': {'total': 0, 'ultra': 0, 'strong': 0, 'bullish': 0, 'bearish': 0, 'top_tickers': []},
+        'calibration_dashboard': {
+            'status': 'empty',
+            'market_day_performance': {'day_types': []},
+            'confidence_calibration': {'numeric_buckets': [], 'bands': []},
+            'signal_type_performance': {'categories': []},
+            'telegram_precision': {},
+            'calibration_health': {},
+        },
     }
 
 
@@ -275,6 +283,13 @@ def export_stats():
                 output['signals_summary'] = get_signals_summary()
             except Exception as e:
                 safe_print(f"[WARN] detail queries failed: {e}")
+
+        try:
+            from backend.analytics.regime_analytics import build_calibration_dashboard
+            output['calibration_dashboard'] = build_calibration_dashboard()
+        except Exception as e:
+            safe_print(f"[WARN] calibration dashboard failed: {e}")
+            output['calibration_dashboard'] = {'status': 'degraded', 'reason': str(e)}
 
         output['last_updated'] = datetime.now(timezone.utc).isoformat()
         output['generation_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

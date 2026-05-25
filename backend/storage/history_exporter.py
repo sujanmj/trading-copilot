@@ -60,6 +60,7 @@ def empty_history_output():
         'by_confidence': [],
         'context_snapshots': [],
         'total_in_db': {'predictions': 0, 'signals': 0, 'snapshots': 0},
+        'intelligence_journal': {'status': 'empty', 'entries': [], 'dates': []},
     }
 
 
@@ -300,6 +301,11 @@ def build_export():
         if not all_predictions:
             print("[INFO] No predictions yet — writing empty history JSON")
             output = empty_history_output()
+            try:
+                from backend.analytics.daily_journal_engine import build_intelligence_journal
+                output['intelligence_journal'] = build_intelligence_journal(limit=21)
+            except Exception as e:
+                print(f"[WARN] intelligence journal failed: {e}")
             atomic_write_json(OUTPUT_FILE, output)
             print(f"\n[SAVED] {OUTPUT_FILE}")
             print("=" * 60)
@@ -350,6 +356,13 @@ def build_export():
 
         snapshots = get_context_snapshots(90)
 
+        try:
+            from backend.analytics.daily_journal_engine import build_intelligence_journal
+            intelligence_journal = build_intelligence_journal(limit=21)
+        except Exception as e:
+            print(f"[WARN] intelligence journal failed: {e}")
+            intelligence_journal = {'status': 'degraded', 'entries': [], 'reason': str(e)}
+
         output = {
             'last_updated': datetime.now().isoformat(),
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -363,7 +376,8 @@ def build_export():
                 'predictions': len(all_predictions),
                 'signals': sum(p['signals_count'] for p in periods.values()),
                 'snapshots': len(snapshots)
-            }
+            },
+            'intelligence_journal': intelligence_journal,
         }
 
         atomic_write_json(OUTPUT_FILE, output)

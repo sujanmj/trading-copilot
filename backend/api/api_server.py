@@ -888,6 +888,18 @@ def api_daily_review(
     return sanitize_json_value(review)
 
 
+@app.get("/api/calibration", dependencies=[Depends(verify_api_key)])
+def api_calibration():
+    from backend.analytics.regime_analytics import build_calibration_dashboard
+    return sanitize_json_value(build_calibration_dashboard())
+
+
+@app.get("/api/journal", dependencies=[Depends(verify_api_key)])
+def api_journal(limit: int = Query(21, ge=1, le=60)):
+    from backend.analytics.daily_journal_engine import build_intelligence_journal
+    return sanitize_json_value(build_intelligence_journal(limit=limit, persist_index=False))
+
+
 def main():
     port = API_PORT
     host = API_HOST
