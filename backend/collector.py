@@ -105,7 +105,7 @@ def get_stock_price(symbol):
 
 
 # ============================================================
-# INDIA MARKET DATA (yfinance + Angel One fallback)
+# INDIA MARKET DATA (yfinance)
 # ============================================================
 
 INDIA_SYMBOLS = {
@@ -122,7 +122,7 @@ INDIA_SYMBOLS = {
     'LT': 'LT.NS',
     'AXISBANK': 'AXISBANK.NS',
     'KOTAKBANK': 'KOTAKBANK.NS',
-    'TATAMOTORS': 'TATAMOTORS.BO',
+    'BAJAJFINSV': 'BAJAJFINSV.NS',
     'MARUTI': 'MARUTI.NS',
 }
 
@@ -189,24 +189,6 @@ def collect_india_market_data():
         if row:
             prices[name] = row
             ok_count += 1
-            continue
-
-        # Angel One fallback for NSE equities (not indices)
-        clean = ticker.replace('.NS', '').replace('.BO', '').replace('^', '')
-        if '.NS' in ticker or '.BO' in ticker or ticker.endswith('-EQ'):
-            print(f"  [RETRY] {name} via Angel One...")
-            angel_price = fetch_accurate_nse_price(clean)
-            if angel_price and angel_price > 0:
-                prices[name] = {
-                    'price': round(angel_price, 2),
-                    'change_percent': 0.0,
-                    'source': 'angel_one',
-                }
-                print(f"  [OK] {name}: Rs.{angel_price:,.2f} (Angel One)")
-                ok_count += 1
-            else:
-                print(f"  [FAIL] {name}: Angel One also failed")
-                fail_count += 1
         else:
             fail_count += 1
 
