@@ -110,155 +110,294 @@ def _coerce_source_data(data, source_name):
 
 def gather_all_data():
     data_dir = Path(__file__).parent.parent / 'data'
-    sources = {
-        'global_markets': data_dir / 'global_markets.json',
-        'india_markets':  data_dir / 'latest_market_data.json',
-        'news':           data_dir / 'news_feed.json',
-        'youtube':        data_dir / 'youtube_feed.json',
-        'govt':           data_dir / 'govt_intelligence.json',
-        'inshorts':       data_dir / 'inshorts_feed.json',
-        'reddit':         data_dir / 'reddit_data.json',
-        'telegram':       data_dir / 'telegram_sentiment.json',
-        'scanner':        data_dir / 'scanner_data.json',
-        'twitter':        data_dir / 'twitter_data.json',
-        'nse_filings':    data_dir / 'nse_announcements.json',
+    raw = {
+        'global_markets': load_json_safe(data_dir / 'global_markets.json'),
+        'india_markets':  load_json_safe(data_dir / 'latest_market_data.json'),
+        'news':           load_json_safe(data_dir / 'news_feed.json'),
+        'youtube':        load_json_safe(data_dir / 'youtube_feed.json'),
+        'govt':           load_json_safe(data_dir / 'govt_intelligence.json'),
+        'inshorts':       load_json_safe(data_dir / 'inshorts_feed.json'),
+        'reddit':         load_json_safe(data_dir / 'reddit_data.json'),
+        'telegram':       load_json_safe(data_dir / 'telegram_sentiment.json'),
+        'scanner':        load_json_safe(data_dir / 'scanner_data.json'),
+        'twitter':        load_json_safe(data_dir / 'twitter_data.json'),
+        'nse_filings':    load_json_safe(data_dir / 'nse_announcements.json'),
     }
-    result = {}
-    for name, path in sources.items():
-        raw = load_json_safe(path)
-        result[name] = _coerce_source_data(raw, name)
-    return result
+    validated = {}
+    for key, value in raw.items():
+        if value is None:
+            validated[key] = None
+        elif isinstance(value, dict):
+            validated[key] = value
+        elif isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, dict):
+                    validated[key] = parsed
+                    print(f"[WARN] {key} was string, parsed as JSON")
+                elif isinstance(parsed, list):
+                    validated[key] = {'items': parsed}
+                    print(f"[WARN] {key} was string JSON list, wrapped in dict")
+                else:
+                    print(f"[ERROR] {key} parsed to unexpected type: {type(parsed)}")
+                    validated[key] = None
+            except json.JSONDecodeError:
+                print(f"[ERROR] {key} is string and not valid JSON: {value[:100]}")
+                validated[key] = None
+        elif isinstance(value, list):
+            validated[key] = {'items': value}
+            print(f"[WARN] {key} was list, wrapped in dict")
+        else:
+            print(f"[ERROR] {key} unexpected type: {type(value)}")
+            validated[key] = None
+    return validated
+
+
+def _normalize_format_input(data, label):
+    """Coerce formatter input to dict or return an error message string."""
+    if data is None:
+        return None, f"{label}: No data"
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            return None, f"{label}: Invalid data format"
+    if isinstance(data, list):
+        data = {'items': data}
+    if not isinstance(data, dict):
+        return None, f"{label}: Unexpected type {type(data).__name__}"
+    return data, None
+
+
+def _safe_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_list(value):
+    return value if isinstance(value, list) else []
 
 
 def format_global_markets(data):
-    if not data:
-        return "GLOBAL MARKETS: No data"
+    data, err = _normalize_format_input(data, "GLOBAL MARKETS")
+    if err:
+        return err
+
     lines = ["=== GLOBAL MARKETS ==="]
-    for region, info in data.get('sentiment', {}).items():
+
+    sentiment = _safe_dict(data.get('sentiment'))
+    for region, info in sentiment.items():
+        info = _safe_dict(info)
         avg = info.get('average_change', info.get('expected_open', 0))
-        lines.append(f"  {region.upper()}: {info.get('mood','?')} ({avg:+.2f}%)")
-    for group, symbols in data.get('markets', {}).items():
-        lines.append(f"\n[{group}]")
-        for name, info in list(symbols.items())[:5]:
-            change = info.get('change_percent', 0)
-            lines.append(f"  {name}: {info.get('price',0):,.0f} ({change:+.2f}%)")
-    for a in data.get('alerts', [])[:5]:
-        lines.append(f"  ALERT: {a.get('message','')}")
+        try:
+            lines.append(f"  {region.upper()}: {info.get('mood', '?')} ({float(avg):+.2f}%)")
+        except (TypeError, ValueError):
+            lines.append(f"  {region.upper()}: {info.get('mood', '?')}")
+
+    markets = data.get('markets', {})
+    if isinstance(markets, dict):
+        for name, info in list(markets.items())[:10]:
+            if not isinstance(info, dict):
+                continue
+            # Flat structure from global_collector: {ticker, change_pct, latest_price}
+            if 'change_pct' in info or 'latest_price' in info:
+                change = info.get('change_pct', info.get('change_percent', 0))
+                price = info.get('latest_price', info.get('price', 0))
+                ticker = info.get('ticker', name)
+                try:
+                    lines.append(f"  {name} ({ticker}): {float(price):,.2f} ({float(change):+.2f}%)")
+                except (TypeError, ValueError):
+                    lines.append(f"  {name} ({ticker})")
+                continue
+            # Legacy nested: markets[group][symbol] = info
+            lines.append(f"\n[{name}]")
+            for sym, sym_info in list(info.items())[:5]:
+                sym_info = _safe_dict(sym_info)
+                change = sym_info.get('change_percent', sym_info.get('change_pct', 0))
+                price = sym_info.get('price', sym_info.get('latest_price', 0))
+                try:
+                    lines.append(f"  {sym}: {float(price):,.0f} ({float(change):+.2f}%)")
+                except (TypeError, ValueError):
+                    lines.append(f"  {sym}")
+
+    for a in _safe_list(data.get('alerts'))[:5]:
+        a = _safe_dict(a)
+        lines.append(f"  ALERT: {a.get('message', '')}")
     return "\n".join(lines)
 
 
 def format_india_markets(data):
-    if not data:
-        return "INDIA MARKETS: No data"
+    data, err = _normalize_format_input(data, "INDIA MARKETS")
+    if err:
+        return err
+
     lines = ["=== INDIA STOCKS ==="]
-    for name, info in data.get('prices', {}).items():
+    prices = data.get('prices', {})
+    if not isinstance(prices, dict):
+        return "INDIA MARKETS: Invalid prices format"
+
+    for name, info in prices.items():
+        info = _safe_dict(info)
         change = info.get('change_percent', 0)
-        lines.append(f"  {name}: Rs.{info.get('price',0):,.2f} ({change:+.2f}%)")
+        price = info.get('price', 0)
+        try:
+            lines.append(f"  {name}: Rs.{float(price):,.2f} ({float(change):+.2f}%)")
+        except (TypeError, ValueError):
+            lines.append(f"  {name}: Rs.{price} ({change}%)")
     return "\n".join(lines)
 
 
 def format_news(data):
-    if not data:
-        return "NEWS: No data"
+    data, err = _normalize_format_input(data, "NEWS")
+    if err:
+        return err
+
     lines = ["=== NEWS ==="]
     lines.append(f"Articles: {data.get('total_articles', 0)}")
-    for stock, count in list(data.get('top_stocks', {}).items())[:10]:
-        lines.append(f"  {stock}: {count} articles")
-    for h in data.get('hot_stocks', [])[:5]:
-        lines.append(f"  HOT [{h.get('velocity','?')}] {h.get('stock','?')}: {h.get('mention_count',0)} mentions")
-    for a in data.get('articles', [])[:15]:
-        lines.append(f"  [{a.get('sentiment_label','?')[:3].upper()}] {a.get('title','')[:100]}")
+    top_stocks = data.get('top_stocks', {})
+    if isinstance(top_stocks, dict):
+        for stock, count in list(top_stocks.items())[:10]:
+            lines.append(f"  {stock}: {count} articles")
+    for h in _safe_list(data.get('hot_stocks'))[:5]:
+        h = _safe_dict(h)
+        lines.append(f"  HOT [{h.get('velocity', '?')}] {h.get('stock', '?')}: {h.get('mention_count', 0)} mentions")
+    for a in _safe_list(data.get('articles'))[:15]:
+        a = _safe_dict(a)
+        label = str(a.get('sentiment_label', '?'))[:3].upper()
+        lines.append(f"  [{label}] {str(a.get('title', ''))[:100]}")
     return "\n".join(lines)
 
 
 def format_inshorts(data):
-    if not data:
-        return ""
+    data, err = _normalize_format_input(data, "INSHORTS")
+    if err:
+        return "" if "No data" in err else err
+
     lines = ["=== INSHORTS ==="]
-    for s in data.get('stories', [])[:10]:
-        lines.append(f"  [{s.get('category','?')}] {s.get('title','')[:100]}")
+    for s in _safe_list(data.get('stories'))[:10]:
+        s = _safe_dict(s)
+        lines.append(f"  [{s.get('category', '?')}] {str(s.get('title', ''))[:100]}")
     return "\n".join(lines)
 
 
 def format_youtube(data):
-    if not data:
-        return "TV: No data"
+    data, err = _normalize_format_input(data, "TV")
+    if err:
+        return err
+
     lines = ["=== TV/YOUTUBE ==="]
-    lines.append(f"Videos: {data.get('total_videos',0)} | Live: {data.get('live_streams',0)}")
-    for v in data.get('live_now', [])[:4]:
-        lines.append(f"  LIVE [{v.get('channel','?')}] {v.get('title','')[:80]}")
-    for v in data.get('recent_videos', [])[:6]:
-        lines.append(f"  [{v.get('channel','?')}] {v.get('title','')[:80]}")
-    for stock, count in list(data.get('stock_mentions', {}).items())[:8]:
-        lines.append(f"  TV mention: {stock} ({count}x)")
+    lines.append(f"Videos: {data.get('total_videos', 0)} | Live: {data.get('live_streams', 0)}")
+    for v in _safe_list(data.get('live_now'))[:4]:
+        v = _safe_dict(v)
+        lines.append(f"  LIVE [{v.get('channel', '?')}] {str(v.get('title', ''))[:80]}")
+    for v in _safe_list(data.get('recent_videos'))[:6]:
+        v = _safe_dict(v)
+        lines.append(f"  [{v.get('channel', '?')}] {str(v.get('title', ''))[:80]}")
+    stock_mentions = data.get('stock_mentions', {})
+    if isinstance(stock_mentions, dict):
+        for stock, count in list(stock_mentions.items())[:8]:
+            lines.append(f"  TV mention: {stock} ({count}x)")
     return "\n".join(lines)
 
 
 def format_govt(data):
-    if not data:
-        return "GOVT: No data"
+    data, err = _normalize_format_input(data, "GOVT")
+    if err:
+        return err
+
     lines = ["=== GOVT INTELLIGENCE ==="]
-    lines.append(f"HIGH: {data.get('high_impact_count',0)} | MED: {data.get('medium_impact_count',0)}")
-    for i, item in enumerate(data.get('high_impact_items', [])[:6], 1):
-        headline = item.get('english_headline', item.get('title',''))[:120]
-        stocks = item.get('affected_stocks', [])
-        lines.append(f"  {i}. [{item.get('impact_score',0)}/10 {item.get('direction','?')}] {headline}")
+    lines.append(f"HIGH: {data.get('high_impact_count', 0)} | MED: {data.get('medium_impact_count', 0)}")
+    for i, item in enumerate(_safe_list(data.get('high_impact_items'))[:6], 1):
+        item = _safe_dict(item)
+        headline = str(item.get('english_headline', item.get('title', '')))[:120]
+        stocks = _safe_list(item.get('affected_stocks'))
+        lines.append(f"  {i}. [{item.get('impact_score', 0)}/10 {item.get('direction', '?')}] {headline}")
         if stocks:
-            lines.append(f"     Affects: {', '.join(stocks[:5])}")
+            lines.append(f"     Affects: {', '.join(str(s) for s in stocks[:5])}")
     return "\n".join(lines)
 
 
 def format_reddit(data):
-    if not data:
-        return "REDDIT: No data"
+    data, err = _normalize_format_input(data, "REDDIT")
+    if err:
+        return err
+
     lines = ["=== REDDIT SENTIMENT ==="]
-    mood = data.get('market_mood', {})
-    lines.append(f"Mood: {mood.get('sentiment','?').upper()} ({mood.get('confidence',0)}%)")
-    for t in data.get('trending_tickers', [])[:8]:
-        lines.append(f"  {t.get('ticker','?')}: {t.get('mentions',0)} mentions | {t.get('sentiment','?').upper()}")
-    for h in data.get('hot_discussions', [])[:5]:
-        lines.append(f"  [{h.get('score',0)}up] {h.get('title','')[:100]}")
+    mood = _safe_dict(data.get('market_mood'))
+    lines.append(f"Mood: {str(mood.get('sentiment', '?')).upper()} ({mood.get('confidence', 0)}%)")
+    for t in _safe_list(data.get('trending_tickers'))[:8]:
+        t = _safe_dict(t)
+        lines.append(f"  {t.get('ticker', '?')}: {t.get('mentions', 0)} mentions | {str(t.get('sentiment', '?')).upper()}")
+    for h in _safe_list(data.get('hot_discussions'))[:5]:
+        h = _safe_dict(h)
+        lines.append(f"  [{h.get('score', 0)}up] {str(h.get('title', ''))[:100]}")
     return "\n".join(lines)
 
 
 def format_scanner(data):
-    if not data:
-        return "SCANNER: No data"
+    data, err = _normalize_format_input(data, "SCANNER")
+    if err:
+        return err
+
     lines = ["=== NSE SCANNER ==="]
-    lines.append(f"Scanned: {data.get('total_scanned',0)} | Signals: {data.get('total_signals',0)}")
-    for s in data.get('top_signals', [])[:15]:
+    lines.append(f"Scanned: {data.get('total_scanned', 0)} | Signals: {data.get('total_signals', 0)}")
+    for s in _safe_list(data.get('top_signals'))[:15]:
+        s = _safe_dict(s)
+        signals = s.get('signals', [])
+        sig_text = ' + '.join(signals[:3]) if isinstance(signals, list) else str(signals)
         lines.append(
-            f"  [{s.get('strength','?')}|{s.get('direction','?')}] "
-            f"{s.get('ticker','?')} ({s.get('sector','?')}) "
-            f"Rs.{s.get('price',0)} {s.get('change_percent',0):+.2f}% "
-            f"vol:{s.get('volume_ratio',0):.1f}x | "
-            f"{' + '.join(s.get('signals',[])[:3])}"
+            f"  [{s.get('strength', '?')}|{s.get('direction', '?')}] "
+            f"{s.get('ticker', '?')} ({s.get('sector', '?')}) "
+            f"Rs.{s.get('price', 0)} {s.get('change_percent', 0):+.2f}% "
+            f"vol:{s.get('volume_ratio', 0):.1f}x | {sig_text}"
         )
-    for r in data.get('sector_rotation', [])[:8]:
+    for r in _safe_list(data.get('sector_rotation'))[:8]:
+        r = _safe_dict(r)
         lines.append(
-            f"  SECTOR [{r.get('direction','?')}] {r.get('sector','?')}: "
-            f"{r.get('avg_change_percent',0):+.2f}% "
-            f"({r.get('stocks_analyzed',0)} stocks)"
+            f"  SECTOR [{r.get('direction', '?')}] {r.get('sector', '?')}: "
+            f"{r.get('avg_change_percent', 0):+.2f}% "
+            f"({r.get('stocks_analyzed', 0)} stocks)"
         )
     return "\n".join(lines)
 
 
 def format_twitter(data):
-    if not data:
-        return ""
+    data, err = _normalize_format_input(data, "TWITTER")
+    if err:
+        return "" if "No data" in err else err
+
     lines = ["=== TWITTER ==="]
-    for t in data.get('tweets', [])[:8]:
-        lines.append(f"  [{t.get('account','?')}] {t.get('text','')[:100]}")
+    for t in _safe_list(data.get('tweets'))[:8]:
+        t = _safe_dict(t)
+        lines.append(f"  [{t.get('account', '?')}] {str(t.get('text', ''))[:100]}")
     return "\n".join(lines)
 
 
 def format_nse(data):
-    if not data:
-        return ""
+    data, err = _normalize_format_input(data, "NSE FILINGS")
+    if err:
+        return "" if "No data" in err else err
+
     lines = ["=== NSE FILINGS ==="]
-    for item in data.get('latest_high_impact', [])[:5]:
-        lines.append(f"  [{item.get('symbol','?')}] {item.get('impact_category','?')} | {item.get('subject','')[:80]}")
+    for item in _safe_list(data.get('latest_high_impact'))[:5]:
+        item = _safe_dict(item)
+        lines.append(f"  [{item.get('symbol', '?')}] {item.get('impact_category', '?')} | {str(item.get('subject', ''))[:80]}")
     return "\n".join(lines)
+
+
+def format_telegram(data):
+    data, err = _normalize_format_input(data, "TELEGRAM")
+    if err:
+        return "" if "No data" in err else err
+
+    lines = ["=== TELEGRAM SENTIMENT ==="]
+    mood = _safe_dict(data.get('market_mood', data.get('overall_sentiment')))
+    if mood:
+        lines.append(f"Mood: {mood.get('sentiment', mood.get('label', '?'))}")
+    channels = _safe_list(data.get('channels', data.get('messages')))
+    for ch in channels[:6]:
+        ch = _safe_dict(ch)
+        lines.append(f"  [{ch.get('channel', ch.get('name', '?'))}] {str(ch.get('text', ch.get('summary', '')))[:100]}")
+    return "\n".join(lines) if len(lines) > 1 else ""
 
 
 def build_memory_context():
@@ -318,18 +457,88 @@ def validate_analysis_json(parsed):
 
 def generate_unified_analysis(all_data):
     print("\n[ANALYSIS] Building prompt from all data sources...")
+    print("[DEBUG] Data types: " + ", ".join(
+        f"{k}:{type(v).__name__}" for k, v in all_data.items()
+    ))
 
-    global_str   = format_global_markets(all_data.get('global_markets'))
-    india_str    = format_india_markets(all_data.get('india_markets'))
-    news_str     = format_news(all_data.get('news'))
-    inshorts_str = format_inshorts(all_data.get('inshorts'))
-    youtube_str  = format_youtube(all_data.get('youtube'))
-    govt_str     = format_govt(all_data.get('govt'))
-    reddit_str   = format_reddit(all_data.get('reddit'))
-    scanner_str  = format_scanner(all_data.get('scanner'))
-    twitter_str  = format_twitter(all_data.get('twitter'))
-    nse_str      = format_nse(all_data.get('nse_filings'))
-    memory_str   = build_memory_context()
+    try:
+        global_str = format_global_markets(all_data.get('global_markets'))
+    except Exception as e:
+        print(f"[ERROR] format_global_markets crashed: {e}")
+        traceback.print_exc()
+        global_str = "GLOBAL MARKETS: Error formatting"
+
+    try:
+        india_str = format_india_markets(all_data.get('india_markets'))
+    except Exception as e:
+        print(f"[ERROR] format_india_markets crashed: {e}")
+        traceback.print_exc()
+        india_str = "INDIA: Error formatting"
+
+    try:
+        news_str = format_news(all_data.get('news'))
+    except Exception as e:
+        print(f"[ERROR] format_news crashed: {e}")
+        traceback.print_exc()
+        news_str = "NEWS: Error formatting"
+
+    try:
+        inshorts_str = format_inshorts(all_data.get('inshorts'))
+    except Exception as e:
+        print(f"[ERROR] format_inshorts crashed: {e}")
+        traceback.print_exc()
+        inshorts_str = ""
+
+    try:
+        youtube_str = format_youtube(all_data.get('youtube'))
+    except Exception as e:
+        print(f"[ERROR] format_youtube crashed: {e}")
+        traceback.print_exc()
+        youtube_str = "TV: Error formatting"
+
+    try:
+        govt_str = format_govt(all_data.get('govt'))
+    except Exception as e:
+        print(f"[ERROR] format_govt crashed: {e}")
+        traceback.print_exc()
+        govt_str = "GOVT: Error formatting"
+
+    try:
+        reddit_str = format_reddit(all_data.get('reddit'))
+    except Exception as e:
+        print(f"[ERROR] format_reddit crashed: {e}")
+        traceback.print_exc()
+        reddit_str = "REDDIT: Error formatting"
+
+    try:
+        scanner_str = format_scanner(all_data.get('scanner'))
+    except Exception as e:
+        print(f"[ERROR] format_scanner crashed: {e}")
+        traceback.print_exc()
+        scanner_str = "SCANNER: Error formatting"
+
+    try:
+        twitter_str = format_twitter(all_data.get('twitter'))
+    except Exception as e:
+        print(f"[ERROR] format_twitter crashed: {e}")
+        traceback.print_exc()
+        twitter_str = ""
+
+    try:
+        nse_str = format_nse(all_data.get('nse_filings'))
+    except Exception as e:
+        print(f"[ERROR] format_nse crashed: {e}")
+        traceback.print_exc()
+        nse_str = ""
+
+    try:
+        telegram_str = format_telegram(all_data.get('telegram'))
+    except Exception as e:
+        print(f"[ERROR] format_telegram crashed: {e}")
+        traceback.print_exc()
+        telegram_str = ""
+
+    memory_str = build_memory_context()
 
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')
 
@@ -350,6 +559,7 @@ SELF-CALIBRATION MEMORY:
 {youtube_str}
 {reddit_str}
 {twitter_str}
+{telegram_str}
 
 CRITICAL INSTRUCTION: You are a backend API. Output ONLY valid JSON. No markdown. No explanations.
 
@@ -523,7 +733,7 @@ def run_master_analysis():
                 'news_articles':      all_data['news'].get('total_articles', 0) if all_data.get('news') else 0,
                 'scanner_stocks':     all_data['scanner'].get('total_scanned', 0) if all_data.get('scanner') else 0,
                 'scanner_signals':    all_data['scanner'].get('total_signals', 0) if all_data.get('scanner') else 0,
-                'reddit_mood':        all_data['reddit'].get('market_mood', {}).get('sentiment', 'unknown') if all_data.get('reddit') else 'unknown',
+                'reddit_mood':        _safe_dict(all_data['reddit'].get('market_mood')).get('sentiment', 'unknown') if all_data.get('reddit') else 'unknown',
                 'tv_videos':          all_data['youtube'].get('total_videos', 0) if all_data.get('youtube') else 0,
             }
         }

@@ -335,7 +335,30 @@ def build_msg6_sectors_global_action(intel):
     return "\n\n".join(parts)
 
 
+def check_intel_file_stale(max_age_hours=2):
+    """Return (is_stale, age_hours). Sends Telegram warning and blocks push if stale."""
+    if not INTEL_FILE.exists():
+        safe_print("[WARN] unified_intelligence.json missing")
+        send_message("⚠️ Market intelligence file missing. Run /refresh to generate analysis.")
+        return True, None
+
+    file_age_hours = (time.time() - INTEL_FILE.stat().st_mtime) / 3600
+    if file_age_hours > max_age_hours:
+        safe_print(f"[WARN] Intelligence is {file_age_hours:.1f}h old - sending stale warning")
+        send_message(
+            f"⚠️ Market intelligence is stale ({file_age_hours:.1f}h old). "
+            "Analyzer may have issues — run /refresh or check Railway logs."
+        )
+        return True, file_age_hours
+    return False, file_age_hours
+
+
 def push_full_brain():
+    is_stale, age = check_intel_file_stale()
+    if is_stale:
+        safe_print(f"[BRAIN] Blocked push — intel file stale or missing (age={age})")
+        return False
+
     raw_intel = load_intel()
     debug_intel_fields(raw_intel)
     intel = normalize_intel(raw_intel)
