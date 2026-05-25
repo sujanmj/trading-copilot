@@ -495,14 +495,14 @@
     </div>
   </aside>
 
-  <script src="frontend/components/AIOpsPanel.js"></script>
+  <script src="components/AIOpsPanel.js"></script>
   <script>
   const fs = require('fs')
   const path = require('path')
   const dotenv = require('dotenv')
   const { spawn } = require('child_process')
 
-  const envPath = path.join(__dirname, 'config', 'keys.env')
+  const envPath = path.join(__dirname, '..', 'config', 'keys.env')
   dotenv.config({ path: envPath })
 
   // ============================================================
@@ -526,7 +526,7 @@
     lastFetch: 0, connected: false
   }
 
-  const dataDir = path.join(__dirname, 'data')
+  const dataDir = path.join(__dirname, '..', 'data')
   const files = {
     intelligence: path.join(dataDir, 'unified_intelligence.json'),
     indiaMarket: path.join(dataDir, 'latest_market_data.json'),

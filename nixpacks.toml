@@ -1,0 +1,11 @@
+# Railway: Python backend only — do not install Node/npm/Electron
+providers = ["python"]
+
+[variables]
+NIXPACKS_PYTHON_PACKAGE_MANAGER = "requirements"
+
+[phases.setup]
+nixPkgs = ["python311", "tzdata"]
+
+[start]
+cmd = "TZ=Asia/Kolkata uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT"

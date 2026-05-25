@@ -4,8 +4,8 @@ PROJECT STRUCTURE:
 - backend/ → All Python scripts
 - data/ → JSON data files (created at runtime)
 - config/keys.env → API keys
-- index.html → Electron GUI
-- main.js → Electron entry point
+- index.html → Electron GUI (frontend/index.html)
+- main.js → Electron entry point (frontend/main.js)
 
 KEY FILES:
 - backend/master_analyzer.py → Main AI analysis engine (v9)
@@ -41,9 +41,11 @@ CRITICAL RULES:
 
 DEPLOYMENT:
 - Platform: Railway
+- Build: nixpacks.toml (Python provider only — no npm/Electron)
 - Entry: uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT
 - Background threads: master_scheduler.py + telegram_listener.py
 - Volume: mounted at data directory
+- GUI: frontend/ folder — local Electron only, not deployed
 
 CURRENT BUGS TO FIX:
 1. master_analyzer.py has broken import "from core.builders.market_state_builder"

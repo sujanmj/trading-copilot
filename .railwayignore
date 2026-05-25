@@ -1,0 +1,22 @@
+# Frontend/Electron — local desktop only (not deployed to Railway)
+frontend/
+node_modules/
+package.json
+package-lock.json
+main.js
+index.html
+debug_pipeline_viewer.html
+
+# Local dev artifacts
+*.log
+logs/
+venv/
+.venv/
+dist/
+build/
+out/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

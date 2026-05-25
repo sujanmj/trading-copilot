@@ -92,8 +92,10 @@ cd trading-copilot
 # 2. Install Python dependencies
 pip install -r requirements.txt
 
-# 3. Install Node dependencies (for GUI)
+# 3. Install GUI dependencies (local Electron only — not used on Railway)
+cd frontend
 npm install
+cd ..
 
 # 4. Configure API keys in config/keys.env:
 ANTHROPIC_API_KEY=sk-ant-...
@@ -113,7 +115,7 @@ API_KEY=your-custom-railway-auth-key   # for FastAPI X-API-Key
 python backend/master_scheduler.py
 
 # 5b. Run GUI when needed
-npm run electron
+cd frontend && npm start
 
 Cloud Deployment (Railway.app)
 
@@ -233,10 +235,16 @@ trading-copilot/
 ├── config/
 │   └── keys.env                   # API keys (gitignored)
 ├── data/                          # All JSON + SQLite (gitignored)
-├── gui/                           # Electron dashboard
-├── package.json
+├── frontend/                      # Electron desktop GUI (local only)
+│   ├── main.js
+│   ├── index.html
+│   ├── package.json
+│   └── components/
 ├── requirements.txt
+├── nixpacks.toml                  # Python-only Railway build (no npm)
 ├── Procfile                       # Railway start command
+├── railway.json                   # Railway deploy config
+├── .railwayignore                 # Exclude frontend from deploy upload
 ├── .gitignore
 └── README.md
 
