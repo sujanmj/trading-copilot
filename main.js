@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session } = require('electron')
+const { app, BrowserWindow, session, shell } = require('electron')
 const path = require('path')
 
 function createWindow() {
@@ -31,6 +31,15 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow()
+})
+
+app.on('web-contents-created', (_event, contents) => {
+  if (contents.getType() === 'webview') {
+    contents.setWindowOpenHandler(({ url }) => {
+      shell.openExternal(url)
+      return { action: 'deny' }
+    })
+  }
 })
 
 app.on('window-all-closed', () => {

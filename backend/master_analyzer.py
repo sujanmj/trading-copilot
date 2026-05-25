@@ -401,12 +401,26 @@ def format_telegram(data):
 
 
 def build_memory_context():
+    """Always return a plain string for prompt injection — never a dict."""
     if not LEARNING_AVAILABLE or not build_memory_summary:
         return "No performance history yet. Using conservative default calibration."
     try:
-        return build_memory_summary()
+        summary = build_memory_summary()
+        if summary is None:
+            return "No performance history yet."
+        if isinstance(summary, dict):
+            print("[WARN] build_memory_summary returned dict — converting to string")
+            return json.dumps(summary, indent=2, default=str)
+        if isinstance(summary, str):
+            return summary
+        return str(summary)
+    except AttributeError as e:
+        print(f"[WARN] build_memory_summary AttributeError (likely .get on non-dict): {e}")
+        traceback.print_exc()
+        return f"Memory unavailable: {e}"
     except Exception as e:
         print(f"[WARN] build_memory_summary failed: {e}")
+        traceback.print_exc()
         return f"Memory unavailable: {e}"
 
 
@@ -456,93 +470,101 @@ def validate_analysis_json(parsed):
 
 
 def generate_unified_analysis(all_data):
-    print("\n[ANALYSIS] Building prompt from all data sources...")
-    print("[DEBUG] Data types: " + ", ".join(
-        f"{k}:{type(v).__name__}" for k, v in all_data.items()
-    ))
+    print("[DEBUG] all_data types:")
+    if not isinstance(all_data, dict):
+        print(f"  [CRASH] all_data is {type(all_data).__name__}, expected dict")
+        return None
+    for k, v in all_data.items():
+        print(f"  {k}: {type(v).__name__} = {str(v)[:80] if v is not None else 'None'}")
 
     try:
-        global_str = format_global_markets(all_data.get('global_markets'))
-    except Exception as e:
-        print(f"[ERROR] format_global_markets crashed: {e}")
-        traceback.print_exc()
-        global_str = "GLOBAL MARKETS: Error formatting"
+        print("\n[ANALYSIS] Building prompt from all data sources...")
 
-    try:
-        india_str = format_india_markets(all_data.get('india_markets'))
-    except Exception as e:
-        print(f"[ERROR] format_india_markets crashed: {e}")
-        traceback.print_exc()
-        india_str = "INDIA: Error formatting"
+        try:
+            global_str = format_global_markets(all_data.get('global_markets'))
+        except Exception as e:
+            print(f"[ERROR] format_global_markets crashed: {e}")
+            traceback.print_exc()
+            global_str = "GLOBAL MARKETS: Error formatting"
 
-    try:
-        news_str = format_news(all_data.get('news'))
-    except Exception as e:
-        print(f"[ERROR] format_news crashed: {e}")
-        traceback.print_exc()
-        news_str = "NEWS: Error formatting"
+        try:
+            india_str = format_india_markets(all_data.get('india_markets'))
+        except Exception as e:
+            print(f"[ERROR] format_india_markets crashed: {e}")
+            traceback.print_exc()
+            india_str = "INDIA: Error formatting"
 
-    try:
-        inshorts_str = format_inshorts(all_data.get('inshorts'))
-    except Exception as e:
-        print(f"[ERROR] format_inshorts crashed: {e}")
-        traceback.print_exc()
-        inshorts_str = ""
+        try:
+            news_str = format_news(all_data.get('news'))
+        except Exception as e:
+            print(f"[ERROR] format_news crashed: {e}")
+            traceback.print_exc()
+            news_str = "NEWS: Error formatting"
 
-    try:
-        youtube_str = format_youtube(all_data.get('youtube'))
-    except Exception as e:
-        print(f"[ERROR] format_youtube crashed: {e}")
-        traceback.print_exc()
-        youtube_str = "TV: Error formatting"
+        try:
+            inshorts_str = format_inshorts(all_data.get('inshorts'))
+        except Exception as e:
+            print(f"[ERROR] format_inshorts crashed: {e}")
+            traceback.print_exc()
+            inshorts_str = ""
 
-    try:
-        govt_str = format_govt(all_data.get('govt'))
-    except Exception as e:
-        print(f"[ERROR] format_govt crashed: {e}")
-        traceback.print_exc()
-        govt_str = "GOVT: Error formatting"
+        try:
+            youtube_str = format_youtube(all_data.get('youtube'))
+        except Exception as e:
+            print(f"[ERROR] format_youtube crashed: {e}")
+            traceback.print_exc()
+            youtube_str = "TV: Error formatting"
 
-    try:
-        reddit_str = format_reddit(all_data.get('reddit'))
-    except Exception as e:
-        print(f"[ERROR] format_reddit crashed: {e}")
-        traceback.print_exc()
-        reddit_str = "REDDIT: Error formatting"
+        try:
+            govt_str = format_govt(all_data.get('govt'))
+        except Exception as e:
+            print(f"[ERROR] format_govt crashed: {e}")
+            traceback.print_exc()
+            govt_str = "GOVT: Error formatting"
 
-    try:
-        scanner_str = format_scanner(all_data.get('scanner'))
-    except Exception as e:
-        print(f"[ERROR] format_scanner crashed: {e}")
-        traceback.print_exc()
-        scanner_str = "SCANNER: Error formatting"
+        try:
+            reddit_str = format_reddit(all_data.get('reddit'))
+        except Exception as e:
+            print(f"[ERROR] format_reddit crashed: {e}")
+            traceback.print_exc()
+            reddit_str = "REDDIT: Error formatting"
 
-    try:
-        twitter_str = format_twitter(all_data.get('twitter'))
-    except Exception as e:
-        print(f"[ERROR] format_twitter crashed: {e}")
-        traceback.print_exc()
-        twitter_str = ""
+        try:
+            scanner_str = format_scanner(all_data.get('scanner'))
+        except Exception as e:
+            print(f"[ERROR] format_scanner crashed: {e}")
+            traceback.print_exc()
+            scanner_str = "SCANNER: Error formatting"
 
-    try:
-        nse_str = format_nse(all_data.get('nse_filings'))
-    except Exception as e:
-        print(f"[ERROR] format_nse crashed: {e}")
-        traceback.print_exc()
-        nse_str = ""
+        try:
+            twitter_str = format_twitter(all_data.get('twitter'))
+        except Exception as e:
+            print(f"[ERROR] format_twitter crashed: {e}")
+            traceback.print_exc()
+            twitter_str = ""
 
-    try:
-        telegram_str = format_telegram(all_data.get('telegram'))
-    except Exception as e:
-        print(f"[ERROR] format_telegram crashed: {e}")
-        traceback.print_exc()
-        telegram_str = ""
+        try:
+            nse_str = format_nse(all_data.get('nse_filings'))
+        except Exception as e:
+            print(f"[ERROR] format_nse crashed: {e}")
+            traceback.print_exc()
+            nse_str = ""
 
-    memory_str = build_memory_context()
+        try:
+            telegram_str = format_telegram(all_data.get('telegram'))
+        except Exception as e:
+            print(f"[ERROR] format_telegram crashed: {e}")
+            traceback.print_exc()
+            telegram_str = ""
 
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')
+        memory_str = build_memory_context()
+        if not isinstance(memory_str, str):
+            print(f"[WARN] memory_str was {type(memory_str).__name__}, coercing to string")
+            memory_str = str(memory_str)
 
-    prompt = f"""You are an institutional-grade Indian market intelligence AI.
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')
+
+        prompt = f"""You are an institutional-grade Indian market intelligence AI.
 Time: {current_time}
 Market Open: {is_indian_market_open()}
 
@@ -609,65 +631,75 @@ RULES:
 - Output ONLY valid JSON, no markdown
 """
 
-    if not AI_ROUTER_AVAILABLE or not ask_ai:
-        print("  [ERROR] ai_router unavailable — cannot call AI")
-        return None
+        if not AI_ROUTER_AVAILABLE or not ask_ai:
+            print("  [ERROR] ai_router unavailable — cannot call AI")
+            return None
 
-    use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
-    try:
-        raw_result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
-        result = validate_ai_response(raw_result, source='master_analyzer') if validate_ai_response else raw_result
-    except Exception as e:
-        print(f"  [ERROR] ask_ai raised exception: {e}")
+        use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
+        try:
+            raw_result = ask_ai(prompt, use_case=use_case, max_tokens=8000)
+            result = validate_ai_response(raw_result, source='master_analyzer') if validate_ai_response else raw_result
+        except Exception as e:
+            print(f"  [ERROR] ask_ai raised exception: {e}")
+            traceback.print_exc()
+            return None
+
+        if isinstance(result, str):
+            print(f"[WARN] ai_router returned string instead of dict: {result[:100]}")
+            result = {
+                'success': bool(result),
+                'text': result,
+                'model': 'unknown',
+                'provider': 'unknown',
+                'estimated_cost': 0,
+                'error': None,
+            }
+
+        if not isinstance(result, dict):
+            print(f"[ERROR] ai_router returned {type(result)}: {result}")
+            return None
+
+        if not result.get('success'):
+            print(f"  ERROR: {result.get('error', 'Unknown')}")
+            return None
+
+        print(f"  [AI] Used: {result.get('model', '?')} ({result.get('provider', '?')})")
+        ai_text = result.get('text') or ''
+        if not ai_text:
+            print("  [ERROR] AI returned empty text")
+            return None
+
+        clean_text = ai_text.strip()
+        if "```json" in clean_text:
+            clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in clean_text:
+            clean_text = clean_text.split("```")[1].split("```")[0].strip()
+
+        try:
+            parsed = json.loads(clean_text)
+        except json.JSONDecodeError as e:
+            print(f"  [ERROR] JSON parse failed: {e}")
+            print(f"  [ERROR] Line {e.lineno}, col {e.colno}: {e.msg}")
+            print(f"  [ERROR] Clean text preview:\n{clean_text[:800]}")
+            print(f"  [ERROR] Raw AI response preview:\n{ai_text[:800]}")
+            return None
+
+        ok, problems = validate_analysis_json(parsed)
+        if not ok:
+            print(f"  [WARN] Invalid or missing fields: {problems}")
+            return None
+
+        return parsed
+
+    except AttributeError as e:
+        print(f"[CRASH] AttributeError: {e}")
+        print("[CRASH] Full traceback:")
         traceback.print_exc()
         return None
-
-    if isinstance(result, str):
-        print(f"[WARN] ai_router returned string instead of dict: {result[:100]}")
-        result = {
-            'success': bool(result),
-            'text': result,
-            'model': 'unknown',
-            'provider': 'unknown',
-            'estimated_cost': 0,
-            'error': None,
-        }
-
-    if not isinstance(result, dict):
-        print(f"[ERROR] ai_router returned {type(result)}: {result}")
+    except Exception as e:
+        print(f"[CRASH] Exception: {e}")
+        traceback.print_exc()
         return None
-
-    if not result.get('success'):
-        print(f"  ERROR: {result.get('error', 'Unknown')}")
-        return None
-
-    print(f"  [AI] Used: {result.get('model', '?')} ({result.get('provider', '?')})")
-    ai_text = result.get('text') or ''
-    if not ai_text:
-        print("  [ERROR] AI returned empty text")
-        return None
-
-    clean_text = ai_text.strip()
-    if "```json" in clean_text:
-        clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-    elif "```" in clean_text:
-        clean_text = clean_text.split("```")[1].split("```")[0].strip()
-
-    try:
-        parsed = json.loads(clean_text)
-    except json.JSONDecodeError as e:
-        print(f"  [ERROR] JSON parse failed: {e}")
-        print(f"  [ERROR] Line {e.lineno}, col {e.colno}: {e.msg}")
-        print(f"  [ERROR] Clean text preview:\n{clean_text[:800]}")
-        print(f"  [ERROR] Raw AI response preview:\n{ai_text[:800]}")
-        return None
-
-    ok, problems = validate_analysis_json(parsed)
-    if not ok:
-        print(f"  [WARN] Invalid or missing fields: {problems}")
-        return None
-
-    return parsed
 
 
 def run_master_analysis():
@@ -729,12 +761,12 @@ def run_master_analysis():
             'sources_used': sources_loaded,
             'memory_augmented': LEARNING_AVAILABLE,
             'data_snapshot': {
-                'govt_high_impact':   all_data['govt'].get('high_impact_count', 0) if all_data.get('govt') else 0,
-                'news_articles':      all_data['news'].get('total_articles', 0) if all_data.get('news') else 0,
-                'scanner_stocks':     all_data['scanner'].get('total_scanned', 0) if all_data.get('scanner') else 0,
-                'scanner_signals':    all_data['scanner'].get('total_signals', 0) if all_data.get('scanner') else 0,
-                'reddit_mood':        _safe_dict(all_data['reddit'].get('market_mood')).get('sentiment', 'unknown') if all_data.get('reddit') else 'unknown',
-                'tv_videos':          all_data['youtube'].get('total_videos', 0) if all_data.get('youtube') else 0,
+                'govt_high_impact':   _safe_dict(all_data.get('govt')).get('high_impact_count', 0),
+                'news_articles':      _safe_dict(all_data.get('news')).get('total_articles', 0),
+                'scanner_stocks':     _safe_dict(all_data.get('scanner')).get('total_scanned', 0),
+                'scanner_signals':    _safe_dict(all_data.get('scanner')).get('total_signals', 0),
+                'reddit_mood':        _safe_dict(_safe_dict(all_data.get('reddit')).get('market_mood')).get('sentiment', 'unknown'),
+                'tv_videos':          _safe_dict(all_data.get('youtube')).get('total_videos', 0),
             }
         }
 

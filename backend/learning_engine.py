@@ -288,6 +288,11 @@ def detect_failure_patterns(predictions):
     return patterns
 
 
+def _safe_row(row):
+    """DB rows should be dicts; guard against unexpected types."""
+    return row if isinstance(row, dict) else {}
+
+
 def build_memory_summary(days=30):
     """
     THE MAIN FUNCTION
@@ -359,6 +364,7 @@ def build_memory_summary(days=30):
     if recent_wins:
         lines.append("\n✅ RECENT WINS (patterns that worked):")
         for w in recent_wins:
+            w = _safe_row(w)
             gain = w.get('max_gain_pct') or w.get('change_7d_pct') or 0
             lines.append(f"  {w['ticker']} ({w.get('sector', '?')}) - {w.get('recommendation', '?')} - {w.get('confidence', '?')} conf - +{gain:.1f}%")
     
@@ -366,6 +372,7 @@ def build_memory_summary(days=30):
     if recent_losses:
         lines.append("\n❌ RECENT LOSSES (avoid similar setups):")
         for l in recent_losses:
+            l = _safe_row(l)
             loss = l.get('max_loss_pct') or l.get('change_7d_pct') or 0
             lines.append(f"  {l['ticker']} ({l.get('sector', '?')}) - {l.get('recommendation', '?')} - {l.get('confidence', '?')} conf - {loss:.1f}%")
     
@@ -374,6 +381,7 @@ def build_memory_summary(days=30):
         lines.append("\n⏳ STILL PENDING (don't repeat these tickers):")
         seen = set()
         for p in pending[:10]:
+            p = _safe_row(p)
             ticker = p.get('ticker')
             if ticker and ticker not in seen:
                 lines.append(f"  {ticker} - {p.get('recommendation', '?')} (predicted {p.get('prediction_date', '?')})")
@@ -423,6 +431,7 @@ def _build_cold_start_summary(pending):
         lines.append("\n⏳ STILL PENDING (don't repeat these tickers):")
         seen = set()
         for p in pending[:10]:
+            p = _safe_row(p)
             ticker = p.get('ticker')
             if ticker and ticker not in seen:
                 lines.append(f"  {ticker} - {p.get('recommendation', '?')}")

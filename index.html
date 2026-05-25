@@ -503,6 +503,41 @@
     }
   }
 
+  function loadSite(url, btn) {
+    if (!url) return
+    const panel = document.getElementById('brokerPanel')
+    const placeholder = document.getElementById('placeholder')
+    if (placeholder) placeholder.style.display = 'none'
+
+    const existing = panel.querySelector('webview')
+    if (existing) existing.remove()
+
+    const wv = document.createElement('webview')
+    wv.src = url
+    wv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;'
+    wv.setAttribute('partition', 'persist:broker')
+    wv.setAttribute('allowpopups', 'true')
+    panel.style.position = 'relative'
+    panel.appendChild(wv)
+
+    const loadingBar = document.getElementById('loadingBar')
+    if (loadingBar) {
+      loadingBar.classList.add('active')
+      loadingBar.textContent = `⏳ Loading ${url}...`
+      wv.addEventListener('did-finish-load', () => {
+        loadingBar.classList.remove('active')
+      })
+      wv.addEventListener('did-fail-load', () => {
+        loadingBar.classList.add('active')
+        loadingBar.textContent = '❌ Failed to load - try another browser'
+      })
+    }
+
+    document.querySelectorAll('.broker-btn, .news-btn').forEach(b =>
+      b.classList.remove('active'))
+    if (btn) btn.classList.add('active')
+  }
+
   function openInPanel(url) {
     // This uses Electron's shell to open the link in your DEFAULT browser (Chrome/Edge/Brave).
     // This bypasses the security headers (X-Frame-Options) that were making the webview blank.
