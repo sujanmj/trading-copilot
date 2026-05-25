@@ -6,7 +6,17 @@ Uses gemini-2.0-flash (higher free quota: 1500/day vs 20/day)
 import os
 from pathlib import Path
 
+import requests
+
 from response_validator import validate_ai_response
+
+try:
+    import google.generativeai as genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    genai = None
+    GENAI_AVAILABLE = False
+    print("[WARN] google-generativeai not installed, using REST API fallback")
 
 
 def _load_env_files():
@@ -32,7 +42,11 @@ def get_anthropic_key():
 
 
 def get_google_key():
-    return os.environ.get('GOOGLE_API_KEY', '').strip()
+    return (
+        os.environ.get('GOOGLE_API_KEY')
+        or os.environ.get('GEMINI_API_KEY')
+        or ''
+    ).strip()
 
 
 def _ai_result(success, text='', model='', provider='', estimated_cost=0.0, error=None):
@@ -182,82 +196,125 @@ def call_anthropic(model_name, prompt, max_tokens=2500):
         return _ai_result(False, model=model_name, provider=provider, error=str(e))
 
 
-def call_gemini(model_name, prompt, max_tokens=2500):
+def _call_gemini_rest(api_key, model_name, prompt, max_tokens=2500):
+    """Call Gemini via REST — no google-generativeai package required."""
     provider = 'google'
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model_name}:generateContent?key={api_key}"
+    )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": 0.7,
+        },
+    }
+
     try:
-        from google import genai
-        from google.genai import types
-
-        api_key = get_google_key()
-        if not api_key:
-            return _ai_result(False, model=model_name, provider=provider,
-                              error='GOOGLE_API_KEY not set in environment')
-
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.7,
-            ),
-        )
-
-        usage = getattr(response, 'usage_metadata', None)
-        input_tokens = getattr(usage, 'prompt_token_count', 0) if usage else 0
-        output_tokens = getattr(usage, 'candidates_token_count', 0) if usage else 0
-        text = _extract_gemini_text(response)
-
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        text = _extract_gemini_text(data)
+        usage = data.get('usageMetadata') or {}
         raw = {
             'success': bool(text),
             'text': text,
             'model': model_name,
             'provider': provider,
             'estimated_cost': 0.0,
-            'error': None if text else 'Empty Gemini response',
-            'input_tokens': input_tokens,
-            'output_tokens': output_tokens,
+            'error': None if text else 'Empty Gemini REST response',
+            'input_tokens': usage.get('promptTokenCount', 0),
+            'output_tokens': usage.get('candidatesTokenCount', 0),
+        }
+        return validate_ai_response(raw, source=provider)
+    except requests.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.response.text[:300] if e.response is not None else ''
+        except Exception:
+            pass
+        err = f"{e} {detail}".strip()
+        return _ai_result(False, model=model_name, provider=provider, error=err)
+    except Exception as e:
+        return _ai_result(False, model=model_name, provider=provider, error=str(e))
+
+
+def _call_gemini_sdk(api_key, model_name, prompt, max_tokens=2500):
+    """Optional SDK path when google-generativeai is installed."""
+    provider = 'google'
+    if not GENAI_AVAILABLE or genai is None:
+        return _ai_result(
+            False,
+            model=model_name,
+            provider=provider,
+            error='google-generativeai not installed',
+        )
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                'max_output_tokens': max_tokens,
+                'temperature': 0.7,
+            },
+        )
+        text = _extract_gemini_text(response)
+        usage = getattr(response, 'usage_metadata', None)
+        raw = {
+            'success': bool(text),
+            'text': text,
+            'model': model_name,
+            'provider': provider,
+            'estimated_cost': 0.0,
+            'error': None if text else 'Empty Gemini SDK response',
+            'input_tokens': getattr(usage, 'prompt_token_count', 0) if usage else 0,
+            'output_tokens': getattr(usage, 'candidates_token_count', 0) if usage else 0,
         }
         return validate_ai_response(raw, source=provider)
     except Exception as e:
-        error_str = str(e)
+        return _ai_result(False, model=model_name, provider=provider, error=str(e))
 
-        if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'quota' in error_str.lower():
-            print("  [AI] Gemini quota hit, trying lite model...")
-            try:
-                from google import genai
-                from google.genai import types
-                api_key = get_google_key()
-                client = genai.Client(api_key=api_key)
-                response = client.models.generate_content(
-                    model='gemini-2.0-flash-lite',
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        max_output_tokens=max_tokens,
-                        temperature=0.7,
-                    ),
-                )
-                text = _extract_gemini_text(response)
-                raw = {
-                    'success': bool(text),
-                    'text': text,
-                    'model': 'gemini-2.0-flash-lite (fallback)',
-                    'provider': provider,
-                    'estimated_cost': 0.0,
-                    'error': None if text else 'Empty Gemini lite response',
-                    'input_tokens': 0,
-                    'output_tokens': 0,
-                }
-                return validate_ai_response(raw, source=provider)
-            except Exception as e2:
-                return _ai_result(
-                    False,
-                    model=model_name,
-                    provider=provider,
-                    error=f'Both Gemini models failed: {str(e2)[:200]}',
-                )
 
-        return _ai_result(False, model=model_name, provider=provider, error=error_str)
+def call_gemini(model_name, prompt, max_tokens=2500):
+    provider = 'google'
+    api_key = get_google_key()
+    if not api_key:
+        return _ai_result(
+            False,
+            model=model_name,
+            provider=provider,
+            error='No Gemini API key found (GOOGLE_API_KEY or GEMINI_API_KEY)',
+        )
+
+    # REST API first — reliable on Railway, no import issues
+    result = _call_gemini_rest(api_key, model_name, prompt, max_tokens)
+    if result.get('success'):
+        return result
+
+    error_str = str(result.get('error') or '')
+
+    if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'quota' in error_str.lower():
+        print("  [AI] Gemini quota hit, trying lite model via REST...")
+        lite_result = _call_gemini_rest(
+            api_key, 'gemini-2.0-flash-lite', prompt, max_tokens
+        )
+        if lite_result.get('success'):
+            lite_result['model'] = 'gemini-2.0-flash-lite (fallback)'
+            return lite_result
+        error_str = str(lite_result.get('error') or error_str)
+
+    # Optional SDK fallback if package is installed
+    if GENAI_AVAILABLE:
+        print("  [AI] REST failed, trying google-generativeai SDK...")
+        sdk_result = _call_gemini_sdk(api_key, model_name, prompt, max_tokens)
+        if sdk_result.get('success'):
+            return sdk_result
+        error_str = str(sdk_result.get('error') or error_str)
+
+    return _ai_result(False, model=model_name, provider=provider, error=error_str)
 
 
 def ask_ai(prompt, use_case='ask_basic', model_override=None, max_tokens=2500):
