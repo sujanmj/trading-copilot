@@ -5,6 +5,7 @@ Includes prompt-hash caching and budget integration.
 
 import hashlib
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -23,9 +24,34 @@ def _log(tag: str, msg: str):
     print(f"[{tag}] {msg}")
 
 
+_CACHE_NORM_RE = [
+    (re.compile(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?'), ''),
+    (re.compile(r'\bage=\d+s\b', re.I), ''),
+    (re.compile(r'\bupdated_at[^\n]*', re.I), ''),
+    (re.compile(r'\bgenerated_at[^\n]*', re.I), ''),
+    (re.compile(r'\btimestamp[^\n]*', re.I), ''),
+    (re.compile(r'\bcycle_id[^\n]*', re.I), ''),
+]
+
+
+def normalize_prompt_for_cache(text: str) -> str:
+    """Strip volatile metadata so semantically identical prompts share cache keys."""
+    if not text:
+        return ''
+    out = text
+    for pattern, repl in _CACHE_NORM_RE:
+        out = pattern.sub(repl, out)
+    out = re.sub(r'[ \t]+', ' ', out)
+    out = re.sub(r'\n{3,}', '\n\n', out)
+    return out.strip()
+
+
 def hash_prompt(prompt: str, use_case: str = '') -> str:
-    blob = f"{use_case}|{prompt}".encode('utf-8', errors='replace')
-    return hashlib.sha256(blob).hexdigest()
+    normalized = normalize_prompt_for_cache(prompt)
+    blob = f"{use_case}|{normalized}".encode('utf-8', errors='replace')
+    digest = hashlib.sha256(blob).hexdigest()
+    _log('CACHE HASH NORMALIZED', f'{use_case} key={digest[:12]} len={len(normalized)}')
+    return digest
 
 
 def _cache_path(key: str) -> Path:
@@ -35,26 +61,26 @@ def _cache_path(key: str) -> Path:
 def get_cached(key: str) -> Optional[Dict[str, Any]]:
     path = _cache_path(key)
     if not path.exists():
-        _log('CACHE MISS', key[:12])
+        _log('SEMANTIC CACHE MISS', key[:12])
         return None
     try:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         if not isinstance(data, dict) or 'result' not in data:
             path.unlink(missing_ok=True)
-            _log('CACHE MISS', 'corrupt entry removed')
+            _log('SEMANTIC CACHE MISS', 'corrupt entry removed')
             return None
         age = time.time() - float(data.get('ts', 0))
         if age > AI_CACHE_TTL_SECONDS:
             path.unlink(missing_ok=True)
-            _log('CACHE MISS', f'expired ({int(age)}s)')
+            _log('SEMANTIC CACHE MISS', f'expired ({int(age)}s)')
             return None
-        _log('CACHE HIT', f"{key[:12]} age={int(age)}s")
+        _log('SEMANTIC CACHE HIT', f"{key[:12]} age={int(age)}s")
         result = dict(data.get('result') or {})
         result['_from_cache'] = True
         return result
     except Exception as e:
-        _log('CACHE MISS', f'read error: {e}')
+        _log('SEMANTIC CACHE MISS', f'read error: {e}')
         try:
             path.unlink(missing_ok=True)
         except OSError:

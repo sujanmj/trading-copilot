@@ -14,9 +14,12 @@ from backend.ai.signal_ranker import (
     extract_key_metrics,
     rank_govt_items,
     rank_news_articles,
+    rank_news_articles_with_stats,
     rank_reddit_tickers,
     rank_scanner_signals,
 )
+from backend.ai.novelty_scoring import select_diverse_raw_evidence
+from backend.ai.token_optimizer import section_char_limit
 from backend.ai.token_optimizer import estimate_tokens, extract_symbols
 
 # ── Logging tags (required by spec) ──────────────────────────────────────────
@@ -466,15 +469,21 @@ def detect_market_regime(
     news_shock_intensity = _clamp(shock_count / 8.0)
     scanner_anomaly_strength = _clamp(ultra_count / 5.0 + avg_abs / 8.0)
 
-    # Higher aggressiveness = more compression allowed (stable markets)
-    if primary in ('sideways', 'bullish_trend') and volatility_index < 0.35:
-        compression_aggressiveness = 0.85
+    # Regime-aware compression aggressiveness (lower = preserve more detail)
+    if primary == 'bullish_trend' and volatility_index < 0.4:
+        compression_aggressiveness = 0.88
+    elif primary == 'sideways' and volatility_index < 0.45:
+        compression_aggressiveness = 0.62
     elif primary == 'panic_volatile' or volatility_index > 0.65:
-        compression_aggressiveness = 0.35
-    elif primary in ('macro_uncertainty', 'regime_transition'):
-        compression_aggressiveness = 0.45
+        compression_aggressiveness = 0.22
+    elif primary == 'macro_uncertainty':
+        compression_aggressiveness = 0.18
+    elif primary == 'regime_transition':
+        compression_aggressiveness = 0.25
+    elif primary in ('sideways', 'bullish_trend'):
+        compression_aggressiveness = 0.72
     else:
-        compression_aggressiveness = 0.6
+        compression_aggressiveness = 0.55
 
     regime_shift = bool(previous_regime and previous_regime != primary)
     if regime_shift:
@@ -506,31 +515,36 @@ def detect_market_regime(
 # ── 4. Raw high-impact evidence (untouched) ───────────────────────────────────
 
 def extract_raw_high_impact(all_data: Dict[str, Any], scored: dict) -> str:
-    """Small raw evidence block — always passed to Claude verbatim."""
-    lines = ['=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===']
+    """Diverse raw evidence block — novelty-filtered, passed to Claude verbatim."""
+    candidates: List[tuple] = []
+    _, novelty_stats = rank_news_articles_with_stats(_safe_dict(all_data.get('news')), limit=10)
 
-    for art in rank_news_articles(_safe_dict(all_data.get('news')), limit=5):
+    for art in rank_news_articles(_safe_dict(all_data.get('news')), limit=10):
         art = _safe_dict(art)
         title = str(art.get('title', '')).strip()
         if not title:
             continue
-        lines.append(
+        novelty = float(art.get('_novelty_score') or 5)
+        if novelty < 2.0 and not _contains_high_impact(title):
+            continue
+        line = (
             f"HEADLINE | [{art.get('sentiment_label', '?')}] {title} "
             f"| source={art.get('source', art.get('publisher', '?'))}"
         )
-        _log('RAW SIGNAL PRESERVED', f'headline {title[:70]}')
+        candidates.append((novelty + 1.0, line, 'news'))
 
-    for gov in rank_govt_items(_safe_dict(all_data.get('govt')), limit=5):
+    for gov in rank_govt_items(_safe_dict(all_data.get('govt')), limit=6):
         gov = _safe_dict(gov)
         headline = str(gov.get('english_headline', gov.get('title', ''))).strip()
-        if float(gov.get('impact_score') or 0) < 4 and not _contains_high_impact(headline):
+        impact = float(gov.get('impact_score') or 0)
+        if impact < 4 and not _contains_high_impact(headline):
             continue
         stocks = ', '.join(str(s) for s in _safe_list(gov.get('affected_stocks'))[:5])
-        lines.append(
-            f"GOVT ALERT | [{gov.get('impact_score', '?')}/10 {gov.get('direction', '?')}] "
+        line = (
+            f"GOVT ALERT | [{impact}/10 {gov.get('direction', '?')}] "
             f"{headline} | affects: {stocks or 'MACRO'}"
         )
-        _log('RAW SIGNAL PRESERVED', f'govt {headline[:70]}')
+        candidates.append((impact + 2.0, line, 'govt'))
 
     for sig in rank_scanner_signals(_safe_dict(all_data.get('scanner')), limit=8):
         sig = _safe_dict(sig)
@@ -539,29 +553,40 @@ def extract_raw_high_impact(all_data: Dict[str, Any], scored: dict) -> str:
         if strength != 'ULTRA' and abs(chg) < 4.0:
             continue
         signals_txt = ' + '.join(_safe_list(sig.get('signals'))[:3])
-        lines.append(
+        line = (
             f"SCANNER ANOMALY | [{strength}|{sig.get('direction', '?')}] "
             f"{sig.get('ticker', '?')} Rs.{sig.get('price', '?')} {chg:+.2f}% "
             f"vol={float(sig.get('volume_ratio') or 0):.1f}x | {signals_txt}"
         )
-        _log('RAW SIGNAL PRESERVED', f"scanner {sig.get('ticker', '?')} {chg:+.2f}%")
+        score = 8.0 + abs(chg) * 0.3 + (2.0 if strength == 'ULTRA' else 0)
+        candidates.append((score, line, 'scanner'))
 
-    reversals = _detect_sentiment_reversals(all_data)
-    for rev in reversals[:4]:
-        lines.append(f"SENTIMENT REVERSAL | {rev}")
-        _log('RAW SIGNAL PRESERVED', rev[:80])
+    for rev in _detect_sentiment_reversals(all_data)[:5]:
+        candidates.append((7.5, f"SENTIMENT REVERSAL | {rev}", 'sentiment'))
 
     nse = _safe_dict(all_data.get('nse_filings'))
     for item in _safe_list(nse.get('latest_high_impact'))[:3]:
         item = _safe_dict(item)
-        lines.append(
+        line = (
             f"NSE FILING | [{item.get('symbol', '?')}] {item.get('impact_category', '?')} | "
             f"{str(item.get('subject', ''))[:100]}"
         )
+        candidates.append((6.5, line, 'nse'))
 
-    if len(lines) == 1:
+    selected, diversity_meta = select_diverse_raw_evidence(candidates, limit=8)
+    lines = ['=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===']
+    if selected:
+        lines.extend(selected)
+        for ln in selected[:4]:
+            _log('RAW SIGNAL PRESERVED', ln[:80])
+    else:
         lines.append('  (No extreme raw signals — market relatively calm)')
 
+    lines.append(
+        f"  [evidence_meta] novelty_avg={novelty_stats.get('avg_novelty_score', '?')} "
+        f"repetition_suppressed={novelty_stats.get('repetition_suppressed', 0)} "
+        f"diversity_suppressed={diversity_meta.get('diversity_suppressed', 0)}"
+    )
     return '\n'.join(lines)
 
 
@@ -605,6 +630,12 @@ def build_compression_profile(regime: dict, contradictions: dict, scored: dict) 
     gemini_word_cap = int(900 + aggressiveness * 900)
 
     skip_gemini = False
+    primary = regime.get('primary_regime', 'sideways')
+    if volatility > 0.58 or disagree > 0.45:
+        skip_gemini = True
+    if primary in ('panic_volatile', 'macro_uncertainty', 'regime_transition'):
+        skip_gemini = True
+        gemini_word_cap = int(gemini_word_cap * 0.75)
     if volatility > 0.72 or disagree > 0.55:
         skip_gemini = True
         _log('REGIME SHIFT', 'Skipping Gemini compression — preserving detail for volatile/contradictory market')
@@ -644,19 +675,52 @@ def adaptive_compress_sections(
     for name, body in sections.items():
         if not body:
             continue
-        limit = max_chars
-        if name in protected_sections:
-            limit = int(max_chars * 1.45)
+        protected = name in protected_sections
+        limit = section_char_limit(max_chars, name, protected=protected)
         out[name] = compress_section(str(body), limit)
     return out
 
 
 # ── 6. Compression quality evaluation ─────────────────────────────────────────
 
+def _compute_sentiment_diversity(all_data: Dict[str, Any]) -> Tuple[float, float]:
+    """Return (sentiment_diversity_score, minority_signal_retention_score)."""
+    buckets = {'bullish': 0, 'bearish': 0, 'neutral': 0}
+    sources = 0
+
+    for art in _safe_list(_safe_dict(all_data.get('news')).get('articles'))[:40]:
+        b = _sentiment_bucket(_safe_dict(art).get('sentiment_label'))
+        buckets[b] += 1
+        sources += 1
+
+    reddit = _safe_dict(all_data.get('reddit'))
+    mood = _sentiment_bucket(_safe_dict(reddit.get('market_mood')).get('sentiment'))
+    if mood != 'neutral':
+        buckets[mood] += 2
+        sources += 2
+
+    for sig in _safe_list(_safe_dict(all_data.get('scanner')).get('top_signals'))[:12]:
+        b = _sentiment_bucket(_safe_dict(sig).get('direction'))
+        if b != 'neutral':
+            buckets[b] += 1
+            sources += 1
+
+    active = sum(1 for v in buckets.values() if v > 0)
+    diversity = _clamp(active / 3.0)
+    if sources > 0:
+        minority = min(buckets.values())
+        majority = max(buckets.values())
+        minority_retention = _clamp(minority / max(majority, 1) + (0.15 if active >= 2 else 0))
+    else:
+        minority_retention = 0.5
+    return round(diversity, 3), round(minority_retention, 3)
+
+
 def evaluate_compression_quality(
     raw_blob: str,
     compressed_blob: str,
     preservation: dict,
+    all_data: Optional[Dict[str, Any]] = None,
 ) -> dict:
     raw_syms = extract_symbols(raw_blob or '')
     comp_syms = extract_symbols(compressed_blob or '')
@@ -688,13 +752,30 @@ def evaluate_compression_quality(
     comp_len = len(compressed_blob or '')
     compression_ratio = round(comp_len / raw_len, 3)
 
+    sentiment_diversity_score, minority_signal_retention_score = (0.5, 0.5)
+    novelty_avg = 0.0
+    repetition_suppressed = 0
+    if all_data:
+        sentiment_diversity_score, minority_signal_retention_score = _compute_sentiment_diversity(all_data)
+        km = extract_key_metrics(all_data)
+        novelty_avg = float(km.get('novelty_avg_score') or 0)
+        repetition_suppressed = int(km.get('repetition_suppressed') or 0)
+
+    regime = preservation.get('regime') or {}
+    primary = regime.get('primary_regime', 'sideways')
+    truncation_severity = round(_clamp(compression_ratio), 3)
+    if primary in ('panic_volatile', 'macro_uncertainty', 'regime_transition') and compression_ratio < 0.35:
+        truncation_severity = round(compression_ratio * 0.7, 3)
+
     raw_evidence_len = len(preservation.get('raw_evidence_block') or '')
     intelligence_quality = round(
-        symbol_retention * 0.22
-        + contradiction_retention * 0.28
-        + sentiment_preservation * 0.22
-        + (1.0 - _clamp(compression_ratio, 0, 1)) * 0.08
-        + _clamp(raw_evidence_len / 2000, 0, 1) * 0.20,
+        symbol_retention * 0.18
+        + contradiction_retention * 0.26
+        + sentiment_preservation * 0.20
+        + sentiment_diversity_score * 0.12
+        + minority_signal_retention_score * 0.10
+        + (1.0 - _clamp(compression_ratio, 0, 1)) * 0.06
+        + _clamp(raw_evidence_len / 2000, 0, 1) * 0.18,
         3,
     )
 
@@ -702,9 +783,15 @@ def evaluate_compression_quality(
         'information_retention_score': round(symbol_retention, 3),
         'contradiction_retention_score': round(contradiction_retention, 3),
         'sentiment_preservation_score': round(sentiment_preservation, 3),
+        'sentiment_diversity_score': sentiment_diversity_score,
+        'minority_signal_retention_score': minority_signal_retention_score,
+        'truncation_severity': truncation_severity,
         'compression_ratio': compression_ratio,
         'intelligence_quality_score': intelligence_quality,
         'raw_evidence_chars': raw_evidence_len,
+        'novelty_avg_score': round(novelty_avg, 3),
+        'repetition_suppressed_count': repetition_suppressed,
+        'primary_regime': primary,
     }
 
     _log(

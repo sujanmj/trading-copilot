@@ -141,6 +141,41 @@ def send_watchdog_alert(message):
         print(f"[WATCHDOG] Telegram alert failed: {e}")
 
 
+def _check_watchdog_emergency() -> tuple:
+    """Emergency override — macro/govt/scanner/contradiction spikes only."""
+    try:
+        state = {}
+        if (DATA_DIR / 'analysis_state.json').exists():
+            with open(DATA_DIR / 'analysis_state.json', 'r', encoding='utf-8') as f:
+                state = json.load(f) or {}
+
+        disagree = float(state.get('disagreement_score') or 0)
+        vol = float(state.get('volatility_index') or 0)
+        if disagree >= 0.55:
+            return True, f'contradiction_spike={disagree:.2f}'
+        if vol >= 0.68:
+            return True, f'volatility_spike={vol:.2f}'
+
+        govt_path = DATA_DIR / 'govt_intelligence.json'
+        if govt_path.exists():
+            with open(govt_path, 'r', encoding='utf-8') as f:
+                govt = json.load(f) or {}
+            for item in (govt.get('high_impact_items') or [])[:5]:
+                if float(item.get('impact_score') or 0) >= 8.5:
+                    return True, 'govt_high_impact'
+
+        scanner_path = DATA_DIR / 'scanner_data.json'
+        if scanner_path.exists():
+            with open(scanner_path, 'r', encoding='utf-8') as f:
+                scanner = json.load(f) or {}
+            for sig in (scanner.get('top_signals') or [])[:6]:
+                if str(sig.get('strength', '')).upper() == 'ULTRA' and abs(float(sig.get('change_percent') or 0)) >= 5:
+                    return True, f"scanner_ultra:{sig.get('ticker')}"
+    except Exception as e:
+        watchdog_log.debug('Emergency check failed: %s', e)
+    return False, ''
+
+
 def stale_data_watchdog():
     """Background loop: auto-run master_analyzer if intelligence file is stale."""
     global _watchdog_last_trigger, _analyzer_running
@@ -148,41 +183,68 @@ def stale_data_watchdog():
     while True:
         time.sleep(WATCHDOG_CHECK_INTERVAL)
         try:
+            from backend.utils.market_hours import get_watchdog_config
+            wd_cfg = get_watchdog_config()
+            threshold = int(wd_cfg['stale_threshold_seconds'])
+            mode = wd_cfg['mode']
+            print(f"[WATCHDOG MODE] {mode} threshold={threshold}s")
+            if wd_cfg.get('night_mode'):
+                print(f"[NIGHT MODE STALE TOLERANCE] active — threshold {threshold // 3600}h")
+
             age = file_age_seconds('unified_intelligence.json')
-            if age and age > STALE_THRESHOLD_SECONDS:
-                now = time.time()
-                if now - _watchdog_last_trigger < WATCHDOG_TRIGGER_COOLDOWN:
-                    continue
-                if _analyzer_running:
-                    watchdog_log.info("Analyzer subprocess already active — skip")
-                    continue
-                locks = lock_status()
-                if locks.get('master_analyzer', {}).get('alive'):
-                    watchdog_log.info("Analyzer lock held — skip auto-refresh")
-                    continue
+            if not age:
+                continue
+            if age <= threshold:
+                if wd_cfg.get('market_hours'):
+                    print(f"[MARKET HOURS STALE CHECK] age={age}s ok (<{threshold}s)")
+                continue
 
-                _watchdog_last_trigger = now
-                hours = age // 3600
-                msg = f"Intelligence {hours}h stale! Auto-recovering..."
-                print(f"[WATCHDOG] {msg}")
-                watchdog_log.warning(msg)
+            emergency, emergency_reason = _check_watchdog_emergency()
+            if wd_cfg.get('night_mode') and not emergency:
+                print(f"[NIGHT MODE STALE TOLERANCE] stale {age}s — no emergency, skip refresh")
+                continue
+
+            now = time.time()
+            if now - _watchdog_last_trigger < WATCHDOG_TRIGGER_COOLDOWN:
+                continue
+            if _analyzer_running:
+                watchdog_log.info("Analyzer subprocess already active — skip")
+                continue
+            locks = lock_status()
+            if locks.get('master_analyzer', {}).get('alive'):
+                watchdog_log.info("Analyzer lock held — skip auto-refresh")
+                continue
+
+            _watchdog_last_trigger = now
+            hours = age // 3600
+            msg = f"Intelligence {hours}h stale ({mode})! Auto-recovering..."
+            if emergency:
+                msg += f" [EMERGENCY: {emergency_reason}]"
+            print(f"[WATCHDOG] {msg}")
+            watchdog_log.warning(msg)
+
+            send_telegram = wd_cfg.get('market_hours') or emergency
+            if send_telegram:
                 send_watchdog_alert(
-                    f"Market intelligence is <b>{hours}h stale</b>. Auto-refresh triggered."
+                    f"Market intelligence is <b>{hours}h stale</b> ({mode}). Auto-refresh triggered."
+                    + (f" Emergency: {emergency_reason}" if emergency else '')
                 )
+            else:
+                print("[WATCHDOG] After-hours stale refresh — Telegram alert suppressed")
 
-                env = {'AI_USE_CASE': 'watchdog_refresh'}
-                _analyzer_running = True
+            env = {'AI_USE_CASE': 'watchdog_refresh'}
+            _analyzer_running = True
 
-                def _run_analyzer():
-                    global _analyzer_running
-                    try:
-                        popen_script('master_analyzer.py', extra_env=env).wait()
-                    finally:
-                        _analyzer_running = False
+            def _run_analyzer():
+                global _analyzer_running
+                try:
+                    popen_script('master_analyzer.py', extra_env=env).wait()
+                finally:
+                    _analyzer_running = False
 
-                threading.Thread(target=_run_analyzer, daemon=True, name='WatchdogAnalyzer').start()
-                watchdog_log.info("Auto-refresh triggered")
-                print("[WATCHDOG] Auto-refresh triggered")
+            threading.Thread(target=_run_analyzer, daemon=True, name='WatchdogAnalyzer').start()
+            watchdog_log.info("Auto-refresh triggered")
+            print("[WATCHDOG] Auto-refresh triggered")
         except Exception as e:
             print(f"[WATCHDOG] Error: {e}")
             watchdog_log.error("Watchdog error: %s", e)
@@ -305,6 +367,10 @@ def api_config():
 
 @app.get("/api/health")
 def health():
+    from backend.utils.market_hours import get_watchdog_config
+    wd_cfg = get_watchdog_config()
+    dynamic_stale_threshold = int(wd_cfg.get('stale_threshold_seconds') or STALE_THRESHOLD_SECONDS)
+
     files = {
         "intelligence": "unified_intelligence.json",
         "scanner": "scanner_data.json",
@@ -334,7 +400,7 @@ def health():
             source_status[key] = {"file": filename, "status": "ok", "age_seconds": age}
         else:
             freshness[key] = f"{age // 3600}h ago"
-            stale = age > STALE_THRESHOLD_SECONDS
+            stale = age > dynamic_stale_threshold
             source_status[key] = {
                 "file": filename,
                 "status": "stale" if stale else "ok",
@@ -385,6 +451,8 @@ def health():
         "last_quality_score": pipeline_obs.get("last_quality_score"),
         "last_claude_reason": pipeline_obs.get("last_claude_reason"),
         "delta_trigger_reason": pipeline_obs.get("delta_trigger_reason"),
+        "watchdog_mode": pipeline_obs.get("watchdog_mode"),
+        "watchdog_stale_threshold_seconds": pipeline_obs.get("watchdog_stale_threshold_seconds"),
         "pipeline_observability": pipeline_obs,
     }
 

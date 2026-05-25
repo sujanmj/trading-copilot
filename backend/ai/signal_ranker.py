@@ -1,6 +1,8 @@
 """Rank and filter high-value signals before synthesis."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+
+from backend.ai.novelty_scoring import rank_news_with_novelty
 
 
 def _safe_dict(v):
@@ -20,7 +22,11 @@ def rank_scanner_signals(scanner: dict, limit: int = 12) -> List[dict]:
         base = strength_order.get(str(s.get('strength', '')).upper(), 0)
         vol = float(s.get('volume_ratio') or 0)
         chg = abs(float(s.get('change_percent') or 0))
-        return (base * 100) + (vol * 10) + chg
+        india_boost = 0.0
+        sector = str(s.get('sector', '')).upper()
+        if sector and sector not in ('UNKNOWN', 'US', 'GLOBAL'):
+            india_boost = 5.0
+        return (base * 100) + (vol * 10) + chg + india_boost
 
     ranked = sorted(signals, key=score, reverse=True)
     return ranked[:limit]
@@ -36,8 +42,13 @@ def rank_govt_items(govt: dict, limit: int = 6) -> List[dict]:
 
 
 def rank_news_articles(news: dict, limit: int = 12) -> List[dict]:
-    articles = _safe_list(_safe_dict(news).get('articles'))
-    return articles[:limit]
+    """Novelty-adjusted ranking — suppress repetitive low-value US chatter."""
+    ranked, _stats = rank_news_with_novelty(news, limit=limit)
+    return ranked
+
+
+def rank_news_articles_with_stats(news: dict, limit: int = 12) -> Tuple[List[dict], dict]:
+    return rank_news_with_novelty(news, limit=limit)
 
 
 def rank_reddit_tickers(reddit: dict, limit: int = 8) -> List[dict]:
@@ -61,11 +72,26 @@ def extract_key_metrics(all_data: Dict[str, Any]) -> Dict[str, Any]:
     scanner = _safe_dict(all_data.get('scanner'))
     top_signals = rank_scanner_signals(scanner, limit=5)
     signal_tickers = [str(_safe_dict(s).get('ticker', '')) for s in top_signals]
+    signal_signature = [
+        (
+            str(_safe_dict(s).get('ticker', '')),
+            str(_safe_dict(s).get('strength', '')),
+            round(float(_safe_dict(s).get('change_percent') or 0), 1),
+        )
+        for s in top_signals
+    ]
 
     news = _safe_dict(all_data.get('news'))
     govt = _safe_dict(all_data.get('govt'))
     reddit = _safe_dict(all_data.get('reddit'))
     mood = _safe_dict(reddit.get('market_mood'))
+
+    ranked_news, novelty_stats = rank_news_with_novelty(news, limit=8)
+    top_news_titles = sorted([
+        str(_safe_dict(a).get('title', ''))[:80].lower().strip()
+        for a in ranked_news[:6]
+        if _safe_dict(a).get('title')
+    ])
 
     return {
         'india_avg_change': round(avg_change, 3),
@@ -73,8 +99,12 @@ def extract_key_metrics(all_data: Dict[str, Any]) -> Dict[str, Any]:
         'govt_high_impact': int(govt.get('high_impact_count') or 0),
         'scanner_signals': int(scanner.get('total_signals') or 0),
         'top_scanner_tickers': signal_tickers,
+        'scanner_signature': signal_signature,
+        'top_news_titles': top_news_titles,
         'reddit_sentiment': str(mood.get('sentiment', 'unknown')),
         'reddit_confidence': int(mood.get('confidence') or 0),
+        'novelty_avg_score': novelty_stats.get('avg_novelty_score', 0),
+        'repetition_suppressed': novelty_stats.get('repetition_suppressed', 0),
     }
 
 
@@ -96,7 +126,11 @@ def format_ranked_summary(all_data: Dict[str, Any]) -> str:
 
     for a in rank_news_articles(_safe_dict(all_data.get('news')), limit=8):
         a = _safe_dict(a)
-        lines.append(f"NEWS [{str(a.get('sentiment_label','?'))[:3]}] {str(a.get('title',''))[:90]}")
+        novelty = a.get('_novelty_score', '?')
+        lines.append(
+            f"NEWS [{str(a.get('sentiment_label','?'))[:3]}|nov={novelty}] "
+            f"{str(a.get('title',''))[:90]}"
+        )
 
     for t in rank_reddit_tickers(_safe_dict(all_data.get('reddit'))):
         t = _safe_dict(t)

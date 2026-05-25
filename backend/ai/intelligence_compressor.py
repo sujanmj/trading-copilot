@@ -14,7 +14,7 @@ from backend.utils.config import ANALYSIS_STATE_FILE, DATA_DIR, ensure_dirs
 from backend.storage.json_io import atomic_write_json
 from backend.ai.deduplicator import deduplicate_all
 from backend.ai.signal_ranker import extract_key_metrics, format_ranked_summary
-from backend.ai.token_optimizer import build_sections_blob, cap_prompt, compress_section, estimate_tokens
+from backend.ai.token_optimizer import build_sections_blob, cap_prompt_preserving_blocks, compress_section, estimate_tokens
 from backend.ai.ai_pipeline_router import call_cheap, pipeline_status
 from backend.ai.intelligence_preservation import (
     adaptive_compress_sections,
@@ -55,6 +55,7 @@ def _fingerprint_blob(obj: Any) -> str:
 
 
 def compute_source_hashes(all_data: Dict[str, Any]) -> Dict[str, str]:
+    """Full source fingerprints — kept for debug/audit."""
     hashes = {}
     for key, value in (all_data or {}).items():
         if value is None:
@@ -63,6 +64,27 @@ def compute_source_hashes(all_data: Dict[str, Any]) -> Dict[str, str]:
             hashes[key] = _fingerprint_blob(value)
     hashes['composite'] = _fingerprint_blob(hashes)
     return hashes
+
+
+def compute_semantic_state_hash(all_data: Dict[str, Any]) -> str:
+    """
+    Semantic hash — ignores timestamps, ordering noise, collector metadata.
+    Only meaningful signal state invalidates reuse.
+    """
+    metrics = extract_key_metrics(all_data)
+    semantic = {
+        'india_avg_change': round(float(metrics.get('india_avg_change') or 0), 2),
+        'news_count_bucket': int(metrics.get('news_count') or 0) // 5,
+        'govt_high_impact': int(metrics.get('govt_high_impact') or 0),
+        'scanner_signals_bucket': int(metrics.get('scanner_signals') or 0) // 3,
+        'scanner_signature': metrics.get('scanner_signature') or [],
+        'top_news_titles': metrics.get('top_news_titles') or [],
+        'reddit_sentiment': metrics.get('reddit_sentiment'),
+        'reddit_confidence_bucket': int(metrics.get('reddit_confidence') or 0) // 10,
+    }
+    digest = _fingerprint_blob(semantic)
+    _log('CACHE HASH NORMALIZED', f'semantic_state={digest}')
+    return digest
 
 
 def load_analysis_state() -> dict:
@@ -124,22 +146,27 @@ def should_run_analysis(
     """
     state = load_analysis_state()
     hashes = compute_source_hashes(all_data)
+    semantic_hash = compute_semantic_state_hash(all_data)
     metrics = extract_key_metrics(all_data)
     prev_hashes = state.get('source_hashes') or {}
     prev_metrics = state.get('metrics') or {}
+    prev_semantic = state.get('semantic_hash')
 
     hash_changed = hashes.get('composite') != prev_hashes.get('composite')
+    semantic_changed = semantic_hash != prev_semantic
     delta_reasons = _metrics_delta(prev_metrics, metrics)
 
     decision = {
         'force': force,
         'hash_changed': hash_changed,
+        'semantic_changed': semantic_changed,
+        'semantic_hash': semantic_hash,
         'delta_reasons': delta_reasons,
         'metrics': metrics,
         'source_hashes': hashes,
         'reuse_previous': False,
         'skip_claude': False,
-        'meaningful_change': bool(delta_reasons) or hash_changed,
+        'meaningful_change': bool(delta_reasons) or semantic_changed,
     }
 
     if force:
@@ -147,7 +174,7 @@ def should_run_analysis(
         _log('DELTA DETECTED', 'forced refresh')
         return decision
 
-    if not hash_changed and not delta_reasons:
+    if not semantic_changed and not delta_reasons:
         if INTEL_FILE.exists():
             age = datetime.now().timestamp() - INTEL_FILE.stat().st_mtime
             if age < MAX_REUSE_AGE_SECONDS:
@@ -162,8 +189,10 @@ def should_run_analysis(
 
     if delta_reasons:
         _log('DELTA DETECTED', ', '.join(delta_reasons))
+    elif semantic_changed:
+        _log('DELTA DETECTED', 'semantic state changed')
     elif hash_changed:
-        _log('DELTA DETECTED', 'source hash changed')
+        _log('DELTA DETECTED', 'full source hash changed (non-semantic noise)')
 
     return decision
 
@@ -201,7 +230,7 @@ def gemini_compress_intelligence(raw_context: str, profile: Optional[dict] = Non
         'input_tokens': estimate_tokens(raw_context or ''),
     }
 
-    raw_context = cap_prompt(raw_context, max_prompt)
+    raw_context = cap_prompt_preserving_blocks(raw_context, max_prompt)
     if estimate_tokens(raw_context) < 800:
         meta['passthrough'] = True
         meta['decision_reason'] = 'Bulk input under 800 tokens — no Gemini compression'
@@ -321,9 +350,9 @@ def prepare_intelligence_pipeline(
         scored_block=preservation['scored_signals_block'],
         compressed_summary=compressed_bulk,
     )
-    final_context = cap_prompt(final_context, int(profile.get('max_prompt_chars') or 28000) + 8000)
+    final_context = cap_prompt_preserving_blocks(final_context, int(profile.get('max_prompt_chars') or 28000) + 8000)
 
-    quality = evaluate_compression_quality(raw_blob, final_context, preservation)
+    quality = evaluate_compression_quality(raw_blob, final_context, preservation, all_data=cleaned)
     input_summary = build_input_summary(all_data, decision)
 
     record_compression_stage(
@@ -357,6 +386,7 @@ def persist_analysis_state(decision: dict, preservation: Optional[dict] = None, 
     state = {
         'updated_at': datetime.now().isoformat(),
         'source_hashes': decision.get('source_hashes') or {},
+        'semantic_hash': decision.get('semantic_hash'),
         'metrics': decision.get('metrics') or {},
         'last_delta_reasons': decision.get('delta_reasons') or [],
         'last_regime': regime.get('primary_regime'),

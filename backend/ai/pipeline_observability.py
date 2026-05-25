@@ -378,6 +378,24 @@ def check_quality_alerts(quality: dict, reuse: bool = False) -> List[dict]:
         warnings.append({'code': 'weak_sentiment_preservation', 'value': sentiment, 'threshold': SENTIMENT_PRESERVATION_WARN})
         _log('QUALITY WARNING', f'sentiment_preservation={sentiment:.2f}')
 
+    truncation = float(quality.get('truncation_severity') or quality.get('compression_ratio') or 0)
+    regime = str(quality.get('primary_regime') or '')
+    if truncation < COMPRESSION_RATIO_WARN and iq < 0.65:
+        if regime not in ('panic_volatile', 'macro_uncertainty', 'regime_transition'):
+            warnings.append({'code': 'overtruncation_risk', 'value': truncation, 'threshold': COMPRESSION_RATIO_WARN})
+            _log('OVERTRUNCATION RISK', f'truncation={truncation:.2f} IQ={iq:.2f}')
+
+    novelty = float(quality.get('novelty_avg_score') or 0)
+    if novelty > 0 and novelty < 3.0:
+        warnings.append({'code': 'low_novelty', 'value': novelty, 'threshold': 3.0})
+        _log('LOW NOVELTY', f'avg_novelty={novelty:.2f}')
+
+    diversity = float(quality.get('sentiment_diversity_score') or 0)
+    minority = float(quality.get('minority_signal_retention_score') or 0)
+    if diversity < 0.45 and sentiment < 0.65:
+        warnings.append({'code': 'sentiment_collapse_risk', 'value': diversity, 'threshold': 0.45})
+        _log('SENTIMENT COLLAPSE RISK', f'diversity={diversity:.2f} minority={minority:.2f}')
+
     if warnings:
         _maybe_telegram_quality_alert(warnings, quality)
     return warnings
@@ -593,6 +611,12 @@ def get_observability_summary() -> dict:
     except Exception:
         remaining = None
 
+    try:
+        from backend.utils.market_hours import get_watchdog_config
+        wd = get_watchdog_config()
+    except Exception:
+        wd = {'mode': 'UNKNOWN', 'stale_threshold_seconds': None, 'night_mode': False}
+
     return {
         'market_regime': regime,
         'compression_mode': compression_mode,
@@ -603,6 +627,14 @@ def get_observability_summary() -> dict:
         'latest_cycle_id': index.get('latest_cycle_id'),
         'snapshot_count': len(index.get('cycles') or []),
         'stale_reuse_count': explanations.get('stale_reuse_count', 0),
+        'watchdog_mode': wd.get('mode'),
+        'watchdog_stale_threshold_seconds': wd.get('stale_threshold_seconds'),
+        'sentiment_diversity_score': quality.get('sentiment_diversity_score'),
+        'minority_signal_retention_score': quality.get('minority_signal_retention_score'),
+        'truncation_severity': quality.get('truncation_severity'),
+        'novelty_avg_score': quality.get('novelty_avg_score'),
+        'repetition_suppressed_count': quality.get('repetition_suppressed_count'),
+        'semantic_hash': state.get('semantic_hash'),
     }
 
 
@@ -722,6 +754,9 @@ def debug_delta_analysis(cycle_id: Optional[str] = None) -> dict:
         'source_hashes': {
             'current_composite': (decision.get('source_hashes') or {}).get('composite'),
             'previous_composite': (state.get('source_hashes') or {}).get('composite'),
+            'current_semantic': decision.get('semantic_hash') or state.get('semantic_hash'),
+            'previous_semantic': state.get('semantic_hash'),
+            'semantic_changed': decision.get('semantic_changed'),
         },
         'market_movement_pct_delta': _delta('india_avg_change'),
         'news_count_delta': _delta('news_count', int),
@@ -737,6 +772,7 @@ def debug_quality(cycle_id: Optional[str] = None) -> dict:
     snap = _load_cycle_files(cycle_id)
     quality_file = (snap.get('files') or {}).get('quality_metrics') or {}
     store = _load_json(ANALYSIS_EXPLANATIONS_FILE)
+    state = _load_json(ANALYSIS_STATE_FILE)
     q = quality_file.get('quality') or (store.get('latest') or {}).get('quality') or {}
     return {
         'cycle_id': snap.get('cycle_id'),
@@ -745,6 +781,15 @@ def debug_quality(cycle_id: Optional[str] = None) -> dict:
         'sentiment_preservation_score': q.get('sentiment_preservation_score'),
         'intelligence_quality_score': q.get('intelligence_quality_score'),
         'compression_ratio': q.get('compression_ratio'),
+        'truncation_severity': q.get('truncation_severity'),
+        'sentiment_diversity_score': q.get('sentiment_diversity_score'),
+        'minority_signal_retention_score': q.get('minority_signal_retention_score'),
+        'novelty_avg_score': q.get('novelty_avg_score'),
+        'repetition_suppressed_count': q.get('repetition_suppressed_count'),
+        'cache_normalization': {
+            'semantic_hash': state.get('semantic_hash'),
+            'full_hash': (state.get('source_hashes') or {}).get('composite'),
+        },
         'quality_history': (store.get('quality_history') or [])[:25],
         'recent_warnings': (store.get('quality_warnings') or [])[-10:],
         'thresholds': {

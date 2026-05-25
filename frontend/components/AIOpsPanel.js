@@ -243,6 +243,22 @@
         cls: routing.low_cost_mode ? 'ai-ops-warn' : '',
       },
       { label: 'Cycle', value: obs.latest_cycle_id || preservation.cycle_id || '—' },
+      { label: 'Watchdog', value: obs.watchdog_mode || health.watchdog_mode || '—' },
+      {
+        label: 'Sent diversity',
+        value: fmtScore(quality.sentiment_diversity_score ?? obs.sentiment_diversity_score),
+        cls: scoreClass(quality.sentiment_diversity_score ?? obs.sentiment_diversity_score, 0.45),
+      },
+      {
+        label: 'Novelty',
+        value: fmtScore(quality.novelty_avg_score ?? obs.novelty_avg_score),
+        cls: scoreClass(quality.novelty_avg_score ?? obs.novelty_avg_score, 3.0),
+      },
+      {
+        label: 'Truncation',
+        value: fmtScore(quality.truncation_severity ?? quality.compression_ratio),
+        cls: scoreClass(quality.truncation_severity ?? quality.compression_ratio, 0.25),
+      },
     ]);
 
     $('aiOpsTimeline').innerHTML = renderTimeline(
@@ -309,10 +325,20 @@
 
     const intelAge = intelFresh.age_seconds;
     const intelStale = intelFresh.status === 'stale';
+    const staleThreshold = health.watchdog_stale_threshold_seconds ?? obs.watchdog_stale_threshold_seconds;
     $('aiOpsHealth').innerHTML = renderList(
       [
         `Intelligence: ${intelFresh.status || 'unknown'}${intelAge != null ? ` (${intelAge}s)` : ''}`,
-        intelStale ? '⚠ Stale intelligence — watchdog may recover' : null,
+        staleThreshold != null ? `Watchdog threshold: ${staleThreshold}s (${health.watchdog_mode || obs.watchdog_mode || '—'})` : null,
+        intelStale ? '⚠ Stale intelligence — watchdog may recover (regime-aware)' : null,
+        quality.repetition_suppressed_count != null
+          ? `Repetition suppressed: ${quality.repetition_suppressed_count}`
+          : obs.repetition_suppressed_count != null
+            ? `Repetition suppressed: ${obs.repetition_suppressed_count}`
+            : null,
+        delta.semantic_changed === false && delta.hash_changed
+          ? 'Cache: semantic hash stable (full hash noise ignored)'
+          : null,
         `Scheduler lock: ${jobs.master_scheduler ? (jobs.master_scheduler.alive ? 'running' : 'idle') : '—'}`,
         `Analyzer lock: ${jobs.master_analyzer ? (jobs.master_analyzer.alive ? 'running' : 'idle') : '—'}`,
         health.delta_trigger_reason && health.delta_trigger_reason !== 'none'
@@ -325,7 +351,13 @@
 
     if (warnings.length) {
       $('aiOpsWarnings').innerHTML = warnings
-        .map((w) => `<div class="ai-ops-warning-chip">${escapeHtml(w.code)}: ${fmtScore(w.value)}</div>`)
+        .map((w) => {
+          const label = w.code === 'overtruncation_risk' ? 'OVERTRUNCATION'
+            : w.code === 'low_novelty' ? 'LOW NOVELTY'
+            : w.code === 'sentiment_collapse_risk' ? 'SENTIMENT COLLAPSE'
+            : w.code;
+          return `<div class="ai-ops-warning-chip">${escapeHtml(label)}: ${fmtScore(w.value)}</div>`;
+        })
         .join('');
       $('aiOpsWarnings').style.display = 'flex';
     } else {
