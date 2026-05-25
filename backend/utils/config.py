@@ -43,6 +43,7 @@ DEBUG_SNAPSHOTS_DIR = DATA_DIR / 'debug_snapshots'
 ANALYSIS_EXPLANATIONS_FILE = DATA_DIR / 'analysis_explanations.json'
 TELEGRAM_ALERT_STATE_FILE = DATA_DIR / 'telegram_alert_state.json'
 TELEGRAM_ALERT_OBS_FILE = DATA_DIR / 'telegram_alert_observability.json'
+MARKET_SOURCE_STATUS_FILE = DATA_DIR / 'market_source_status.json'
 
 # Observability thresholds
 QUALITY_SCORE_WARN = float(os.environ.get('QUALITY_SCORE_WARN', '0.55'))

@@ -1,132 +1,48 @@
-import os
-import json
-import pyotp
-import requests
-from pathlib import Path
-from backend.utils.config import CONFIG_DIR, DATA_DIR
-from dotenv import load_dotenv
-from SmartApi import SmartConnect
-from backend.storage.json_io import atomic_write_json
+"""
+India market collector — Angel One primary, Yahoo fallback, validated output.
+"""
 
-load_dotenv(CONFIG_DIR / 'keys.env', override=False)
+import json
+from datetime import datetime
+from pathlib import Path
+
+from backend.utils.config import DATA_DIR, MARKET_SOURCE_STATUS_FILE
+from backend.utils.market_hours import get_collection_profile, get_market_period
+from backend.utils.angel_one_client import fetch_ltp, get_status, is_configured
+from backend.utils.market_data_validator import (
+    load_previous_snapshot,
+    validate_market_snapshot,
+    validate_price_row,
+    preserve_previous_row,
+)
+from backend.storage.json_io import atomic_write_json
 
 OUTPUT_FILE = DATA_DIR / 'latest_market_data.json'
 
-# Global caches to prevent rate-limiting and redundant logins
-_angel_session = None
-_instrument_map = {}
-
-def _initialize_angel_one():
-    """Handles the automated TOTP login and fetches the NSE instrument tokens."""
-    global _angel_session, _instrument_map
-    
-    api_key = os.getenv("ANGEL_API_KEY")
-    client_id = os.getenv("ANGEL_CLIENT_ID")
-    pin = os.getenv("ANGEL_PIN")
-    totp_secret = os.getenv("ANGEL_TOTP_SECRET")
-
-    if not all([api_key, client_id, pin, totp_secret]):
-        print("[!] Angel One credentials missing in config/keys.env")
-        return None
-
-    try:
-        print("[*] Authenticating with Angel One (Auto-TOTP)...")
-        obj = SmartConnect(api_key=api_key)
-        
-        # Programmatically generate the live 6-digit 2FA token
-        live_totp = pyotp.TOTP(totp_secret).now()
-        
-        data = obj.generateSession(client_id, pin, live_totp)
-        if data.get('status') == False:
-            print(f"[!] Angel One Login Failed: {data.get('message')}")
-            return None
-        
-        _angel_session = obj
-        print("[+] Angel One Authenticated Successfully.")
-
-        if not _instrument_map:
-            print("[*] Downloading NSE Instrument Master List...")
-            url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
-            response = requests.get(url, timeout=15).json()
-            
-            for item in response:
-                if item['exch_seg'] == 'NSE' and '-EQ' in item['symbol']:
-                    clean_sym = item['symbol'].replace('-EQ', '')
-                    _instrument_map[clean_sym] = item['token']
-            print(f"[+] Loaded {len(_instrument_map)} NSE instruments.")
-            
-    except Exception as e:
-        print(f"[!] Angel One initialization error: {str(e)}")
-        
-    return _angel_session
-
-def fetch_accurate_nse_price(symbol: str) -> float:
-    """
-    Fetches real-time Last Traded Price (LTP) directly from Angel One API.
-    """
-    global _angel_session, _instrument_map
-    
-    if _angel_session is None:
-        _initialize_angel_one()
-        if _angel_session is None:
-            return 0.0
-
-    clean_symbol = symbol.strip().upper().replace('.NS', '').replace('.BO', '')
-    
-    token = _instrument_map.get(clean_symbol)
-    if not token:
-        print(f"[!] Token not found in Angel mapping for {clean_symbol}")
-        return 0.0
-
-    try:
-        res = _angel_session.ltpData("NSE", f"{clean_symbol}-EQ", token)
-        
-        if res and res.get('status'):
-            return float(res['data']['ltp'])
-        elif res and res.get('message') == 'Invalid Token':
-            print("[*] Angel session expired. Re-authenticating...")
-            _angel_session = None
-            _initialize_angel_one()
-            res = _angel_session.ltpData("NSE", f"{clean_symbol}-EQ", token)
-            if res and res.get('status'):
-                return float(res['data']['ltp'])
-                
-        return 0.0
-        
-    except Exception as e:
-        print(f"[!] Error fetching price for {clean_symbol}: {str(e)}")
-        return 0.0
-
-def get_stock_price(symbol):
-    """Keep function namespace uniform across other caller scripts."""
-    return fetch_accurate_nse_price(symbol)
-
-
-# ============================================================
-# INDIA MARKET DATA (yfinance)
-# ============================================================
-
 INDIA_SYMBOLS = {
-    'NIFTY 50': '^NSEI',
-    'SENSEX': '^BSESN',
-    'RELIANCE': 'RELIANCE.NS',
-    'TCS': 'TCS.NS',
-    'HDFCBANK': 'HDFCBANK.NS',
-    'INFY': 'INFY.NS',
-    'ICICIBANK': 'ICICIBANK.NS',
-    'SBIN': 'SBIN.NS',
-    'BHARTIARTL': 'BHARTIARTL.NS',
-    'ITC': 'ITC.NS',
-    'LT': 'LT.NS',
-    'AXISBANK': 'AXISBANK.NS',
-    'KOTAKBANK': 'KOTAKBANK.NS',
-    'BAJAJFINSV': 'BAJAJFINSV.NS',
-    'MARUTI': 'MARUTI.NS',
+    'NIFTY 50': {'ticker': '^NSEI', 'type': 'index'},
+    'SENSEX': {'ticker': '^BSESN', 'type': 'index'},
+    'RELIANCE': {'ticker': 'RELIANCE.NS', 'type': 'equity'},
+    'TCS': {'ticker': 'TCS.NS', 'type': 'equity'},
+    'HDFCBANK': {'ticker': 'HDFCBANK.NS', 'type': 'equity'},
+    'INFY': {'ticker': 'INFY.NS', 'type': 'equity'},
+    'ICICIBANK': {'ticker': 'ICICIBANK.NS', 'type': 'equity'},
+    'SBIN': {'ticker': 'SBIN.NS', 'type': 'equity'},
+    'BHARTIARTL': {'ticker': 'BHARTIARTL.NS', 'type': 'equity'},
+    'ITC': {'ticker': 'ITC.NS', 'type': 'equity'},
+    'LT': {'ticker': 'LT.NS', 'type': 'equity'},
+    'AXISBANK': {'ticker': 'AXISBANK.NS', 'type': 'equity'},
+    'KOTAKBANK': {'ticker': 'KOTAKBANK.NS', 'type': 'equity'},
+    'BAJAJFINSV': {'ticker': 'BAJAJFINSV.NS', 'type': 'equity'},
+    'MARUTI': {'ticker': 'MARUTI.NS', 'type': 'equity'},
 }
 
 
+def _log(tag: str, msg: str):
+    print(f"[{tag}] {msg}")
+
+
 def _fetch_yfinance_once(name, ticker):
-    """Single yfinance attempt for one ticker symbol."""
     import yfinance as yf
     print(f"  [FETCH] {name} ({ticker}) via yfinance...")
     stock = yf.Ticker(ticker)
@@ -136,6 +52,9 @@ def _fetch_yfinance_once(name, ticker):
         return None
     close = float(hist['Close'].iloc[-1])
     prev = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else close
+    if close != close or prev != prev:  # NaN check
+        print(f"  [FAIL] {name}: NaN in yfinance data")
+        return None
     change_pct = ((close - prev) / prev * 100) if prev else 0.0
     print(f"  [OK] {name} ({ticker}): Rs.{close:,.2f} ({change_pct:+.2f}%)")
     return {
@@ -146,7 +65,6 @@ def _fetch_yfinance_once(name, ticker):
 
 
 def fetch_symbol_yfinance(name, ticker):
-    """Fetch via yfinance; retry with .BO if .NS fails (404 / empty data)."""
     try:
         row = _fetch_yfinance_once(name, ticker)
         if row:
@@ -157,53 +75,147 @@ def fetch_symbol_yfinance(name, ticker):
             return _fetch_yfinance_once(name, bo_ticker)
         return None
     except Exception as e:
-        err = str(e).lower()
         print(f"  [FAIL] {name} ({ticker}) yfinance error: {e}")
-        if ticker.endswith('.NS') or '404' in err or 'not found' in err:
-            bo_ticker = ticker.replace('.NS', '.BO') if '.NS' in ticker else f"{ticker}.BO"
-            try:
-                print(f"  [RETRY] {name}: trying BSE {bo_ticker}...")
-                return _fetch_yfinance_once(name, bo_ticker)
-            except Exception as e2:
-                print(f"  [FAIL] {name} ({bo_ticker}) also failed: {e2}")
         return None
 
 
-def collect_india_market_data():
-    """Collect India prices — save partial results even if some symbols fail."""
-    print("=" * 60)
-    print("INDIA MARKET COLLECTOR")
-    print(f"Time: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 60)
+def _build_row_from_ltp(name: str, price: float, source: str, previous_row: dict) -> dict:
+    prev_price = (previous_row or {}).get('price')
+    if prev_price and float(prev_price) > 0:
+        change_pct = ((price - float(prev_price)) / float(prev_price)) * 100
+    else:
+        change_pct = 0.0
+    return {
+        'price': round(price, 2),
+        'change_percent': round(change_pct, 2),
+        'source': source,
+    }
 
-    prices = {}
-    ok_count = 0
-    fail_count = 0
 
-    for name, ticker in INDIA_SYMBOLS.items():
+def fetch_symbol_with_failover(name: str, spec: dict, previous_row: dict) -> tuple:
+    """
+    Priority: Angel One (equities) → Yahoo → preserve previous valid snapshot.
+    Indices always use Yahoo (reliable for ^NSEI / ^BSESN).
+    """
+    ticker = spec['ticker']
+    sym_type = spec.get('type', 'equity')
+    stats = {'angel': 0, 'yahoo': 0, 'preserved': 0}
+
+    row = None
+    if sym_type == 'index' or ticker.startswith('^'):
         row = fetch_symbol_yfinance(name, ticker)
         if row:
-            prices[name] = row
-            ok_count += 1
+            stats['yahoo'] = 1
+    elif is_configured():
+        clean = ticker.replace('.NS', '').replace('.BO', '')
+        ltp, tag = fetch_ltp(clean)
+        if ltp and ltp > 0:
+            row = _build_row_from_ltp(name, ltp, 'angel_one', previous_row)
+            stats['angel'] = 1
+            print(f"  [OK] {name} via Angel One: Rs.{ltp:,.2f}")
         else:
-            fail_count += 1
+            _log('DATA SOURCE FAILOVER', f'{name} Angel failed ({tag}) → Yahoo')
 
-    output = {
-        'last_updated': __import__('datetime').datetime.now().isoformat(),
+    if not row:
+        row = fetch_symbol_yfinance(name, ticker)
+        if row:
+            stats['yahoo'] = 1
+            row['source'] = f"yahoo_fallback:{row.get('source', ticker)}"
+
+    ok, reason, cleaned = validate_price_row(row or {}, symbol_name=name, previous_row=previous_row)
+    if ok and cleaned:
+        return cleaned, stats
+
+    if previous_row and previous_row.get('price'):
+        preserved = preserve_previous_row(previous_row, reason or 'validation_failed')
+        stats['preserved'] = 1
+        return preserved, stats
+
+    return None, stats
+
+
+def collect_india_market_data(force: bool = False):
+    """Collect India prices with source priority routing and validation."""
+    profile = get_collection_profile()
+    period = profile.get('period', get_market_period())
+    if profile.get('lightweight_only') and not force:
+        print(f"[COLLECTOR] {period} mode — lightweight India refresh only")
+
+    print("=" * 60)
+    print("INDIA MARKET COLLECTOR (Angel One primary)")
+    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Period: {period}")
+    print(f"Angel configured: {is_configured()} | {get_status()}")
+    print("=" * 60)
+
+    previous = load_previous_snapshot(OUTPUT_FILE)
+    prev_prices = previous.get('prices') or {}
+
+    prices = {}
+    source_stats = {'angel_one': 0, 'yahoo_fallback': 0, 'preserved_previous': 0, 'failed': 0}
+
+    for name, spec in INDIA_SYMBOLS.items():
+        row, stats = fetch_symbol_with_failover(name, spec, prev_prices.get(name))
+        if row:
+            prices[name] = row
+            source_stats['angel_one'] += stats.get('angel', 0)
+            source_stats['yahoo_fallback'] += stats.get('yahoo', 0)
+            source_stats['preserved_previous'] += stats.get('preserved', 0)
+        else:
+            source_stats['failed'] += 1
+
+    raw_output = {
+        'last_updated': datetime.now().isoformat(),
+        'market_period': period,
         'prices': prices,
-        'symbols_ok': ok_count,
-        'symbols_failed': fail_count,
+        'symbols_ok': len(prices),
+        'symbols_failed': source_stats['failed'],
         'total_symbols': len(INDIA_SYMBOLS),
+        'source_meta': {
+            'primary_source': 'angel_one' if source_stats['angel_one'] > 0 else 'yahoo',
+            'angel_one_count': source_stats['angel_one'],
+            'yahoo_fallback_count': source_stats['yahoo_fallback'],
+            'preserved_previous_count': source_stats['preserved_previous'],
+            'degraded': source_stats['preserved_previous'] > 0 or source_stats['failed'] > 0,
+        },
     }
+
+    output, validation_meta = validate_market_snapshot(raw_output, previous_snapshot=previous, file_label='india')
+    output['source_meta']['validation'] = validation_meta
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(OUTPUT_FILE, output)
 
+    status = {
+        'updated_at': datetime.now().isoformat(),
+        'market_period': period,
+        'active_source': output['source_meta'].get('primary_source'),
+        'angel_one_count': source_stats['angel_one'],
+        'yahoo_fallback_count': source_stats['yahoo_fallback'],
+        'preserved_previous_count': source_stats['preserved_previous'],
+        'degraded': output['source_meta'].get('degraded', False),
+        'symbols_ok': output.get('symbols_ok', 0),
+        'symbols_failed': output.get('symbols_failed', 0),
+    }
+    atomic_write_json(MARKET_SOURCE_STATUS_FILE, status)
+
     print("-" * 60)
     print(f"[SAVED] {OUTPUT_FILE}")
-    print(f"  OK: {ok_count} | Failed: {fail_count} | Total in file: {len(prices)}")
+    print(
+        f"  Angel: {source_stats['angel_one']} | Yahoo: {source_stats['yahoo_fallback']} | "
+        f"Preserved: {source_stats['preserved_previous']} | Failed: {source_stats['failed']}"
+    )
     print("=" * 60)
     return output
+
+
+# Backward-compatible exports for other modules
+def fetch_accurate_nse_price(symbol: str) -> float:
+    ltp, _ = fetch_ltp(symbol)
+    return ltp or 0.0
+
+
+def get_stock_price(symbol):
+    return fetch_accurate_nse_price(symbol)
 
 
 if __name__ == '__main__':

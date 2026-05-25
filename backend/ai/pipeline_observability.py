@@ -612,10 +612,22 @@ def get_observability_summary() -> dict:
         remaining = None
 
     try:
+        from backend.utils.config import MARKET_SOURCE_STATUS_FILE
+        market_source = _load_json(MARKET_SOURCE_STATUS_FILE)
+    except Exception:
+        market_source = {}
+
+    try:
         from backend.utils.market_hours import get_watchdog_config
         wd = get_watchdog_config()
     except Exception:
         wd = {'mode': 'UNKNOWN', 'stale_threshold_seconds': None, 'night_mode': False}
+
+    try:
+        from backend.metrics.execution_metrics import get_execution_summary
+        reliability = get_execution_summary()
+    except Exception:
+        reliability = {}
 
     return {
         'market_regime': regime,
@@ -635,6 +647,20 @@ def get_observability_summary() -> dict:
         'novelty_avg_score': quality.get('novelty_avg_score'),
         'repetition_suppressed_count': quality.get('repetition_suppressed_count'),
         'semantic_hash': state.get('semantic_hash'),
+        'market_active_source': market_source.get('active_source'),
+        'market_angel_count': market_source.get('angel_one_count'),
+        'market_yahoo_fallback_count': market_source.get('yahoo_fallback_count'),
+        'market_source_degraded': market_source.get('degraded'),
+        'market_period': market_source.get('market_period'),
+        'hallucination_detections': reliability.get('hallucination_detections'),
+        'schema_failures': reliability.get('schema_failures'),
+        'validation_retries': reliability.get('retry_counts'),
+        'safe_fallbacks': reliability.get('safe_fallbacks'),
+        'ai_reliability_score': reliability.get('last_reliability_score'),
+        'confidence_distribution': reliability.get('confidence_distribution'),
+        'avg_ai_latency_ms': reliability.get('avg_ai_latency_ms'),
+        'cache_hit_rate': reliability.get('cache_hit_rate'),
+        'telegram_suppression_rate': reliability.get('telegram_suppression_rate'),
     }
 
 

@@ -751,6 +751,12 @@ def api_debug_explanations():
         return {"error": str(e)}
 
 
+@app.get("/api/debug/reliability", dependencies=[Depends(verify_api_key)])
+def api_debug_reliability():
+    from backend.metrics.execution_metrics import get_reliability_debug
+    return get_reliability_debug()
+
+
 def main():
     port = API_PORT
     host = API_HOST

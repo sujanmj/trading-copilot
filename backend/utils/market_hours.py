@@ -61,3 +61,17 @@ def get_watchdog_config(now: Optional[datetime] = None) -> Dict[str, object]:
         'night_mode': period in ('night', 'weekend'),
         'market_hours': period == 'market',
     }
+
+
+def get_collection_profile(now: Optional[datetime] = None) -> Dict[str, object]:
+    """Collector scheduling profile — reduce overnight noise."""
+    period = get_market_period(now)
+    return {
+        'period': period,
+        'lightweight_only': period in ('night', 'weekend'),
+        'run_india_collector': True,
+        'run_parallel_ingestion': period in ('market', 'pre_market', 'after_hours'),
+        'run_scanner': period in ('market', 'pre_market'),
+        'run_analyzer': period in ('market', 'pre_market', 'after_hours'),
+        'skip_heavy_overnight': period in ('night', 'weekend'),
+    }

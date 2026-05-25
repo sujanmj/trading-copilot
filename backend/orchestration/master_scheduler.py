@@ -26,31 +26,41 @@ def run_standalone_script(script_name: str):
         print(f"[!] Deployment Exception executing {script_name}: {str(e)}")
 
 def run_all_collectors_parallel(push_telegram_brain: bool = False, run_analyzer: bool = True):
-    print("\n" + "="*60)
-    print(f"[*] Launching Parallel Ingestion Layer: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*60)
-
-    ingestion_scripts = [
-        "global_collector.py",
-        "live_news_tracker.py",
-        "nse_announcements.py",
-        "inshorts_tracker.py",
-        "youtube_tracker.py",
-        "govt_tracker.py",
-        "telegram_scraper.py",
-        "twitter_tracker.py",
-        "reddit_tracker.py"
-    ]
+    from backend.utils.market_hours import get_collection_profile
+    profile = get_collection_profile()
+    period = profile.get('period', 'unknown')
+    print("\n" + "=" * 60)
+    print(f"[*] Ingestion Layer | period={period} @ {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
 
     run_standalone_script("collector.py")
 
-    with ThreadPoolExecutor(max_workers=len(ingestion_scripts)) as executor:
-        executor.map(run_standalone_script, ingestion_scripts)
+    if profile.get('run_parallel_ingestion'):
+        ingestion_scripts = [
+            "global_collector.py",
+            "live_news_tracker.py",
+            "nse_announcements.py",
+            "inshorts_tracker.py",
+            "youtube_tracker.py",
+            "govt_tracker.py",
+            "telegram_scraper.py",
+            "twitter_tracker.py",
+            "reddit_tracker.py",
+        ]
+        with ThreadPoolExecutor(max_workers=len(ingestion_scripts)) as executor:
+            executor.map(run_standalone_script, ingestion_scripts)
+    else:
+        print(f"[COLLECTOR] {period} — skipping parallel news/social ingestion")
 
-    print("[+] Parallel data ingestion complete.")
-    run_standalone_script("stock_scanner.py")
-    if run_analyzer:
+    print("[+] Data ingestion complete.")
+    if profile.get('run_scanner'):
+        run_standalone_script("stock_scanner.py")
+    else:
+        print(f"[COLLECTOR] {period} — skipping scanner")
+    if run_analyzer and profile.get('run_analyzer'):
         run_standalone_script("master_analyzer.py")
+    elif not profile.get('run_analyzer'):
+        print(f"[COLLECTOR] {period} — skipping analyzer (low-power mode)")
     if push_telegram_brain:
         run_standalone_script("telegram_brain_pusher.py")
 
@@ -115,12 +125,18 @@ schedule.every().day.at("12:00").do(run_full_cycle, brief_name="Midday")
 schedule.every().day.at("23:00").do(run_full_cycle, brief_name="US Pulse")
 
 def run_scheduled_collection():
-    """After 5 PM / before 6 AM: collectors only. Market hours use intraday slots."""
-    now = datetime.now(IST)
-    t = now.time()
-    from datetime import time as dtime
-    if t >= dtime(17, 0) or t < dtime(6, 0):
-        run_collectors_only()
+    """Market-hours-aware scheduled ingestion."""
+    from backend.utils.market_hours import get_collection_profile
+    profile = get_collection_profile()
+    period = profile.get('period')
+    if period == 'night':
+        print("[COLLECTOR] Night mode — skip scheduled collection")
+        return
+    if profile.get('lightweight_only'):
+        print(f"[COLLECTOR] {period} — lightweight India collector only")
+        run_standalone_script("collector.py")
+        return
+    run_collectors_only()
 
 
 # ── After-hours / overnight ingestion (market hours use intraday slots below)

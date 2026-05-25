@@ -67,6 +67,27 @@ def _load(path: Path) -> Optional[dict]:
         return None
 
 
+def _load_trusted_intel(category: str = 'intel') -> Optional[dict]:
+    """Load intelligence only if reliability gate passes."""
+    intel = _load(FILES['intel'])
+    if not intel:
+        return None
+    try:
+        from backend.ai.reliability.response_gateway import validate_for_telegram
+        from backend.metrics.execution_metrics import record_reliability_event
+        ok, reasons = validate_for_telegram(intel)
+        if not ok:
+            reason = ','.join(reasons)
+            _log('ALERT SUPPRESSED', f'untrusted intelligence: {reason}')
+            get_observability().record_suppressed(category, 'reliability_gate', reason)
+            record_reliability_event('telegram_suppressed', reasons=reason)
+            return None
+    except Exception as e:
+        _log('ALERT', f'reliability gate error: {e}')
+        return intel
+    return intel
+
+
 def _load_analysis_state() -> dict:
     return _load(ANALYSIS_STATE_FILE) or {}
 
@@ -141,6 +162,11 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
         return False
     mark_alert_sent(category, ticker=ticker, dedupe_key=dedupe_key)
     get_observability().record_sent(category, detail, {'confidence': round(confidence, 2)})
+    try:
+        from backend.metrics.execution_metrics import record_reliability_event
+        record_reliability_event('telegram_sent')
+    except Exception:
+        pass
     return True
 
 
@@ -192,7 +218,7 @@ def try_pre_market() -> int:
         get_observability().record_suppressed(PRE_MARKET, 'no_overnight_delta', 'skip pre-market')
         return 0
 
-    intel = _load(FILES['intel'])
+    intel = _load_trusted_intel(PRE_MARKET)
     if not intel:
         get_observability().record_suppressed(PRE_MARKET, 'no_intelligence', '')
         return 0
@@ -238,7 +264,7 @@ def format_opportunity(signal: dict, intel: dict, state: dict) -> str:
 
 def try_open_opportunity() -> int:
     scanner = _load(FILES['scanner'])
-    intel = _load(FILES['intel']) or {}
+    intel = _load_trusted_intel(INTRADAY_OPPORTUNITY) or {}
     state = _load_analysis_state()
     regime, vol, disagree = _regime_context(state)
 
@@ -327,7 +353,7 @@ def try_intraday_events() -> int:
     state = _load_analysis_state()
     scanner = _load(FILES['scanner'])
     govt = _load(FILES['govt'])
-    intel = _load(FILES['intel']) or {}
+    intel = _load_trusted_intel(INTRADAY_EVENT) or {}
     regime, vol, _ = _regime_context(state)
 
     events = _detect_intraday_events(state, scanner, govt, intel)
@@ -379,7 +405,7 @@ def try_midday_update() -> int:
         get_observability().record_suppressed(MIDDAY_UPDATE, 'no_significant_change', '')
         return 0
 
-    intel = _load(FILES['intel'])
+    intel = _load_trusted_intel(MIDDAY_UPDATE)
     if not intel:
         return 0
 
@@ -444,7 +470,7 @@ def format_close_summary(intel: dict, stats: dict, scanner: dict, state: dict) -
 
 
 def try_close_summary() -> int:
-    intel = _load(FILES['intel'])
+    intel = _load_trusted_intel(MARKET_CLOSE_SUMMARY)
     if not intel:
         get_observability().record_suppressed(MARKET_CLOSE_SUMMARY, 'no_intelligence', '')
         return 0

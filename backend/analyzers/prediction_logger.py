@@ -29,69 +29,8 @@ except ImportError:
     NSE_TICKERS = set()
     SECTOR_MAP = {}
 
-# Optional: yfinance for live price fallback
-# ============================================================
-# ANGEL ONE LIVE PRICE INTEGRATION
-# ============================================================
-from SmartApi import SmartConnect
-import pyotp
-import urllib.request
-
-# --- FILL THESE WITH YOUR CREDENTIALS ---
-ANGEL_API_KEY="tLzO6vAl"
-ANGEL_CLIENT_ID="M50034699"
-ANGEL_PIN="0369"
-ANGEL_TOTP_SECRET="36IRF7MHDTIDBITRIAB5TLCCUM" # The setup key from Google Authenticator
-# ----------------------------------------
-
-ANGEL_TOKENS = {}
-angel_client = None
-
-def init_angel_one():
-    global angel_client
-    if angel_client is not None: return True
-    
-    try:
-        # Generate TOTP automatically
-        totp = pyotp.TOTP(ANGEL_TOTP_SECRET).now()
-        
-        # Connect to SmartAPI
-        client = SmartConnect(api_key=ANGEL_API_KEY)
-        data = client.generateSession(ANGEL_CLIENT_ID, ANGEL_PIN, totp)
-        
-        if data['status']:
-            angel_client = client
-            safe_print("[DB] Angel One SmartAPI Connected successfully")
-            return True
-        else:
-            safe_print(f"[WARN] Angel One Login Failed: {data.get('message')}")
-            return False
-    except Exception as e:
-        safe_print(f"[WARN] Angel One Connection Error: {e}")
-        return False
-
-def get_angel_token(ticker):
-    """Downloads and caches the Angel One Token Master list to find the exact token ID"""
-    global ANGEL_TOKENS
-    if not ANGEL_TOKENS:
-        try:
-            url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            response = urllib.request.urlopen(req)
-            token_list = json.loads(response.read())
-            
-            for item in token_list:
-                # We only want NSE Equity segment
-                if item['exch_seg'] == 'NSE' and item['symbol'].endswith('-EQ'):
-                    clean_symbol = item['symbol'].replace('-EQ', '')
-                    ANGEL_TOKENS[clean_symbol] = {
-                        'token': item['token'],
-                        'symbol': item['symbol']
-                    }
-        except Exception as e:
-            safe_print(f"[WARN] Failed to load Angel Tokens: {e}")
-            
-    return ANGEL_TOKENS.get(ticker)
+# Live price via Angel One (shared client — credentials in config/keys.env)
+from backend.utils.angel_one_client import fetch_ltp, is_configured
 
 def safe_print(text):
     try:
@@ -193,34 +132,14 @@ def is_valid_ticker(ticker):
 
 
 def fetch_live_price(ticker):
-    """Fetch exact LTP from Angel One SmartAPI"""
-    if not ticker: return None
-    
-    # Ensure we are connected
-    if not init_angel_one(): 
+    """Fetch exact LTP from Angel One SmartAPI (shared client)."""
+    if not ticker:
         return None
-        
-    # Get exact token for the ticker (e.g., RELIANCE -> 2885)
-    token_info = get_angel_token(ticker)
-    if not token_info:
-        safe_print(f"[WARN] Ticker {ticker} not found in Angel One NSE list")
+    if not is_configured():
         return None
-        
-    try:
-        # Fetch Live Price
-        response = angel_client.ltpData(
-            exchange="NSE",
-            tradingsymbol=token_info['symbol'],
-            symboltoken=token_info['token']
-        )
-        
-        if response.get('status') and 'data' in response:
-            ltp = float(response['data']['ltp'])
-            if 5 <= ltp <= 1000000:
-                return round(ltp, 2)
-    except Exception as e:
-        pass
-        
+    ltp, source = fetch_ltp(str(ticker).upper().replace('.NS', ''))
+    if ltp and 5 <= ltp <= 1000000:
+        return round(ltp, 2)
     return None
 # ============================================================
 # DEDUPLICATION

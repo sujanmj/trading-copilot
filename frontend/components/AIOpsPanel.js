@@ -259,6 +259,15 @@
         value: fmtScore(quality.truncation_severity ?? quality.compression_ratio),
         cls: scoreClass(quality.truncation_severity ?? quality.compression_ratio, 0.25),
       },
+      {
+        label: 'Market src',
+        value: obs.market_active_source || '—',
+        cls: obs.market_source_degraded ? 'ai-ops-warn' : '',
+      },
+      {
+        label: 'Angel/Yahoo',
+        value: `${obs.market_angel_count ?? '—'}/${obs.market_yahoo_fallback_count ?? '—'}`,
+      },
     ]);
 
     $('aiOpsTimeline').innerHTML = renderTimeline(
@@ -323,6 +332,36 @@
       ]) +
       `<div class="ai-ops-subhead">Recent</div>${renderList(recentLines, 'No alert events yet today')}`;
 
+    const rel = data.reliability || {};
+    const exec = rel.execution || {};
+    const hist = rel.confidence_histogram || exec.confidence_distribution || {};
+    const histLines = Object.entries(hist).map(([k, v]) => `${k}: ${v}`);
+    const relEl = $('aiOpsReliability');
+    if (relEl) {
+      relEl.innerHTML =
+        renderStatGrid([
+          {
+            label: 'Reliability IQ',
+            value: fmtScore(exec.ai_reliability_score ?? obs.ai_reliability_score),
+            cls: scoreClass(exec.ai_reliability_score ?? obs.ai_reliability_score, 0.55),
+          },
+          { label: 'Hallucinations', value: String(exec.hallucination_detections ?? obs.hallucination_detections ?? 0),
+            cls: (exec.hallucination_detections ?? 0) > 0 ? 'ai-ops-warn' : '' },
+          { label: 'Schema fails', value: String(exec.schema_failures ?? obs.schema_failures ?? 0) },
+          { label: 'Retries', value: String(exec.retry_counts ?? obs.validation_retries ?? 0) },
+          { label: 'Fallbacks', value: String(exec.safe_fallbacks ?? obs.safe_fallbacks ?? 0),
+            cls: (exec.safe_fallbacks ?? 0) > 0 ? 'ai-ops-warn' : '' },
+          { label: 'Avg latency', value: exec.avg_ai_latency_ms != null ? `${exec.avg_ai_latency_ms}ms` : '—' },
+          { label: 'Cache hit', value: exec.cache_hit_rate != null ? `${Math.round(exec.cache_hit_rate * 100)}%` : '—' },
+          { label: 'TG suppress', value: exec.telegram_suppression_rate != null ? `${Math.round(exec.telegram_suppression_rate * 100)}%` : '—' },
+        ]) +
+        `<div class="ai-ops-subhead">Confidence distribution</div>${renderList(histLines, 'No confidence samples yet')}` +
+        `<div class="ai-ops-subhead">Recent reliability events</div>${renderList(
+          (rel.recent_logs || []).slice(-6).map((e) => `${e.event || '?'} ${e.cycle_id || ''}`.trim()),
+          'No reliability events logged yet'
+        )}`;
+    }
+
     const intelAge = intelFresh.age_seconds;
     const intelStale = intelFresh.status === 'stale';
     const staleThreshold = health.watchdog_stale_threshold_seconds ?? obs.watchdog_stale_threshold_seconds;
@@ -339,6 +378,8 @@
         delta.semantic_changed === false && delta.hash_changed
           ? 'Cache: semantic hash stable (full hash noise ignored)'
           : null,
+        obs.market_source_degraded ? '⚠ Market source degraded — preserved snapshots in use' : null,
+        obs.market_active_source ? `Market feed: ${obs.market_active_source} (Angel ${obs.market_angel_count ?? 0} / Yahoo ${obs.market_yahoo_fallback_count ?? 0})` : null,
         `Scheduler lock: ${jobs.master_scheduler ? (jobs.master_scheduler.alive ? 'running' : 'idle') : '—'}`,
         `Analyzer lock: ${jobs.master_analyzer ? (jobs.master_analyzer.alive ? 'running' : 'idle') : '—'}`,
         health.delta_trigger_reason && health.delta_trigger_reason !== 'none'
@@ -372,7 +413,7 @@
     const statusEl = $('aiOpsLoadStatus');
     if (statusEl) statusEl.textContent = 'Syncing…';
     try {
-      const [health, preservation, compression, routing, delta, quality, explanations, telegram] = await Promise.all([
+      const [health, preservation, compression, routing, delta, quality, explanations, telegram, reliability] = await Promise.all([
         fetchJson('/api/health', false),
         fetchJson('/api/debug/preservation', true),
         fetchJson('/api/debug/compression', true),
@@ -381,9 +422,10 @@
         fetchJson('/api/debug/quality', true),
         fetchJson('/api/debug/explanations', true),
         fetchJson('/api/debug/telegram-alerts', true).catch(() => ({})),
+        fetchJson('/api/debug/reliability', true).catch(() => ({})),
       ]);
 
-      const data = { health, preservation, compression, routing, delta, quality, explanations, telegram };
+      const data = { health, preservation, compression, routing, delta, quality, explanations, telegram, reliability };
       renderPanel(data);
       markAlertsSeen(data);
       if (statusEl) statusEl.textContent = '';

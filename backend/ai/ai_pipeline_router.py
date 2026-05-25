@@ -121,6 +121,13 @@ def call_cheap(prompt: str, use_case: str = 'compress', max_tokens: int = 2000) 
             'reason': f'prompt hash {cache_key[:12]}',
             'model': cached.get('model', 'gemini'),
         })
+        try:
+            from backend.metrics.execution_metrics import record_ai_call
+            from backend.utils.structured_log import pipeline_log
+            record_ai_call(latency_ms=0, use_case=use_case, cache_hit=True, success=True)
+            pipeline_log('cache_hit', use_case=use_case, tier='cheap', model=cached.get('model', 'gemini'))
+        except Exception:
+            pass
         return cached
 
     record_routing_event({
@@ -132,13 +139,26 @@ def call_cheap(prompt: str, use_case: str = 'compress', max_tokens: int = 2000) 
     })
 
     _log('COMPRESSOR', f"Gemini {use_case} ~{estimate_tokens(prompt)} tok")
+    t0 = time.time()
     result = None
     for attempt in range(MAX_AI_RETRIES + 1):
         result = ask_ai(prompt, use_case='compress', model_override='gemini', max_tokens=max_tokens)
         if isinstance(result, dict) and result.get('success'):
             break
+    latency_ms = (time.time() - t0) * 1000.0
     if not isinstance(result, dict):
         result = {'success': False, 'text': '', 'error': 'invalid response'}
+
+    try:
+        from backend.metrics.execution_metrics import record_ai_call
+        record_ai_call(
+            latency_ms=latency_ms,
+            use_case=use_case,
+            cache_hit=False,
+            success=bool(result.get('success')),
+        )
+    except Exception:
+        pass
 
     cost = float(result.get('estimated_cost') or 0)
     record_cost(cost, result.get('model', 'gemini'), use_case, result.get('provider', 'google'))
@@ -177,6 +197,13 @@ def call_expensive(
             'reason': f'prompt hash {cache_key[:12]}',
             'model': cached.get('model'),
         })
+        try:
+            from backend.metrics.execution_metrics import record_ai_call
+            from backend.utils.structured_log import pipeline_log
+            record_ai_call(latency_ms=0, use_case=use_case, cache_hit=True, success=True)
+            pipeline_log('cache_hit', use_case=use_case, tier='expensive', model=cached.get('model'))
+        except Exception:
+            pass
         return cached
 
     if not is_claude_allowed(force=force):
@@ -205,6 +232,7 @@ def call_expensive(
     })
 
     _log('AI COST', f"Claude {use_case} ~{estimate_tokens(prompt)} tok")
+    t0 = time.time()
     result = None
     for attempt in range(MAX_AI_RETRIES + 1):
         result = ask_ai(
@@ -215,9 +243,21 @@ def call_expensive(
         )
         if isinstance(result, dict) and result.get('success'):
             break
+    latency_ms = (time.time() - t0) * 1000.0
 
     if not isinstance(result, dict):
         result = {'success': False, 'text': '', 'error': 'invalid response'}
+
+    try:
+        from backend.metrics.execution_metrics import record_ai_call
+        record_ai_call(
+            latency_ms=latency_ms,
+            use_case=use_case,
+            cache_hit=False,
+            success=bool(result.get('success')),
+        )
+    except Exception:
+        pass
 
     if not result.get('success'):
         record_routing_event({

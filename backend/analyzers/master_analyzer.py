@@ -146,6 +146,10 @@ def gather_all_data():
         else:
             print(f"[ERROR] {key} unexpected type: {type(value)}")
             validated[key] = None
+
+    from backend.utils.market_data_validator import sanitize_for_analyzer
+    if validated.get('india_markets'):
+        validated['india_markets'] = sanitize_for_analyzer(validated['india_markets'])
     return validated
 
 
@@ -441,28 +445,41 @@ REQUIRED_JSON_FIELDS = [
 ]
 
 
+def _extract_known_tickers(all_data):
+    tickers = set()
+    scanner = _safe_dict(all_data.get('scanner'))
+    for sig in scanner.get('top_signals') or []:
+        if isinstance(sig, dict):
+            t = str(sig.get('ticker') or '').strip().upper()
+            if t:
+                tickers.add(t)
+    india = _safe_dict(all_data.get('india_markets'))
+    for sym in (india.get('prices') or {}):
+        tickers.add(str(sym).upper())
+    return list(tickers)
+
+
 def validate_analysis_json(parsed):
-    """Return (ok, missing_or_invalid_fields)."""
+    """Return (ok, missing_or_invalid_fields) — delegates to reliability schemas."""
     if not isinstance(parsed, dict):
         return False, ['root (not an object)']
-
-    problems = []
-    for field in REQUIRED_JSON_FIELDS:
-        if field not in parsed or parsed[field] in (None, ''):
-            problems.append(field)
-
-    if 'government_impact' in parsed and not isinstance(parsed['government_impact'], dict):
-        problems.append('government_impact (not an object)')
-    if 'sector_rotation' in parsed and not isinstance(parsed['sector_rotation'], dict):
-        problems.append('sector_rotation (not an object)')
-    if 'market_mood' in parsed and not isinstance(parsed['market_mood'], dict):
-        problems.append('market_mood (not an object)')
-    if 'top_opportunities' in parsed and not isinstance(parsed['top_opportunities'], list):
-        problems.append('top_opportunities (not a list)')
-    if 'risks_and_avoids' in parsed and not isinstance(parsed['risks_and_avoids'], list):
-        problems.append('risks_and_avoids (not a list)')
-
-    return len(problems) == 0, problems
+    try:
+        from backend.ai.reliability.hallucination import detect_hallucinations, validate_schema
+        model, schema_errors = validate_schema(parsed)
+        if model is None:
+            return False, schema_errors or ['schema_validation_failed']
+        issues = detect_hallucinations(parsed)
+        if len(issues) >= 4:
+            return False, issues
+        return True, []
+    except Exception as e:
+        problems = []
+        for field in REQUIRED_JSON_FIELDS:
+            if field not in parsed or parsed[field] in (None, ''):
+                problems.append(field)
+        if problems:
+            return False, problems
+        return False, [str(e)]
 
 
 def _build_format_sections(all_data):
@@ -511,6 +528,7 @@ def generate_unified_analysis(all_data, compressed_context=None, force_claude=Fa
         use_case = os.environ.get('AI_USE_CASE', 'manual_refresh')
         force = force_claude or use_case == 'manual_refresh'
         pipeline_quality = {}
+        preservation_ctx = {}
 
         if compressed_context is None:
             pipeline = prepare_intelligence_pipeline(all_data, _build_format_sections, force=force)
@@ -519,9 +537,10 @@ def generate_unified_analysis(all_data, compressed_context=None, force_claude=Fa
                 return pipeline['reuse_intel']
             compressed_context = pipeline.get('compressed_context') or ''
             pipeline_quality = pipeline.get('quality_metrics') or {}
+            preservation_ctx = pipeline.get('preservation') or {}
             persist_analysis_state(
                 pipeline.get('decision') or {},
-                preservation=pipeline.get('preservation'),
+                preservation=preservation_ctx,
                 quality=pipeline_quality,
             )
             if pipeline_quality:
@@ -676,27 +695,59 @@ RULES:
             print("  [ERROR] AI returned empty text")
             return None
 
-        clean_text = ai_text.strip()
-        if "```json" in clean_text:
-            clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in clean_text:
-            clean_text = clean_text.split("```")[1].split("```")[0].strip()
+        from backend.ai.reliability.response_gateway import (
+            build_retry_prompt,
+            process_intelligence_synthesis,
+        )
+        from backend.metrics.execution_metrics import record_reliability_event
 
-        try:
-            parsed = json.loads(clean_text)
-        except json.JSONDecodeError as e:
-            print(f"  [ERROR] JSON parse failed: {e}")
-            print(f"  [ERROR] Line {e.lineno}, col {e.colno}: {e.msg}")
-            print(f"  [ERROR] Clean text preview:\n{clean_text[:800]}")
-            print(f"  [ERROR] Raw AI response preview:\n{ai_text[:800]}")
+        regime_info = preservation_ctx.get('regime') or {}
+        contra = preservation_ctx.get('contradictions') or {}
+        gateway_context = {
+            'known_tickers': _extract_known_tickers(all_data),
+            'preservation': preservation_ctx,
+            'scanner': _safe_dict(all_data.get('scanner')),
+            'regime': regime_info.get('primary_regime') or 'sideways',
+            'sentiment_diversity_score': pipeline_quality.get('sentiment_diversity_score'),
+            'novelty_avg_score': pipeline_quality.get('novelty_avg_score'),
+            'contradiction_severity': contra.get('overall_disagreement_score'),
+        }
+
+        def _retry_synthesis():
+            if cache_hit:
+                return None
+            retry_prompt = build_retry_prompt(prompt)
+            retry_raw = call_expensive(
+                retry_prompt,
+                use_case='final_synthesis',
+                max_tokens=3500,
+                force=force,
+            )
+            retry_result = validate_ai_response(retry_raw, source='master_analyzer_retry')
+            if isinstance(retry_result, dict) and retry_result.get('success'):
+                return retry_result.get('text')
             return None
 
-        ok, problems = validate_analysis_json(parsed)
-        if not ok:
-            print(f"  [WARN] Invalid or missing fields: {problems}")
+        gateway = process_intelligence_synthesis(
+            ai_text,
+            context=gateway_context,
+            retry_callback=_retry_synthesis if not cache_hit else None,
+        )
+
+        if not gateway.success or not gateway.data:
+            print(f"  [ERROR] Reliability gateway rejected output: "
+                  f"{(gateway.hallucinations + gateway.schema_errors)[:5]}")
+            record_reliability_event('signal_survival', ok=False)
             return None
 
-        return parsed
+        if gateway.used_fallback:
+            print("  [SAFE FALLBACK] Serving last-valid intelligence (degraded)")
+
+        rel_score = (gateway.data.get('reliability_meta') or {}).get('reliability_score')
+        if rel_score is not None:
+            record_reliability_event('signal_survival', ok=True, reliability_score=rel_score)
+
+        return gateway.data
 
     except AttributeError as e:
         print(f"[CRASH] AttributeError: {e}")
@@ -790,14 +841,24 @@ def run_master_analysis():
         output.update(analysis_dict)
         output['pipeline_meta'] = pipeline_status() if pipeline_status else {}
         output['reused'] = bool(analysis_dict.get('reused'))
+        if analysis_dict.get('reliability_meta'):
+            output['reliability_meta'] = analysis_dict['reliability_meta']
+        if analysis_dict.get('confidence_metrics'):
+            output['confidence_metrics'] = analysis_dict['confidence_metrics']
+
+        from backend.ai.reliability.response_gateway import validate_for_persistence
+        persist_ok, safe_output = validate_for_persistence(output)
+        if not persist_ok:
+            print("\n[ERROR] Persistence safety check failed — unified_intelligence.json NOT updated")
+            return None
 
         data_dir = DATA_DIR
         output_file = data_dir / 'unified_intelligence.json'
 
-        atomic_write_json(output_file, output)
+        atomic_write_json(output_file, safe_output)
 
         print(f"\n[SAVED] {output_file}")
-        return output
+        return safe_output
 
     except Exception as e:
         print(f"\n[FATAL] run_master_analysis crashed: {e}")
