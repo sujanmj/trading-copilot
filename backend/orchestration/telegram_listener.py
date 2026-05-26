@@ -423,12 +423,32 @@ def cmd_stats():
 
     send_message(msg)
 
-def _do_ask(question):
+def _do_ask(question, user_id='unknown'):
     """Direct import call to ai_router — no subprocess, no injection risk."""
     try:
+        from backend.ai.conversational_throttle import check_telegram_ask
         from backend.ai.ai_router import ask_ai
     except Exception as e:
         send_message(f"❌ Could not load ai_router: {str(e)[:200]}")
+        return
+
+    gate = check_telegram_ask(user_id, question)
+    if not gate.get('allowed'):
+        cached = gate.get('cached_response')
+        if cached and cached.get('text'):
+            send_message(f"<b>🤖 AI Answer (cached):</b>\n\n{cached['text'][:3500]}")
+        elif not gate.get('suppress'):
+            send_message(f"⏳ {gate.get('reason', 'Please wait before asking again.')}")
+        try:
+            from backend.analytics.provider_analytics import record_throttle_block
+            record_throttle_block(gate.get('reason') or 'blocked')
+        except Exception:
+            pass
+        return
+
+    if gate.get('cached_response') and gate['cached_response'].get('text'):
+        answer = gate['cached_response']['text'].strip()
+        send_message(f"<b>🤖 AI Answer (cached):</b>\n\n{answer[:3500]}")
         return
 
     intel_file = DATA_DIR / 'unified_intelligence.json'
@@ -451,22 +471,29 @@ Question: {question}
 Give specific, actionable advice for an Indian retail investor."""
 
     try:
-        result = ask_ai(prompt, use_case='ask_basic', max_tokens=600)
+        result = ask_ai(prompt, use_case='telegram_ask', max_tokens=600, channel='telegram')
         if result.get('success'):
             answer = result.get('text', '').strip() or "No response"
             send_message(f"<b>🤖 AI Answer:</b>\n\n{answer[:3500]}")
         else:
-            send_message(f"❌ AI error: {str(result.get('error', 'unknown'))[:200]}")
+            friendly = result.get('user_message') or ''
+            if friendly:
+                send_message(friendly)
+            else:
+                send_message(
+                    "⚠ AI enrichment temporarily unavailable.\n"
+                    "Core intelligence systems remain operational."
+                )
     except Exception as e:
         send_message(f"❌ Error: {str(e)[:200]}")
 
-def cmd_ask(question):
+def cmd_ask(question, from_user='unknown'):
     if not question.strip():
         send_message("❓ Usage: /ask <your question>\nExample: /ask should I buy Reliance?")
         return
 
     send_message(f"🤔 <b>Thinking about:</b>\n<i>{question[:200]}</i>")
-    run_in_background(_do_ask, question)
+    run_in_background(_do_ask, question, from_user)
 
 def cmd_silence(arg):
     try:
@@ -589,7 +616,7 @@ def handle_command(text, from_user):
     elif cmd in ('stats', 'accuracy'):
         cmd_stats()
     elif cmd in ('ask', 'q', 'question'):
-        cmd_ask(args)
+        cmd_ask(args, from_user)
     # Control
     elif cmd in ('silence', 'mute'):
         cmd_silence(args)

@@ -1,0 +1,72 @@
+{
+  "date": "2026-05-26",
+  "generated_at": "2026-05-26T15:03:06.351551",
+  "providers": {
+    "gemini": {
+      "provider": "gemini",
+      "requests_today": 1,
+      "requests_per_hour": {
+        "15": 1
+      },
+      "avg_latency_ms": 1800.0,
+      "failovers": 1,
+      "cooldown_activations": 0,
+      "quota_failures": 0,
+      "success_rate_pct": 100.0,
+      "degraded_count": 0,
+      "fallback_count": 0,
+      "cache_hits": 0,
+      "uptime_score": 100.0
+    },
+    "groq": {
+      "provider": "groq",
+      "requests_today": 1,
+      "requests_per_hour": {
+        "15": 1
+      },
+      "avg_latency_ms": 420.0,
+      "failovers": 0,
+      "cooldown_activations": 0,
+      "quota_failures": 0,
+      "success_rate_pct": 100.0,
+      "degraded_count": 0,
+      "fallback_count": 0,
+      "cache_hits": 0,
+      "uptime_score": 100.0
+    },
+    "claude": {
+      "provider": "claude",
+      "requests_today": 1,
+      "requests_per_hour": {
+        "15": 1
+      },
+      "avg_latency_ms": 6200.0,
+      "failovers": 0,
+      "cooldown_activations": 0,
+      "quota_failures": 0,
+      "success_rate_pct": 100.0,
+      "degraded_count": 0,
+      "fallback_count": 0,
+      "cache_hits": 0,
+      "uptime_score": 100.0
+    }
+  },
+  "conversational_load": {
+    "counts": {
+      "groq": 1
+    },
+    "pct": {
+      "groq": 100.0
+    },
+    "total": 1
+  },
+  "claude_strategic_runs": 1,
+  "runtime_notes": [
+    "Gemini had 1 failover(s); pool remained operational.",
+    "Groq handled 100% of conversational requests.",
+    "No degraded-mode activations recorded.",
+    "Claude used for 1 strategic synthesis run(s) only."
+  ],
+  "ai_uptime_pct": 100.0,
+  "total_requests": 3
+}

@@ -617,6 +617,18 @@ def health():
     except Exception:
         operational_alerts = {}
 
+    try:
+        from backend.ai.provider_manager import get_provider_ops_summary
+        provider_ops = get_provider_ops_summary()
+    except Exception:
+        provider_ops = {}
+
+    try:
+        from backend.analytics.provider_analytics import get_runtime_ops_summary
+        provider_analytics = get_runtime_ops_summary()
+    except Exception:
+        provider_analytics = {}
+
     return {
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
@@ -646,6 +658,8 @@ def health():
         "watchdog_stale_threshold_seconds": pipeline_obs.get("watchdog_stale_threshold_seconds"),
         "pipeline_observability": pipeline_obs,
         "operational_alerts": operational_alerts,
+        "provider_ops": provider_ops,
+        "provider_analytics": provider_analytics,
     }
 
 
@@ -722,7 +736,7 @@ Question: {question}
 
 Answer in 4-6 lines for Indian retail investor."""
     try:
-        result = ask_ai(prompt, use_case=use_case, max_tokens=600)
+        result = ask_ai(prompt, use_case=use_case, max_tokens=600, channel='api')
         if result.get('success'):
             return {
                 "success": True,
@@ -732,7 +746,15 @@ Answer in 4-6 lines for Indian retail investor."""
                 "cost": result.get('estimated_cost', 0)
             }
         else:
-            return {"success": False, "error": result.get('error', 'Unknown error')}
+            friendly = result.get('user_message') or ''
+            return {
+                "success": False,
+                "error": result.get('error', 'Unknown error'),
+                "user_message": friendly or (
+                    "⚠ AI enrichment temporarily unavailable. "
+                    "Core intelligence systems remain operational."
+                ),
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -950,6 +972,25 @@ def api_debug_explanations():
             "latest": None,
             "quality_history": [],
         })
+
+
+@app.get("/api/debug/providers", dependencies=[Depends(verify_api_key)])
+def api_debug_providers():
+    from backend.ai.provider_manager import get_provider_ops_summary
+    from backend.analytics.provider_analytics import get_runtime_ops_summary
+    return sanitize_json_value({
+        **get_provider_ops_summary(),
+        'runtime_analytics': get_runtime_ops_summary(),
+    })
+
+
+@app.get("/api/debug/provider-analytics", dependencies=[Depends(verify_api_key)])
+def api_debug_provider_analytics():
+    from backend.analytics.provider_analytics import get_runtime_ops_summary, get_ai_runtime_stats_payload
+    return sanitize_json_value({
+        'ops': get_runtime_ops_summary(),
+        'stats': get_ai_runtime_stats_payload(),
+    })
 
 
 @app.get("/api/debug/reliability", dependencies=[Depends(verify_api_key)])

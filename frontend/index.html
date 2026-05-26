@@ -377,6 +377,8 @@
     .journal-v.win { color: #00E676; }
     .journal-v.loss { color: #FF3D00; }
     .journal-obs { font-size: 11px; color: #A3B3C8; line-height: 1.45; margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 2px solid rgba(212,168,83,0.35); }
+    .journal-runtime { font-size: 10px; color: #8B949E; margin: 8px 0; padding: 8px; background: rgba(56,139,253,0.06); border-radius: 6px; border-left: 2px solid rgba(56,139,253,0.35); }
+    .journal-runtime-line { margin: 4px 0; line-height: 1.4; }
     .journal-details { margin-top: 8px; }
     .journal-details summary { font-size: 10px; color: #8B949E; cursor: pointer; user-select: none; }
     .journal-timeline-item { font-size: 10px; color: #A3B3C8; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
@@ -645,9 +647,9 @@
 
       <div class="ask-bar">
         <select id="aiModel" style="background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);color:#ccc;padding:8px;border-radius:6px;font-size:12px;cursor:pointer;">
-          <option value="ask_basic">⚡ Gemini (Free)</option>
-          <option value="ask_haiku">💨 Haiku</option>
-          <option value="ask_deep">🧠 Sonnet</option>
+          <option value="ask_basic">⚡ Groq (Fast)</option>
+          <option value="ask_haiku">💨 Groq Lite</option>
+          <option value="ask_deep">🧠 Claude Strategist</option>
         </select>
         <input class="ask-input" id="askInput" placeholder="Ask anything..."/>
         <button class="ask-btn" id="askBtn">Ask</button>
@@ -699,6 +701,14 @@
       <details class="ai-ops-section">
         <summary>Preservation Inspector</summary>
         <div class="ai-ops-section-body" id="aiOpsPreservation"></div>
+      </details>
+      <details class="ai-ops-section" open>
+        <summary>AI Providers</summary>
+        <div class="ai-ops-section-body" id="aiOpsProviders"></div>
+      </details>
+      <details class="ai-ops-section" open>
+        <summary>AI Runtime Analytics</summary>
+        <div class="ai-ops-section-body" id="aiOpsRuntime"></div>
       </details>
       <details class="ai-ops-section">
         <summary>AI Routing</summary>
@@ -1819,6 +1829,39 @@
     if (health.hallucination_detections) html += calibRow('Hallucination detections', health.hallucination_detections, 'bad')
     html += `</div>`
 
+    const rt = data.ai_runtime || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">AI Runtime</div>`
+    if (rt.status === 'degraded' || rt.status === 'empty') {
+      html += `<div class="calib-insufficient">${escapeHtml(rt.reason || 'Runtime analytics building after first AI requests…')}</div>`
+    } else {
+      html += calibRow('AI uptime', rt.ai_uptime_pct != null ? `${rt.ai_uptime_pct}%` : '—', pctClass(rt.ai_uptime_pct))
+      html += calibRow('Degraded mode', escapeHtml(rt.degraded_mode || 'normal'), rt.degraded_mode && rt.degraded_mode !== 'normal' ? 'bad' : 'good')
+      html += calibRow('Cache hits today', rt.cache_hits_today != null ? rt.cache_hits_today : '—', 'good')
+      html += calibRow('TG throttle blocks', rt.throttle_blocks_today != null ? rt.throttle_blocks_today : '—', 'muted')
+      const provNames = ['gemini', 'groq', 'claude']
+      const provLabels = { gemini: 'Gemini', groq: 'Groq', claude: 'Claude' }
+      provNames.forEach(name => {
+        const p = (rt.providers || {})[name] || {}
+        const rel = (rt.provider_reliability || {})[name] || {}
+        const latS = p.avg_latency_ms ? (p.avg_latency_ms / 1000).toFixed(1) + 's' : '—'
+        const req = p.requests_today != null ? p.requests_today : 0
+        const line = name === 'claude'
+          ? `${rt.claude_strategic_runs || 0} strategic · avg ${latS}`
+          : `${req} req · ${p.failovers || 0} fail · avg ${latS} · uptime ${rel.uptime_score != null ? rel.uptime_score : '—'}%`
+        html += calibRow(provLabels[name], line, 'muted')
+      })
+      const conv = rt.conversational_load_pct || {}
+      if (Object.keys(conv).length) {
+        html += calibRow('Conversational load', Object.entries(conv).map(([k, v]) => `${k} ${v}%`).join(' · '), 'muted')
+      }
+      const fbTrend = rt.fallback_trends || []
+      if (fbTrend.length) {
+        const last = fbTrend[fbTrend.length - 1]
+        html += calibRow('Fallback trend', `${last.date || '?'}: ${last.total || 0} fallbacks`, 'mid')
+      }
+    }
+    html += `</div>`
+
     container.innerHTML = html;
   }
 
@@ -1900,6 +1943,12 @@
     html += `<span class="journal-k">Telegram</span><span class="journal-v">${escapeHtml(entry.telegram_summary || '—')}</span>`
     html += `</div>`
     if (entry.observation) html += `<div class="journal-obs">${escapeHtml(entry.observation)}</div>`
+    const runtimeNotes = entry.runtime_notes || []
+    if (runtimeNotes.length) {
+      html += `<div class="journal-runtime"><div class="journal-k" style="margin-bottom:6px;">Daily AI Runtime Notes</div>`
+      runtimeNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
+      html += `</div>`
+    }
     const timeline = entry.regime_timeline || []
     const warnings = entry.warnings || []
     const hl = entry.highlights || {}
@@ -2056,7 +2105,7 @@
     input.value = ''; askBtn.disabled = true; askBtn.innerText = '...'
     
     const aiModel = document.getElementById('aiModel').value
-    const modelLabel = aiModel === 'ask_basic' ? 'Gemini' : aiModel === 'ask_haiku' ? 'Haiku' : 'Sonnet'
+    const modelLabel = aiModel === 'ask_basic' ? 'Groq' : aiModel === 'ask_haiku' ? 'Groq Lite' : 'Claude'
     const container = document.getElementById('tab-' + document.querySelector('.tab.active').dataset.tab)
     const qid = 'q' + Date.now()
     addChatMessage('user', question, modelLabel)
@@ -2072,7 +2121,9 @@
       askBtn.disabled = false; askBtn.innerText = 'Ask'
       const responseEl = document.getElementById(qid)
       if (!responseEl) return
-      const displayText = result.success ? (result.response || 'No response') : ('Error: ' + (result.error || 'Unknown'))
+      const displayText = result.success
+        ? (result.response || 'No response')
+        : (result.user_message || ('Error: ' + (result.error || 'Unknown')))
       addChatMessage('assistant', displayText, modelLabel)
       responseEl.innerHTML = `<div class="chat-msg-meta">${modelLabel}:</div><div class="chat-msg-content">${escapeHtml(displayText).replace(/\n/g, '<br>')}</div>`
       container.scrollTop = container.scrollHeight

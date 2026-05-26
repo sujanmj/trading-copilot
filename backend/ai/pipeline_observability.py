@@ -772,7 +772,7 @@ def debug_ai_routing(cycle_id: Optional[str] = None) -> dict:
     gemini_events = [e for e in events if 'gemini' in str(e.get('tier', '')).lower() or e.get('tier') == 'cheap']
     claude_events = [e for e in events if e.get('tier') == 'expensive']
 
-    return {
+    payload = {
         'cycle_id': snap.get('cycle_id'),
         'claude_decision': claude,
         'routing_events': events[-20:],
@@ -789,6 +789,12 @@ def debug_ai_routing(cycle_id: Optional[str] = None) -> dict:
         'pipeline_status': pipe,
         'last_expensive_call_reason': claude_events[-1] if claude_events else None,
     }
+    try:
+        from backend.ai.provider_manager import get_provider_ops_summary
+        payload['providers'] = get_provider_ops_summary()
+    except Exception as e:
+        payload['providers'] = {'status': 'degraded', 'reason': str(e)}
+    return payload
 
 
 def debug_delta_analysis(cycle_id: Optional[str] = None) -> dict:

@@ -66,6 +66,12 @@ def empty_stats_output():
             'telegram_precision': {},
             'calibration_health': {},
         },
+        'ai_runtime': {
+            'status': 'empty',
+            'ai_uptime_pct': 0,
+            'providers': {},
+            'conversational_load_pct': {},
+        },
     }
 
 
@@ -290,6 +296,14 @@ def export_stats():
         except Exception as e:
             safe_print(f"[WARN] calibration dashboard failed: {e}")
             output['calibration_dashboard'] = {'status': 'degraded', 'reason': str(e)}
+
+        try:
+            from backend.analytics.provider_analytics import get_ai_runtime_stats_payload, snapshot_daily
+            output['ai_runtime'] = get_ai_runtime_stats_payload()
+            snapshot_daily()
+        except Exception as e:
+            safe_print(f"[WARN] ai runtime analytics failed: {e}")
+            output['ai_runtime'] = {'status': 'degraded', 'reason': str(e)}
 
         output['last_updated'] = datetime.now(timezone.utc).isoformat()
         output['generation_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

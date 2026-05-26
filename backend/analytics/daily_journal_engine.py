@@ -53,6 +53,15 @@ def _format_journal_card(review: dict) -> dict:
     if tg_useful is None and tg.get('telegram_precision_pct') and tg_sent:
         tg_useful = max(0, round(tg_sent * tg['telegram_precision_pct'] / 100))
 
+    runtime_notes = []
+    review_date = review.get('date')
+    if review_date:
+        try:
+            from backend.analytics.provider_analytics import get_daily_runtime_notes
+            runtime_notes = get_daily_runtime_notes(review_date)
+        except Exception:
+            runtime_notes = []
+
     return {
         'date': review.get('date'),
         'status': review.get('status', 'ok'),
@@ -70,6 +79,8 @@ def _format_journal_card(review: dict) -> dict:
         'telegram_sent': tg_sent,
         'telegram_useful_est': tg_useful,
         'observation': review.get('observation') or '',
+        'runtime_notes': runtime_notes,
+        'runtime_summary': '\n'.join(runtime_notes) if runtime_notes else '',
         'regime_timeline': regime.get('timeline') or [],
         'warnings': warnings[:8],
         'highlights': highlights,

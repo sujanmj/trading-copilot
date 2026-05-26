@@ -306,6 +306,89 @@
       'No routing explainability yet'
     );
 
+    const prov = (routing.providers || health.provider_ops || {});
+    const degraded = prov.degraded || {};
+    const gem = (prov.providers || {}).gemini || {};
+    const groq = (prov.providers || {}).groq || {};
+    const claude = (prov.providers || {}).claude || {};
+    const slotLine = (p, label) => {
+      const active = p.active_slot || '—';
+      const st = p.degraded ? 'degraded' : 'healthy';
+      const fails = p.total_failovers || 0;
+      return `${label}: ${active} · ${st} · failovers ${fails}`;
+    };
+    const slotDetails = []
+      .concat((gem.slots || []).map((s) => `${s.slot_id} → ${s.status}${s.cooldown_remaining_sec ? ` (${s.cooldown_remaining_sec}s)` : ''}`))
+      .concat((groq.slots || []).map((s) => `${s.slot_id} → ${s.status}${s.cooldown_remaining_sec ? ` (${s.cooldown_remaining_sec}s)` : ''}`));
+    $('aiOpsProviders').innerHTML =
+      renderStatGrid([
+        { label: 'Mode', value: degraded.mode || '—', cls: degraded.mode && degraded.mode !== 'normal' ? 'ai-ops-warn' : '' },
+        { label: 'Gemini', value: gem.active_slot || '—' },
+        { label: 'Groq', value: groq.active_slot || '—' },
+        { label: 'Claude', value: claude.active_slot || 'standby' },
+      ]) +
+      renderList(
+        [
+          slotLine(gem, 'Gemini pool'),
+          slotLine(groq, 'Groq pool'),
+          claude.active_slot ? 'Claude → strategist standby' : 'Claude → no key',
+          degraded.enrichment_message ? 'Enrichment fallback active' : null,
+        ].filter(Boolean),
+        'Provider data unavailable'
+      ) +
+      (slotDetails.length
+        ? `<div class="ai-ops-subhead">Pool slots</div>${renderList(slotDetails.slice(0, 8), '')}`
+        : '');
+
+    const rt = health.provider_analytics || {};
+    const rtProv = rt.providers || {};
+    const rtGem = rtProv.gemini || {};
+    const rtGroq = rtProv.groq || {};
+    const rtClaude = rtProv.claude || {};
+    const fmtLat = (ms) => (ms ? `${(ms / 1000).toFixed(1)}s` : '—');
+    const runtimeLines = (rt.summary_lines || []).length
+      ? rt.summary_lines
+      : [
+          `Gemini: ${rtGem.requests_today || 0} requests · ${rtGem.failovers || 0} failovers · avg ${fmtLat(rtGem.avg_latency_ms)}`,
+          `Groq: ${rtGroq.requests_today || 0} requests · ${rtGroq.failovers || 0} failovers · avg ${fmtLat(rtGroq.avg_latency_ms)}`,
+          `Claude: ${rt.claude_strategic_runs || 0} strategic runs · avg ${fmtLat(rtClaude.avg_latency_ms)}`,
+        ];
+    const runtimeEl = $('aiOpsRuntime');
+    if (runtimeEl) {
+      runtimeEl.innerHTML =
+        renderStatGrid([
+          { label: 'AI uptime', value: rt.ai_uptime_pct != null ? `${rt.ai_uptime_pct}%` : '—',
+            cls: scoreClass(rt.ai_uptime_pct, 95) },
+          { label: 'Degraded', value: rt.degraded_mode || degraded.mode || 'normal',
+            cls: (rt.degraded_mode || degraded.mode) !== 'normal' ? 'ai-ops-warn' : '' },
+          { label: 'Cache hits', value: String(rt.cache_hits_today ?? '—') },
+          { label: 'TG throttle', value: String(rt.throttle_blocks_today ?? '—'),
+            cls: (rt.throttle_blocks_today || 0) > 0 ? 'ai-ops-warn' : '' },
+          { label: 'Conv load', value: rt.conversational_load && rt.conversational_load.pct
+            ? Object.entries(rt.conversational_load.pct).map(([k, v]) => `${k} ${v}%`).join(' · ')
+            : '—' },
+          { label: 'Claude strat', value: String(rt.claude_strategic_runs ?? '—') },
+        ]) +
+        `<div class="ai-ops-subhead">Requests / provider</div>${renderList(runtimeLines, 'No AI requests yet today')}` +
+        `<div class="ai-ops-subhead">Quota pressure</div>${renderList(
+          ['gemini', 'groq', 'claude'].map((n) => {
+            const p = rtProv[n] || {};
+            const req = p.requests_today || 0;
+            const qf = p.quota_failures || 0;
+            const pct = req ? Math.round(100 * qf / req) : 0;
+            return `${n}: ${qf} quota events (${pct}% pressure)`;
+          }),
+          'No quota events'
+        )}` +
+        `<div class="ai-ops-subhead">Uptime scores</div>${renderList(
+          ['gemini', 'groq', 'claude'].map((n) => {
+            const p = rtProv[n] || {};
+            return `${n}: ${p.uptime_score != null ? p.uptime_score : '—'}% · degraded ${p.degraded_count || 0}`;
+          }),
+          '—'
+        )}`;
+    }
+
     const tg = data.telegram || {};
     const tgObs = tg.telegram_alerts || tg;
     const sentToday = tgObs.alerts_sent_today ?? 0;

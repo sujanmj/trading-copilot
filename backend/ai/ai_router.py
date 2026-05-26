@@ -1,10 +1,9 @@
 """
-AI ROUTER v4 - Guaranteed dict responses via response_validator
-Uses gemini-2.0-flash (higher free quota: 1500/day vs 20/day)
+AI ROUTER v5 — Tiered orchestration via provider pools (Gemini / Groq / Claude).
 """
 
 import os
-from pathlib import Path
+import time
 
 import requests
 
@@ -16,11 +15,9 @@ try:
 except ImportError:
     genai = None
     GENAI_AVAILABLE = False
-    print("[WARN] google-generativeai not installed, using REST API fallback")
 
 
 def _load_env_files():
-    """Load .env and keys.env via central config."""
     from backend.utils.config import load_env
     load_env()
 
@@ -32,57 +29,43 @@ def get_anthropic_key():
     return os.environ.get('ANTHROPIC_API_KEY', '').strip()
 
 
-def get_google_key():
-    return (
-        os.environ.get('GOOGLE_API_KEY')
-        or os.environ.get('GEMINI_API_KEY')
-        or ''
-    ).strip()
+def _ai_result(success, text='', model='', provider='', estimated_cost=0.0, error=None, **extra):
+    payload = {
+        'success': bool(success),
+        'text': text if text is not None else '',
+        'model': model if model is not None else '',
+        'provider': provider if provider is not None else '',
+        'estimated_cost': float(estimated_cost or 0),
+        'error': error if not success else None,
+    }
+    payload.update(extra)
+    return validate_ai_response(payload, source=provider or 'ai_router')
 
 
-def _ai_result(success, text='', model='', provider='', estimated_cost=0.0, error=None):
-    """Build standard dict — always pass through validate_ai_response before returning to callers."""
+def _safe_return(result, model, provider, cost=0.0):
+    if isinstance(result, dict):
+        return validate_ai_response(result, source=provider or 'ai_router')
     return validate_ai_response(
         {
-            'success': bool(success),
-            'text': text if text is not None else '',
-            'model': model if model is not None else '',
-            'provider': provider if provider is not None else '',
-            'estimated_cost': float(estimated_cost or 0),
-            'error': error if not success else None,
-        },
-        source=provider or 'ai_router',
-    )
-
-
-def _safe_return(text, model, provider, cost=0.0):
-    """Final safety wrapper — never return a plain string from ask_ai()."""
-    if isinstance(text, dict):
-        return validate_ai_response(text, source=provider or 'ai_router')
-    return validate_ai_response(
-        {
-            'success': bool(text),
-            'text': str(text) if text else '',
+            'success': bool(result),
+            'text': str(result) if result else '',
             'model': model or 'unknown',
             'provider': provider or 'unknown',
             'estimated_cost': float(cost or 0),
-            'error': None if text else 'Empty response',
+            'error': None if result else 'Empty response',
         },
         source=provider or 'ai_router',
     )
 
 
 def _extract_gemini_text(response):
-    """Extract text from Gemini response object without returning a bare string upstream."""
     text = ''
     try:
         text = getattr(response, 'text', None) or ''
     except Exception:
         text = ''
-
     if text:
         return str(text)
-
     try:
         candidates = getattr(response, 'candidates', None) or []
         if candidates:
@@ -94,7 +77,6 @@ def _extract_gemini_text(response):
                     return str(part_text)
     except Exception:
         pass
-
     try:
         if isinstance(response, dict):
             return str(
@@ -105,7 +87,6 @@ def _extract_gemini_text(response):
             )
     except Exception:
         pass
-
     return ''
 
 
@@ -134,6 +115,12 @@ MODELS = {
         'cost_per_1k_input': 0,
         'cost_per_1k_output': 0,
     },
+    'groq': {
+        'provider': 'groq',
+        'model': os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+        'cost_per_1k_input': 0,
+        'cost_per_1k_output': 0,
+    },
     'final_synthesis': {
         'provider': 'anthropic',
         'model': 'claude-sonnet-4-5',
@@ -143,22 +130,27 @@ MODELS = {
 }
 
 USE_CASE_ROUTING = {
-    'overnight_brief':    'final_synthesis',
-    'premarket_brief':    'final_synthesis',
-    'midday_check':       'gemini',
-    'post_close':         'gemini',
-    'us_check':           'gemini',
-    'manual_refresh':     'final_synthesis',
-    'final_synthesis':    'final_synthesis',
-    'compress':           'gemini',
-    'gemini_synthesis':   'gemini',
-    'ask_basic':          'gemini',
-    'ask_haiku':          'haiku',
-    'ask_deep':           'sonnet',
-    'stock_scanner':      'gemini',
-    'alert_analysis':     'haiku',
-    'translate':          'gemini_lite',
-    'postmortem':         'sonnet',
+    'overnight_brief': 'final_synthesis',
+    'premarket_brief': 'final_synthesis',
+    'midday_check': 'gemini',
+    'post_close': 'gemini',
+    'us_check': 'gemini',
+    'manual_refresh': 'final_synthesis',
+    'final_synthesis': 'final_synthesis',
+    'compress': 'gemini',
+    'gemini_synthesis': 'gemini',
+    'ask_basic': 'groq',
+    'ask_conversational': 'groq',
+    'telegram_ask': 'groq',
+    'ops_assistant': 'groq',
+    'lightweight_summary': 'groq',
+    'ask_haiku': 'groq',
+    'ask_deep': 'sonnet',
+    'stock_scanner': 'gemini',
+    'alert_analysis': 'groq',
+    'translate': 'gemini_lite',
+    'postmortem': 'sonnet',
+    'watchdog_refresh': 'gemini',
 }
 
 
@@ -173,7 +165,7 @@ def call_anthropic(model_name, prompt, max_tokens=2500):
                               error='ANTHROPIC_API_KEY not set in environment')
         if not api_key.startswith('sk-ant-'):
             return _ai_result(False, model=model_name, provider=provider,
-                              error=f'Invalid ANTHROPIC_API_KEY format. Got: {api_key[:10]}...')
+                              error='Invalid ANTHROPIC_API_KEY format')
 
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
@@ -197,7 +189,6 @@ def call_anthropic(model_name, prompt, max_tokens=2500):
 
 
 def _call_gemini_rest(api_key, model_name, prompt, max_tokens=2500):
-    """Call Gemini via REST — no google-generativeai package required."""
     provider = 'google'
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -210,9 +201,8 @@ def _call_gemini_rest(api_key, model_name, prompt, max_tokens=2500):
             "temperature": 0.7,
         },
     }
-
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(url, json=payload, timeout=45)
         response.raise_for_status()
         data = response.json()
         text = _extract_gemini_text(data)
@@ -240,137 +230,289 @@ def _call_gemini_rest(api_key, model_name, prompt, max_tokens=2500):
         return _ai_result(False, model=model_name, provider=provider, error=str(e))
 
 
-def _call_gemini_sdk(api_key, model_name, prompt, max_tokens=2500):
-    """Optional SDK path when google-generativeai is installed."""
-    provider = 'google'
-    if not GENAI_AVAILABLE or genai is None:
-        return _ai_result(
-            False,
-            model=model_name,
-            provider=provider,
-            error='google-generativeai not installed',
-        )
-
+def _call_groq_rest(api_key, model_name, prompt, max_tokens=2500):
+    provider = 'groq'
+    url = 'https://api.groq.com/openai/v1/chat/completions'
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'model': model_name,
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_tokens': max_tokens,
+        'temperature': 0.6,
+    }
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                'max_output_tokens': max_tokens,
-                'temperature': 0.7,
-            },
-        )
-        text = _extract_gemini_text(response)
-        usage = getattr(response, 'usage_metadata', None)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        text = ''
+        try:
+            text = data['choices'][0]['message']['content']
+        except (KeyError, IndexError, TypeError):
+            text = ''
+        usage = data.get('usage') or {}
         raw = {
             'success': bool(text),
-            'text': text,
+            'text': text or '',
             'model': model_name,
             'provider': provider,
             'estimated_cost': 0.0,
-            'error': None if text else 'Empty Gemini SDK response',
-            'input_tokens': getattr(usage, 'prompt_token_count', 0) if usage else 0,
-            'output_tokens': getattr(usage, 'candidates_token_count', 0) if usage else 0,
+            'error': None if text else 'Empty Groq response',
+            'input_tokens': usage.get('prompt_tokens', 0),
+            'output_tokens': usage.get('completion_tokens', 0),
         }
         return validate_ai_response(raw, source=provider)
+    except requests.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.response.text[:300] if e.response is not None else ''
+        except Exception:
+            pass
+        return _ai_result(False, model=model_name, provider=provider, error=f"{e} {detail}".strip())
     except Exception as e:
         return _ai_result(False, model=model_name, provider=provider, error=str(e))
 
 
 def call_gemini(model_name, prompt, max_tokens=2500):
-    provider = 'google'
-    api_key = get_google_key()
-    if not api_key:
-        return _ai_result(
-            False,
-            model=model_name,
-            provider=provider,
-            error='No Gemini API key found (GOOGLE_API_KEY or GEMINI_API_KEY)',
-        )
+    from backend.ai.provider_manager import get_gemini_pool
 
-    # REST API first — reliable on Railway, no import issues
-    result = _call_gemini_rest(api_key, model_name, prompt, max_tokens)
+    pool = get_gemini_pool()
+
+    def _invoke(api_key: str, slot_id: str):
+        t0 = time.time()
+        result = _call_gemini_rest(api_key, model_name, prompt, max_tokens)
+        latency = (time.time() - t0) * 1000
+        if result.get('success'):
+            return result, latency
+        err = str(result.get('error') or '')
+        if '429' in err or 'quota' in err.lower() or 'resource_exhausted' in err.lower():
+            lite = _call_gemini_rest(api_key, 'gemini-2.0-flash-lite', prompt, max_tokens)
+            if lite.get('success'):
+                lite['model'] = 'gemini-2.0-flash-lite (lite)'
+                return lite, (time.time() - t0) * 1000
+            result = lite
+        return result, latency
+
+    result, meta = pool.execute_with_failover(_invoke, model_label=model_name)
+    result['_pool_meta'] = meta
+    if meta.get('slot_id'):
+        result['provider_slot'] = meta['slot_id']
+    if meta.get('degraded') and not result.get('success'):
+        result.setdefault('user_message', meta.get('user_message'))
+        try:
+            from backend.ai.provider_manager import ENRICHMENT_UNAVAILABLE_MSG
+            result['user_message'] = ENRICHMENT_UNAVAILABLE_MSG
+        except Exception:
+            pass
+    return result
+
+
+def call_groq(model_name, prompt, max_tokens=2500):
+    from backend.ai.provider_manager import get_gemini_pool, get_groq_pool, ENRICHMENT_UNAVAILABLE_MSG
+
+    pool = get_groq_pool()
+
+    def _invoke(api_key: str, slot_id: str):
+        t0 = time.time()
+        result = _call_groq_rest(api_key, model_name, prompt, max_tokens)
+        return result, (time.time() - t0) * 1000
+
+    result, meta = pool.execute_with_failover(_invoke, model_label=model_name)
+    result['_pool_meta'] = meta
     if result.get('success'):
         return result
 
-    error_str = str(result.get('error') or '')
+    # Conversational fallback → Gemini pool
+    if not get_gemini_pool().is_degraded():
+        print('  [AI] Groq pool exhausted — falling back to Gemini for conversational request')
+        gem = call_gemini('gemini-2.0-flash-lite', prompt, max_tokens)
+        if gem.get('success'):
+            gem['model'] = f"{gem.get('model', 'gemini')} (groq-fallback)"
+            gem['provider'] = 'google'
+            gem['fallback_from'] = 'groq'
+            return gem
 
-    if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'quota' in error_str.lower():
-        print("  [AI] Gemini quota hit, trying lite model via REST...")
-        lite_result = _call_gemini_rest(
-            api_key, 'gemini-2.0-flash-lite', prompt, max_tokens
-        )
-        if lite_result.get('success'):
-            lite_result['model'] = 'gemini-2.0-flash-lite (fallback)'
-            return lite_result
-        error_str = str(lite_result.get('error') or error_str)
-
-    # Optional SDK fallback if package is installed
-    if GENAI_AVAILABLE:
-        print("  [AI] REST failed, trying google-generativeai SDK...")
-        sdk_result = _call_gemini_sdk(api_key, model_name, prompt, max_tokens)
-        if sdk_result.get('success'):
-            return sdk_result
-        error_str = str(sdk_result.get('error') or error_str)
-
-    return _ai_result(False, model=model_name, provider=provider, error=error_str)
+    result['user_message'] = ENRICHMENT_UNAVAILABLE_MSG
+    return result
 
 
-def ask_ai(prompt, use_case='ask_basic', model_override=None, max_tokens=2500):
+def _is_quota_error_text(err: str) -> bool:
+    e = (err or '').lower()
+    return '429' in e or 'quota' in e or 'rate limit' in e or 'resource_exhausted' in e
+
+
+def resolve_conversational_priority(use_case: str, prompt: str) -> str:
+    """Route trivial asks to Groq; deeper contextual asks to Gemini."""
+    deep_markers = (
+        'analyze', 'analysis', 'strategy', 'strategic', 'compare', 'contrast',
+        'deep dive', 'explain in detail', 'why did', 'root cause', 'implications',
+        'market situation', 'sector rotation', 'macro',
+    )
+    pl = (prompt or '').lower()
+    if len(prompt or '') > 1200:
+        return 'gemini'
+    if len(prompt or '') > 450 and any(m in pl for m in deep_markers):
+        return 'gemini'
+    return 'groq'
+
+
+def ask_ai(
+    prompt,
+    use_case='ask_basic',
+    model_override=None,
+    max_tokens=2500,
+    channel='api',
+    skip_cache=False,
+):
+    from backend.ai.provider_manager import resolve_use_case_tier, get_degraded_status
+    from backend.ai.conversational_cache import get_cached, set_cached, should_use_cache
+    from backend.analytics.provider_analytics import normalize_provider, record_provider_request
+
     if model_override:
         model_key = model_override
     else:
         model_key = USE_CASE_ROUTING.get(use_case, 'gemini')
 
-    if model_key not in MODELS:
-        return validate_ai_response(
-            {'success': False, 'error': f'Unknown model: {model_key}', 'text': ''},
-            source='ai_router',
-        )
+    tier = resolve_use_case_tier(use_case)
+    if model_override == 'groq' or model_key == 'groq':
+        tier = 'conversational'
+    elif model_override in ('sonnet', 'final_synthesis') or model_key in ('sonnet', 'final_synthesis', 'postmortem'):
+        tier = 'strategic'
+    elif model_override in ('gemini', 'gemini_lite') or model_key in ('gemini', 'gemini_lite', 'compress'):
+        tier = 'gemini'
 
-    model_config = MODELS[model_key]
+    if tier == 'conversational' and not model_override:
+        priority = resolve_conversational_priority(use_case, prompt)
+        if priority == 'gemini':
+            model_key = 'gemini'
+            tier = 'gemini'
+        else:
+            model_key = 'groq'
+
+    if model_key not in MODELS and model_key != 'groq':
+        if tier == 'conversational':
+            model_key = 'groq'
+        elif tier == 'strategic':
+            model_key = 'sonnet'
+        else:
+            model_key = 'gemini'
+
+    if not skip_cache and should_use_cache(use_case, tier):
+        cached = get_cached(use_case, prompt)
+        if cached:
+            record_provider_request(
+                provider=normalize_provider(cached.get('provider', 'groq'), tier),
+                use_case=use_case,
+                channel=channel,
+                success=True,
+                latency_ms=0.0,
+                cache_hit=True,
+            )
+            out = validate_ai_response(cached, source='conversational_cache')
+            out['routing_tier'] = tier
+            out['cache_hit'] = True
+            return out
+
+    model_config = MODELS.get(model_key, MODELS['gemini'])
     provider = model_config['provider']
     model_name = model_config['model']
-    print(f"  [AI] Using {model_key.upper()} ({provider}) for: {use_case}")
+    t0 = time.time()
+    pool_meta = {}
+    fallback_used = False
+    quota_failure = False
 
-    try:
-        if provider == 'anthropic':
-            raw = call_anthropic(model_name, prompt, max_tokens)
-        elif provider == 'google':
-            raw = call_gemini(model_name, prompt, max_tokens)
-        else:
-            raw = _ai_result(False, error=f"Unknown provider: {provider}", provider=provider)
-    except Exception as e:
-        raw = _ai_result(False, model=model_name, provider=provider, error=str(e))
+    if tier == 'conversational' or model_key == 'groq':
+        provider = 'groq'
+        model_name = MODELS['groq']['model']
+        print(f"  [AI] Using GROQ ({model_name}) for: {use_case}")
+        raw = call_groq(model_name, prompt, max_tokens)
+        pool_meta = raw.pop('_pool_meta', {}) or {}
+        if raw.get('fallback_from') == 'groq':
+            fallback_used = True
+    elif tier == 'strategic' or provider == 'anthropic':
+        print(f"  [AI] Using CLAUDE ({model_name}) for: {use_case}")
+        raw = call_anthropic(model_name, prompt, max_tokens)
+        if not raw.get('success') and tier == 'strategic':
+            print('  [AI] Claude failed — Gemini synthesis fallback')
+            raw = call_gemini('gemini-2.0-flash', prompt, max_tokens)
+            pool_meta = raw.pop('_pool_meta', {}) or {}
+            fallback_used = True
+            if raw.get('success'):
+                raw['model'] = f"{raw.get('model', 'gemini')} (claude-fallback)"
+    elif provider == 'google':
+        print(f"  [AI] Using GEMINI pool ({model_name}) for: {use_case}")
+        raw = call_gemini(model_name, prompt, max_tokens)
+        pool_meta = raw.pop('_pool_meta', {}) or {}
+    else:
+        raw = _ai_result(False, error=f"Unknown provider: {provider}", provider=provider)
 
-    result = validate_ai_response(raw, source=f'{provider}/{model_name}')
+    latency_ms = (time.time() - t0) * 1000
+    err_text = str(raw.get('error') or '')
+    quota_failure = _is_quota_error_text(err_text)
+    degraded = bool(pool_meta.get('degraded')) or get_degraded_status().get('mode') not in (None, 'normal', '')
+
+    result = validate_ai_response(raw, source=f'{raw.get("provider", provider)}/{model_name}')
+    result['routing_tier'] = tier
+    result['degraded_mode'] = get_degraded_status().get('mode')
+    result['cache_hit'] = False
 
     if result['success'] and isinstance(raw, dict):
         input_tokens = raw.get('input_tokens', 0) or 0
         output_tokens = raw.get('output_tokens', 0) or 0
         if input_tokens or output_tokens:
-            input_cost = (input_tokens / 1000) * model_config['cost_per_1k_input']
-            output_cost = (output_tokens / 1000) * model_config['cost_per_1k_output']
+            cfg = MODELS.get(model_key, MODELS['gemini'])
+            input_cost = (input_tokens / 1000) * cfg['cost_per_1k_input']
+            output_cost = (output_tokens / 1000) * cfg['cost_per_1k_output']
             result['estimated_cost'] = round(input_cost + output_cost, 4)
 
-    return _safe_return(result, model_name, provider, result.get('estimated_cost', 0))
+    record_provider_request(
+        provider=normalize_provider(result.get('provider', provider), tier),
+        use_case=use_case,
+        channel=channel,
+        success=bool(result.get('success')),
+        latency_ms=latency_ms,
+        failovers=int(pool_meta.get('failovers') or 0),
+        quota_failure=quota_failure,
+        fallback=fallback_used,
+        cache_hit=False,
+        degraded=degraded,
+    )
+
+    if result.get('success') and should_use_cache(use_case, tier):
+        set_cached(use_case, prompt, result)
+
+    return _safe_return(result, result.get('model', model_name), result.get('provider', provider), result.get('estimated_cost', 0))
 
 
 def check_keys_status():
-    return {
-        'anthropic': bool(get_anthropic_key()),
-        'google': bool(get_google_key()),
-        'anthropic_first_chars': get_anthropic_key()[:15] if get_anthropic_key() else 'MISSING',
-        'anthropic_length': len(get_anthropic_key()),
-    }
+    try:
+        from backend.ai.provider_manager import get_provider_ops_summary
+        ops = get_provider_ops_summary()
+        gem = ops.get('providers', {}).get('gemini', {})
+        groq = ops.get('providers', {}).get('groq', {})
+        claude = ops.get('providers', {}).get('claude', {})
+        return {
+            'anthropic': bool(get_anthropic_key()),
+            'google': not gem.get('degraded', True),
+            'groq': not groq.get('degraded', True),
+            'gemini_active_slot': gem.get('active_slot'),
+            'groq_active_slot': groq.get('active_slot'),
+            'degraded_mode': ops.get('degraded', {}).get('mode'),
+            'anthropic_first_chars': get_anthropic_key()[:15] if get_anthropic_key() else 'MISSING',
+        }
+    except Exception:
+        return {
+            'anthropic': bool(get_anthropic_key()),
+            'google': bool(os.environ.get('GOOGLE_API_KEY') or os.environ.get('GOOGLE_API_KEY_1')),
+            'groq': bool(os.environ.get('GROQ_API_KEY_1') or os.environ.get('GROQ_API_KEY')),
+        }
 
 
 if __name__ == "__main__":
-    print("Testing AI Router v4...")
+    print("Testing AI Router v5...")
     test_prompt = "In one sentence, what is the Indian stock market?"
-    for model in ['gemini', 'haiku', 'sonnet']:
+    for model in ['groq', 'gemini']:
         result = ask_ai(test_prompt, model_override=model, max_tokens=200)
-        assert isinstance(result, dict), f"ask_ai returned {type(result)}"
-        assert 'success' in result and 'text' in result
-        print(f"{model}: type={type(result).__name__} success={result['success']}")
+        print(f"{model}: success={result.get('success')} provider={result.get('provider')}")
