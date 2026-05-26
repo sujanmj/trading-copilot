@@ -539,6 +539,7 @@
           ? `${Math.round(data.sourceStatus.history.age_seconds / 60)}m`
           : null);
       const statusCls = pipelineStatus === 'COMPLETE' ? 'ai-ops-ok'
+        : pipelineStatus === 'RECOVERING' ? 'ai-ops-warn'
         : pipelineStatus === 'RUNNING' ? 'ai-ops-warn'
         : pipelineStatus === 'FAILED' ? 'ai-ops-warn'
         : 'ai-ops-warn';
@@ -597,6 +598,11 @@
             lifecycle.current_stage ? `Stage: ${lifecycle.current_stage}` : null,
             lifecycle.last_eod_cycle_at ? `Last cycle: ${lifecycle.last_eod_cycle_at.slice(0, 19)}` : null,
             lifecycle.last_failure_reason ? `Last failure: ${lifecycle.last_failure_reason}` : null,
+            lifecycle.last_successful_eod ? `Last successful EOD: ${lifecycle.last_successful_eod.slice(0, 19)}` : null,
+            lifecycle.last_stats_export ? `Stats export: ${lifecycle.last_stats_export.slice(0, 19)}` : null,
+            lifecycle.last_history_export ? `History export: ${lifecycle.last_history_export.slice(0, 19)}` : null,
+            lifecycle.last_calibration_export ? `Calibration export: ${lifecycle.last_calibration_export.slice(0, 19)}` : null,
+            lifecycle.recovery_reason ? `Recovery: ${lifecycle.recovery_reason}` : null,
             statsAge != null ? `Stats export age: ${statsAge}` : null,
             historyAge != null ? `History export age: ${historyAge}` : null,
             lifecycle.message,

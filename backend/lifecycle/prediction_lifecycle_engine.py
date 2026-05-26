@@ -95,6 +95,8 @@ def load_lifecycle_state() -> dict:
         'brain_refresh_at': None,
         'exports_synced_at': None,
         'last_stats_export': None,
+        'last_history_export': None,
+        'last_calibration_export': None,
         'last_journal_generation': None,
         'last_brain_refresh': None,
         'last_successful_eod': None,
@@ -765,6 +767,12 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
             'brain_refresh_at': _now_iso(),
             'exports_synced_at': _now_iso(),
             'last_successful_eod': _now_iso(),
+            'last_stats_export': _now_iso(),
+            'last_history_export': _now_iso(),
+            'last_calibration_export': _now_iso(),
+            'last_journal_generation': _now_iso(),
+            'last_brain_refresh': _now_iso(),
+            'recovery_reason': None,
             'active_count': sync_stats.get('active', 0) if sync_stats else state.get('active_count', 0),
             'archived_count': sync_stats.get('archived', 0) if sync_stats else state.get('archived_count', 0),
             'stale_invalidated': (inv_stats.get('invalidated') or 0) + (brain.get('removed') or 0),
@@ -820,6 +828,8 @@ def get_lifecycle_status() -> dict:
     pipeline_status = state.get('pipeline_status') or 'IDLE'
     if pipeline_status == 'RUNNING':
         display_status = 'RUNNING'
+    elif pipeline_status == 'RECOVERING':
+        display_status = 'RECOVERING'
     elif pipeline_status == 'FAILED':
         display_status = 'FAILED'
     elif cycle_today and state.get('evaluation_cycle_complete') and pipeline_status == 'COMPLETE':
@@ -836,6 +846,12 @@ def get_lifecycle_status() -> dict:
         'last_evaluation_at': state.get('last_evaluation_at'),
         'brain_refresh_at': state.get('brain_refresh_at'),
         'exports_synced_at': state.get('exports_synced_at'),
+        'last_stats_export': state.get('last_stats_export'),
+        'last_history_export': state.get('last_history_export'),
+        'last_calibration_export': state.get('last_calibration_export'),
+        'last_journal_generation': state.get('last_journal_generation'),
+        'last_successful_eod': state.get('last_successful_eod'),
+        'recovery_reason': state.get('recovery_reason'),
         'active_predictions': state.get('active_count', active_file.get('count', 0)),
         'archived_predictions': state.get('archived_count', history_file.get('count', 0)),
         'unresolved_predictions': unresolved,
@@ -849,9 +865,13 @@ def get_lifecycle_status() -> dict:
         'calibration_fresh': cal_age is not None and cal_age < 360 and cycle_today,
         'review_fresh': review_age is not None and review_age < 720 and cycle_today,
         'message': (
-            f'Lifecycle {display_status}'
-            if display_status != 'COMPLETE'
-            else 'Post-market evaluation complete'
+            'Recovering missed post-market EOD cycle…'
+            if display_status == 'RECOVERING'
+            else (
+                f'Lifecycle {display_status}'
+                if display_status != 'COMPLETE'
+                else 'Post-market evaluation complete'
+            )
         ),
         'calibration_message': (
             'Awaiting evaluated prediction sample size.'
@@ -860,7 +880,6 @@ def get_lifecycle_status() -> dict:
         ),
         'current_stage': state.get('current_stage'),
         'last_failure_reason': state.get('last_failure_reason'),
-        'last_successful_eod': state.get('last_successful_eod'),
         'stage_history': (state.get('stage_history') or [])[-5:],
     }
 

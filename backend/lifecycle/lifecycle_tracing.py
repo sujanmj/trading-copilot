@@ -71,7 +71,7 @@ def update_heartbeat(
 ):
     """
     Persist lifecycle heartbeat for OPS / Telegram.
-    pipeline_status: IDLE | RUNNING | COMPLETE | FAILED | STALE
+    pipeline_status: IDLE | RUNNING | COMPLETE | FAILED | STALE | RECOVERING
     """
     state = load_lifecycle_state({
         'pipeline_status': 'IDLE',
@@ -80,6 +80,8 @@ def update_heartbeat(
         'last_successful_eod': None,
         'last_evaluation_completion': None,
         'last_stats_export': None,
+        'last_history_export': None,
+        'last_calibration_export': None,
         'last_journal_generation': None,
         'last_brain_refresh': None,
         'stage_history': [],
@@ -108,7 +110,9 @@ def mark_stage_complete(stage: str, *, extra_fields: Optional[dict] = None):
     mapping = {
         'evaluate_outcomes': 'last_evaluation_completion',
         'stats_export': 'last_stats_export',
-        'history_export': 'last_stats_export',
+        'history_export': 'last_history_export',
+        'calibration_snapshot': 'last_calibration_export',
+        'adaptive_calibration': 'last_calibration_export',
         'daily_review': 'last_journal_generation',
         'brain_refresh': 'last_brain_refresh',
         'telegram_daily_review': 'last_journal_generation',

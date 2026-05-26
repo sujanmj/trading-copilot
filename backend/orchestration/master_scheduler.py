@@ -13,9 +13,11 @@ from backend.utils.config import PROJECT_ROOT
 from backend.utils.runner import run_script
 from backend.lifecycle.lifecycle_tracing import SCHEDULER_EXIT_SINGLETON
 from backend.orchestration.schedule_registry import (
+    bind_primary_scheduler,
     dump_task_registry,
     get_task_registry,
     ist_daily,
+    log_scheduler_tick,
     set_job_status,
     tick_ist_jobs,
 )
@@ -27,6 +29,9 @@ PYTHON_EXE = sys.executable
 
 _eod_thread: threading.Thread | None = None
 _eod_lock = threading.Lock()
+_interval_jobs_registered = False
+_last_recovery_check = 0.0
+RECOVERY_CHECK_SECONDS = 300
 
 
 def run_standalone_script(script_name: str):
@@ -99,16 +104,21 @@ def run_full_cycle(brief_name: str = "Scheduled", push_brain: bool = False):
     run_all_collectors_parallel(push_telegram_brain=push_brain, run_analyzer=True)
 
 
-def _run_eod_lifecycle_impl():
+def _run_eod_lifecycle_impl(force: bool = False, trigger: str = 'scheduled'):
     """Execute EOD lifecycle — runs on worker thread so scheduler loop stays alive."""
     set_job_status('eod_lifecycle', 'running')
     print("\n" + "=" * 60, flush=True)
-    print(f"[*] Post-Market Lifecycle Pipeline: {datetime.now(IST).strftime('%H:%M:%S IST')}", flush=True)
+    print(
+        f"[*] Post-Market Lifecycle Pipeline: {datetime.now(IST).strftime('%H:%M:%S IST')} "
+        f"trigger={trigger} force={force}",
+        flush=True,
+    )
     print("=" * 60, flush=True)
     try:
         from backend.lifecycle.prediction_lifecycle_engine import run_end_of_day_cycle
-        result = run_end_of_day_cycle(force=False)
+        result = run_end_of_day_cycle(force=force)
         status = result.get('status', 'unknown')
+        print(f"[EOD TASK COMPLETE] status={status} trigger={trigger}", flush=True)
         print(f"[EOD PIPELINE] cycle finished status={status}", flush=True)
         if result.get('errors'):
             for err in result['errors'][:8]:
@@ -119,6 +129,7 @@ def _run_eod_lifecycle_impl():
             set_job_status('eod_lifecycle', f'failed:{status}')
     except Exception as e:
         set_job_status('eod_lifecycle', f'failed:{e}')
+        print(f"[EOD TASK COMPLETE] status=failed trigger={trigger} error={e}", flush=True)
         print(f"[!] EOD lifecycle pipeline failed: {e}", flush=True)
         try:
             from backend.lifecycle.lifecycle_tracing import log_error
@@ -137,15 +148,17 @@ def _run_eod_lifecycle_impl():
             print(f"[!] Legacy fallback also failed: {fb}", flush=True)
 
 
-def run_post_market_pipeline():
+def run_post_market_pipeline(force: bool = False, trigger: str = 'scheduled'):
     """Start EOD lifecycle on a dedicated thread — avoid blocking scheduler heartbeat."""
     global _eod_thread
     with _eod_lock:
         if _eod_thread and _eod_thread.is_alive():
-            print("[EOD PIPELINE] Already running — skip duplicate trigger", flush=True)
+            print(f"[EOD PIPELINE] Already running — skip duplicate trigger ({trigger})", flush=True)
             return
+        print(f"[EOD TASK FIRING] trigger={trigger} force={force}", flush=True)
         _eod_thread = threading.Thread(
             target=_run_eod_lifecycle_impl,
+            kwargs={'force': force, 'trigger': trigger},
             name='EOD-Lifecycle',
             daemon=False,
         )
@@ -176,7 +189,7 @@ def _job_midday():
 
 @ist_daily(15, 45, name='eod_lifecycle')
 def _job_eod_lifecycle():
-    run_post_market_pipeline()
+    run_post_market_pipeline(force=False, trigger='scheduled:15:45')
 
 
 @ist_daily(23, 0, name='us_pulse')
@@ -235,30 +248,21 @@ def run_outcome_horizon_tick():
         print(f"[!] Outcome horizon tick failed: {e}", flush=True)
 
 
-# Interval jobs (not wall-clock IST specific)
-schedule.every(30).minutes.do(run_scheduled_collection)
-schedule.every(1).minutes.do(run_alert_scheduler_tick)
-schedule.every(15).minutes.do(run_outcome_horizon_tick)
-schedule.every(60).minutes.do(dump_task_registry)
+# Interval jobs — registered only when primary scheduler main() runs
+def register_interval_jobs():
+    global _interval_jobs_registered
+    if _interval_jobs_registered:
+        return
+    _interval_jobs_registered = True
+    schedule.every(30).minutes.do(run_scheduled_collection)
+    schedule.every(1).minutes.do(run_alert_scheduler_tick)
+    schedule.every(15).minutes.do(run_outcome_horizon_tick)
+    schedule.every(60).minutes.do(dump_task_registry)
+    print("[SCHEDULER] Interval jobs registered (primary singleton)", flush=True)
 
 
-def main():
-    from backend.utils.process_lock import try_acquire_lock, release_lock
-
-    if not try_acquire_lock('master_scheduler'):
-        print("[SKIP] master_scheduler already running", flush=True)
-        print("[SCHEDULER SINGLETON ACTIVE] Guard exit — primary scheduler lock held", flush=True)
-        sys.exit(SCHEDULER_EXIT_SINGLETON)
-
-    print("=" * 60, flush=True)
-    print("TRADING COPILOT - MASTER ORCHESTRATOR LAUNCHED", flush=True)
-    print(f"Boot Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}", flush=True)
-    print(f"Host TZ: {time.tzname} | IST now: {datetime.now(IST).strftime('%H:%M:%S')}", flush=True)
-    print("=" * 60, flush=True)
-    print("[SCHEDULER HEALTHY] Lock acquired — orchestrator running", flush=True)
-    dump_task_registry()
-
-    # Light boot — skip heavy full cycle if intelligence is fresh (< 2h)
+def _run_boot_cycle_async():
+    """Boot full cycle on background thread — must not block IST tick loop."""
     try:
         from backend.utils.config import DATA_DIR
         intel_path = DATA_DIR / 'unified_intelligence.json'
@@ -273,12 +277,58 @@ def main():
     except Exception as e:
         print(f"[SCHEDULER] Boot cycle error (non-fatal): {e}", flush=True)
 
+
+def _maybe_periodic_eod_recovery():
+    global _last_recovery_check
+    now = time.time()
+    if now - _last_recovery_check < RECOVERY_CHECK_SECONDS:
+        return
+    _last_recovery_check = now
+    try:
+        from backend.orchestration.eod_recovery import maybe_trigger_eod_recovery
+        maybe_trigger_eod_recovery('periodic')
+    except Exception as e:
+        print(f"[EOD RECOVERY] Periodic check failed: {e}", flush=True)
+
+
+def main():
+    from backend.utils.process_lock import try_acquire_lock, release_lock
+
+    if not try_acquire_lock('master_scheduler'):
+        print("[SKIP] master_scheduler already running", flush=True)
+        print("[SCHEDULER SINGLETON ACTIVE] Guard exit — primary scheduler lock held", flush=True)
+        sys.exit(SCHEDULER_EXIT_SINGLETON)
+
+    if not bind_primary_scheduler():
+        print("[WARN] Primary scheduler registry already bound in-process", flush=True)
+
+    register_interval_jobs()
+
+    print("=" * 60, flush=True)
+    print("TRADING COPILOT - MASTER ORCHESTRATOR LAUNCHED", flush=True)
+    print(f"Boot Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}", flush=True)
+    print(f"Host TZ: {time.tzname} | IST now: {datetime.now(IST).strftime('%H:%M:%S')}", flush=True)
+    print("=" * 60, flush=True)
+    print("[SCHEDULER HEALTHY] Lock acquired — orchestrator running", flush=True)
+    dump_task_registry()
+
+    threading.Thread(target=_run_boot_cycle_async, name='Boot-Cycle', daemon=True).start()
+    print("[SCHEDULER] Boot cycle running in background — IST tick loop starting", flush=True)
+
+    try:
+        from backend.orchestration.eod_recovery import run_startup_eod_recovery
+        run_startup_eod_recovery()
+    except Exception as e:
+        print(f"[EOD RECOVERY] Startup recovery check failed: {e}", flush=True)
+
     last_registry_dump = time.time()
 
     try:
         while True:
+            log_scheduler_tick()
             tick_ist_jobs()
             schedule.run_pending()
+            _maybe_periodic_eod_recovery()
             if time.time() - last_registry_dump > 3600:
                 dump_task_registry()
                 last_registry_dump = time.time()

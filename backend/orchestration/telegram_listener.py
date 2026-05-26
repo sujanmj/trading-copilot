@@ -402,9 +402,13 @@ def cmd_status():
         from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
         lc = get_lifecycle_status()
         lc_emoji = "✅" if lc.get('pipeline_status') == 'COMPLETE' else (
-            "🔄" if lc.get('pipeline_status') == 'RUNNING' else (
+            "🔄" if lc.get('pipeline_status') in ('RUNNING', 'RECOVERING') else (
             "❌" if lc.get('pipeline_status') == 'FAILED' else "⏳"))
         msg += f"\n{lc_emoji} Lifecycle: {lc.get('pipeline_status', 'STALE')} — {lc.get('message', 'unknown')}"
+        if lc.get('last_successful_eod'):
+            msg += f"\n   Last EOD: {str(lc['last_successful_eod'])[:19]}"
+        if lc.get('last_stats_export'):
+            msg += f"\n   Stats export: {str(lc['last_stats_export'])[:19]}"
         if lc.get('active_predictions'):
             msg += f" ({lc['active_predictions']} active)"
     except Exception:
