@@ -87,14 +87,23 @@
     return !!(config.cache && config.cache.connected);
   }
 
+  const FETCH_TIMEOUT_MS = 20000;
+
   async function fetchSnapshot() {
     const base = config.getApiBase().replace(/\/$/, '');
-    const res = await fetch(base + '/api/runtime_snapshot', {
-      method: 'GET',
-      headers: config.getHeaders(),
-    });
-    if (!res.ok) throw new Error(`runtime_snapshot → ${res.status}`);
-    return res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(base + '/api/runtime_snapshot', {
+        method: 'GET',
+        headers: config.getHeaders(),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`runtime_snapshot → ${res.status}`);
+      return res.json();
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async function refresh(opts) {
@@ -111,7 +120,8 @@
       applySnapshot(snapshot, seq);
       return state;
     } catch (e) {
-      console.error('[RuntimeManager] refresh failed:', e.message);
+      const msg = e.name === 'AbortError' ? 'API timeout (20s)' : e.message;
+      console.error('[RuntimeManager] refresh failed:', msg);
       if (config.cache) config.cache.connected = false;
       if (typeof config.onConnectionChange === 'function') {
         config.onConnectionChange(false);

@@ -916,11 +916,33 @@
   }
 
   function renderAllTabs() {
-    loadBrain(); loadGovt(); loadScanner(); loadMarkets(); loadNews(); loadTV(); loadReddit(); loadStats(); loadHistory()
+    try {
+      loadBrain(); loadGovt(); loadScanner(); loadMarkets(); loadNews(); loadTV(); loadReddit(); loadStats(); loadHistory()
+    } catch (e) {
+      console.error('renderAllTabs failed:', e)
+    }
     setTimeout(() => {
-      const activeTab = document.querySelector('.tab.active')
-      if (activeTab) renderChatHistory(document.getElementById('tab-' + activeTab.dataset.tab))
+      try {
+        const activeTab = document.querySelector('.tab.active')
+        if (activeTab) renderChatHistory(document.getElementById('tab-' + activeTab.dataset.tab))
+      } catch (e) {
+        console.error('renderChatHistory failed:', e)
+      }
     }, 150)
+  }
+
+  function resetUiOverlays() {
+    ['customDateOverlay', 'predDetailOverlay', 'aiOpsBackdrop', 'reviewBackdrop'].forEach((id) => {
+      const el = document.getElementById(id)
+      if (el) {
+        el.classList.remove('active')
+        el.classList.remove('open')
+      }
+    })
+    document.querySelectorAll('.pred-detail-modal.active').forEach((el) => el.classList.remove('active'))
+    document.querySelectorAll('.ai-ops-drawer.open, .ai-review-drawer.open').forEach((el) => el.classList.remove('open'))
+    const bar = document.getElementById('loadingBar')
+    if (bar) bar.classList.remove('active')
   }
 
   const CHAT_STORAGE_KEY = 'tradingcopilot_chat_history'
@@ -2325,6 +2347,7 @@
   document.getElementById('apiStatus').addEventListener('click', () => { updateApiStatus(USE_API && apiCache.connected) })
 
   if (window.RuntimeManager) {
+    resetUiOverlays()
     RuntimeManager.init({
       getApiBase: () => API_BASE,
       getHeaders: apiHeaders,
@@ -2334,6 +2357,7 @@
     RuntimeManager.subscribe(() => renderAllTabs())
     RuntimeManager.start(30000)
   } else {
+    resetUiOverlays()
     refreshAll()
     setInterval(refreshAll, 30000)
   }

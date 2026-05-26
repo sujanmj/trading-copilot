@@ -1,0 +1,113 @@
+{
+  "status": "ok",
+  "date": "2026-05-27",
+  "generated_at": "2026-05-27T00:28:44.111022",
+  "market_day_classification": {
+    "label": "PANIC VOLATILE",
+    "confidence": 0.88,
+    "reason": "Regime flagged as panic_volatile",
+    "regime": "panic_volatile",
+    "drivers": {
+      "volatility": 1.0,
+      "contradiction_intensity": 0.29,
+      "scanner_dispersion": 15.49,
+      "breadth": 0.73,
+      "macro_pressure": 1.0,
+      "avg_volume_ratio": 4.88
+    }
+  },
+  "performance_summary": {
+    "signals_generated": 49,
+    "high_confidence_signals": 5,
+    "useful_signals": 0,
+    "failed_signals": 0,
+    "false_positives": 0,
+    "suppressed_alerts": 0,
+    "missed_opportunities": 0,
+    "telegram_precision_pct": null,
+    "evaluated_signals": 0,
+    "confidence_calibration_quality": "insufficient_data"
+  },
+  "highlights": {
+    "best_bullish": null,
+    "best_bearish": null,
+    "biggest_miss": null,
+    "highest_confidence_winner": null,
+    "worst_false_positive": null,
+    "strongest_contradiction": null
+  },
+  "regime_analysis": {
+    "timeline": [
+      {
+        "time": "—",
+        "transition": "panic_volatile",
+        "note": "Stable regime through session (no intraday shift logged)"
+      },
+      {
+        "time": "—",
+        "transition": "regime shift",
+        "note": "Stable regime: panic_volatile"
+      }
+    ],
+    "final_regime": "panic_volatile",
+    "contradiction_intensity": 0.29,
+    "sentiment_diversity": 1.0
+  },
+  "warnings": [
+    {
+      "code": "fallback_activations",
+      "message": "Safe fallback used 1 time(s) — degraded intelligence served",
+      "severity": "high"
+    },
+    {
+      "code": "hallucination_detections",
+      "message": "Hallucination guard triggered 3 time(s)",
+      "severity": "medium"
+    },
+    {
+      "code": "schema_failures",
+      "message": "Schema validation failures: 2",
+      "severity": "medium"
+    }
+  ],
+  "telegram": {
+    "alerts_sent": 0,
+    "alerts_suppressed": 0,
+    "duplicate_blocks": 0,
+    "low_confidence_skips": 0,
+    "cooldown_blocks": 0,
+    "emergency_alerts": 0,
+    "estimated_useful_alerts": null,
+    "telegram_precision_pct": null
+  },
+  "daily_summary": {
+    "regime": "panic_volatile",
+    "quality_iq": 0.78,
+    "day_type": "PANIC VOLATILE",
+    "best_signal": null,
+    "failed_signal": null,
+    "telegram_sent": 0,
+    "telegram_useful_est": null,
+    "warnings_count": 3
+  },
+  "observation": "AI correctly leaned cautious during elevated volatility and contradictions.",
+  "copy_text": "DAILY INTELLIGENCE REVIEW — 2026-05-27\n\nDAY TYPE: PANIC VOLATILE\nREGIME: panic_volatile\nQUALITY IQ: 0.78\n\nPERFORMANCE\nSignals: 49 | Useful: 0 | False positives: 0 | Suppressed alerts: 0\nTelegram precision: —%\n\nHIGHLIGHTS\n\nTELEGRAM\nSent: 0 | Useful est: None\n\nWARNINGS\n- Safe fallback used 1 time(s) — degraded intelligence served\n- Hallucination guard triggered 3 time(s)\n- Schema validation failures: 2\n\nOBSERVATION\nAI correctly leaned cautious during elevated volatility and contradictions.",
+  "lifecycle_summary": {
+    "evaluation_complete": false,
+    "last_cycle_at": "2026-05-26T17:33:47.969722+05:30",
+    "resolved_today": 15,
+    "wins_today": 0,
+    "losses_today": 0,
+    "partials_today": 0,
+    "best_prediction": null,
+    "worst_prediction": null,
+    "win_rate": 60.0,
+    "confidence_realism": 30.0,
+    "false_positive_rate": 40.0,
+    "active_count": 81,
+    "stale_invalidated": 0,
+    "tomorrow_outlook": "Fresh post-market intelligence generated"
+  },
+  "immutable": true,
+  "lifecycle_engine": "prediction_lifecycle_engine_v1"
+}

@@ -1,0 +1,100 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 4035,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-05-26",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-27T00:26:57.974590",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 4035,
+      "force": true
+    },
+    {
+      "time": "2026-05-27T00:27:53.968185",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "fa59f18de14783d18dcb",
+    "delta_reasons": [
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": 0.183,
+      "news_count": 140,
+      "govt_high_impact": 12,
+      "scanner_signals": 126,
+      "top_scanner_tickers": [
+        "CENTURYPLY",
+        "GREENLAM",
+        "JWL",
+        "TITAGARH",
+        "KOLTEPATIL"
+      ],
+      "scanner_signature": [
+        "('CENTURYPLY', 'STRONG', 1.5)",
+        "('GREENLAM', 'ULTRA', 5.6)",
+        "('JWL', 'ULTRA', 7.0)",
+        "('TITAGARH', 'ULTRA', 9.9)",
+        "('KOLTEPATIL', 'ULTRA', -3.1)"
+      ],
+      "top_news_titles": [
+        "corporate actions this week: tcs, bajaj auto, itc, glaxo, bank of india, uno min",
+        "inr slides on renewed geopolitical tensions in west asia",
+        "payment companies raise concerns over rbi's draft ppi norms, seek parity with ba",
+        "rbi's $5 billion fx swap subscribed nearly twice over",
+        "sebi reviews easing disclosure for bonds, to pilot tokenised bond market",
+        "spot gold prices slip by 1% as inflation fears resurface after new u.s. strikes"
+      ],
+      "reddit_sentiment": "neutral",
+      "reddit_confidence": 50,
+      "novelty_avg_score": 4.55,
+      "repetition_suppressed": 70
+    },
+    "source_hashes": {
+      "global_markets": "5daeb2d2b6cddf1ff6ff",
+      "india_markets": "8359398c81bdaf882dca",
+      "news": "9fc04dff57ae5587ab48",
+      "youtube": "c64273098434dc2a2a51",
+      "govt": "9e211ce6188e89da2416",
+      "inshorts": "f169a1cbf5346c2b56ea",
+      "reddit": "933e49aeb4e95c9ab976",
+      "telegram": "empty",
+      "scanner": "8b0be521dbbe67a10eae",
+      "twitter": "30cfec8d052d28ce7781",
+      "nse_filings": "f77e406aaf481cde6521",
+      "composite": "cf4c63bc8878025e3c87"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

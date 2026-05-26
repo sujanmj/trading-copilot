@@ -115,8 +115,8 @@ def verify_api_key(x_api_key: Optional[str] = Header(None)):
 # ============================================================
 
 def _scheduler_singleton_active() -> bool:
-    info = lock_status().get('master_scheduler') or {}
-    return bool(info.get('alive'))
+    from backend.utils.process_lock import is_lock_holder_valid
+    return is_lock_holder_valid('master_scheduler')
 
 
 def _log_subprocess_event(label: str, message: str, *, force: bool = False):
@@ -159,6 +159,11 @@ def run_subprocess_loop(script_name, label):
 
             if script_name == SCHEDULER_SCRIPT:
                 if rc == SCHEDULER_EXIT_SINGLETON:
+                    from backend.utils.process_lock import clear_stale_lock, is_lock_holder_valid
+                    if not is_lock_holder_valid('master_scheduler'):
+                        print("[SCHEDULER] Stale singleton lock — clearing and retrying immediately", flush=True)
+                        clear_stale_lock('master_scheduler')
+                        continue
                     print("[SCHEDULER SINGLETON SKIP] Duplicate launch blocked — primary holds lock")
                     _log_subprocess_event(
                         'Scheduler',
@@ -450,6 +455,12 @@ def start_background_processes():
 
     # Scheduler thread
     if os.environ.get('DISABLE_SCHEDULER') != '1':
+        try:
+            from backend.utils.process_lock import clear_stale_lock
+            if clear_stale_lock('master_scheduler'):
+                print("[SCHEDULER] Cleared stale master_scheduler lock on startup", flush=True)
+        except Exception as e:
+            print(f"[SCHEDULER] Stale lock cleanup failed: {e}", flush=True)
         scheduler_thread = threading.Thread(
             target=run_subprocess_loop,
             args=('master_scheduler.py', 'Scheduler'),

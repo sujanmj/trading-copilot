@@ -2,8 +2,6 @@
 history_exporter.py v2.2 - Removed 30d (replaced with Custom in GUI)
 """
 
-print("[HISTORY] history_exporter.py starting...")
-
 import os
 import sys
 import json

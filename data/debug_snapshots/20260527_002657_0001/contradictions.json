@@ -1,0 +1,25 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [TITAGARH, HFCL, JWL, EICHERMOT] vs SHORT [KOLTEPATIL, COLPAL, SUNTV, KRSNAA]",
+      "disagreement_score": 0.154,
+      "long_count": 26,
+      "short_count": 4
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 1 bullish vs 3 bearish high-impact items",
+      "disagreement_score": 0.333
+    },
+    {
+      "type": "outlier_vs_sector",
+      "summary": "Outlier KOLTEPATIL bearish (+3.1%) vs sector CONSTRUCTION_REALTY consensus bullish",
+      "disagreement_score": 0.39,
+      "ticker": "KOLTEPATIL"
+    }
+  ],
+  "overall_disagreement_score": 0.292,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.15 | Scanner split: LONG [TITAGARH, HFCL, JWL, EICHERMOT] vs SHORT [KOLTEPATIL, COLPAL, SUNTV, KRSNAA]\n  [institutional_policy_divergence] disagreement=0.33 | Govt policy mix: 1 bullish vs 3 bearish high-impact items\n  [outlier_vs_sector] disagreement=0.39 | Outlier KOLTEPATIL bearish (+3.1%) vs sector CONSTRUCTION_REALTY consensus bullish",
+  "count": 3
+}
