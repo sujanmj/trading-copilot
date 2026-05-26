@@ -2,6 +2,7 @@ import schedule
 import time
 import sys
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
 import pytz
@@ -10,28 +11,40 @@ from concurrent.futures import ThreadPoolExecutor
 from backend.utils.bootstrap import setup_project_path
 from backend.utils.config import PROJECT_ROOT
 from backend.utils.runner import run_script
+from backend.lifecycle.lifecycle_tracing import SCHEDULER_EXIT_SINGLETON
+from backend.orchestration.schedule_registry import (
+    dump_task_registry,
+    get_task_registry,
+    ist_daily,
+    set_job_status,
+    tick_ist_jobs,
+)
 
 setup_project_path()
 
 IST = pytz.timezone('Asia/Kolkata')
 PYTHON_EXE = sys.executable
 
+_eod_thread: threading.Thread | None = None
+_eod_lock = threading.Lock()
+
 
 def run_standalone_script(script_name: str):
     timestamp = datetime.now(IST).strftime("%H:%M:%S")
-    print(f"[{timestamp}] Running {script_name}...")
+    print(f"[{timestamp}] Running {script_name}...", flush=True)
     try:
         run_script(script_name, check=True)
     except Exception as e:
-        print(f"[!] Deployment Exception executing {script_name}: {str(e)}")
+        print(f"[!] Deployment Exception executing {script_name}: {str(e)}", flush=True)
+
 
 def run_all_collectors_parallel(push_telegram_brain: bool = False, run_analyzer: bool = True):
     from backend.utils.market_hours import get_collection_profile
     profile = get_collection_profile()
     period = profile.get('period', 'unknown')
-    print("\n" + "=" * 60)
-    print(f"[*] Ingestion Layer | period={period} @ {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 60)
+    print("\n" + "=" * 60, flush=True)
+    print(f"[*] Ingestion Layer | period={period} @ {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
+    print("=" * 60, flush=True)
 
     run_standalone_script("collector.py")
 
@@ -50,17 +63,17 @@ def run_all_collectors_parallel(push_telegram_brain: bool = False, run_analyzer:
         with ThreadPoolExecutor(max_workers=len(ingestion_scripts)) as executor:
             executor.map(run_standalone_script, ingestion_scripts)
     else:
-        print(f"[COLLECTOR] {period} — skipping parallel news/social ingestion")
+        print(f"[COLLECTOR] {period} — skipping parallel news/social ingestion", flush=True)
 
-    print("[+] Data ingestion complete.")
+    print("[+] Data ingestion complete.", flush=True)
     if profile.get('run_scanner'):
         run_standalone_script("stock_scanner.py")
     else:
-        print(f"[COLLECTOR] {period} — skipping scanner")
+        print(f"[COLLECTOR] {period} — skipping scanner", flush=True)
     if run_analyzer and profile.get('run_analyzer'):
         run_standalone_script("master_analyzer.py")
     elif not profile.get('run_analyzer'):
-        print(f"[COLLECTOR] {period} — skipping analyzer (low-power mode)")
+        print(f"[COLLECTOR] {period} — skipping analyzer (low-power mode)", flush=True)
     if push_telegram_brain:
         run_standalone_script("telegram_brain_pusher.py")
 
@@ -75,67 +88,123 @@ def run_alert_scheduler_tick():
     try:
         result = tick()
         if result.get('sent'):
-            print(f"[ALERTS] tick sent={result['sent']} actions={result.get('actions')}")
+            print(f"[ALERTS] tick sent={result['sent']} actions={result.get('actions')}", flush=True)
     except Exception as e:
-        print(f"[!] Alert scheduler tick failed: {e}")
+        print(f"[!] Alert scheduler tick failed: {e}", flush=True)
+
 
 def run_full_cycle(brief_name: str = "Scheduled", push_brain: bool = False):
     """Collect data + optional analyzer; smart alerts handled by alert_scheduler."""
-    print(f"\n[*] Full Cycle: {brief_name} @ {datetime.now(IST).strftime('%H:%M:%S IST')}")
+    print(f"\n[*] Full Cycle: {brief_name} @ {datetime.now(IST).strftime('%H:%M:%S IST')}", flush=True)
     run_all_collectors_parallel(push_telegram_brain=push_brain, run_analyzer=True)
 
-def run_post_market_pipeline():
-    print("\n" + "="*60)
-    print(f"[*] Post-Market Lifecycle Pipeline: {datetime.now(IST).strftime('%H:%M:%S IST')}")
-    print("="*60)
+
+def _run_eod_lifecycle_impl():
+    """Execute EOD lifecycle — runs on worker thread so scheduler loop stays alive."""
+    set_job_status('eod_lifecycle', 'running')
+    print("\n" + "=" * 60, flush=True)
+    print(f"[*] Post-Market Lifecycle Pipeline: {datetime.now(IST).strftime('%H:%M:%S IST')}", flush=True)
+    print("=" * 60, flush=True)
     try:
         from backend.lifecycle.prediction_lifecycle_engine import run_end_of_day_cycle
         result = run_end_of_day_cycle(force=False)
         status = result.get('status', 'unknown')
-        print(f"[LIFECYCLE] EOD cycle status={status}")
+        print(f"[EOD PIPELINE] cycle finished status={status}", flush=True)
         if result.get('errors'):
-            for err in result['errors'][:5]:
-                print(f"  [!] {err}")
+            for err in result['errors'][:8]:
+                print(f"  [!] {err}", flush=True)
+        if status in ('ok', 'skipped'):
+            set_job_status('eod_lifecycle', 'completed')
+        else:
+            set_job_status('eod_lifecycle', f'failed:{status}')
     except Exception as e:
-        print(f"[!] EOD lifecycle pipeline failed: {e}")
-        print("[LIFECYCLE] Falling back to legacy post-market sequence...")
-        run_standalone_script("outcome_tracker.py")
-        run_full_cycle("Post-Market")
-        run_standalone_script("meta_labeler.py")
-        run_standalone_script("prediction_logger.py")
-        run_standalone_script("stats_exporter.py")
-        run_standalone_script("history_exporter.py")
+        set_job_status('eod_lifecycle', f'failed:{e}')
+        print(f"[!] EOD lifecycle pipeline failed: {e}", flush=True)
+        try:
+            from backend.lifecycle.lifecycle_tracing import log_error
+            log_error('run_post_market_pipeline', e, stage='eod_lifecycle')
+        except Exception:
+            pass
+        print("[LIFECYCLE] Falling back to legacy post-market sequence...", flush=True)
+        try:
+            run_standalone_script("outcome_tracker.py")
+            run_full_cycle("Post-Market")
+            run_standalone_script("meta_labeler.py")
+            run_standalone_script("prediction_logger.py")
+            run_standalone_script("stats_exporter.py")
+            run_standalone_script("history_exporter.py")
+        except Exception as fb:
+            print(f"[!] Legacy fallback also failed: {fb}", flush=True)
 
-# ============================================================
-# SCHEDULE — FIXED
-# ============================================================
 
-# ── Intraday: every 30 mins during market hours (properly fixed)
+def run_post_market_pipeline():
+    """Start EOD lifecycle on a dedicated thread — avoid blocking scheduler heartbeat."""
+    global _eod_thread
+    with _eod_lock:
+        if _eod_thread and _eod_thread.is_alive():
+            print("[EOD PIPELINE] Already running — skip duplicate trigger", flush=True)
+            return
+        _eod_thread = threading.Thread(
+            target=_run_eod_lifecycle_impl,
+            name='EOD-Lifecycle',
+            daemon=False,
+        )
+        _eod_thread.start()
+        print("[EOD PIPELINE] Lifecycle thread started", flush=True)
+
+
+# ── IST daily jobs (Railway-safe — host TZ may be UTC) ─────────────────────
+@ist_daily(5, 0, name='overnight_brief')
+def _job_overnight_brief():
+    run_full_cycle("Overnight Brief")
+
+
+@ist_daily(8, 0, name='outcome_tracker')
+def _job_outcome_tracker():
+    run_standalone_script("outcome_tracker.py")
+
+
+@ist_daily(8, 45, name='pre_market')
+def _job_pre_market():
+    run_full_cycle("Pre-Market")
+
+
+@ist_daily(12, 0, name='midday')
+def _job_midday():
+    run_full_cycle("Midday")
+
+
+@ist_daily(15, 45, name='eod_lifecycle')
+def _job_eod_lifecycle():
+    run_post_market_pipeline()
+
+
+@ist_daily(23, 0, name='us_pulse')
+def _job_us_pulse():
+    run_full_cycle("US Pulse")
+
+
+# ── Intraday IST slots (weekdays) ─────────────────────────────────────────
 intraday_slots = [
     "09:30", "10:00", "10:30", "11:00", "11:30",
     "12:00", "12:30", "13:00", "13:30", "14:00",
-    "14:30", "15:00", "15:30"
+    "14:30", "15:00", "15:30",
 ]
 
-def _schedule_intraday_job(day: str, slot: str):
-    getattr(schedule.every(), day).at(slot).do(
-        run_full_cycle, brief_name=f"Intraday {slot}"
-    )
+
+def _make_intraday_job(slot: str):
+    hour, minute = map(int, slot.split(':'))
+
+    @ist_daily(hour, minute, name=f'intraday_{slot}')
+    def _job():
+        run_full_cycle(brief_name=f"Intraday {slot}")
+
+    return _job
+
 
 for slot in intraday_slots:
-    for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-        _schedule_intraday_job(day, slot)
+    _make_intraday_job(slot)
 
-# ── Post-market settlement
-for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']:
-    getattr(schedule.every(), day).at("15:45").do(run_post_market_pipeline)
-
-# ── Strategic daily runs
-schedule.every().day.at("05:00").do(run_full_cycle, brief_name="Overnight Brief")
-schedule.every().day.at("08:00").do(run_standalone_script, script_name="outcome_tracker.py")
-schedule.every().day.at("08:45").do(run_full_cycle, brief_name="Pre-Market")
-schedule.every().day.at("12:00").do(run_full_cycle, brief_name="Midday")
-schedule.every().day.at("23:00").do(run_full_cycle, brief_name="US Pulse")
 
 def run_scheduled_collection():
     """Market-hours-aware scheduled ingestion."""
@@ -143,17 +212,14 @@ def run_scheduled_collection():
     profile = get_collection_profile()
     period = profile.get('period')
     if period == 'night':
-        print("[COLLECTOR] Night mode — skip scheduled collection")
+        print("[COLLECTOR] Night mode — skip scheduled collection", flush=True)
         return
     if profile.get('lightweight_only'):
-        print(f"[COLLECTOR] {period} — lightweight India collector only")
+        print(f"[COLLECTOR] {period} — lightweight India collector only", flush=True)
         run_standalone_script("collector.py")
         return
     run_collectors_only()
 
-
-# ── After-hours / overnight ingestion (market hours use intraday slots below)
-schedule.every(30).minutes.do(run_scheduled_collection)
 
 def run_outcome_horizon_tick():
     """Evaluate 15m/1h/intraday signal horizons during market hours."""
@@ -164,37 +230,58 @@ def run_outcome_horizon_tick():
             return
         result = evaluate_due_horizons()
         if result.get('evaluated'):
-            print(f"[OUTCOME LEARN] evaluated {result['evaluated']} horizons")
+            print(f"[OUTCOME LEARN] evaluated {result['evaluated']} horizons", flush=True)
     except Exception as e:
-        print(f"[!] Outcome horizon tick failed: {e}")
+        print(f"[!] Outcome horizon tick failed: {e}", flush=True)
 
 
-# ── Smart Telegram alert scheduler (event-driven, anti-spam)
+# Interval jobs (not wall-clock IST specific)
+schedule.every(30).minutes.do(run_scheduled_collection)
 schedule.every(1).minutes.do(run_alert_scheduler_tick)
 schedule.every(15).minutes.do(run_outcome_horizon_tick)
+schedule.every(60).minutes.do(dump_task_registry)
 
-# ============================================================
-# BOOT
-# ============================================================
+
 def main():
     from backend.utils.process_lock import try_acquire_lock, release_lock
 
     if not try_acquire_lock('master_scheduler'):
-        print("[SKIP] master_scheduler already running")
-        print("[SCHEDULER SINGLETON ACTIVE] Guard exit — primary scheduler lock held")
-        sys.exit(0)
+        print("[SKIP] master_scheduler already running", flush=True)
+        print("[SCHEDULER SINGLETON ACTIVE] Guard exit — primary scheduler lock held", flush=True)
+        sys.exit(SCHEDULER_EXIT_SINGLETON)
 
-    print("="*60)
-    print("TRADING COPILOT - MASTER ORCHESTRATOR LAUNCHED")
-    print(f"Boot Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}")
-    print("="*60)
-    print("[SCHEDULER HEALTHY] Lock acquired — orchestrator running")
+    print("=" * 60, flush=True)
+    print("TRADING COPILOT - MASTER ORCHESTRATOR LAUNCHED", flush=True)
+    print(f"Boot Time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')}", flush=True)
+    print(f"Host TZ: {time.tzname} | IST now: {datetime.now(IST).strftime('%H:%M:%S')}", flush=True)
+    print("=" * 60, flush=True)
+    print("[SCHEDULER HEALTHY] Lock acquired — orchestrator running", flush=True)
+    dump_task_registry()
+
+    # Light boot — skip heavy full cycle if intelligence is fresh (< 2h)
+    try:
+        from backend.utils.config import DATA_DIR
+        intel_path = DATA_DIR / 'unified_intelligence.json'
+        skip_boot = False
+        if intel_path.exists():
+            age_min = (time.time() - intel_path.stat().st_mtime) / 60
+            if age_min < 120:
+                skip_boot = True
+                print(f"[SCHEDULER] Boot full cycle skipped — intelligence {int(age_min)}m old", flush=True)
+        if not skip_boot:
+            run_full_cycle("Boot Startup")
+    except Exception as e:
+        print(f"[SCHEDULER] Boot cycle error (non-fatal): {e}", flush=True)
+
+    last_registry_dump = time.time()
 
     try:
-        run_full_cycle("Boot Startup")
-
         while True:
+            tick_ist_jobs()
             schedule.run_pending()
+            if time.time() - last_registry_dump > 3600:
+                dump_task_registry()
+                last_registry_dump = time.time()
             time.sleep(1)
     finally:
         release_lock('master_scheduler')

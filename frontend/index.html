@@ -1129,9 +1129,9 @@
       return;
     }
 
-    if (activeStore && Array.isArray(activeStore.predictions) && activeStore.predictions.length >= 0) {
+    if activeStore && Array.isArray(activeStore.predictions) {
       const activeOpps = (activeStore.predictions || [])
-        .filter(p => p.category === 'opportunity' || p.state === 'ACTIVE' || p.state === 'PENDING')
+        .filter(p => (p.state === 'ACTIVE' || p.state === 'PENDING') && p.category === 'opportunity')
         .map(p => ({
           symbol: p.ticker,
           ticker: p.ticker,

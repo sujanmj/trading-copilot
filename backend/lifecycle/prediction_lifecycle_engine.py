@@ -18,16 +18,26 @@ import pytz
 
 from backend.lifecycle.lifecycle_rules import (
     ACTIVE_STATES,
+    EXPIRE_AFTER_DAYS,
     TERMINAL_STATES,
     UNRESOLVED_STATE,
     infer_prediction_horizon,
     infer_signal_type,
+    sessions_elapsed,
+    should_expire,
+    ttl_sessions,
 )
 from backend.lifecycle.lifecycle_evaluator import (
     build_confidence_realism_curve,
     build_regime_performance,
     build_signal_type_performance,
     evaluate_lifecycle_predictions,
+)
+from backend.lifecycle.lifecycle_tracing import (
+    log_error,
+    mark_stage_complete,
+    pipeline_log,
+    update_heartbeat,
 )
 from backend.storage.db_manager import get_connection, init_db
 from backend.storage.json_io import atomic_write_json
@@ -77,12 +87,17 @@ def _load_json(path: Path, default: Any = None) -> Any:
 
 def load_lifecycle_state() -> dict:
     return _load_json(LIFECYCLE_STATE_FILE, {
+        'pipeline_status': 'IDLE',
         'last_eod_cycle_date': None,
         'last_eod_cycle_at': None,
         'last_evaluation_at': None,
         'evaluation_cycle_complete': False,
         'brain_refresh_at': None,
         'exports_synced_at': None,
+        'last_stats_export': None,
+        'last_journal_generation': None,
+        'last_brain_refresh': None,
+        'last_successful_eod': None,
         'active_count': 0,
         'archived_count': 0,
         'stale_invalidated': 0,
@@ -108,34 +123,62 @@ def _run_script(script_name: str, extra_env: Optional[dict] = None):
     run_script(script_name, check=False, extra_env=extra_env or {})
 
 
+def _run_script_safe(script_name: str, extra_env: Optional[dict] = None) -> dict:
+    """Run script without raising — optional lifecycle steps."""
+    from backend.utils.safe_optional import run_optional
+    return run_optional(
+        script_name,
+        lambda: _run_script(script_name, extra_env),
+        log=lambda m: pipeline_log(m, stage=script_name),
+    )
+
+
 def expire_stale_pending() -> dict:
-    """Mark aged PENDING outcomes as EXPIRED."""
-    init_db()
-    conn = get_connection()
-    stats = {'expired': 0}
+    """Mark aged PENDING outcomes as EXPIRED — never raises."""
+    stats = {'expired': 0, 'skipped': 0, 'errors': 0}
     try:
-        today = datetime.now().date()
-        rows = conn.execute("""
-            SELECT o.id, o.prediction_date, o.ticker
-            FROM outcomes o
-            WHERE o.verdict = 'PENDING' OR o.verdict IS NULL
-        """).fetchall()
-        for row in rows:
-            try:
-                pred_date = datetime.strptime(row['prediction_date'], '%Y-%m-%d').date()
-            except (TypeError, ValueError):
-                continue
-            if (today - pred_date).days >= EXPIRE_AFTER_DAYS:
-                conn.execute("""
-                    UPDATE outcomes SET verdict = 'EXPIRED', last_checked = ?
-                    WHERE id = ?
-                """, (_now_iso(), row['id']))
-                stats['expired'] += 1
-        conn.commit()
-    finally:
-        conn.close()
-    if stats['expired']:
-        _log('LIFECYCLE', f"Expired {stats['expired']} stale pending outcomes")
+        init_db()
+        conn = get_connection()
+        try:
+            today = datetime.now().date()
+            rows = conn.execute("""
+                SELECT o.id, o.prediction_date, o.ticker, o.verdict,
+                       p.signal_type, p.prediction_horizon
+                FROM outcomes o
+                LEFT JOIN predictions p ON o.source_type = 'prediction' AND o.source_id = p.id
+                WHERE o.verdict IN ('PENDING', 'UNRESOLVED') OR o.verdict IS NULL
+            """).fetchall()
+            for row in rows:
+                try:
+                    pred_date_str = row['prediction_date']
+                    if not pred_date_str:
+                        stats['skipped'] += 1
+                        continue
+                    elapsed = sessions_elapsed(pred_date_str, today)
+                    signal_type = row['signal_type'] or 'breakout'
+                    verdict = row['verdict'] or 'PENDING'
+                    max_days = max(ttl_sessions(signal_type), 1)
+                    cap_days = EXPIRE_AFTER_DAYS
+                    expire_at = min(max_days, cap_days) if signal_type != 'regime outlook' else cap_days
+                    if should_expire(signal_type, elapsed, verdict) or elapsed >= expire_at:
+                        conn.execute("""
+                            UPDATE outcomes SET verdict = 'EXPIRED', last_checked = ?
+                            WHERE id = ?
+                        """, (_now_iso(), row['id']))
+                        stats['expired'] += 1
+                    else:
+                        stats['skipped'] += 1
+                except Exception:
+                    stats['errors'] += 1
+            conn.commit()
+        finally:
+            conn.close()
+        if stats['expired']:
+            pipeline_log(f"Expired {stats['expired']} stale pending outcomes", stage='expire_stale')
+    except Exception as e:
+        stats['errors'] += 1
+        log_error('expire_stale_pending', e, stage='expire_stale')
+        pipeline_log(f"expire_stale degraded (non-fatal): {e}", stage='expire_stale')
     return stats
 
 
@@ -332,7 +375,10 @@ def refresh_brain_opportunities() -> dict:
 
     opps = []
     for p in active:
-        if p.get('category') != 'opportunity' and p.get('state') not in ACTIVE_STATES and p.get('state') != 'PARTIAL':
+        state = (p.get('state') or '').upper()
+        if state not in ('ACTIVE', 'PENDING'):
+            continue
+        if p.get('category') != 'opportunity':
             continue
         opps.append({
             'symbol': p.get('ticker'),
@@ -350,6 +396,8 @@ def refresh_brain_opportunities() -> dict:
         })
 
     intel['top_opportunities'] = opps
+    intel['timestamp'] = _now_iso()
+    intel['generated_date'] = _today()
     intel['active_predictions_source'] = str(ACTIVE_PREDICTIONS_FILE.name)
     intel['lifecycle'] = {
         'refreshed_at': _now_iso(),
@@ -587,13 +635,30 @@ def _evaluate_outcomes() -> dict:
     return {'lifecycle': eval_stats, 'signals': sig, 'horizons': hr, 'adaptive': adaptive}
 
 
+def _run_adaptive_calibration():
+    from backend.adaptive.adaptive_calibration_engine import run_adaptive_calibration_cycle
+    return run_adaptive_calibration_cycle()
+
+
+CRITICAL_STAGES = frozenset({
+    'evaluate_outcomes',
+    'sync_predictions',
+    'brain_refresh',
+    'daily_review',
+    'calibration_snapshot',
+    'stats_export',
+    'history_export',
+})
+
+
 def run_end_of_day_cycle(force: bool = False) -> dict:
     """
     Full post-market lifecycle pipeline with single-execution guard.
+    Must fully complete OR fail loudly — never silent partial success.
     """
     lock_name = 'eod_lifecycle'
     if not try_acquire_lock(lock_name):
-        _log('LIFECYCLE', 'Skipped — another EOD cycle is running')
+        pipeline_log('Skipped — another EOD cycle is running', stage='lock')
         return {'status': 'skipped', 'reason': 'lock_held'}
 
     result: Dict[str, Any] = {'status': 'running', 'stages': [], 'started_at': _now_iso()}
@@ -601,31 +666,54 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
     today = _today()
 
     if not force and state.get('last_eod_cycle_date') == today and state.get('evaluation_cycle_complete'):
-        release_lock(lock_name)
-        return {'status': 'skipped', 'reason': 'already_completed_today', 'last_at': state.get('last_eod_cycle_at')}
+        if state.get('pipeline_status') == 'COMPLETE':
+            release_lock(lock_name)
+            pipeline_log('Already completed today — skip', stage='lock')
+            return {'status': 'skipped', 'reason': 'already_completed_today', 'last_at': state.get('last_eod_cycle_at')}
 
     errors: List[str] = []
+    failed_critical = False
 
-    def _stage(name: str, fn):
+    update_heartbeat(
+        pipeline_status='RUNNING',
+        current_stage='starting',
+        extra={
+            'evaluation_cycle_complete': False,
+            'last_eod_attempt_at': _now_iso(),
+            'last_eod_cycle_date': today,
+        },
+    )
+    pipeline_log('starting evaluation cycle', stage='start')
+
+    def _stage(name: str, fn, *, critical: bool = True):
+        nonlocal failed_critical
+        pipeline_log(f'begin {name}', stage=name)
+        update_heartbeat(pipeline_status='RUNNING', current_stage=name)
         try:
             out = fn()
             result['stages'].append({'name': name, 'status': 'ok', 'result': out})
-            _log('LIFECYCLE', f"{name}: ok")
+            mark_stage_complete(name)
+            pipeline_log(f'completed {name}', stage=name)
             return out
         except Exception as e:
             msg = f"{name}: {e}"
             errors.append(msg)
+            log_error(name, e, stage=name)
             result['stages'].append({'name': name, 'status': 'error', 'error': str(e)})
-            _log('LIFECYCLE', f"{name}: FAILED — {e}")
+            pipeline_log(f'FAILED {name}: {e}', stage=name)
+            if critical and name in CRITICAL_STAGES:
+                failed_critical = True
             return None
 
     try:
         _stage('evaluate_outcomes', _evaluate_outcomes)
-        expire_stats = _stage('expire_stale', expire_stale_pending) or {}
-        inv_stats = _stage('invalidate_contradicted', invalidate_contradicted_predictions) or {}
-        sync_stats = _stage('sync_predictions', sync_prediction_json_files) or {}
+        pipeline_log('evaluating predictions complete', stage='evaluate_outcomes')
+        expire_stats = _stage('expire_stale', expire_stale_pending, critical=False) or {}
+        inv_stats = _stage('invalidate_contradicted', invalidate_contradicted_predictions, critical=False) or {}
+        sync_stats = _stage('sync_predictions', sync_prediction_json_files)
+        pipeline_log('refreshing active predictions', stage='sync_predictions')
 
-        _stage('meta_labeler', lambda: _run_script('meta_labeler.py'))
+        _stage('meta_labeler', lambda: _run_script_safe('meta_labeler.py'), critical=False)
 
         def _post_market_intel():
             os.environ['AI_USE_CASE'] = 'post_close'
@@ -634,46 +722,81 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
             return {'use_case': 'post_close'}
 
         _stage('tomorrow_intelligence', _post_market_intel)
-        _stage('prediction_logger', lambda: _run_script('prediction_logger.py', {'AI_USE_CASE': 'post_close'}))
+        _stage('prediction_logger', lambda: _run_script('prediction_logger.py', {'AI_USE_CASE': 'post_close'}), critical=False)
         brain = _stage('brain_refresh', refresh_brain_opportunities) or {}
-        _stage('sync_predictions_post_brain', sync_prediction_json_files)
+        _stage('sync_predictions_post_brain', sync_prediction_json_files, critical=False)
 
+        pipeline_log('generating daily review', stage='daily_review')
         _stage('daily_review', lambda: persist_immutable_daily_review())
-        cal = _stage('calibration_snapshot', build_calibration_snapshot) or {}
-
-        def _adaptive_safe():
-            from backend.adaptive.adaptive_calibration_engine import run_adaptive_calibration_cycle
-            return run_adaptive_calibration_cycle()
-
-        _stage('adaptive_calibration', _adaptive_safe)
+        _stage('calibration_snapshot', build_calibration_snapshot)
+        _stage('adaptive_calibration', _run_adaptive_calibration, critical=False)
+        pipeline_log('exporting stats', stage='stats_export')
         _stage('stats_export', lambda: _run_script('stats_exporter.py'))
+        pipeline_log('exporting history', stage='history_export')
         _stage('history_export', lambda: _run_script('history_exporter.py'))
 
         review_result = next((s.get('result') for s in result['stages'] if s.get('name') == 'daily_review'), {}) or {}
         review = (review_result.get('review') or _load_json(DAILY_REVIEWS_DIR / f'review_{_today()}.json', {}))
         if review:
-            _stage('telegram_daily_review', lambda: send_telegram_daily_review(review, review.get('lifecycle_summary') or {}))
+            _stage('telegram_daily_review', lambda: send_telegram_daily_review(review, review.get('lifecycle_summary') or {}), critical=False)
+
+        if failed_critical:
+            state.update({
+                'pipeline_status': 'FAILED',
+                'evaluation_cycle_complete': False,
+                'last_failure_at': _now_iso(),
+                'last_failure_reason': errors[-1] if errors else 'critical stage failed',
+                'errors': errors[-10:],
+            })
+            save_lifecycle_state(state)
+            update_heartbeat(pipeline_status='FAILED', current_stage='failed', extra=state)
+            result['status'] = 'failed'
+            result['completed_at'] = _now_iso()
+            result['errors'] = errors
+            pipeline_log(f"FAILED — {errors[-1] if errors else 'critical stage failed'}", stage='complete')
+            return result
 
         state.update({
             'last_eod_cycle_date': today,
             'last_eod_cycle_at': _now_iso(),
             'last_evaluation_at': _now_iso(),
             'evaluation_cycle_complete': True,
+            'pipeline_status': 'COMPLETE',
             'brain_refresh_at': _now_iso(),
             'exports_synced_at': _now_iso(),
-            'active_count': sync_stats.get('active', 0),
-            'archived_count': sync_stats.get('archived', 0),
+            'last_successful_eod': _now_iso(),
+            'active_count': sync_stats.get('active', 0) if sync_stats else state.get('active_count', 0),
+            'archived_count': sync_stats.get('archived', 0) if sync_stats else state.get('archived_count', 0),
             'stale_invalidated': (inv_stats.get('invalidated') or 0) + (brain.get('removed') or 0),
             'cycles_today': (state.get('cycles_today') or 0) + 1,
             'errors': errors[-10:],
         })
         save_lifecycle_state(state)
+        update_heartbeat(pipeline_status='COMPLETE', current_stage='completed', extra=state)
 
         result['status'] = 'ok' if not errors else 'partial'
         result['completed_at'] = _now_iso()
         result['lifecycle_state'] = state
         result['errors'] = errors
-        _log('LIFECYCLE', f"EOD cycle complete — active={state['active_count']} archived={state['archived_count']}")
+        pipeline_log(
+            f"completed successfully — active={state['active_count']} archived={state['archived_count']}",
+            stage='complete',
+        )
+        return result
+    except Exception as e:
+        log_error('run_end_of_day_cycle', e, stage='fatal')
+        state = load_lifecycle_state()
+        state.update({
+            'pipeline_status': 'FAILED',
+            'evaluation_cycle_complete': False,
+            'last_failure_at': _now_iso(),
+            'last_failure_reason': str(e),
+        })
+        save_lifecycle_state(state)
+        update_heartbeat(pipeline_status='FAILED', current_stage='fatal', extra={'last_failure_reason': str(e)})
+        result['status'] = 'failed'
+        result['error'] = str(e)
+        pipeline_log(f"fatal error: {e}", stage='complete')
         return result
     finally:
         release_lock(lock_name)
@@ -694,8 +817,19 @@ def get_lifecycle_status() -> dict:
     history_file = _load_json(PREDICTION_HISTORY_FILE, {})
     unresolved = sum(1 for p in (active_file.get('predictions') or []) if p.get('state') == UNRESOLVED_STATE)
 
+    pipeline_status = state.get('pipeline_status') or 'IDLE'
+    if pipeline_status == 'RUNNING':
+        display_status = 'RUNNING'
+    elif pipeline_status == 'FAILED':
+        display_status = 'FAILED'
+    elif cycle_today and state.get('evaluation_cycle_complete') and pipeline_status == 'COMPLETE':
+        display_status = 'COMPLETE'
+    else:
+        display_status = 'STALE'
+
     return {
-        'status': 'healthy' if cycle_today and state.get('evaluation_cycle_complete') else 'stale',
+        'status': 'healthy' if display_status == 'COMPLETE' else display_status.lower(),
+        'pipeline_status': display_status,
         'evaluation_cycle_complete': bool(state.get('evaluation_cycle_complete')),
         'last_eod_cycle_date': state.get('last_eod_cycle_date'),
         'last_eod_cycle_at': state.get('last_eod_cycle_at'),
@@ -715,15 +849,19 @@ def get_lifecycle_status() -> dict:
         'calibration_fresh': cal_age is not None and cal_age < 360 and cycle_today,
         'review_fresh': review_age is not None and review_age < 720 and cycle_today,
         'message': (
-            'Post-market evaluation complete'
-            if cycle_today and state.get('evaluation_cycle_complete')
-            else 'Awaiting post-market evaluation cycle (15:45 IST).'
+            f'Lifecycle {display_status}'
+            if display_status != 'COMPLETE'
+            else 'Post-market evaluation complete'
         ),
         'calibration_message': (
             'Awaiting evaluated prediction sample size.'
             if (_load_json(CALIBRATION_HISTORY_FILE, {}).get('latest') or {}).get('total_evaluated', 0) < 30
             else 'Calibration metrics synchronized from lifecycle.'
         ),
+        'current_stage': state.get('current_stage'),
+        'last_failure_reason': state.get('last_failure_reason'),
+        'last_successful_eod': state.get('last_successful_eod'),
+        'stage_history': (state.get('stage_history') or [])[-5:],
     }
 
 
@@ -733,9 +871,15 @@ def get_lifecycle_ops_payload() -> dict:
     cal = _load_json(CALIBRATION_HISTORY_FILE, {}).get('latest') or {}
     active = _load_json(ACTIVE_PREDICTIONS_FILE, {})
     ml = get_ml_core_status()
+    try:
+        from backend.orchestration.schedule_registry import get_task_registry
+        scheduler_tasks = get_task_registry()
+    except Exception:
+        scheduler_tasks = {}
     return {
         **status,
         'ml_core': ml,
+        'scheduler_tasks': scheduler_tasks,
         'calibration': cal,
         'active_predictions_file': {
             'count': active.get('count', 0),

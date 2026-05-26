@@ -95,8 +95,22 @@ async def main():
     await client.disconnect()
 
 def run_scraper():
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    """Python 3.10+ safe entry — no deprecated get_event_loop()."""
+    asyncio.run(main())
+
 
 if __name__ == "__main__":
-    run_scraper()
+    try:
+        run_scraper()
+    except RuntimeError as e:
+        # Thread/subprocess edge case — create dedicated loop once
+        if 'event loop' in str(e).lower():
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(main())
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
+        else:
+            raise

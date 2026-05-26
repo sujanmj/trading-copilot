@@ -631,7 +631,12 @@ RULES:
             print("  [ERROR] ai_router unavailable — cannot call AI")
             return None
 
-        from backend.ai.pipeline_observability import record_claude_decision, finalize_cycle
+        try:
+            from backend.ai.pipeline_observability import record_claude_decision, finalize_cycle
+        except Exception as obs_import_err:
+            record_claude_decision = None
+            finalize_cycle = None
+            print(f"  [WARN] pipeline_observability unavailable (non-fatal): {obs_import_err}")
 
         raw_result = call_expensive(
             prompt,
@@ -656,17 +661,25 @@ RULES:
             else:
                 skipped_reason = f"Claude bypassed — used {model} ({provider})"
 
-        record_claude_decision(
-            ran=claude_ran,
-            skipped_reason=skipped_reason,
-            model=model,
-            provider=provider,
-            cache_hit=cache_hit,
-            prompt_tokens=estimate_tokens(prompt),
-            force=force,
-            budget=budget,
-        )
-        finalize_cycle(quality=pipeline_quality)
+        if record_claude_decision:
+            try:
+                record_claude_decision(
+                    ran=claude_ran,
+                    skipped_reason=skipped_reason,
+                    model=model,
+                    provider=provider,
+                    cache_hit=cache_hit,
+                    prompt_tokens=estimate_tokens(prompt),
+                    force=force,
+                    budget=budget,
+                )
+            except Exception as obs_err:
+                print(f"  [WARN] record_claude_decision skipped: {obs_err}")
+        if finalize_cycle:
+            try:
+                finalize_cycle(quality=pipeline_quality)
+            except Exception as obs_err:
+                print(f"  [WARN] finalize_cycle skipped: {obs_err}")
 
         result = validate_ai_response(raw_result, source='master_analyzer') if validate_ai_response else raw_result
 

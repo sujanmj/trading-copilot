@@ -401,8 +401,10 @@ def cmd_status():
     try:
         from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
         lc = get_lifecycle_status()
-        lc_emoji = "✅" if lc.get('evaluation_cycle_complete') else "⏳"
-        msg += f"\n{lc_emoji} Lifecycle: {lc.get('message', 'unknown')}"
+        lc_emoji = "✅" if lc.get('pipeline_status') == 'COMPLETE' else (
+            "🔄" if lc.get('pipeline_status') == 'RUNNING' else (
+            "❌" if lc.get('pipeline_status') == 'FAILED' else "⏳"))
+        msg += f"\n{lc_emoji} Lifecycle: {lc.get('pipeline_status', 'STALE')} — {lc.get('message', 'unknown')}"
         if lc.get('active_predictions'):
             msg += f" ({lc['active_predictions']} active)"
     except Exception:

@@ -69,7 +69,11 @@ _subprocess_restart_log_at: dict = {}
 SCHEDULER_SCRIPT = 'master_scheduler.py'
 SCHEDULER_SINGLETON_POLL_SECONDS = 120
 SCHEDULER_CRASH_RESTART_SECONDS = 30
+SCHEDULER_EXIT_SINGLETON = 75
 SUBPROCESS_WARN_COOLDOWN_SECONDS = 300
+
+_background_started = False
+_background_lock = threading.Lock()
 
 try:
     from backend.ai.ai_router import ask_ai
@@ -154,6 +158,16 @@ def run_subprocess_loop(script_name, label):
             rc = process.returncode if process.returncode is not None else -1
 
             if script_name == SCHEDULER_SCRIPT:
+                if rc == SCHEDULER_EXIT_SINGLETON:
+                    print("[SCHEDULER SINGLETON SKIP] Duplicate launch blocked — primary holds lock")
+                    _log_subprocess_event(
+                        'Scheduler',
+                        "[WATCHDOG NO-RESTART] Singleton guard exit — not a crash",
+                        force=True,
+                    )
+                    _wait_scheduler_singleton_health()
+                    continue
+
                 if rc == 0 and _scheduler_singleton_active():
                     print("[SCHEDULER SINGLETON ACTIVE] Primary scheduler already running")
                     _log_subprocess_event(
@@ -165,6 +179,12 @@ def run_subprocess_loop(script_name, label):
                     continue
 
                 if rc == 0:
+                    # Grace period — lock may release briefly during handoff
+                    time.sleep(5)
+                    if _scheduler_singleton_active():
+                        print("[SCHEDULER HEALTHY] Clean exit but singleton re-acquired — no restart")
+                        _wait_scheduler_singleton_health()
+                        continue
                     print("[SCHEDULER CRASH DETECTED] Scheduler exited cleanly but lock is free")
                     _log_subprocess_event(
                         'Scheduler',
@@ -412,7 +432,15 @@ def stale_data_watchdog():
 
 
 def start_background_processes():
-    """Launch scheduler and telegram listener in daemon threads"""
+    """Launch scheduler and telegram listener in daemon threads (once)."""
+    global _background_started
+    with _background_lock:
+        if _background_started:
+            backend_log.info("Background processes already started — skip duplicate startup")
+            print("[INFO] Background processes already running — skip duplicate startup")
+            return
+        _background_started = True
+
     backend_log.info("Starting background processes (railway=%s)", IS_RAILWAY)
     try:
         from backend.ai.provider_manager import log_provider_startup_diagnostics
@@ -659,6 +687,7 @@ def _build_runtime_snapshot() -> dict:
 
     lifecycle_panel = {
         'status': 'waiting',
+        'pipeline_status': 'STALE',
         'stale': True,
         'message': 'Post-market evaluation cycle has not completed today.',
         'calibration_message': 'Awaiting evaluated prediction sample size.',
@@ -668,7 +697,8 @@ def _build_runtime_snapshot() -> dict:
         lc = get_lifecycle_status()
         lifecycle_panel = {
             'status': 'ready' if lc.get('evaluation_cycle_complete') else 'waiting',
-            'stale': lc.get('status') == 'stale',
+            'pipeline_status': lc.get('pipeline_status', 'STALE'),
+            'stale': lc.get('status') == 'stale' or lc.get('pipeline_status') == 'STALE',
             'message': lc.get('message'),
             'calibration_message': lc.get('calibration_message'),
             'active_predictions': lc.get('active_predictions'),

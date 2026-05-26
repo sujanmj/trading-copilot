@@ -40,6 +40,7 @@ AI_CACHE_DIR = DATA_DIR / 'ai_cache'
 ANALYSIS_STATE_FILE = DATA_DIR / 'analysis_state.json'
 AI_BUDGET_FILE = DATA_DIR / 'ai_budget.json'
 DEBUG_SNAPSHOTS_DIR = DATA_DIR / 'debug_snapshots'
+MAX_DEBUG_SNAPSHOTS = int(os.environ.get('MAX_DEBUG_SNAPSHOTS', '30'))
 ANALYSIS_EXPLANATIONS_FILE = DATA_DIR / 'analysis_explanations.json'
 TELEGRAM_ALERT_STATE_FILE = DATA_DIR / 'telegram_alert_state.json'
 TELEGRAM_ALERT_OBS_FILE = DATA_DIR / 'telegram_alert_observability.json'

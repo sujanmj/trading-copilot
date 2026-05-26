@@ -527,11 +527,21 @@
       const states = lifecycle.prediction_states || {};
       const stateLines = Object.entries(states).map(([k, v]) => `${k}: ${v}`);
       const calSnap = lifecycle.calibration || {};
+      const pipelineStatus = lifecycle.pipeline_status || (lifecycle.evaluation_cycle_complete ? 'COMPLETE' : 'STALE');
+      const statusCls = pipelineStatus === 'COMPLETE' ? 'ai-ops-ok'
+        : pipelineStatus === 'RUNNING' ? 'ai-ops-warn'
+        : pipelineStatus === 'FAILED' ? 'ai-ops-warn'
+        : 'ai-ops-warn';
       lcEl.innerHTML =
         renderStatGrid([
           {
+            label: 'Lifecycle',
+            value: pipelineStatus,
+            cls: statusCls,
+          },
+          {
             label: 'EOD cycle',
-            value: lifecycle.evaluation_cycle_complete ? 'COMPLETE' : 'PENDING',
+            value: lifecycle.evaluation_cycle_complete ? 'COMPLETE' : (pipelineStatus === 'RUNNING' ? 'RUNNING' : 'PENDING'),
             cls: lifecycle.evaluation_cycle_complete ? 'ai-ops-ok' : 'ai-ops-warn',
           },
           {
@@ -575,12 +585,22 @@
         `<div class="ai-ops-subhead">Status</div>${renderList(
           [
             lifecycle.message,
+            lifecycle.current_stage ? `Stage: ${lifecycle.current_stage}` : null,
             lifecycle.last_eod_cycle_at ? `Last cycle: ${lifecycle.last_eod_cycle_at.slice(0, 19)}` : null,
+            lifecycle.last_failure_reason ? `Last failure: ${lifecycle.last_failure_reason}` : null,
             lifecycle.stats_age_minutes != null ? `Stats age: ${lifecycle.stats_age_minutes}m` : null,
             lifecycle.history_age_minutes != null ? `History age: ${lifecycle.history_age_minutes}m` : null,
           ].filter(Boolean),
           'Post-market evaluation runs at 15:45 IST'
         )}` +
+        (lifecycle.scheduler_tasks && lifecycle.scheduler_tasks.tasks
+          ? `<div class="ai-ops-subhead">Scheduler tasks (IST)</div>${renderList(
+              lifecycle.scheduler_tasks.tasks.slice(0, 8).map(
+                (t) => `${t.name}: ${t.status} @ ${t.schedule}`
+              ),
+              'Scheduler registry unavailable'
+            )}`
+          : '') +
         `<div class="ai-ops-subhead">Prediction states</div>${renderList(stateLines, 'No evaluated predictions yet')}`;
     }
 

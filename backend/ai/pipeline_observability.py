@@ -18,13 +18,19 @@ from backend.utils.config import (
     ANALYSIS_STATE_FILE,
     AI_CACHE_DIR,
     DEBUG_SNAPSHOTS_DIR,
-    MAX_DEBUG_SNAPSHOTS,
     COMPRESSION_RATIO_WARN,
     CONTRADICTION_RETENTION_WARN,
     QUALITY_SCORE_WARN,
     SENTIMENT_PRESERVATION_WARN,
     get_env,
 )
+
+try:
+    from backend.utils.config import MAX_DEBUG_SNAPSHOTS
+except ImportError:
+    MAX_DEBUG_SNAPSHOTS = 30
+else:
+    MAX_DEBUG_SNAPSHOTS = int(MAX_DEBUG_SNAPSHOTS or 30)
 from backend.storage.json_io import atomic_write_json
 from backend.ai.token_optimizer import estimate_tokens
 

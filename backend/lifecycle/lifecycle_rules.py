@@ -5,6 +5,7 @@ Single source of truth for prediction lifecycle semantics.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Optional, Tuple
 
 HORIZON_CONFIG = {
@@ -15,6 +16,9 @@ HORIZON_CONFIG = {
 }
 
 DEFAULT_HORIZON = 'next_day'
+
+# Hard ceiling for generic pending expiration (days) — signal-type TTL may be shorter.
+EXPIRE_AFTER_DAYS = int(os.environ.get('EXPIRE_AFTER_DAYS', '10'))
 
 TTL_SESSIONS = {
     'ULTRA scanner': 2,

@@ -1,7 +1,7 @@
 {
   "status": "ok",
   "date": "2026-05-26",
-  "generated_at": "2026-05-26T02:12:20.684039",
+  "generated_at": "2026-05-26T16:57:36.466068",
   "market_day_classification": {
     "label": "MIXED SESSION",
     "confidence": 0.5,
@@ -19,17 +19,22 @@
   "performance_summary": {
     "signals_generated": 4,
     "high_confidence_signals": 1,
-    "useful_signals": 0,
+    "useful_signals": 3,
     "failed_signals": 0,
     "false_positives": 0,
     "suppressed_alerts": 0,
     "missed_opportunities": 0,
     "telegram_precision_pct": null,
-    "evaluated_signals": 0,
+    "evaluated_signals": 3,
     "confidence_calibration_quality": "insufficient_data"
   },
   "highlights": {
-    "best_bullish": null,
+    "best_bullish": {
+      "ticker": "?",
+      "move": "+1.3%",
+      "change_pct": 1.32,
+      "label": "? +1.3%"
+    },
     "best_bearish": null,
     "biggest_miss": null,
     "highest_confidence_winner": null,
@@ -97,12 +102,30 @@
     "regime": "unknown",
     "quality_iq": 0.53,
     "day_type": "MIXED SESSION",
-    "best_signal": null,
+    "best_signal": "? +1.3%",
     "failed_signal": null,
     "telegram_sent": 0,
     "telegram_useful_est": null,
     "warnings_count": 5
   },
   "observation": "Mixed session — selective signal filtering outperformed broad aggression.",
-  "copy_text": "DAILY INTELLIGENCE REVIEW — 2026-05-26\n\nDAY TYPE: MIXED SESSION\nREGIME: unknown\nQUALITY IQ: 0.53\n\nPERFORMANCE\nSignals: 4 | Useful: 0 | False positives: 0 | Suppressed alerts: 0\nTelegram precision: —%\n\nHIGHLIGHTS\n\nTELEGRAM\nSent: 0 | Useful est: None\n\nWARNINGS\n- low intelligence quality\n- weak sentiment preservation\n- Safe fallback used 1 time(s) — degraded intelligence served\n- Hallucination guard triggered 3 time(s)\n- Schema validation failures: 2\n\nOBSERVATION\nMixed session — selective signal filtering outperformed broad aggression."
+  "copy_text": "DAILY INTELLIGENCE REVIEW — 2026-05-26\n\nDAY TYPE: MIXED SESSION\nREGIME: unknown\nQUALITY IQ: 0.53\n\nPERFORMANCE\nSignals: 4 | Useful: 3 | False positives: 0 | Suppressed alerts: 0\nTelegram precision: —%\n\nHIGHLIGHTS\nBEST BULLISH: ? +1.3%\n\nTELEGRAM\nSent: 0 | Useful est: None\n\nWARNINGS\n- low intelligence quality\n- weak sentiment preservation\n- Safe fallback used 1 time(s) — degraded intelligence served\n- Hallucination guard triggered 3 time(s)\n- Schema validation failures: 2\n\nOBSERVATION\nMixed session — selective signal filtering outperformed broad aggression.",
+  "lifecycle_summary": {
+    "evaluation_complete": false,
+    "last_cycle_at": null,
+    "resolved_today": 33,
+    "wins_today": 0,
+    "losses_today": 0,
+    "partials_today": 0,
+    "best_prediction": null,
+    "worst_prediction": null,
+    "win_rate": null,
+    "confidence_realism": null,
+    "false_positive_rate": null,
+    "active_count": 0,
+    "stale_invalidated": 0,
+    "tomorrow_outlook": "Pending refresh"
+  },
+  "immutable": true,
+  "lifecycle_engine": "prediction_lifecycle_engine_v1"
 }
