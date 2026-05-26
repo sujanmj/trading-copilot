@@ -153,6 +153,22 @@ USE_CASE_ROUTING = {
     'watchdog_refresh': 'gemini',
 }
 
+CONVERSATIONAL_USE_CASES = frozenset({
+    'ask_basic', 'ask_conversational', 'telegram_ask', 'ops_assistant',
+    'lightweight_summary', 'ask_haiku', 'alert_analysis',
+})
+
+GROQ_FIRST_USE_CASES = frozenset({
+    'telegram_ask', 'ask_basic', 'ops_assistant', 'ask_haiku', 'alert_analysis',
+})
+
+
+def _log_route(use_case: str, target: str, detail: str = ''):
+    line = f"{use_case} → {target}"
+    if detail:
+        line = f"{line} ({detail})"
+    print(f"  [AI ROUTE] {line}")
+
 
 def call_anthropic(model_name, prompt, max_tokens=2500):
     provider = 'anthropic'
@@ -275,10 +291,12 @@ def _call_groq_rest(api_key, model_name, prompt, max_tokens=2500):
         return _ai_result(False, model=model_name, provider=provider, error=str(e))
 
 
-def call_gemini(model_name, prompt, max_tokens=2500):
+def call_gemini(model_name, prompt, max_tokens=2500, *, use_case: str = ''):
     from backend.ai.provider_manager import get_gemini_pool
 
     pool = get_gemini_pool()
+    if use_case:
+        _log_route(use_case, 'gemini_pool', pool._state.get('active_slot') or 'gemini-1')
 
     def _invoke(api_key: str, slot_id: str):
         t0 = time.time()
@@ -309,10 +327,11 @@ def call_gemini(model_name, prompt, max_tokens=2500):
     return result
 
 
-def call_groq(model_name, prompt, max_tokens=2500):
+def call_groq(model_name, prompt, max_tokens=2500, *, use_case: str = ''):
     from backend.ai.provider_manager import get_gemini_pool, get_groq_pool, ENRICHMENT_UNAVAILABLE_MSG
 
     pool = get_groq_pool()
+    _log_route(use_case or 'conversational', 'groq_pool', pool._state.get('active_slot') or 'groq-1')
 
     def _invoke(api_key: str, slot_id: str):
         t0 = time.time()
@@ -327,7 +346,8 @@ def call_groq(model_name, prompt, max_tokens=2500):
     # Conversational fallback → Gemini pool
     if not get_gemini_pool().is_degraded():
         print('  [AI] Groq pool exhausted — falling back to Gemini for conversational request')
-        gem = call_gemini('gemini-2.0-flash-lite', prompt, max_tokens)
+        _log_route(use_case or 'conversational', 'gemini_pool', 'groq-fallback')
+        gem = call_gemini('gemini-2.0-flash-lite', prompt, max_tokens, use_case=use_case)
         if gem.get('success'):
             gem['model'] = f"{gem.get('model', 'gemini')} (groq-fallback)"
             gem['provider'] = 'google'
@@ -344,16 +364,26 @@ def _is_quota_error_text(err: str) -> bool:
 
 
 def resolve_conversational_priority(use_case: str, prompt: str) -> str:
-    """Route trivial asks to Groq; deeper contextual asks to Gemini."""
+    """Route trivial asks to Groq; deeper contextual asks to Gemini.
+
+    Telegram / operator chat always uses Groq first — prompt length includes
+    intelligence context and must not force Gemini routing.
+    """
+    if use_case in GROQ_FIRST_USE_CASES:
+        return 'groq'
+    if use_case == 'ask_deep':
+        return 'gemini'
+    question_len = len(prompt or '')
+    if 'Question:' in (prompt or ''):
+        question_len = len((prompt or '').split('Question:')[-1])
     deep_markers = (
         'analyze', 'analysis', 'strategy', 'strategic', 'compare', 'contrast',
         'deep dive', 'explain in detail', 'why did', 'root cause', 'implications',
         'market situation', 'sector rotation', 'macro',
     )
     pl = (prompt or '').lower()
-    if len(prompt or '') > 1200:
-        return 'gemini'
-    if len(prompt or '') > 450 and any(m in pl for m in deep_markers):
+    qpart = pl.split('question:')[-1] if 'question:' in pl else pl
+    if question_len > 800 or (question_len > 300 and any(m in qpart for m in deep_markers)):
         return 'gemini'
     return 'groq'
 
@@ -366,7 +396,7 @@ def ask_ai(
     channel='api',
     skip_cache=False,
 ):
-    from backend.ai.provider_manager import resolve_use_case_tier, get_degraded_status
+    from backend.ai.provider_manager import resolve_use_case_tier, get_degraded_status, get_groq_pool
     from backend.ai.conversational_cache import get_cached, set_cached, should_use_cache
     from backend.analytics.provider_analytics import normalize_provider, record_provider_request
 
@@ -388,8 +418,10 @@ def ask_ai(
         if priority == 'gemini':
             model_key = 'gemini'
             tier = 'gemini'
+            _log_route(use_case, 'gemini', 'deep contextual')
         else:
             model_key = 'groq'
+            _log_route(use_case, 'groq_pool', 'conversational-first')
 
     if model_key not in MODELS and model_key != 'groq':
         if tier == 'conversational':
@@ -427,23 +459,33 @@ def ask_ai(
         provider = 'groq'
         model_name = MODELS['groq']['model']
         print(f"  [AI] Using GROQ ({model_name}) for: {use_case}")
-        raw = call_groq(model_name, prompt, max_tokens)
+        raw = call_groq(model_name, prompt, max_tokens, use_case=use_case)
         pool_meta = raw.pop('_pool_meta', {}) or {}
         if raw.get('fallback_from') == 'groq':
+            fallback_used = True
+    elif tier == 'gemini' and use_case in CONVERSATIONAL_USE_CASES:
+        print(f"  [AI] Using GEMINI pool ({model_name}) for: {use_case}")
+        raw = call_gemini(model_name, prompt, max_tokens, use_case=use_case)
+        pool_meta = raw.pop('_pool_meta', {}) or {}
+        if not raw.get('success') and not get_groq_pool().is_degraded():
+            print('  [AI] Gemini conversational path failed — falling back to Groq')
+            _log_route(use_case, 'groq_pool', 'gemini-fallback')
+            raw = call_groq(MODELS['groq']['model'], prompt, max_tokens, use_case=use_case)
+            pool_meta = raw.pop('_pool_meta', {}) or {}
             fallback_used = True
     elif tier == 'strategic' or provider == 'anthropic':
         print(f"  [AI] Using CLAUDE ({model_name}) for: {use_case}")
         raw = call_anthropic(model_name, prompt, max_tokens)
         if not raw.get('success') and tier == 'strategic':
             print('  [AI] Claude failed — Gemini synthesis fallback')
-            raw = call_gemini('gemini-2.0-flash', prompt, max_tokens)
+            raw = call_gemini('gemini-2.0-flash', prompt, max_tokens, use_case=use_case)
             pool_meta = raw.pop('_pool_meta', {}) or {}
             fallback_used = True
             if raw.get('success'):
                 raw['model'] = f"{raw.get('model', 'gemini')} (claude-fallback)"
     elif provider == 'google':
         print(f"  [AI] Using GEMINI pool ({model_name}) for: {use_case}")
-        raw = call_gemini(model_name, prompt, max_tokens)
+        raw = call_gemini(model_name, prompt, max_tokens, use_case=use_case)
         pool_meta = raw.pop('_pool_meta', {}) or {}
     else:
         raw = _ai_result(False, error=f"Unknown provider: {provider}", provider=provider)

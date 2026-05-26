@@ -129,6 +129,7 @@
     .live-tag { background: rgba(255, 61, 0, 0.2); color: #FF3D00; padding: 1px 6px; border-radius: 4px; font-size: 8px; font-weight: bold; margin-left: 4px; border: 1px solid #FF3D00; animation: pulse 1.5s infinite; }
     
     .timestamp { font-size: 10px; color: #8B949E; text-align: right; margin-bottom: 12px; }
+    .runtime-stale { color: #D29922; }
     .loading { color: #8B949E; text-align: center; padding: 20px; font-size: 12px; }
     
     .ask-bar { border-top: 1px solid rgba(255,255,255,0.05); padding: 10px; display: flex; gap: 8px; background: #0a0a0a; flex-shrink: 0; }
@@ -780,6 +781,7 @@
     </div>
   </aside>
 
+  <script src="runtime/runtimeManager.js"></script>
   <script src="components/DailyReviewPanel.js"></script>
   <script src="components/AIOpsPanel.js"></script>
   <script>
@@ -840,25 +842,29 @@
   }
 
   async function fetchAllFromAPI() {
+    if (window.RuntimeManager) {
+      const snap = await RuntimeManager.refresh({ force: true })
+      return !!snap
+    }
     try {
-      const response = await fetch(API_BASE + '/api/all', { method: 'GET', headers: apiHeaders() })
+      const response = await fetch(API_BASE + '/api/runtime_snapshot', { method: 'GET', headers: apiHeaders() })
       if (!response.ok) throw new Error(`API ${response.status}`)
       const data = await response.json()
-      apiCache.intelligence = data.intelligence
-      apiCache.indiaMarket = data.india
-      apiCache.globalMarket = data.markets
-      apiCache.news = data.news
-      apiCache.youtube = data.youtube
-      apiCache.govt = data.govt
-      apiCache.inshorts = data.inshorts
-      apiCache.reddit = data.reddit
-      apiCache.scanner = data.scanner
-      apiCache.stats = data.stats
-      apiCache.history = data.history
+      apiCache.intelligence = data.data.intelligence
+      apiCache.indiaMarket = data.data.india
+      apiCache.globalMarket = data.data.markets
+      apiCache.news = data.data.news
+      apiCache.youtube = data.data.youtube
+      apiCache.govt = data.data.govt
+      apiCache.inshorts = data.data.inshorts
+      apiCache.reddit = data.data.reddit
+      apiCache.scanner = data.data.scanner
+      apiCache.stats = data.data.stats
+      apiCache.history = data.data.history
+      apiCache.runtime = data
       apiCache.lastFetch = Date.now()
       apiCache.connected = true
       updateApiStatus(true)
-      if (window.AIOpsPanel && AIOpsPanel.checkAlerts) AIOpsPanel.checkAlerts()
       return true
     } catch (e) {
       console.error('❌ API fetch failed:', e.message)
@@ -866,6 +872,19 @@
       updateApiStatus(false)
       return false
     }
+  }
+
+  function runtimeTimestampHtml(extra) {
+    if (window.RuntimeManager && RuntimeManager.timestampHtml) return RuntimeManager.timestampHtml(extra)
+    return `<div class="timestamp runtime-ts">Updated: —${extra ? ' • ' + extra : ''}</div>`
+  }
+
+  function renderAllTabs() {
+    loadBrain(); loadGovt(); loadScanner(); loadMarkets(); loadNews(); loadTV(); loadReddit(); loadStats(); loadHistory()
+    setTimeout(() => {
+      const activeTab = document.querySelector('.tab.active')
+      if (activeTab) renderChatHistory(document.getElementById('tab-' + activeTab.dataset.tab))
+    }, 150)
   }
 
   const CHAT_STORAGE_KEY = 'tradingcopilot_chat_history'
@@ -1110,7 +1129,7 @@
       return;
     }
 
-    const ts = formatTime(data.timestamp || data.generation_time);
+
     const govt = data.government_impact || {};
     const rotation = data.sector_rotation || { bullish: [], bearish: [] };
     const mood = data.market_mood || {};
@@ -1166,7 +1185,7 @@
     }
 
     let html = `
-      <div class="timestamp">Updated: ${ts} | Sources: ${data.sources_used || 8}/8</div>
+      ${runtimeTimestampHtml('Sources: ' + (data.sources_used || 8) + '/8')}
       
       <div class="brain-grid">
         <div class="main-column">
@@ -1288,7 +1307,7 @@
     }
 
     let html = `
-      <div class="timestamp">Updated: ${formatTime(data.timestamp)}</div>
+      ${runtimeTimestampHtml()}
       <div class="brain-grid">
         <div class="main-column">
           <div class="glass-card">
@@ -1373,7 +1392,7 @@
     }
 
     let html = `
-      <div class="timestamp">Updated: ${formatTime(data.last_updated)} • ${data.universe || 'NSE'}</div>
+      ${runtimeTimestampHtml(data.universe || 'NSE')}
       <div class="brain-grid">
         <div class="main-column">
           <div class="glass-card">
@@ -1497,7 +1516,7 @@
     }
 
     let html = `
-      <div class="timestamp">Updated: ${formatTime(data?.timestamp)}</div>
+      ${runtimeTimestampHtml()}
       <div class="brain-grid">
         <div class="main-column">${leftHtml}</div>
         <div class="action-column">${rightHtml}</div>
@@ -1556,7 +1575,7 @@
     rightHtml += '</div>';
 
     let html = `
-      <div class="timestamp">Updated: ${formatTime(newsData?.timestamp || inshortsData?.timestamp)}</div>
+      ${runtimeTimestampHtml()}
       <div class="brain-grid">
         <div class="main-column">${leftHtml}</div>
         <div class="action-column">${rightHtml}</div>
@@ -1613,7 +1632,7 @@
     rightHtml += '</div>';
 
     let html = `
-      <div class="timestamp">Updated: ${formatTime(data.timestamp)} • ${data.total_videos} videos</div>
+      ${runtimeTimestampHtml((data.total_videos || 0) + ' videos')}
       <div class="brain-grid">
         <div class="main-column">${leftHtml}</div>
         <div class="action-column">${rightHtml}</div>
@@ -1687,7 +1706,7 @@
     }
 
     let html = `
-      <div class="timestamp">Updated: ${formatTime(data.last_updated)} • ${data.total_posts_analyzed || 0} posts analyzed</div>
+      ${runtimeTimestampHtml((data.total_posts_analyzed || 0) + ' posts analyzed')}
       <div class="brain-grid">
         <div class="main-column">${leftHtml}</div>
         <div class="action-column">${rightHtml}</div>
@@ -1722,8 +1741,9 @@
   function loadStats() {
     const data = loadJson(files.stats);
     const container = document.getElementById('tab-stats');
+    const lifecycle = window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Run outcome_tracker or wait for signal evaluations.') : 'Run outcome_tracker or wait for signal evaluations.';
     if (!data) {
-      container.innerHTML = `<div class="empty-stats"><h4>📊 Calibration building...</h4><p>Run outcome_tracker or wait for signal evaluations.</p></div>`;
+      container.innerHTML = `<div class="empty-stats"><h4>📊 Calibration building...</h4><p>${escapeHtml(lifecycle)}</p></div>`;
       return;
     }
 
@@ -1733,7 +1753,7 @@
     const profitFactor = metrics.profit_factor || 0
     const cal = data.calibration_dashboard || {}
 
-    let html = `<div class="timestamp">Updated: ${formatTime(data.last_updated)}</div>`;
+    let html = runtimeTimestampHtml();
     
     html += `
       <div class="glass-card" style="padding: 20px;">
@@ -1760,7 +1780,7 @@
             <div class="stat-big-sub">gain ÷ loss</div>
           </div>
         </div>
-        ${(metrics.total_evaluated || 0) === 0 ? `<div class="calib-insufficient">⏳ Track record building — outcomes evaluate automatically.</div>` : ''}
+        ${(metrics.total_evaluated || 0) === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Track record building — outcomes evaluate automatically.') : 'Track record building — outcomes evaluate automatically.')}</div>` : ''}
       </div>
     `;
 
@@ -1970,19 +1990,21 @@
   function loadHistory() {
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
+    const journalMsg = window.RuntimeManager
+      ? RuntimeManager.lifecycleMessage('journal', 'Waiting for post-market review generation.')
+      : 'Waiting for post-market review generation.'
     if (!data) {
-      container.innerHTML = `<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>Daily reviews appear after market close snapshot.</p></div>`
+      container.innerHTML = `<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>${escapeHtml(journalMsg)}</p></div>`
       return
     }
 
     const journal = data.intelligence_journal || {}
     const entries = journal.entries || []
-    const ts = formatTime(data.last_updated)
-    let html = `<div class="timestamp">Updated: ${ts} • ${data.today_weekday || ''} ${data.today_date || ''}</div>`
+    let html = runtimeTimestampHtml(`${data.today_weekday || ''} ${data.today_date || ''}`.trim())
     html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`
 
     if (entries.length === 0) {
-      html += `<div class="calib-insufficient">No daily review snapshots yet. Post-market pipeline builds reviews at ~15:45.</div>`
+      html += `<div class="calib-insufficient">${escapeHtml(journalMsg)}</div>`
     } else {
       entries.forEach((entry, idx) => { html += renderJournalCard(entry, idx) })
     }
@@ -2138,24 +2160,39 @@
   document.getElementById('askInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') askClaude() })
 
   async function refreshAll() {
-    if (USE_API) await fetchAllFromAPI()
-    loadBrain(); loadGovt(); loadScanner(); loadMarkets(); loadNews(); loadTV(); loadReddit(); loadStats(); loadHistory()
-    setTimeout(() => {
-      const activeTab = document.querySelector('.tab.active')
-      if (activeTab) renderChatHistory(document.getElementById('tab-' + activeTab.dataset.tab))
-    }, 150)
+    if (USE_API && window.RuntimeManager) {
+      await RuntimeManager.refresh({ force: true })
+    } else if (USE_API) {
+      await fetchAllFromAPI()
+      renderAllTabs()
+    } else {
+      renderAllTabs()
+    }
   }
 
   document.getElementById('refreshBtn').addEventListener('click', refreshAll)
   document.getElementById('apiStatus').addEventListener('click', () => { updateApiStatus(USE_API && apiCache.connected) })
 
-  refreshAll()
-  setInterval(refreshAll, 30000)
+  if (window.RuntimeManager) {
+    RuntimeManager.init({
+      getApiBase: () => API_BASE,
+      getHeaders: apiHeaders,
+      cache: apiCache,
+      onConnectionChange: updateApiStatus,
+    })
+    RuntimeManager.subscribe(() => renderAllTabs())
+    RuntimeManager.start(30000)
+  } else {
+    refreshAll()
+    setInterval(refreshAll, 30000)
+  }
 
   if (window.AIOpsPanel) {
     AIOpsPanel.init({
       getApiBase: () => API_BASE,
       getHeaders: apiHeaders,
+      getRuntimeState: () => (window.RuntimeManager ? RuntimeManager.getState() : null),
+      subscribeRuntime: (fn) => (window.RuntimeManager ? RuntimeManager.subscribe(fn) : () => {}),
     })
   }
   if (window.DailyReviewPanel) {

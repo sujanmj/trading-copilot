@@ -7,13 +7,16 @@ Failover only on quota / repeated timeout / API failure — no random rotation.
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.storage.json_io import atomic_write_json
-from backend.utils.config import DATA_DIR
+from backend.utils.config import DATA_DIR, IS_RAILWAY, load_env
+
+load_env()
 
 PROVIDER_HEALTH_FILE = DATA_DIR / 'provider_health.json'
 
@@ -25,7 +28,17 @@ MAX_COOLDOWN_SEC = 3600
 GEMINI_KEY_VARS = ('GOOGLE_API_KEY_1', 'GOOGLE_API_KEY_2', 'GOOGLE_API_KEY_3')
 GROQ_KEY_VARS = ('GROQ_API_KEY_1', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3')
 GEMINI_LEGACY_VARS = ('GOOGLE_API_KEY', 'GEMINI_API_KEY')
+GROQ_LEGACY_VARS = ('GROQ_API_KEY',)
 GROQ_DEFAULT_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+
+ENV_TYPO_PATTERNS = (
+    (re.compile(r'^GORQ_', re.I), 'GORQ → did you mean GROQ?'),
+    (re.compile(r'^GROQ_API_KEY$', re.I), 'Use GROQ_API_KEY_1/2/3 pool vars instead of GROQ_API_KEY alone on Railway'),
+    (re.compile(r'^GEMINI_API_KEY_[123]$', re.I), 'GEMINI_API_KEY_N → did you mean GOOGLE_API_KEY_N?'),
+    (re.compile(r'^GOOGLE_KEY_', re.I), 'GOOGLE_KEY → did you mean GOOGLE_API_KEY?'),
+)
+
+_startup_logged = False
 
 ENRICHMENT_UNAVAILABLE_MSG = (
     '⚠ AI enrichment temporarily unavailable.\n'
@@ -41,19 +54,118 @@ def _log(tag: str, msg: str):
     print(f"[{tag}] {msg}")
 
 
+def _mask_key(key: str) -> str:
+    k = (key or '').strip()
+    if len(k) <= 8:
+        return '***' if k else ''
+    return f"{k[:4]}…{k[-4:]}"
+
+
+def _env_var_present(var: str) -> bool:
+    return bool(os.environ.get(var, '').strip())
+
+
+def _scan_env_typos() -> List[str]:
+    warnings: List[str] = []
+    for var in os.environ:
+        for pattern, hint in ENV_TYPO_PATTERNS:
+            if pattern.match(var):
+                warnings.append(f"Found {var} in environment — {hint}")
+    if not any(_env_var_present(v) for v in GROQ_KEY_VARS) and not any(_env_var_present(v) for v in GROQ_LEGACY_VARS):
+        for var in os.environ:
+            if 'GORQ' in var.upper() or (var.upper().startswith('GROQ') and var not in GROQ_KEY_VARS + GROQ_LEGACY_VARS):
+                warnings.append(f"Possible Groq env typo: {var}")
+    return warnings
+
+
+def _key_registry(prefix_vars: Tuple[str, ...], legacy_vars: Tuple[str, ...] = ()) -> List[dict]:
+    rows = []
+    for var in prefix_vars:
+        val = os.environ.get(var, '').strip()
+        rows.append({
+            'env_var': var,
+            'present': bool(val),
+            'masked': _mask_key(val) if val else None,
+            'source': 'railway' if IS_RAILWAY and val else ('env_file' if val else 'missing'),
+        })
+    if not any(r['present'] for r in rows):
+        for var in legacy_vars:
+            val = os.environ.get(var, '').strip()
+            if val:
+                rows.append({
+                    'env_var': var,
+                    'present': True,
+                    'masked': _mask_key(val),
+                    'source': 'legacy',
+                })
+                break
+    return rows
+
+
 def _load_keys(prefix_vars: Tuple[str, ...], legacy_vars: Tuple[str, ...] = ()) -> List[Tuple[str, str]]:
     keys: List[Tuple[str, str]] = []
     for var in prefix_vars:
         val = os.environ.get(var, '').strip()
         if val:
-            keys.append((var.replace('_API_KEY', '').replace('GOOGLE', 'Gemini').replace('GROQ', 'Groq'), val))
+            keys.append((var, val))
     if not keys:
         for var in legacy_vars:
             val = os.environ.get(var, '').strip()
             if val:
-                keys.append(('legacy', val))
+                keys.append((var, val))
                 break
     return keys
+
+
+def get_provider_env_diagnostics() -> dict:
+    """Safe env/registry diagnostics for OPS and debug endpoints."""
+    gemini_registry = _key_registry(GEMINI_KEY_VARS, GEMINI_LEGACY_VARS)
+    groq_registry = _key_registry(GROQ_KEY_VARS, GROQ_LEGACY_VARS)
+    claude_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    gemini_loaded = sum(1 for r in gemini_registry if r.get('present'))
+    groq_loaded = sum(1 for r in groq_registry if r.get('present'))
+    typos = _scan_env_typos()
+    warnings = list(typos)
+    if gemini_loaded == 0:
+        warnings.append('Gemini pool empty — set GOOGLE_API_KEY_1/2/3 (or GOOGLE_API_KEY legacy)')
+    if groq_loaded == 0:
+        warnings.append('Groq pool empty — set GROQ_API_KEY_1/2/3 (or GROQ_API_KEY legacy)')
+    if not claude_key:
+        warnings.append('Claude key missing — ANTHROPIC_API_KEY not set (strategic tier only)')
+    return {
+        'railway': IS_RAILWAY,
+        'gemini_loaded': gemini_loaded,
+        'groq_loaded': groq_loaded,
+        'claude_loaded': bool(claude_key) and claude_key.startswith('sk-ant-'),
+        'gemini_keys': gemini_registry,
+        'groq_keys': groq_registry,
+        'claude_masked': _mask_key(claude_key) if claude_key else None,
+        'typo_warnings': typos,
+        'warnings': warnings,
+        'conversational_provider': 'groq' if groq_loaded else ('gemini' if gemini_loaded else 'none'),
+    }
+
+
+def log_provider_startup_diagnostics(*, force: bool = False) -> dict:
+    global _startup_logged
+    diag = get_provider_env_diagnostics()
+    if _startup_logged and not force:
+        return diag
+    _startup_logged = True
+    _log('AI PROVIDERS', f"Gemini loaded: {diag['gemini_loaded']}")
+    _log('AI PROVIDERS', f"Groq loaded: {diag['groq_loaded']}")
+    _log('AI PROVIDERS', f"Claude loaded: {'yes' if diag['claude_loaded'] else 'no'}")
+    _log('AI PROVIDERS', f"Conversational route: {diag['conversational_provider']}")
+    if diag['gemini_loaded'] == 0:
+        _log('AI PROVIDERS', 'ERROR Gemini pool empty — check GOOGLE_API_KEY_1/2/3 on Railway')
+    if diag['groq_loaded'] == 0:
+        _log('AI PROVIDERS', 'ERROR Groq pool empty — check GROQ_API_KEY_1/2/3 on Railway')
+    for warn in diag.get('typo_warnings') or []:
+        _log('AI PROVIDERS', f"WARN {warn}")
+    for row in (diag.get('gemini_keys') or []) + (diag.get('groq_keys') or []):
+        if row.get('present'):
+            _log('AI PROVIDERS', f"  {row['env_var']} -> {row['masked']} ({row.get('source')})")
+    return diag
 
 
 def _is_quota_error(error: str) -> bool:
@@ -94,21 +206,56 @@ class ProviderPool:
     def __init__(self, provider_name: str, role: str, key_pairs: List[Tuple[str, str]]):
         self.provider_name = provider_name
         self.role = role
+        self._key_vars: Tuple[str, ...] = ()
+        self._legacy_vars: Tuple[str, ...] = ()
         self._keys = key_pairs
         self._active_index = 0
         self._state = self._load_state()
+
+    def reload_keys_from_env(self, prefix_vars: Tuple[str, ...], legacy_vars: Tuple[str, ...] = ()):
+        self._key_vars = prefix_vars
+        self._legacy_vars = legacy_vars
+        fresh = _load_keys(prefix_vars, legacy_vars)
+        if len(fresh) != len(self._keys) or any(a[0] != b[0] for a, b in zip(fresh, self._keys)):
+            self._keys = fresh
+            self._state = self._load_state()
+        else:
+            self._keys = fresh
+            for idx, (var, key) in enumerate(self._keys):
+                sid = f"{self.provider_name}-{idx + 1}"
+                slot = self._state.setdefault('slots', {}).setdefault(sid, _slot_template(sid, key))
+                slot['has_key'] = bool(key)
+                slot['env_var'] = var
+
+    def _recover_expired_cooldowns(self) -> int:
+        now = time.time()
+        recovered = 0
+        for slot_id, slot in (self._state.get('slots') or {}).items():
+            cd = float(slot.get('cooldown_until') or 0)
+            if cd > 0 and now >= cd:
+                slot['cooldown_until'] = 0.0
+                slot['active'] = True
+                slot['consecutive_failures'] = 0
+                slot['health_score'] = min(1.0, float(slot.get('health_score', 0.5)) + 0.1)
+                self._state['slots'][slot_id] = slot
+                recovered += 1
+                _log('PROVIDER RECOVER', f'{slot_id} cooldown expired — slot reactivated')
+        if recovered:
+            self._persist()
+        return recovered
 
     def _load_state(self) -> dict:
         all_state = _read_global_state()
         pool = all_state.get('pools', {}).get(self.provider_name) or {}
         slots = pool.get('slots') or {}
-        for idx, (slot_id, key) in enumerate(self._keys):
+        for idx, (env_var, key) in enumerate(self._keys):
             sid = f"{self.provider_name}-{idx + 1}"
             if sid not in slots:
                 slots[sid] = _slot_template(sid, key)
             else:
                 slots[sid]['has_key'] = bool(key)
                 slots[sid]['key_id'] = sid
+            slots[sid]['env_var'] = env_var
         pool['slots'] = slots
         pool['active_slot'] = pool.get('active_slot') or (f"{self.provider_name}-1" if self._keys else None)
         pool['role'] = self.role
@@ -194,6 +341,7 @@ class ProviderPool:
         call_fn: Callable[[str, str], Tuple[dict, float]],
         *,
         model_label: str = '',
+        _recovery_retry: bool = True,
     ) -> Tuple[dict, dict]:
         """
         call_fn(api_key, slot_id) -> (result_dict, latency_ms)
@@ -205,21 +353,26 @@ class ProviderPool:
                 {'degraded': True, 'reason': 'no_keys'},
             )
 
+        self._recover_expired_cooldowns()
+
         meta = {'provider': self.provider_name, 'failovers': 0, 'slot_id': None, 'degraded': False}
         last_error = ''
         attempts = 0
+        skipped_cooldown = 0
 
         for slot_id in self._slot_ids_ordered():
             if attempts >= MAX_FAILOVER_PER_REQUEST:
                 break
             slot = self._state['slots'].get(slot_id) or {}
             if self._in_cooldown(slot):
+                skipped_cooldown += 1
                 continue
             api_key = self._get_key_for_slot(slot_id)
             if not api_key:
                 continue
 
             attempts += 1
+            _log('AI ROUTE', f'{self.provider_name}_pool -> {slot_id} active')
             t0 = time.time()
             try:
                 result, latency_ms = call_fn(api_key, slot_id)
@@ -250,10 +403,18 @@ class ProviderPool:
                 self._state['slots'][slot_id] = slot
                 meta['failovers'] += 1
                 self._persist()
-                _log('PROVIDER FAILOVER', f'{self.provider_name} {slot_id} → next ({err[:80]})')
+                _log('PROVIDER FAILOVER', f'{self.provider_name} {slot_id} -> next ({err[:80]})')
                 continue
 
+        if attempts == 0 and skipped_cooldown and self._keys and _recovery_retry:
+            recovered = self._recover_expired_cooldowns()
+            if recovered:
+                return self.execute_with_failover(call_fn, model_label=model_label, _recovery_retry=False)
+
         meta['degraded'] = True
+        if attempts == 0 and skipped_cooldown:
+            last_error = last_error or f'all {self.provider_name} slots in cooldown'
+            _log('PROVIDER DEGRADED', f'{self.provider_name} all slots cooling down ({skipped_cooldown} skipped)')
         out = {'success': False, 'error': last_error or 'all pool slots failed', 'text': ''}
         out['user_message'] = ENRICHMENT_UNAVAILABLE_MSG
         return out, meta
@@ -261,6 +422,7 @@ class ProviderPool:
     def is_degraded(self) -> bool:
         if not self._keys:
             return True
+        self._recover_expired_cooldowns()
         now = time.time()
         for slot_id in self._slot_ids_ordered():
             slot = self._state['slots'].get(slot_id) or {}
@@ -297,12 +459,16 @@ class GeminiPoolManager(ProviderPool):
     def __init__(self):
         keys = _load_keys(GEMINI_KEY_VARS, GEMINI_LEGACY_VARS)
         super().__init__('gemini', 'intelligence_engine', keys)
+        self._key_vars = GEMINI_KEY_VARS
+        self._legacy_vars = GEMINI_LEGACY_VARS
 
 
 class GroqPoolManager(ProviderPool):
     def __init__(self):
-        keys = _load_keys(GROQ_KEY_VARS, ('GROQ_API_KEY',))
+        keys = _load_keys(GROQ_KEY_VARS, GROQ_LEGACY_VARS)
         super().__init__('groq', 'conversational_runtime', keys)
+        self._key_vars = GROQ_KEY_VARS
+        self._legacy_vars = GROQ_LEGACY_VARS
 
 
 class ClaudeProvider:
@@ -347,15 +513,21 @@ def _read_global_state() -> dict:
 
 def get_gemini_pool() -> GeminiPoolManager:
     global _gemini_pool
+    load_env()
     if _gemini_pool is None:
         _gemini_pool = GeminiPoolManager()
+    else:
+        _gemini_pool.reload_keys_from_env(GEMINI_KEY_VARS, GEMINI_LEGACY_VARS)
     return _gemini_pool
 
 
 def get_groq_pool() -> GroqPoolManager:
     global _groq_pool
+    load_env()
     if _groq_pool is None:
         _groq_pool = GroqPoolManager()
+    else:
+        _groq_pool.reload_keys_from_env(GROQ_KEY_VARS, GROQ_LEGACY_VARS)
     return _groq_pool
 
 
@@ -386,13 +558,16 @@ def get_degraded_status() -> dict:
 
 
 def get_provider_ops_summary() -> dict:
+    log_provider_startup_diagnostics()
     gem = get_gemini_pool().summary()
     groq = get_groq_pool().summary()
     claude = get_claude_provider().summary()
     degraded = get_degraded_status()
+    env_diag = get_provider_env_diagnostics()
     return {
         'status': 'ok',
         'degraded': degraded,
+        'env_diagnostics': env_diag,
         'providers': {
             'gemini': gem,
             'groq': groq,
@@ -403,7 +578,46 @@ def get_provider_ops_summary() -> dict:
             'groq': 'Telegram Q&A · operator chat · lightweight explanations',
             'claude': 'final synthesis · contradiction-heavy strategic reasoning only',
         },
+        'active_conversational_provider': env_diag.get('conversational_provider'),
         'updated_at': _read_global_state().get('updated_at'),
+    }
+
+
+def get_provider_debug_registry() -> dict:
+    """Extended registry for /api/debug/providers."""
+    ops = get_provider_ops_summary()
+    env_diag = ops.get('env_diagnostics') or get_provider_env_diagnostics()
+    providers = ops.get('providers') or {}
+    registry = {}
+    for name, pdata in providers.items():
+        slots = []
+        for s in pdata.get('slots') or []:
+            slots.append({
+                'slot_id': s.get('slot_id'),
+                'env_var': s.get('env_var'),
+                'status': s.get('status'),
+                'active': s.get('status') == 'active',
+                'has_key': s.get('has_key'),
+                'cooldown_remaining_sec': s.get('cooldown_remaining_sec'),
+                'consecutive_failures': s.get('consecutive_failures'),
+                'quota_failures': s.get('quota_failures'),
+                'failover_count': s.get('failover_count'),
+                'last_error': s.get('last_error'),
+                'last_success': s.get('last_success'),
+                'health_score': s.get('health_score'),
+            })
+        registry[name] = {
+            'loaded': pdata.get('active_slot') is not None or any(x.get('has_key') for x in slots),
+            'degraded': pdata.get('degraded'),
+            'active_slot': pdata.get('active_slot'),
+            'role': pdata.get('role'),
+            'slots': slots,
+        }
+    return {
+        'env': env_diag,
+        'registry': registry,
+        'degraded': ops.get('degraded'),
+        'active_conversational_provider': env_diag.get('conversational_provider'),
     }
 
 

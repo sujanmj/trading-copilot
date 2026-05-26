@@ -636,6 +636,11 @@ def listen_forever():
     safe_print("TELEGRAM LISTENER v4 - ML Elite Integration")
     safe_print(f"Bot: @{os.environ.get('BOT_USERNAME', 'sujan_trading_bot')}")
     safe_print(f"Chat ID: {CHAT_ID}")
+    try:
+        from backend.ai.provider_manager import log_provider_startup_diagnostics
+        log_provider_startup_diagnostics(force=True)
+    except Exception as e:
+        safe_print(f"[AI PROVIDERS] WARN diagnostics failed: {e}")
     safe_print("=" * 60)
 
     if not BOT_TOKEN or not CHAT_ID:

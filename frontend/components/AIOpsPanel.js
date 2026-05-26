@@ -6,18 +6,19 @@
   'use strict';
 
   const POLL_MS = 8000;
-  const ALERT_POLL_MS = 30000;
-  const STORAGE_KEY = 'tradingcopilot_aiops_seen';
 
   let config = {
     getApiBase: () => '',
     getHeaders: () => ({}),
+    getRuntimeState: () => null,
   };
   let open = false;
   let pollTimer = null;
-  let alertTimer = null;
   let loadedOnce = false;
   let lastAlertSignature = '';
+  let runtimeUnsub = null;
+
+  const STORAGE_KEY = 'tradingcopilot_aiops_seen';
 
   function $(id) {
     return document.getElementById(id);
@@ -112,9 +113,32 @@
     return false;
   }
 
+  function buildHealthFromRuntime(runtime) {
+    if (!runtime || !runtime.ops) return {};
+    const ops = runtime.ops;
+    const health = ops.health || {};
+    return {
+      ...health,
+      provider_analytics: ops.provider_analytics || health.provider_analytics,
+      provider_ops: ops.provider_ops || health.provider_ops,
+      operational_alerts: ops.operational_alerts || health.operational_alerts,
+      pipeline_observability: ops.pipeline_observability || health.pipeline_observability,
+    };
+  }
+
   async function checkAlertsOnly() {
     if (open) return;
     try {
+      const runtime = config.getRuntimeState ? config.getRuntimeState() : null;
+      if (runtime) {
+        const data = {
+          health: buildHealthFromRuntime(runtime),
+          explanations: runtime.explanations || {},
+        };
+        updateAlertDot(computeUnread(data));
+        if (!lastAlertSignature) lastAlertSignature = alertSignature(data);
+        return;
+      }
       const [health, explanations] = await Promise.all([
         fetchJson('/api/health', false),
         fetchJson('/api/debug/explanations', true).catch(() => ({})),
@@ -307,6 +331,7 @@
     );
 
     const prov = (routing.providers || health.provider_ops || {});
+    const envDiag = prov.env_diagnostics || health.provider_ops?.env_diagnostics || {};
     const degraded = prov.degraded || {};
     const gem = (prov.providers || {}).gemini || {};
     const groq = (prov.providers || {}).groq || {};
@@ -323,15 +348,20 @@
     $('aiOpsProviders').innerHTML =
       renderStatGrid([
         { label: 'Mode', value: degraded.mode || '—', cls: degraded.mode && degraded.mode !== 'normal' ? 'ai-ops-warn' : '' },
-        { label: 'Gemini', value: gem.active_slot || '—' },
-        { label: 'Groq', value: groq.active_slot || '—' },
-        { label: 'Claude', value: claude.active_slot || 'standby' },
+        { label: 'Gemini', value: `${envDiag.gemini_loaded ?? '—'} loaded` },
+        { label: 'Groq', value: `${envDiag.groq_loaded ?? '—'} loaded` },
+        { label: 'Claude', value: envDiag.claude_loaded ? 'yes' : 'no', cls: envDiag.claude_loaded ? '' : 'ai-ops-warn' },
+        { label: 'Conv route', value: envDiag.conversational_provider || prov.active_conversational_provider || '—' },
       ]) +
       renderList(
         [
           slotLine(gem, 'Gemini pool'),
           slotLine(groq, 'Groq pool'),
           claude.active_slot ? 'Claude → strategist standby' : 'Claude → no key',
+          envDiag.gemini_loaded === 0 ? '⚠ Gemini env missing (GOOGLE_API_KEY_1/2/3)' : null,
+          envDiag.groq_loaded === 0 ? '⚠ Groq env missing (GROQ_API_KEY_1/2/3)' : null,
+          ...(envDiag.typo_warnings || []).map((w) => `⚠ ${w}`),
+          ...(envDiag.warnings || []).slice(0, 3).map((w) => `⚠ ${w}`),
           degraded.enrichment_message ? 'Enrichment fallback active' : null,
         ].filter(Boolean),
         'Provider data unavailable'
@@ -547,27 +577,43 @@
       $('aiOpsWarnings').style.display = 'none';
     }
 
-    $('aiOpsFooter').textContent = `Updated ${new Date().toLocaleTimeString('en-IN')} · ${obs.latest_cycle_id || 'no cycle'}`;
+    const runtimeTs = (global.RuntimeManager && RuntimeManager.formatTimestamp)
+      ? RuntimeManager.formatTimestamp()
+      : new Date().toLocaleTimeString('en-IN');
+    $('aiOpsFooter').textContent = `Updated ${runtimeTs} · ${obs.latest_cycle_id || 'no cycle'}`;
   }
 
   async function refreshPanel() {
     const statusEl = $('aiOpsLoadStatus');
     if (statusEl) statusEl.textContent = 'Syncing…';
     try {
-      const [health, preservation, compression, routing, delta, quality, explanations, telegram, reliability, calibration] = await Promise.all([
-        fetchJson('/api/health', false),
+      const runtime = config.getRuntimeState ? config.getRuntimeState() : null;
+      const health = buildHealthFromRuntime(runtime);
+      const explanations = (runtime && runtime.explanations) || {};
+
+      const [preservation, compression, routing, delta, quality, telegram, reliability, calibration] = await Promise.all([
         fetchJson('/api/debug/preservation', true),
         fetchJson('/api/debug/compression', true),
         fetchJson('/api/debug/ai-routing', true),
         fetchJson('/api/debug/delta-analysis', true),
         fetchJson('/api/debug/quality', true),
-        fetchJson('/api/debug/explanations', true),
         fetchJson('/api/debug/telegram-alerts', true).catch(() => ({})),
         fetchJson('/api/debug/reliability', true).catch(() => ({})),
         fetchJson('/api/debug/calibration', true).catch(() => ({})),
       ]);
 
-      const data = { health, preservation, compression, routing, delta, quality, explanations, telegram, reliability, calibration };
+      const data = {
+        health,
+        preservation,
+        compression,
+        routing,
+        delta,
+        quality,
+        explanations,
+        telegram,
+        reliability,
+        calibration,
+      };
       renderPanel(data);
       markAlertsSeen(data);
       if (statusEl) statusEl.textContent = '';
@@ -590,8 +636,20 @@
   }
 
   function startAlertPolling() {
-    if (alertTimer) return;
-    alertTimer = setInterval(checkAlertsOnly, ALERT_POLL_MS);
+    /* Alerts driven by RuntimeManager subscription — no independent timer. */
+  }
+
+  function onRuntimeUpdate(runtime) {
+    if (!runtime) return;
+    if (open) {
+      refreshPanel();
+    } else {
+      const data = {
+        health: buildHealthFromRuntime(runtime),
+        explanations: runtime.explanations || {},
+      };
+      updateAlertDot(computeUnread(data));
+    }
   }
 
   function openPanel() {
@@ -632,9 +690,12 @@
   function init(opts) {
     config.getApiBase = opts.getApiBase || config.getApiBase;
     config.getHeaders = opts.getHeaders || config.getHeaders;
+    config.getRuntimeState = opts.getRuntimeState || config.getRuntimeState;
     bindUi();
+    if (opts.subscribeRuntime) {
+      runtimeUnsub = opts.subscribeRuntime(onRuntimeUpdate);
+    }
     checkAlertsOnly();
-    startAlertPolling();
   }
 
   global.AIOpsPanel = {
@@ -644,5 +705,6 @@
     toggle: togglePanel,
     refresh: refreshPanel,
     checkAlerts: checkAlertsOnly,
+    onRuntimeUpdate,
   };
 })(window);

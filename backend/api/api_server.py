@@ -414,6 +414,11 @@ def stale_data_watchdog():
 def start_background_processes():
     """Launch scheduler and telegram listener in daemon threads"""
     backend_log.info("Starting background processes (railway=%s)", IS_RAILWAY)
+    try:
+        from backend.ai.provider_manager import log_provider_startup_diagnostics
+        log_provider_startup_diagnostics(force=True)
+    except Exception as e:
+        print(f"[AI PROVIDERS] WARN diagnostics failed: {e}")
 
     # Scheduler thread
     if os.environ.get('DISABLE_SCHEDULER') != '1':
@@ -552,6 +557,203 @@ def api_config():
 
 @app.get("/api/health")
 def health():
+    return _build_health_payload()
+
+
+def _load_explanations_light() -> dict:
+    from backend.utils.config import ANALYSIS_EXPLANATIONS_FILE
+    path = ANALYSIS_EXPLANATIONS_FILE
+    if not path.exists():
+        return {"status": "degraded", "reason": "file_missing", "latest": None, "quality_history": []}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            data = {"latest": None, "quality_history": []}
+        data.setdefault('status', 'ok')
+        return sanitize_json_value(data)
+    except Exception as e:
+        return sanitize_json_value({
+            "status": "degraded",
+            "reason": str(e),
+            "latest": None,
+            "quality_history": [],
+        })
+
+
+def _panel_state_from_source(
+    key: str,
+    source_status: dict,
+    *,
+    ready: bool = True,
+    waiting_message: str = '',
+    collecting_message: str = '',
+) -> dict:
+    src = source_status.get(key) or {}
+    status_name = src.get('status') or 'missing'
+    stale = status_name == 'stale'
+    age = src.get('age_seconds')
+
+    if status_name == 'missing' or not ready:
+        return {
+            'status': 'waiting',
+            'stale': True,
+            'message': waiting_message or f'Waiting for {key} data.',
+            'age_seconds': age,
+        }
+    if collecting_message:
+        return {
+            'status': 'collecting',
+            'stale': stale,
+            'message': collecting_message,
+            'age_seconds': age,
+        }
+    return {
+        'status': 'stale' if stale else 'ready',
+        'stale': stale,
+        'message': f'{key} data is stale — watchdog may refresh.' if stale else None,
+        'age_seconds': age,
+    }
+
+
+def _build_runtime_snapshot() -> dict:
+    """Single synchronized payload for all frontend intelligence surfaces."""
+    generated_at = datetime.now().isoformat()
+    health_payload = _build_health_payload()
+    source_status = health_payload.get('source_status') or {}
+
+    data = {
+        'intelligence': load_json_file('unified_intelligence.json'),
+        'scanner': load_json_file('scanner_data.json'),
+        'govt': load_json_file('govt_intelligence.json'),
+        'news': load_json_file('news_feed.json'),
+        'reddit': load_json_file('reddit_data.json'),
+        'markets': load_json_file('global_markets.json'),
+        'india': load_json_file('latest_market_data.json'),
+        'youtube': load_json_file('youtube_feed.json'),
+        'inshorts': load_json_file('inshorts_feed.json'),
+        'stats': load_json_file('stats_data.json'),
+        'history': load_json_file('history_data.json'),
+    }
+
+    stats = data.get('stats') or {}
+    history = data.get('history') or {}
+    intelligence = data.get('intelligence') or {}
+    db_stats = stats.get('db_stats') or {}
+    metrics = stats.get('metrics_all_time') or {}
+    journal = history.get('intelligence_journal') or {}
+    journal_entries = journal.get('entries') or []
+
+    intel_ok = bool(intelligence) and not intelligence.get('error')
+    stats_ok = bool(stats) and not stats.get('error')
+    history_ok = bool(history) and not history.get('error')
+    market_ok = (
+        (source_status.get('markets') or {}).get('status') not in (None, 'missing')
+        or (source_status.get('india') or {}).get('status') not in (None, 'missing')
+    )
+
+    evaluated = int(metrics.get('total_evaluated') or 0)
+    calibration_panel = _panel_state_from_source(
+        'stats',
+        source_status,
+        ready=stats_ok,
+        waiting_message='Collecting evaluation samples.',
+    )
+    if stats_ok and evaluated == 0:
+        calibration_panel = {
+            'status': 'collecting',
+            'stale': calibration_panel.get('stale', False),
+            'message': 'Collecting evaluation samples.',
+            'age_seconds': calibration_panel.get('age_seconds'),
+        }
+
+    journal_panel = {
+        'status': 'waiting',
+        'stale': False,
+        'message': 'Waiting for post-market review generation.',
+        'entry_count': len(journal_entries),
+        'latest': journal.get('latest'),
+        'age_seconds': (source_status.get('history') or {}).get('age_seconds'),
+    }
+    if journal_entries:
+        journal_panel['status'] = 'ready'
+        journal_panel['message'] = None
+    elif not history_ok:
+        journal_panel['stale'] = True
+
+    any_stale = any(
+        (source_status.get(k) or {}).get('status') == 'stale'
+        for k in ('intelligence', 'markets', 'india', 'stats', 'history')
+    )
+
+    ai_runtime = {}
+    try:
+        from backend.analytics.provider_analytics import get_ai_runtime_stats_payload
+        ai_runtime = get_ai_runtime_stats_payload()
+    except Exception:
+        ai_runtime = {'status': 'degraded'}
+
+    panels = {
+        'runtime': {
+            'status': 'ready',
+            'stale': any_stale,
+            'message': None,
+            'generated_at': generated_at,
+        },
+        'brain': _panel_state_from_source(
+            'intelligence',
+            source_status,
+            ready=intel_ok,
+            waiting_message='Waiting for intelligence cycle.',
+        ),
+        'market': _panel_state_from_source(
+            'markets',
+            source_status,
+            ready=market_ok,
+            waiting_message='Waiting for market feed refresh.',
+        ),
+        'calibration': calibration_panel,
+        'journal': journal_panel,
+        'ops': {
+            'status': 'ready',
+            'stale': any_stale,
+            'message': None,
+            'degraded_mode': (health_payload.get('provider_analytics') or {}).get('degraded_mode'),
+        },
+    }
+
+    return sanitize_json_value({
+        'status': 'ok',
+        'generated_at': generated_at,
+        'panels': panels,
+        'freshness': health_payload.get('data_freshness') or {},
+        'source_status': source_status,
+        'data': data,
+        'ops': {
+            'health': health_payload,
+            'provider_analytics': health_payload.get('provider_analytics') or {},
+            'provider_ops': health_payload.get('provider_ops') or {},
+            'operational_alerts': health_payload.get('operational_alerts') or {},
+            'pipeline_observability': health_payload.get('pipeline_observability') or {},
+        },
+        'explanations': _load_explanations_light(),
+        'calibration_summary': {
+            'predictions': db_stats.get('total_predictions', 0),
+            'evaluated': evaluated,
+            'win_rate': metrics.get('win_rate'),
+            'ai_runtime': ai_runtime,
+            'dashboard_status': (stats.get('calibration_dashboard') or {}).get('status'),
+        },
+        'journal_summary': {
+            'entry_count': len(journal_entries),
+            'latest': journal.get('latest'),
+            'status': journal_panel['status'],
+            'message': journal_panel.get('message'),
+        },
+    })
+
+
+def _build_health_payload() -> dict:
     from backend.utils.market_hours import get_watchdog_config
     wd_cfg = get_watchdog_config()
     dynamic_stale_threshold = int(wd_cfg.get('stale_threshold_seconds') or STALE_THRESHOLD_SECONDS)
@@ -663,6 +865,11 @@ def health():
     }
 
 
+@app.get("/api/runtime_snapshot", dependencies=[Depends(verify_api_key)])
+def api_runtime_snapshot():
+    return _build_runtime_snapshot()
+
+
 @app.get("/api/intelligence", dependencies=[Depends(verify_api_key)])
 def get_intelligence(): return load_json_file("unified_intelligence.json")
 
@@ -699,19 +906,15 @@ def get_history(): return load_json_file("history_data.json")
 
 @app.get("/api/all", dependencies=[Depends(verify_api_key)])
 def get_all():
+    snap = _build_runtime_snapshot()
+    data = snap.get('data') or {}
     return {
-        "intelligence": load_json_file("unified_intelligence.json"),
-        "scanner": load_json_file("scanner_data.json"),
-        "govt": load_json_file("govt_intelligence.json"),
-        "news": load_json_file("news_feed.json"),
-        "reddit": load_json_file("reddit_data.json"),
-        "markets": load_json_file("global_markets.json"),
-        "india": load_json_file("latest_market_data.json"),
-        "youtube": load_json_file("youtube_feed.json"),
-        "inshorts": load_json_file("inshorts_feed.json"),
-        "stats": load_json_file("stats_data.json"),
-        "history": load_json_file("history_data.json"),
-        "fetched_at": datetime.now().isoformat()
+        **data,
+        "fetched_at": snap.get('generated_at'),
+        "runtime": {
+            "generated_at": snap.get('generated_at'),
+            "panels": snap.get('panels'),
+        },
     }
 
 
@@ -976,10 +1179,11 @@ def api_debug_explanations():
 
 @app.get("/api/debug/providers", dependencies=[Depends(verify_api_key)])
 def api_debug_providers():
-    from backend.ai.provider_manager import get_provider_ops_summary
+    from backend.ai.provider_manager import get_provider_ops_summary, get_provider_debug_registry
     from backend.analytics.provider_analytics import get_runtime_ops_summary
     return sanitize_json_value({
         **get_provider_ops_summary(),
+        'debug_registry': get_provider_debug_registry(),
         'runtime_analytics': get_runtime_ops_summary(),
     })
 
@@ -1040,6 +1244,11 @@ def main():
     print(f"DB:   {DB_PATH}")
     print(f"AI: {'Available' if AI_AVAILABLE else 'NOT available'}")
     print(f"Auth: {'X-API-Key required' if API_KEY else 'OPEN MODE'}")
+    try:
+        from backend.ai.provider_manager import log_provider_startup_diagnostics
+        log_provider_startup_diagnostics(force=True)
+    except Exception as e:
+        print(f"[AI PROVIDERS] WARN diagnostics failed: {e}")
     print("=" * 60)
     backend_log.info("Uvicorn starting host=%s port=%s railway=%s", host, port, IS_RAILWAY)
     uvicorn.run(app, host=host, port=port, log_level="info")
