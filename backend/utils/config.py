@@ -50,7 +50,11 @@ QUALITY_SCORE_WARN = float(os.environ.get('QUALITY_SCORE_WARN', '0.55'))
 CONTRADICTION_RETENTION_WARN = float(os.environ.get('CONTRADICTION_RETENTION_WARN', '0.6'))
 COMPRESSION_RATIO_WARN = float(os.environ.get('COMPRESSION_RATIO_WARN', '0.25'))
 SENTIMENT_PRESERVATION_WARN = float(os.environ.get('SENTIMENT_PRESERVATION_WARN', '0.55'))
-MAX_DEBUG_SNAPSHOTS = int(os.environ.get('MAX_DEBUG_SNAPSHOTS', '25'))
+# Operational alert routing (Telegram severity policy)
+CONTRADICTION_TELEGRAM_WARN = float(os.environ.get('CONTRADICTION_TELEGRAM_WARN', '0.85'))
+CONTRADICTION_TELEGRAM_CRITICAL = float(os.environ.get('CONTRADICTION_TELEGRAM_CRITICAL', '0.95'))
+ALERT_COOLDOWN_CRITICAL = int(os.environ.get('ALERT_COOLDOWN_CRITICAL', '3600'))
+ALERT_COOLDOWN_HIGH = int(os.environ.get('ALERT_COOLDOWN_HIGH', '14400'))
 
 
 def ensure_dirs():

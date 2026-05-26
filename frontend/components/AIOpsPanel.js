@@ -411,11 +411,20 @@
     const intelAge = intelFresh.age_seconds;
     const intelStale = intelFresh.status === 'stale';
     const staleThreshold = health.watchdog_stale_threshold_seconds ?? obs.watchdog_stale_threshold_seconds;
+    const opAlerts = health.operational_alerts || {};
+    const opEvents = (opAlerts.recent_events || []).slice(0, 6);
+    const opEventLines = opEvents.map((e) => {
+      const tg = e.telegram && e.telegram !== 'not_evaluated' ? ` · TG:${e.telegram}` : '';
+      return `${e.severity || '?'} · ${e.code || 'event'} — ${(e.message || '').slice(0, 72)}${tg}`;
+    });
     $('aiOpsHealth').innerHTML = renderList(
       [
         `Intelligence: ${intelFresh.status || 'unknown'}${intelAge != null ? ` (${intelAge}s)` : ''}`,
         staleThreshold != null ? `Watchdog threshold: ${staleThreshold}s (${health.watchdog_mode || obs.watchdog_mode || '—'})` : null,
         intelStale ? '⚠ Stale intelligence — watchdog may recover (regime-aware)' : null,
+        opAlerts.counters
+          ? `Alert router: ${opAlerts.counters.telegram_sent || 0} TG sent · ${opAlerts.counters.telegram_suppressed || 0} suppressed · ${opAlerts.counters.ops_logged || 0} logged`
+          : null,
         quality.repetition_suppressed_count != null
           ? `Repetition suppressed: ${quality.repetition_suppressed_count}`
           : obs.repetition_suppressed_count != null
@@ -434,7 +443,10 @@
         warnings.length ? `⚠ ${warnings.length} quality warning(s)` : null,
       ].filter(Boolean),
       'Health data unavailable'
-    );
+    ) +
+    (opEventLines.length
+      ? `<div class="ai-ops-subhead">Operational events (OPS only)</div>${renderList(opEventLines, 'No operational events yet')}`
+      : '');
 
     if (warnings.length) {
       $('aiOpsWarnings').innerHTML = warnings

@@ -402,26 +402,24 @@ def check_quality_alerts(quality: dict, reuse: bool = False) -> List[dict]:
 
 
 def _maybe_telegram_quality_alert(warnings: List[dict], quality: dict):
-    """Telegram alert only for severe multi-signal degradation."""
+    """Telegram alert only for severe multi-signal degradation — routed via severity policy."""
     severe = [w for w in warnings if w['code'] in ('low_intelligence_quality', 'overcompression_risk')]
     if len(severe) < 2:
         return
-    token = get_env('TELEGRAM_BOT_TOKEN')
-    chat_id = get_env('TELEGRAM_CHAT_ID')
-    if not token or not chat_id:
-        return
     try:
-        import requests
+        from backend.utils.alert_routing import HIGH, emit_operational_alert
+        from backend.utils.market_hours import get_market_period
         iq = quality.get('intelligence_quality_score', '?')
         msg = (
-            f"⚠️ AI Quality Degradation\n"
-            f"IQ={iq} warnings={len(warnings)}\n"
+            f"AI quality degradation: IQ={iq}, warnings={len(warnings)} — "
             + ', '.join(w['code'] for w in warnings[:4])
         )
-        requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={'chat_id': chat_id, 'text': msg},
-            timeout=10,
+        emit_operational_alert(
+            'ai_quality_degradation',
+            HIGH,
+            msg,
+            period=get_market_period(),
+            meta={'quality_iq': iq, 'warning_count': len(warnings)},
         )
     except Exception as e:
         _log('QUALITY WARNING', f'Telegram alert failed: {e}')

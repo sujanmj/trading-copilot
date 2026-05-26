@@ -368,13 +368,25 @@ def _detect_intraday_events(state: dict, scanner: dict, govt: dict, intel: dict)
                 'item': item,
             })
 
-    if disagree > 0.55:
+    if disagree >= 0.85:
         events.append({
             'type': 'sentiment_reversal',
-            'confidence': 0.7,
-            'detail': f'Sentiment instability {disagree:.2f}',
+            'confidence': min(0.92, 0.75 + disagree * 0.15),
+            'detail': f'Severe sentiment instability {disagree:.2f}',
             'dedupe': f"sentiment_{datetime.now().strftime('%Y-%m-%d-%H')}",
         })
+    elif disagree >= 0.65:
+        try:
+            from backend.utils.alert_routing import MEDIUM, record_operational_event
+            record_operational_event(
+                'contradiction_elevated',
+                MEDIUM,
+                f'Elevated contradictions {disagree:.2f} — logged for OPS, Telegram suppressed',
+                meta={'contradiction_score': disagree},
+                telegram_decision='below_telegram_threshold',
+            )
+        except Exception:
+            pass
 
     return events
 
