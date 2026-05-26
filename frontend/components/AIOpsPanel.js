@@ -535,6 +535,11 @@
       const stateLines = Object.entries(states).map(([k, v]) => `${k}: ${v}`);
       const calSnap = lifecycle.calibration || {};
       const pipelineStatus = lifecycle.pipeline_status || (lifecycle.evaluation_cycle_complete ? 'COMPLETE' : 'STALE');
+      const pipelineDisplay = pipelineStatus === 'STALE' && operational && operational.expect_quiet_collectors
+        ? 'IDLE'
+        : pipelineStatus;
+      const pipelineCls = pipelineDisplay === 'COMPLETE' ? 'ai-ops-ok'
+        : (pipelineDisplay === 'IDLE' ? 'ai-ops-ok' : (pipelineDisplay === 'RUNNING' ? 'ai-ops-warn' : 'ai-ops-warn'));
       const statsAge = lifecycle.stats_age_minutes != null
         ? `${lifecycle.stats_age_minutes}m`
         : ((data.sourceStatus && data.sourceStatus.stats && data.sourceStatus.stats.age_seconds != null)
@@ -545,17 +550,18 @@
         : ((data.sourceStatus && data.sourceStatus.history && data.sourceStatus.history.age_seconds != null)
           ? `${Math.round(data.sourceStatus.history.age_seconds / 60)}m`
           : null);
-      const statusCls = pipelineStatus === 'COMPLETE' ? 'ai-ops-ok'
-        : pipelineStatus === 'RECOVERING' ? 'ai-ops-warn'
-        : pipelineStatus === 'RUNNING' ? 'ai-ops-warn'
-        : pipelineStatus === 'FAILED' ? 'ai-ops-warn'
+      const statusCls = pipelineDisplay === 'COMPLETE' ? 'ai-ops-ok'
+        : pipelineDisplay === 'IDLE' ? 'ai-ops-ok'
+        : pipelineDisplay === 'RECOVERING' ? 'ai-ops-warn'
+        : pipelineDisplay === 'RUNNING' ? 'ai-ops-warn'
+        : pipelineDisplay === 'FAILED' ? 'ai-ops-warn'
         : 'ai-ops-warn';
       lcEl.innerHTML =
         renderStatGrid([
           {
             label: 'Lifecycle',
-            value: pipelineStatus,
-            cls: statusCls,
+            value: pipelineDisplay,
+            cls: pipelineCls || statusCls,
           },
           {
             label: 'EOD cycle',

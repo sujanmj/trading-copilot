@@ -290,13 +290,16 @@ def cmd_elite():
         engine = data.get("engine_mode", "Initializing...")
         
         if not elite_signals:
-            msg = "🛡️ <b>META-LABELER GUARDRAILS ACTIVE</b>\n\nNo high-conviction trades passed the >72% probability threshold today. The AI recommends protecting capital. Cash is a position."
+            msg = (
+                "🛡️ <b>ELITE: NONE PASSED THRESHOLD</b>\n\n"
+                "No setups exceeded the &gt;72% meta-labeler probability gate. "
+                "Use /opps for scanner WATCHLIST items (below elite threshold)."
+            )
             send_message(msg)
             return
             
-        msg = f"🎯 <b>ELITE SETUPS ({len(elite_signals)} found)</b>\n"
-        msg += f"🧠 <b>Engine:</b> <code>{engine}</code>\n"
-        msg += "═" * 24 + "\n\n"
+        msg = f"🎯 <b>ELITE SETUPS ({len(elite_signals)})</b> · HIGH conviction\n"
+        msg += f"🧠 Engine: <code>{engine}</code>\n\n"
         
         for stock in elite_signals:
             symbol = stock.get("symbol", stock.get("Stock", "UNKNOWN"))
@@ -304,10 +307,9 @@ def cmd_elite():
             prob = stock.get("ml_confidence", "N/A")
             entry = stock.get("entry", "Market")
             
-            icon = "🟢 BUY" if action == "BUY" else "🔴 SELL/AVOID"
-            msg += f"{icon} | <b>{symbol}</b>\n"
-            msg += f"📊 ML Win Probability: <b>{prob}</b>\n"
-            msg += f"💰 Target Entry: <code>{entry}</code>\n\n"
+            icon = "🟢" if action == "BUY" else "🔴"
+            msg += f"{icon} <b>{symbol}</b> [{action}] · ML {prob}\n"
+            msg += f"   Entry: <code>{entry}</code>\n\n"
             
         send_message(msg)
         
@@ -320,8 +322,36 @@ def cmd_brief():
     run_in_background(run_module_with_arg, 'alert_engine', 'morning', 120)
 
 def cmd_outcomes():
-    send_message("📊 Generating outcome report...")
-    run_in_background(run_module_with_arg, 'alert_engine', 'outcome', 120)
+    """Inline outcome summary from stats export — same source as /stats."""
+
+    def _do():
+        try:
+            from backend.storage.stats_exporter import export_stats
+            from backend.utils.telegram_bot import send_outcome_report
+            output = export_stats()
+            metrics = output.get('metrics_all_time') or {}
+            if send_outcome_report(metrics, output.get('top_winners'), output.get('top_losers')):
+                return
+            wins = metrics.get('wins', 0)
+            losses = metrics.get('losses', 0)
+            evaluated = metrics.get('total_evaluated', 0)
+            pending = metrics.get('pending', 0)
+            if evaluated == 0 and wins == 0 and losses == 0:
+                send_message(
+                    "<b>📊 Outcomes</b>\n\n"
+                    f"Evaluated: 0 | Pending: {pending}\n"
+                    "<i>Outcomes evaluate at post-market EOD and 8 AM cycle.</i>"
+                )
+                return
+            send_message(
+                f"<b>📊 Outcomes</b>\n\n"
+                f"Evaluated: {evaluated} | Win rate: {metrics.get('win_rate', 0):.1f}%\n"
+                f"✅ Wins: {wins} | ❌ Losses: {losses} | ⏳ Pending: {pending}"
+            )
+        except Exception as e:
+            send_message(f"❌ Outcome report failed: {str(e)[:200]}")
+
+    run_in_background(_do)
 
 def cmd_history():
     """Refresh GUI history export on demand."""
@@ -413,10 +443,18 @@ def cmd_status():
     try:
         from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
         lc = get_lifecycle_status()
-        lc_emoji = "✅" if lc.get('pipeline_status') == 'COMPLETE' else (
-            "🔄" if lc.get('pipeline_status') in ('RUNNING', 'RECOVERING') else (
-            "❌" if lc.get('pipeline_status') == 'FAILED' else "⏳"))
-        msg += f"\n{lc_emoji} Lifecycle: {lc.get('pipeline_status', 'STALE')} — {lc.get('message', 'unknown')}"
+        lc_status = lc.get('pipeline_status', 'STALE')
+        if lc_status == 'IDLE':
+            lc_emoji = "🌙"
+        elif lc_status == 'COMPLETE':
+            lc_emoji = "✅"
+        elif lc_status in ('RUNNING', 'RECOVERING'):
+            lc_emoji = "🔄"
+        elif lc_status == 'FAILED':
+            lc_emoji = "❌"
+        else:
+            lc_emoji = "⏳"
+        msg += f"\n{lc_emoji} Lifecycle: {lc_status} — {lc.get('message', 'unknown')}"
         if lc.get('last_successful_eod'):
             msg += f"\n   Last EOD: {str(lc['last_successful_eod'])[:19]}"
         if lc.get('last_stats_export'):
@@ -450,9 +488,12 @@ def cmd_stats():
 
     msg = "<b>📊 Trading Copilot Stats</b>\n\n"
     msg += f"<b>Predictions:</b> {db_stats.get('total_predictions', 0)}\n"
-    msg += f"<b>Evaluated:</b> {metrics.get('total_evaluated', 0)}\n"
+    evaluated = metrics.get('total_evaluated', 0)
+    pending = metrics.get('pending', 0)
+    msg += f"<b>Evaluated:</b> {evaluated}\n"
+    msg += f"<b>Pending:</b> {pending}\n"
 
-    if metrics.get('total_evaluated', 0) > 0:
+    if evaluated > 0:
         msg += f"<b>Win Rate:</b> {metrics.get('win_rate', 0):.1f}%\n"
         msg += f"  Wins: {metrics.get('wins', 0)}\n"
         msg += f"  Losses: {metrics.get('losses', 0)}\n"
@@ -460,7 +501,7 @@ def cmd_stats():
         msg += f"<b>Avg Loss:</b> -{metrics.get('avg_loss_pct', 0):.2f}%\n"
         msg += f"<b>Profit Factor:</b> {metrics.get('profit_factor', 0):.2f}\n"
     else:
-        msg += "\n<i>⏳ Outcomes evaluate at 8 AM daily</i>"
+        msg += "\n<i>⏳ No resolved outcomes yet — pending predictions evaluate at EOD</i>"
 
     send_message(msg)
 
@@ -493,16 +534,19 @@ def _do_ask(question, user_id='unknown'):
         return
 
     intel_file = DATA_DIR / 'unified_intelligence.json'
-    context = ""
-    if intel_file.exists():
-        try:
-            with open(intel_file, 'r', encoding='utf-8') as f:
-                intel = json.load(f)
-            context = intel.get('analysis', '')[:3000]
-        except Exception:
-            pass
-
-    prompt = f"""You are an Indian stock market expert. Answer briefly (4-6 sentences).
+    try:
+        from backend.ai.ask_context_builder import build_ask_prompt
+        prompt = build_ask_prompt(question)
+    except Exception:
+        context = ""
+        if intel_file.exists():
+            try:
+                with open(intel_file, 'r', encoding='utf-8') as f:
+                    intel = json.load(f)
+                context = intel.get('analysis', '')[:3000]
+            except Exception:
+                pass
+        prompt = f"""You are an Indian stock market expert. Answer briefly (4-6 sentences).
 
 Recent intelligence context:
 {context}

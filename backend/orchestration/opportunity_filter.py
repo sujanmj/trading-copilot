@@ -21,13 +21,16 @@ IST = pytz.timezone('Asia/Kolkata')
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
 ACTIVE_PREDICTIONS_FILE = DATA_DIR / 'active_predictions.json'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
+ELITE_ALERTS_FILE = DATA_DIR / 'high_conviction_alerts.json'
 
 DEFAULT_OPPS_LIMIT = int(os.environ.get('TELEGRAM_OPPS_LIMIT', '10'))
 MAX_INTEL_AGE_HOURS = 24
 ACTIVE_STATES = frozenset({'ACTIVE', 'PENDING'})
 MIN_RANK_SCORE = 5.5
 MIN_RANK_SCORE_PANIC = 11.0
+ELITE_PROB_THRESHOLD = 0.72
 PANIC_REGIMES = frozenset({'panic_volatile', 'macro_uncertainty', 'regime_transition'})
+MACRO_CONFLICT_REGIMES = frozenset({'macro_uncertainty', 'regime_transition', 'panic_volatile'})
 
 CONFIDENCE_RANK = {
     'ULTRA': 5,
@@ -242,10 +245,29 @@ def _multi_source_boost(item: dict) -> float:
 def _contradiction_penalty(item: dict, ctx: dict) -> float:
     disagree = float(ctx.get('disagreement_score') or 0)
     item_contra = float(item.get('contradiction_severity') or 0)
-    penalty = disagree * 3.0 + item_contra * 2.5
+    penalty = disagree * 4.5 + item_contra * 3.5
     logic = str(item.get('logic') or '').lower()
+    if disagree >= 0.35:
+        penalty += 1.2
     if disagree >= 0.45 and 'watch' in logic:
-        penalty += 1.5
+        penalty += 2.0
+    if disagree >= 0.55 and _confidence_score(item.get('confidence')) >= 4:
+        penalty += 2.5
+    return penalty
+
+
+def _macro_conflict_penalty(item: dict, ctx: dict) -> float:
+    regime = str(ctx.get('regime') or '')
+    if regime not in MACRO_CONFLICT_REGIMES:
+        return 0.0
+    action = str(item.get('action') or '').upper()
+    penalty = 0.0
+    if action in ('BUY', 'LONG', 'OPPORTUNITY') and regime == 'macro_uncertainty':
+        penalty += 2.0
+    if action in ('BUY', 'LONG') and regime == 'panic_volatile':
+        penalty += 2.8
+    if 'govt' not in str(item.get('logic') or '').lower() and regime == 'macro_uncertainty':
+        penalty += 0.8
     return penalty
 
 
@@ -324,13 +346,76 @@ def _rank_score(
         _contradiction_penalty(item, ctx)
         + _hallucination_penalty(item, ctx)
         + _panic_overextension_penalty(item, ctx, scanner_index)
+        + _macro_conflict_penalty(item, ctx)
     )
     vol = float(ctx.get('volatility_index') or 0)
-    if vol > 0.65:
-        base *= 0.90
+    if vol > 0.55:
+        base *= max(0.78, 1.0 - (vol - 0.55) * 0.35)
     if str(ctx.get('regime') or '') in PANIC_REGIMES:
-        base *= 0.85
+        base *= 0.80
+        if _confidence_score(item.get('confidence')) >= 4:
+            penalties += 1.5
     return max(0.0, base - penalties)
+
+
+def _load_elite_index() -> Tuple[Dict[str, dict], bool]:
+    """Symbol index from meta-labeler output; second value = file exists."""
+    if not ELITE_ALERTS_FILE.exists():
+        return {}, False
+    try:
+        data = json.loads(ELITE_ALERTS_FILE.read_text(encoding='utf-8'))
+    except Exception:
+        return {}, False
+    index: Dict[str, dict] = {}
+    for row in data.get('elite_signals') or []:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get('symbol') or row.get('Stock') or row.get('ticker') or '').upper()
+        if sym:
+            index[sym] = row
+    return index, True
+
+
+def _align_display_confidence(item: dict, elite_index: Dict[str, dict]) -> dict:
+    """Synchronize scanner labels with meta-labeler elite gate (>72%)."""
+    sym = str(item.get('symbol') or item.get('ticker') or '').upper()
+    raw_conf = str(item.get('confidence') or 'MEDIUM').strip().upper()
+    elite = elite_index.get(sym)
+
+    if elite:
+        item['elite_verified'] = True
+        item['display_confidence'] = 'HIGH'
+        item['below_elite_threshold'] = False
+        item['ml_confidence'] = elite.get('ml_confidence')
+        item.pop('confidence_note', None)
+        return item
+
+    item['elite_verified'] = False
+    if raw_conf in ('HIGH', 'ULTRA'):
+        item['display_confidence'] = 'WATCHLIST'
+        item['below_elite_threshold'] = True
+        item['confidence_note'] = 'Below elite threshold (>72%)'
+    elif raw_conf in ('MEDIUM', 'MODERATE'):
+        item['display_confidence'] = 'MEDIUM'
+        item['below_elite_threshold'] = False
+    elif raw_conf in ('LOW', 'WATCH'):
+        item['display_confidence'] = 'SPECULATIVE'
+        item['below_elite_threshold'] = False
+    else:
+        item['display_confidence'] = raw_conf or 'MEDIUM'
+        item['below_elite_threshold'] = False
+    return item
+
+
+def elite_alignment_summary(opps: List[dict]) -> dict:
+    verified = sum(1 for o in opps if o.get('elite_verified'))
+    watchlist = sum(1 for o in opps if o.get('below_elite_threshold'))
+    return {
+        'elite_verified_count': verified,
+        'watchlist_count': watchlist,
+        'has_elite_verified': verified > 0,
+        'all_below_elite': verified == 0 and len(opps) > 0,
+    }
 
 
 def _normalize_opp(item: dict, source: str) -> dict:
@@ -433,6 +518,8 @@ def rank_opportunities(
     ]
 
     elite = filtered[: max(1, int(limit))]
+    elite_index, _ = _load_elite_index()
     for item in elite:
         item['_rank_score'] = round(score_fn(item), 2)
+        _align_display_confidence(item, elite_index)
     return elite

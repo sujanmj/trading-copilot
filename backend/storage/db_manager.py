@@ -543,14 +543,14 @@ def calculate_accuracy_metrics(metric_type='all_time'):
         query = f"""
             SELECT 
                 COUNT(p.id) as total_predictions,
-                COUNT(o.id) as total_evaluated,
+                SUM(CASE WHEN o.verdict IN ('WIN','LOSS','PARTIAL','NEUTRAL','EXPIRED','INVALIDATED') THEN 1 ELSE 0 END) as total_evaluated,
                 SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
                 SUM(CASE WHEN o.verdict='LOSS' THEN 1 ELSE 0 END) as losses,
                 SUM(CASE WHEN o.verdict IN ('NEUTRAL','PARTIAL') THEN 1 ELSE 0 END) as neutral,
                 SUM(CASE WHEN o.verdict='PARTIAL' THEN 1 ELSE 0 END) as partials,
                 SUM(CASE WHEN o.verdict='EXPIRED' THEN 1 ELSE 0 END) as expired,
                 SUM(CASE WHEN o.verdict='INVALIDATED' THEN 1 ELSE 0 END) as invalidated,
-                SUM(CASE WHEN o.verdict='PENDING' OR o.verdict IS NULL THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN o.verdict IN ('PENDING','UNRESOLVED') OR o.verdict IS NULL THEN 1 ELSE 0 END) as pending,
                 AVG(CASE WHEN o.verdict='WIN' THEN o.max_gain_pct END) as avg_gain,
                 AVG(CASE WHEN o.verdict='LOSS' THEN o.max_loss_pct END) as avg_loss,
                 
@@ -581,8 +581,9 @@ def calculate_accuracy_metrics(metric_type='all_time'):
         wins = d['wins'] or 0
         losses = d['losses'] or 0
         
-        # Calculate rates
-        win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+        # Calculate rates — win_rate uses resolved outcomes only
+        resolved = wins + losses + (d['neutral'] or 0)
+        win_rate = (wins / resolved * 100) if resolved > 0 else 0
         opp_rate = (d['opp_wins'] / d['opp_total'] * 100) if d['opp_total'] else 0
         risk_rate = (d['risk_correct'] / d['risk_total'] * 100) if d['risk_total'] else 0
         high_conf = (d['high_wins'] / d['high_total'] * 100) if d['high_total'] else 0

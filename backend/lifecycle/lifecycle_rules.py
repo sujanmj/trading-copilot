@@ -18,7 +18,8 @@ HORIZON_CONFIG = {
 DEFAULT_HORIZON = 'next_day'
 
 # Hard ceiling for generic pending expiration (days) — signal-type TTL may be shorter.
-EXPIRE_AFTER_DAYS = int(os.environ.get('EXPIRE_AFTER_DAYS', '10'))
+EXPIRE_AFTER_DAYS = int(os.environ.get('EXPIRE_AFTER_DAYS', '7'))
+UNRESOLVED_EXPIRE_DAYS = int(os.environ.get('UNRESOLVED_EXPIRE_DAYS', '5'))
 
 TTL_SESSIONS = {
     'ULTRA scanner': 2,
@@ -26,7 +27,7 @@ TTL_SESSIONS = {
     'momentum breakout': 1,
     'gap-up': 1,
     'govt alert': 5,
-    'macro alert': 5,
+    'macro alert': 4,
     'regime outlook': 999,
     'contradiction-heavy': 2,
     'Reddit momentum': 2,
@@ -130,7 +131,22 @@ def should_expire(signal_type: str, elapsed_sessions: int, verdict: str) -> bool
         return False
     if signal_type == 'regime outlook':
         return False
-    return elapsed_sessions >= ttl_sessions(signal_type)
+    ttl = ttl_sessions(signal_type)
+    if verdict == 'UNRESOLVED' and elapsed_sessions >= UNRESOLVED_EXPIRE_DAYS:
+        return True
+    return elapsed_sessions >= ttl
+
+
+def confidence_decay_label(original: str, elapsed_sessions: int) -> str:
+    """Downgrade displayed confidence on aged unresolved predictions."""
+    conf = (original or 'MEDIUM').upper()
+    if elapsed_sessions >= 4 and conf in ('HIGH', 'ULTRA'):
+        return 'MEDIUM'
+    if elapsed_sessions >= 6 and conf == 'MEDIUM':
+        return 'LOW'
+    if elapsed_sessions >= UNRESOLVED_EXPIRE_DAYS:
+        return 'EXPIRED'
+    return conf
 
 
 def resolve_deterministic(

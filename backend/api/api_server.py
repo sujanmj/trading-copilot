@@ -910,9 +910,11 @@ def _build_runtime_snapshot() -> dict:
         from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
         lc = get_lifecycle_status()
         lifecycle_panel = {
-            'status': 'ready' if lc.get('evaluation_cycle_complete') else 'waiting',
+            'status': 'ready' if lc.get('evaluation_cycle_complete') else ('idle' if lc.get('pipeline_status') == 'IDLE' else 'waiting'),
             'pipeline_status': lc.get('pipeline_status', 'STALE'),
-            'stale': lc.get('pipeline_status') in (None, 'STALE', 'FAILED', 'IDLE'),
+            'stale': lc.get('pipeline_status') in (None, 'STALE', 'FAILED') and not (
+                operational.get('expect_quiet_collectors') and lc.get('pipeline_status') == 'IDLE'
+            ),
             'message': lc.get('message'),
             'calibration_message': lc.get('calibration_message'),
             'active_predictions': lc.get('active_predictions'),
@@ -1289,10 +1291,14 @@ def ask_question(payload: dict = Body(...)):
     if not question:
         raise HTTPException(status_code=400, detail="Question is required")
     intel = load_json_file("unified_intelligence.json")
-    context = ""
-    if intel.get("analysis"):
-        context = "Latest intelligence:\n" + intel["analysis"][:2000]
-    prompt = f"""You are an Indian stock market expert.
+    try:
+        from backend.ai.ask_context_builder import build_ask_prompt
+        prompt = build_ask_prompt(question)
+    except Exception:
+        context = ""
+        if intel.get("analysis"):
+            context = "Latest intelligence:\n" + intel["analysis"][:2000]
+        prompt = f"""You are an Indian stock market expert.
 
 Context:
 {context}

@@ -19,8 +19,10 @@ import pytz
 from backend.lifecycle.lifecycle_rules import (
     ACTIVE_STATES,
     EXPIRE_AFTER_DAYS,
+    UNRESOLVED_EXPIRE_DAYS,
     TERMINAL_STATES,
     UNRESOLVED_STATE,
+    confidence_decay_label,
     infer_prediction_horizon,
     infer_signal_type,
     sessions_elapsed,
@@ -136,16 +138,16 @@ def _run_script_safe(script_name: str, extra_env: Optional[dict] = None) -> dict
 
 
 def expire_stale_pending() -> dict:
-    """Mark aged PENDING outcomes as EXPIRED — never raises."""
-    stats = {'expired': 0, 'skipped': 0, 'errors': 0}
+    """Mark aged PENDING/UNRESOLVED outcomes as EXPIRED — never raises."""
+    stats = {'expired': 0, 'skipped': 0, 'errors': 0, 'confidence_decayed': 0}
     try:
         init_db()
         conn = get_connection()
         try:
             today = datetime.now().date()
             rows = conn.execute("""
-                SELECT o.id, o.prediction_date, o.ticker, o.verdict,
-                       p.signal_type, p.prediction_horizon
+                SELECT o.id, o.source_id, o.prediction_date, o.ticker, o.verdict,
+                       p.signal_type, p.prediction_horizon, p.confidence
                 FROM outcomes o
                 LEFT JOIN predictions p ON o.source_type = 'prediction' AND o.source_id = p.id
                 WHERE o.verdict IN ('PENDING', 'UNRESOLVED') OR o.verdict IS NULL
@@ -162,12 +164,28 @@ def expire_stale_pending() -> dict:
                     max_days = max(ttl_sessions(signal_type), 1)
                     cap_days = EXPIRE_AFTER_DAYS
                     expire_at = min(max_days, cap_days) if signal_type != 'regime outlook' else cap_days
-                    if should_expire(signal_type, elapsed, verdict) or elapsed >= expire_at:
+                    unresolved_cap = min(UNRESOLVED_EXPIRE_DAYS, cap_days)
+                    if verdict == 'UNRESOLVED' and elapsed >= unresolved_cap:
                         conn.execute("""
                             UPDATE outcomes SET verdict = 'EXPIRED', last_checked = ?
                             WHERE id = ?
                         """, (_now_iso(), row['id']))
                         stats['expired'] += 1
+                    elif should_expire(signal_type, elapsed, verdict) or elapsed >= expire_at:
+                        conn.execute("""
+                            UPDATE outcomes SET verdict = 'EXPIRED', last_checked = ?
+                            WHERE id = ?
+                        """, (_now_iso(), row['id']))
+                        stats['expired'] += 1
+                    elif elapsed >= 3 and row['confidence'] and row['source_id']:
+                        decayed = confidence_decay_label(row['confidence'], elapsed)
+                        if decayed != row['confidence'] and decayed != 'EXPIRED':
+                            conn.execute(
+                                "UPDATE predictions SET confidence = ? WHERE id = ?",
+                                (decayed, row['source_id']),
+                            )
+                            stats['confidence_decayed'] += 1
+                        stats['skipped'] += 1
                     else:
                         stats['skipped'] += 1
                 except Exception:
@@ -177,6 +195,8 @@ def expire_stale_pending() -> dict:
             conn.close()
         if stats['expired']:
             pipeline_log(f"Expired {stats['expired']} stale pending outcomes", stage='expire_stale')
+        if stats['confidence_decayed']:
+            pipeline_log(f"Decayed confidence on {stats['confidence_decayed']} aged predictions", stage='expire_stale')
     except Exception as e:
         stats['errors'] += 1
         log_error('expire_stale_pending', e, stage='expire_stale')
@@ -849,6 +869,18 @@ def get_lifecycle_status() -> dict:
     else:
         display_status = 'STALE'
 
+    quiet_overnight = False
+    idle_message = None
+    try:
+        from backend.utils.market_hours import get_operational_status
+        op = get_operational_status()
+        quiet_overnight = bool(op.get('expect_quiet_collectors'))
+        if display_status == 'STALE' and quiet_overnight and state.get('last_successful_eod'):
+            display_status = 'IDLE'
+            idle_message = 'Lifecycle idle until next market session'
+    except Exception:
+        op = {}
+
     return {
         'status': 'healthy' if display_status == 'COMPLETE' else display_status.lower(),
         'pipeline_status': display_status,
@@ -877,12 +909,16 @@ def get_lifecycle_status() -> dict:
         'calibration_fresh': cal_age is not None and cal_age < 360 and cycle_today,
         'review_fresh': review_age is not None and review_age < 720 and cycle_today,
         'message': (
-            'Recovering missed post-market EOD cycle…'
-            if display_status == 'RECOVERING'
+            idle_message
+            if idle_message
             else (
-                f'Lifecycle {display_status}'
-                if display_status != 'COMPLETE'
-                else 'Post-market evaluation complete'
+                'Recovering missed post-market EOD cycle…'
+                if display_status == 'RECOVERING'
+                else (
+                    f'Lifecycle {display_status}'
+                    if display_status not in ('COMPLETE', 'IDLE')
+                    else ('Lifecycle idle until next market session' if display_status == 'IDLE' else 'Post-market evaluation complete')
+                )
             )
         ),
         'calibration_message': (

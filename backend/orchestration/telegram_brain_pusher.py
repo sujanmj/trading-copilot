@@ -227,16 +227,39 @@ def normalize_intel(intel):
 def format_opps(opps_list):
     opps_list = _list(opps_list)
     if not opps_list:
-        return "<i>📊 Scanner running — no high conviction signals right now</i>"
-    res = []
+        return "<i>📊 Scanner running — no ranked signals pass quality gates right now</i>"
+    try:
+        from backend.orchestration.opportunity_filter import elite_alignment_summary
+        summary = elite_alignment_summary(opps_list)
+    except Exception:
+        summary = {}
+    header = ""
+    if summary.get('all_below_elite'):
+        header = (
+            "<i>🛡️ No setups passed elite meta-labeler (&gt;72%). "
+            "Labels below are scanner-ranked WATCHLIST/MEDIUM — not elite HIGH conviction.</i>\n\n"
+        )
+    elif summary.get('has_elite_verified'):
+        header = f"<i>✅ {summary.get('elite_verified_count', 0)} elite-verified · "
+        wl = summary.get('watchlist_count', 0)
+        if wl:
+            header += f"{wl} watchlist (below elite threshold)</i>\n\n"
+        else:
+            header += "all shown are elite-aligned</i>\n\n"
+    res = [header] if header else []
     for i, o in enumerate(opps_list, 1):
         o = _dict(o)
         action = _text(o.get('action'), 'WATCH').upper()
         icon = "🟢" if action == "BUY" else "🟡"
+        conf = _text(o.get('display_confidence') or o.get('confidence'), 'MEDIUM').upper()
+        note = o.get('confidence_note') or ''
+        note_html = f"\n   ⚠️ <i>{note}</i>" if note else ""
+        ml = o.get('ml_confidence')
+        ml_html = f" · ML {ml}" if ml and o.get('elite_verified') else ""
         res.append(
             f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b> [{action}]\n"
             f"   💰 Entry: {_text(o.get('entry_zone'))} | Tgt: {_text(o.get('target'))} | SL: {_text(o.get('stop_loss'))}\n"
-            f"   📊 Conf: <b>{_text(o.get('confidence'), 'MEDIUM')}</b>\n"
+            f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html}\n"
             f"   <i>{_text(o.get('logic'), 'No rationale provided.')}</i>"
         )
     return "\n\n".join(res)
@@ -429,7 +452,13 @@ def push_opps():
             safe_print(f"[WARN] opportunity filter failed: {e}")
             opps = get_opportunities(intel)[:DEFAULT_OPPS_LIMIT]
         stale = stale_warning(raw)
-        send_chunked(f"{stale}💎 <b>ELITE OPPORTUNITIES</b> (top {len(opps)})\n\n{format_opps(opps)}")
+        try:
+            from backend.orchestration.opportunity_filter import elite_alignment_summary
+            align = elite_alignment_summary(opps)
+            title = "ELITE-ALIGNED OPPORTUNITIES" if align.get('has_elite_verified') else "SCANNER WATCHLIST (below elite threshold)"
+        except Exception:
+            title = "RANKED OPPORTUNITIES"
+        send_chunked(f"{stale}💎 <b>{title}</b> (top {len(opps)})\n\n{format_opps(opps)}")
 
 
 def push_risks():
