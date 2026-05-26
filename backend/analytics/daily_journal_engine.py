@@ -70,6 +70,20 @@ def _format_journal_card(review: dict) -> dict:
         except Exception:
             adaptive_notes = []
 
+    lifecycle_summary = review.get('lifecycle_summary') or {}
+    lifecycle_notes = []
+    if lifecycle_summary:
+        if lifecycle_summary.get('wins_today') is not None:
+            lifecycle_notes.append(
+                f"Resolved today: {lifecycle_summary.get('wins_today', 0)}W / "
+                f"{lifecycle_summary.get('losses_today', 0)}L / "
+                f"{lifecycle_summary.get('partials_today', 0)} partial"
+            )
+        if lifecycle_summary.get('win_rate') is not None:
+            lifecycle_notes.append(f"Win rate: {lifecycle_summary['win_rate']}%")
+        if lifecycle_summary.get('tomorrow_outlook'):
+            lifecycle_notes.append(lifecycle_summary['tomorrow_outlook'])
+
     return {
         'date': review.get('date'),
         'status': review.get('status', 'ok'),
@@ -91,6 +105,8 @@ def _format_journal_card(review: dict) -> dict:
         'runtime_summary': '\n'.join(runtime_notes) if runtime_notes else '',
         'adaptive_notes': adaptive_notes,
         'adaptive_summary': '\n'.join(adaptive_notes) if adaptive_notes else '',
+        'lifecycle_notes': lifecycle_notes,
+        'lifecycle_summary': '\n'.join(lifecycle_notes) if lifecycle_notes else '',
         'regime_timeline': regime.get('timeline') or [],
         'warnings': warnings[:8],
         'highlights': highlights,

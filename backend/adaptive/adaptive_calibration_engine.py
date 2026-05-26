@@ -22,8 +22,8 @@ ENGINE_VERSION = 1
 MAX_DELTA_PER_CYCLE = 0.02
 MAX_CUMULATIVE = 0.15
 ADAPTATION_COOLDOWN_SEC = 86400
-MIN_SAMPLES_GLOBAL = 20
-MIN_SAMPLES_REGIME = 5
+MIN_SAMPLES_GLOBAL = 30
+MIN_SAMPLES_REGIME = 10
 MIN_SAMPLES_SIGNAL = 10
 MIN_SAMPLES_TELEGRAM = 8
 
@@ -392,6 +392,14 @@ def _apply_adjustments(state: dict, proposals: List[dict]) -> dict:
     return state
 
 
+def _detect_current_regime() -> str:
+    try:
+        from backend.lifecycle.lifecycle_evaluator import _load_current_regime
+        return _load_current_regime()
+    except Exception:
+        return 'unknown'
+
+
 def run_adaptive_calibration_cycle(*, force: bool = False, dry_run: bool = False) -> dict:
     """
     Analyze recent outcomes and apply bounded calibration if safety rules allow.
@@ -437,10 +445,18 @@ def run_adaptive_calibration_cycle(*, force: bool = False, dry_run: bool = False
 
     if not learning_ok:
         state['status'] = 'collecting'
-        state['status_message'] = f'Collecting evaluation samples ({total_evaluated}/{MIN_SAMPLES_GLOBAL}).'
+        state['status_message'] = f'Awaiting evaluated prediction sample size ({total_evaluated}/{MIN_SAMPLES_GLOBAL}).'
         if not dry_run:
             save_adaptive_state(state)
         return _build_cycle_result(state, applied=[], skipped='insufficient_samples')
+
+    current_regime = _detect_current_regime()
+    if current_regime == 'panic_volatile' and not force:
+        state['status'] = 'blocked'
+        state['status_message'] = 'Adaptive calibration paused during panic_volatile regime.'
+        if not dry_run:
+            save_adaptive_state(state)
+        return _build_cycle_result(state, applied=[], skipped='panic_regime')
 
     if cooldown_active and not force:
         state['status'] = 'cooldown'

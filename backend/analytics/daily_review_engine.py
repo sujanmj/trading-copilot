@@ -588,7 +588,14 @@ def build_daily_review(review_date: Optional[str] = None, *, persist: bool = Tru
 
     if persist:
         DAILY_REVIEWS_DIR.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(DAILY_REVIEWS_DIR / f'review_{date}.json', review)
+        out_path = DAILY_REVIEWS_DIR / f'review_{date}.json'
+        if out_path.exists():
+            cached = _load_json(out_path, {})
+            if cached.get('immutable') and cached.get('date') == date:
+                _log('DAILY REVIEW', f'immutable snapshot preserved for {date}')
+                return cached
+        review['immutable'] = True
+        atomic_write_json(out_path, review)
         index = _load_json(REVIEW_INDEX_FILE, {'dates': []})
         dates = [d for d in (index.get('dates') or []) if d != date]
         dates.insert(0, date)

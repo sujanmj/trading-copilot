@@ -634,6 +634,9 @@ def _build_runtime_snapshot() -> dict:
         'inshorts': load_json_file('inshorts_feed.json'),
         'stats': load_json_file('stats_data.json'),
         'history': load_json_file('history_data.json'),
+        'active_predictions': load_json_file('active_predictions.json'),
+        'prediction_history': load_json_file('prediction_history.json'),
+        'lifecycle_state': load_json_file('lifecycle_state.json'),
     }
 
     stats = data.get('stats') or {}
@@ -653,17 +656,45 @@ def _build_runtime_snapshot() -> dict:
     )
 
     evaluated = int(metrics.get('total_evaluated') or 0)
+
+    lifecycle_panel = {
+        'status': 'waiting',
+        'stale': True,
+        'message': 'Post-market evaluation cycle has not completed today.',
+        'calibration_message': 'Awaiting evaluated prediction sample size.',
+    }
+    try:
+        from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
+        lc = get_lifecycle_status()
+        lifecycle_panel = {
+            'status': 'ready' if lc.get('evaluation_cycle_complete') else 'waiting',
+            'stale': lc.get('status') == 'stale',
+            'message': lc.get('message'),
+            'calibration_message': lc.get('calibration_message'),
+            'active_predictions': lc.get('active_predictions'),
+            'archived_predictions': lc.get('archived_predictions'),
+            'unresolved_predictions': lc.get('unresolved_predictions'),
+            'last_eod_cycle_at': lc.get('last_eod_cycle_at'),
+            'exports_fresh': lc.get('exports_fresh'),
+            'calibration_fresh': lc.get('calibration_fresh'),
+            'review_fresh': lc.get('review_fresh'),
+            'review_age_minutes': lc.get('review_age_minutes'),
+        }
+    except Exception:
+        pass
+
     calibration_panel = _panel_state_from_source(
         'stats',
         source_status,
         ready=stats_ok,
-        waiting_message='Collecting evaluation samples.',
+        waiting_message='Awaiting evaluated prediction sample size.',
     )
     if stats_ok and evaluated == 0:
+        lc_msg = lifecycle_panel.get('calibration_message') or 'Awaiting evaluated prediction sample size.'
         calibration_panel = {
             'status': 'collecting',
             'stale': calibration_panel.get('stale', False),
-            'message': 'Collecting evaluation samples.',
+            'message': lc_msg,
             'age_seconds': calibration_panel.get('age_seconds'),
         }
 
@@ -675,6 +706,13 @@ def _build_runtime_snapshot() -> dict:
         'latest': journal.get('latest'),
         'age_seconds': (source_status.get('history') or {}).get('age_seconds'),
     }
+    if lifecycle_panel.get('status') == 'ready':
+        journal_panel['message'] = None
+        if journal_entries:
+            journal_panel['status'] = 'ready'
+        elif history_ok:
+            journal_panel['status'] = 'collecting'
+            journal_panel['message'] = 'Review generated — journal indexing in progress.'
     if journal_entries:
         journal_panel['status'] = 'ready'
         journal_panel['message'] = None
@@ -714,6 +752,7 @@ def _build_runtime_snapshot() -> dict:
         ),
         'calibration': calibration_panel,
         'journal': journal_panel,
+        'lifecycle': lifecycle_panel,
         'ops': {
             'status': 'ready',
             'stale': any_stale,
@@ -750,6 +789,7 @@ def _build_runtime_snapshot() -> dict:
             'status': journal_panel['status'],
             'message': journal_panel.get('message'),
         },
+        'lifecycle_summary': lifecycle_panel,
     })
 
 
@@ -1194,6 +1234,21 @@ def api_debug_provider_analytics():
     return sanitize_json_value({
         'ops': get_runtime_ops_summary(),
         'stats': get_ai_runtime_stats_payload(),
+    })
+
+
+@app.get("/api/active-predictions", dependencies=[Depends(verify_api_key)])
+def api_active_predictions():
+    from backend.lifecycle.prediction_lifecycle_engine import get_active_predictions_payload
+    return sanitize_json_value(get_active_predictions_payload())
+
+
+@app.get("/api/debug/lifecycle", dependencies=[Depends(verify_api_key)])
+def api_debug_lifecycle():
+    from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_ops_payload, get_ml_core_status
+    return sanitize_json_value({
+        'lifecycle': get_lifecycle_ops_payload(),
+        'ml_core': get_ml_core_status(),
     })
 
 

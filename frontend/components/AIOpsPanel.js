@@ -521,6 +521,69 @@
         )}`;
     }
 
+    const lifecycle = data.lifecycle || {};
+    const lcEl = $('aiOpsLifecycle');
+    if (lcEl) {
+      const states = lifecycle.prediction_states || {};
+      const stateLines = Object.entries(states).map(([k, v]) => `${k}: ${v}`);
+      const calSnap = lifecycle.calibration || {};
+      lcEl.innerHTML =
+        renderStatGrid([
+          {
+            label: 'EOD cycle',
+            value: lifecycle.evaluation_cycle_complete ? 'COMPLETE' : 'PENDING',
+            cls: lifecycle.evaluation_cycle_complete ? 'ai-ops-ok' : 'ai-ops-warn',
+          },
+          {
+            label: 'Active',
+            value: String(lifecycle.active_predictions ?? lifecycle.active_count ?? '—'),
+          },
+          {
+            label: 'Archived',
+            value: String(lifecycle.archived_predictions ?? lifecycle.archived_count ?? '—'),
+          },
+          {
+            label: 'Invalidated',
+            value: String(lifecycle.stale_invalidated ?? '—'),
+            cls: (lifecycle.stale_invalidated || 0) > 0 ? 'ai-ops-warn' : '',
+          },
+          {
+            label: 'Unresolved',
+            value: String(lifecycle.unresolved_predictions ?? '—'),
+            cls: (lifecycle.unresolved_predictions || 0) > 0 ? 'ai-ops-warn' : '',
+          },
+          {
+            label: 'Review',
+            value: lifecycle.review_fresh ? 'FRESH' : 'STALE',
+            cls: lifecycle.review_fresh ? 'ai-ops-ok' : 'ai-ops-warn',
+          },
+          {
+            label: 'Calibration',
+            value: lifecycle.calibration_fresh ? 'FRESH' : 'WAITING',
+            cls: lifecycle.calibration_fresh ? 'ai-ops-ok' : 'ai-ops-warn',
+          },
+          {
+            label: 'Win rate',
+            value: calSnap.win_rate != null ? `${calSnap.win_rate}%` : '—',
+          },
+          {
+            label: 'Exports',
+            value: lifecycle.exports_fresh ? 'SYNCED' : 'STALE',
+            cls: lifecycle.exports_fresh ? 'ai-ops-ok' : 'ai-ops-warn',
+          },
+        ]) +
+        `<div class="ai-ops-subhead">Status</div>${renderList(
+          [
+            lifecycle.message,
+            lifecycle.last_eod_cycle_at ? `Last cycle: ${lifecycle.last_eod_cycle_at.slice(0, 19)}` : null,
+            lifecycle.stats_age_minutes != null ? `Stats age: ${lifecycle.stats_age_minutes}m` : null,
+            lifecycle.history_age_minutes != null ? `History age: ${lifecycle.history_age_minutes}m` : null,
+          ].filter(Boolean),
+          'Post-market evaluation runs at 15:45 IST'
+        )}` +
+        `<div class="ai-ops-subhead">Prediction states</div>${renderList(stateLines, 'No evaluated predictions yet')}`;
+    }
+
     const adaptive = cal.adaptive_calibration || {};
     const adaptEl = $('aiOpsAdaptive');
     if (adaptEl) {
@@ -633,7 +696,7 @@
       const health = buildHealthFromRuntime(runtime);
       const explanations = (runtime && runtime.explanations) || {};
 
-      const [preservation, compression, routing, delta, quality, telegram, reliability, calibration] = await Promise.all([
+      const [preservation, compression, routing, delta, quality, telegram, reliability, calibration, lifecycle] = await Promise.all([
         fetchJson('/api/debug/preservation', true),
         fetchJson('/api/debug/compression', true),
         fetchJson('/api/debug/ai-routing', true),
@@ -642,6 +705,7 @@
         fetchJson('/api/debug/telegram-alerts', true).catch(() => ({})),
         fetchJson('/api/debug/reliability', true).catch(() => ({})),
         fetchJson('/api/debug/calibration', true).catch(() => ({})),
+        fetchJson('/api/debug/lifecycle', true).catch(() => ({})),
       ]);
 
       const data = {
@@ -655,6 +719,7 @@
         telegram,
         reliability,
         calibration,
+        lifecycle: lifecycle.lifecycle || lifecycle,
       };
       renderPanel(data);
       markAlertsSeen(data);

@@ -428,8 +428,15 @@ def log_predictions_from_intelligence():
             'confidence': opp.get('confidence', 'MEDIUM'),
             'reasoning': opp.get('logic', ''),
             'overall_conviction': conviction,
-            'raw_data': opp
+            'raw_data': opp,
         }
+        try:
+            from backend.lifecycle.lifecycle_rules import infer_signal_type, infer_prediction_horizon
+            prediction_data['signal_type'] = infer_signal_type(prediction_data)
+            prediction_data['prediction_horizon'] = infer_prediction_horizon(prediction_data)
+        except Exception:
+            prediction_data['signal_type'] = 'breakout'
+            prediction_data['prediction_horizon'] = 'next_day'
         
         if insert_prediction(prediction_data):
             # Patch: Create outcome row for grading

@@ -723,6 +723,10 @@
         <summary>AI Reliability</summary>
         <div class="ai-ops-section-body" id="aiOpsReliability"></div>
       </details>
+      <details class="ai-ops-section" open>
+        <summary>Prediction Lifecycle</summary>
+        <div class="ai-ops-section-body" id="aiOpsLifecycle"></div>
+      </details>
       <details class="ai-ops-section">
         <summary>Outcome Learning</summary>
         <div class="ai-ops-section-body" id="aiOpsCalibration"></div>
@@ -831,6 +835,7 @@
     scanner: path.join(dataDir, 'scanner_data.json'),
     stats: path.join(dataDir, 'stats_data.json'),
     history: path.join(dataDir, 'history_data.json'),
+    activePredictions: path.join(dataDir, 'active_predictions.json'),
   }
 
   function updateApiStatus(connected) {
@@ -865,6 +870,7 @@
       apiCache.scanner = data.data.scanner
       apiCache.stats = data.data.stats
       apiCache.history = data.data.history
+      apiCache.activePredictions = data.data.active_predictions
       apiCache.runtime = data
       apiCache.lastFetch = Date.now()
       apiCache.connected = true
@@ -1114,12 +1120,31 @@
   // ============================================================
   function loadBrain() {
     const raw = loadJson(files.intelligence);
+    const activeStore = loadJson(files.activePredictions);
     const data = normalizeBrainData(raw);
     const container = document.getElementById('tab-brain');
 
     if (!data) {
       container.innerHTML = `<div class="loading">⏳ Waiting for analysis...</div>`;
       return;
+    }
+
+    if (activeStore && Array.isArray(activeStore.predictions) && activeStore.predictions.length >= 0) {
+      const activeOpps = (activeStore.predictions || [])
+        .filter(p => p.category === 'opportunity' || p.state === 'ACTIVE' || p.state === 'PENDING')
+        .map(p => ({
+          symbol: p.ticker,
+          ticker: p.ticker,
+          action: 'BUY',
+          confidence: p.confidence || 'MEDIUM',
+          entry_zone: p.entry_price,
+          target: p.target_price,
+          stop_loss: p.stop_loss,
+          logic: `${p.signal_type || 'signal'} · ${p.prediction_horizon || 'next_day'} · ${p.state || 'ACTIVE'}`,
+          lifecycle_state: p.state,
+        }));
+      data.top_opportunities = activeOpps;
+      data.lifecycle_active_count = activeStore.count || activeOpps.length;
     }
 
     const summary = displayText(data.executive_summary, '');
@@ -1745,7 +1770,7 @@
   function loadStats() {
     const data = loadJson(files.stats);
     const container = document.getElementById('tab-stats');
-    const lifecycle = window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Run outcome_tracker or wait for signal evaluations.') : 'Run outcome_tracker or wait for signal evaluations.';
+    const lifecycle = window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Post-market evaluation at 15:45 IST populates calibration metrics.') : 'Post-market evaluation at 15:45 IST populates calibration metrics.';
     if (!data) {
       container.innerHTML = `<div class="empty-stats"><h4>📊 Calibration building...</h4><p>${escapeHtml(lifecycle)}</p></div>`;
       return;
@@ -1784,7 +1809,7 @@
             <div class="stat-big-sub">gain ÷ loss</div>
           </div>
         </div>
-        ${(metrics.total_evaluated || 0) === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Track record building — outcomes evaluate automatically.') : 'Track record building — outcomes evaluate automatically.')}</div>` : ''}
+        ${(metrics.total_evaluated || 0) === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Track record building — post-market EOD cycle evaluates predictions automatically.') : 'Track record building — post-market EOD cycle evaluates predictions automatically.')}</div>` : ''}
       </div>
     `;
 
@@ -2008,6 +2033,12 @@
       adaptiveNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
       html += `</div>`
     }
+    const lifecycleNotes = entry.lifecycle_notes || []
+    if (lifecycleNotes.length) {
+      html += `<div class="journal-runtime" style="border-left-color:rgba(126,184,255,0.35);background:rgba(126,184,255,0.06);"><div class="journal-k" style="margin-bottom:6px;">Prediction Lifecycle</div>`
+      lifecycleNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
+      html += `</div>`
+    }
     const timeline = entry.regime_timeline || []
     const warnings = entry.warnings || []
     const hl = entry.highlights || {}
@@ -2030,8 +2061,8 @@
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
     const journalMsg = window.RuntimeManager
-      ? RuntimeManager.lifecycleMessage('journal', 'Waiting for post-market review generation.')
-      : 'Waiting for post-market review generation.'
+      ? RuntimeManager.lifecycleMessage('journal', 'Daily review generates after post-market EOD cycle (15:45 IST).')
+      : 'Daily review generates after post-market EOD cycle (15:45 IST).'
     if (!data) {
       container.innerHTML = `<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>${escapeHtml(journalMsg)}</p></div>`
       return

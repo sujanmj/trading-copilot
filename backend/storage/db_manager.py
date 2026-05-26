@@ -254,6 +254,14 @@ def init_db():
     try:
         conn.executescript(SCHEMA)
         conn.executescript(SIGNAL_TRACKING_SCHEMA)
+        cols = {row[1] for row in conn.execute('PRAGMA table_info(predictions)').fetchall()}
+        for name, col_type in (
+            ('prediction_horizon', 'TEXT'),
+            ('signal_type', 'TEXT'),
+            ('failure_reason', 'TEXT'),
+        ):
+            if name not in cols:
+                conn.execute(f'ALTER TABLE predictions ADD COLUMN {name} {col_type}')
         conn.commit()
         print("[DB] Schema initialized successfully")
     except Exception as e:
@@ -286,8 +294,9 @@ def insert_prediction(prediction_data):
                 ticker, sector, recommendation, category, rank_in_list,
                 entry_price, target_price, stop_loss,
                 confidence, reasoning, cross_validation,
-                overall_conviction, raw_data
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                overall_conviction, raw_data,
+                prediction_horizon, signal_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             prediction_data.get('prediction_date'),
             prediction_data.get('run_type'),
@@ -305,6 +314,8 @@ def insert_prediction(prediction_data):
             prediction_data.get('cross_validation'),
             prediction_data.get('overall_conviction'),
             json.dumps(prediction_data.get('raw_data', {})),
+            prediction_data.get('prediction_horizon'),
+            prediction_data.get('signal_type'),
         ))
         conn.commit()
         return cursor.lastrowid
@@ -487,7 +498,10 @@ def calculate_accuracy_metrics(metric_type='all_time'):
                 COUNT(o.id) as total_evaluated,
                 SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
                 SUM(CASE WHEN o.verdict='LOSS' THEN 1 ELSE 0 END) as losses,
-                SUM(CASE WHEN o.verdict='NEUTRAL' THEN 1 ELSE 0 END) as neutral,
+                SUM(CASE WHEN o.verdict IN ('NEUTRAL','PARTIAL') THEN 1 ELSE 0 END) as neutral,
+                SUM(CASE WHEN o.verdict='PARTIAL' THEN 1 ELSE 0 END) as partials,
+                SUM(CASE WHEN o.verdict='EXPIRED' THEN 1 ELSE 0 END) as expired,
+                SUM(CASE WHEN o.verdict='INVALIDATED' THEN 1 ELSE 0 END) as invalidated,
                 SUM(CASE WHEN o.verdict='PENDING' OR o.verdict IS NULL THEN 1 ELSE 0 END) as pending,
                 AVG(CASE WHEN o.verdict='WIN' THEN o.max_gain_pct END) as avg_gain,
                 AVG(CASE WHEN o.verdict='LOSS' THEN o.max_loss_pct END) as avg_loss,
@@ -539,6 +553,9 @@ def calculate_accuracy_metrics(metric_type='all_time'):
             'wins': wins,
             'losses': losses,
             'neutral': d['neutral'] or 0,
+            'partials': d.get('partials') or 0,
+            'expired': d.get('expired') or 0,
+            'invalidated': d.get('invalidated') or 0,
             'pending': d['pending'] or 0,
             'win_rate': round(win_rate, 2),
             'avg_gain_pct': round(avg_gain, 2),

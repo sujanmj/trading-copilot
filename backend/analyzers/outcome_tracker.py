@@ -150,6 +150,8 @@ def determine_verdict(prediction, outcome_data):
             return 'WIN', target_hit, stop_hit
         elif change_pct <= LOSS_THRESHOLD_PCT:
             return 'LOSS', target_hit, stop_hit
+        elif change_pct >= 0.5:
+            return 'PARTIAL', target_hit, stop_hit
         else:
             return 'NEUTRAL', target_hit, stop_hit
     

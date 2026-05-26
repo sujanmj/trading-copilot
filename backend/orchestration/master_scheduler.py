@@ -86,18 +86,25 @@ def run_full_cycle(brief_name: str = "Scheduled", push_brain: bool = False):
 
 def run_post_market_pipeline():
     print("\n" + "="*60)
-    print(f"[*] Post-Market Pipeline: {datetime.now(IST).strftime('%H:%M:%S IST')}")
+    print(f"[*] Post-Market Lifecycle Pipeline: {datetime.now(IST).strftime('%H:%M:%S IST')}")
     print("="*60)
-    run_standalone_script("outcome_tracker.py")
-    run_standalone_script("stats_exporter.py")
-    run_standalone_script("history_exporter.py")
     try:
-        from backend.analytics.daily_review_engine import build_daily_review
-        build_daily_review()
-        print("[DAILY REVIEW] End-of-day snapshot saved")
+        from backend.lifecycle.prediction_lifecycle_engine import run_end_of_day_cycle
+        result = run_end_of_day_cycle(force=False)
+        status = result.get('status', 'unknown')
+        print(f"[LIFECYCLE] EOD cycle status={status}")
+        if result.get('errors'):
+            for err in result['errors'][:5]:
+                print(f"  [!] {err}")
     except Exception as e:
-        print(f"[!] Daily review snapshot failed: {e}")
-    run_full_cycle("Post-Market")
+        print(f"[!] EOD lifecycle pipeline failed: {e}")
+        print("[LIFECYCLE] Falling back to legacy post-market sequence...")
+        run_standalone_script("outcome_tracker.py")
+        run_full_cycle("Post-Market")
+        run_standalone_script("meta_labeler.py")
+        run_standalone_script("prediction_logger.py")
+        run_standalone_script("stats_exporter.py")
+        run_standalone_script("history_exporter.py")
 
 # ============================================================
 # SCHEDULE — FIXED

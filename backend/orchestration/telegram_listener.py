@@ -346,7 +346,6 @@ def cmd_brain_pusher(mode, status_msg=None):
 def cmd_status():
     files_to_check = [
         ('unified_intelligence.json', 'AI Brain'),
-        ('high_conviction_alerts.json', 'ML Core'),
         ('scanner_data.json', 'Scanner'),
         ('reddit_data.json', 'Reddit'),
         ('govt_intelligence.json', 'Govt'),
@@ -359,6 +358,20 @@ def cmd_status():
 
     msg = f"<b>📡 System Status</b>\n<i>{datetime.now().strftime('%H:%M:%S')}</i>\n\n"
     now = datetime.now()
+
+    try:
+        from backend.lifecycle.prediction_lifecycle_engine import get_ml_core_status
+        ml = get_ml_core_status()
+        msg += f"{ml.get('display', '❌ ML Core: unknown')}\n"
+    except Exception:
+        hc_path = DATA_DIR / 'high_conviction_alerts.json'
+        if hc_path.exists():
+            mtime = datetime.fromtimestamp(hc_path.stat().st_mtime)
+            age_min = int((now - mtime).total_seconds() / 60)
+            emoji = "✅" if age_min < 60 else ("⚠️" if age_min < 360 else "❌")
+            msg += f"{emoji} ML Core: {age_min}m ago\n"
+        else:
+            msg += "❌ ML Core: MISSING\n"
 
     for filename, label in files_to_check:
         path = DATA_DIR / filename
@@ -384,6 +397,16 @@ def cmd_status():
     if db_file.exists():
         size_kb = db_file.stat().st_size / 1024
         msg += f"\n💾 Database: {size_kb:.1f} KB"
+
+    try:
+        from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
+        lc = get_lifecycle_status()
+        lc_emoji = "✅" if lc.get('evaluation_cycle_complete') else "⏳"
+        msg += f"\n{lc_emoji} Lifecycle: {lc.get('message', 'unknown')}"
+        if lc.get('active_predictions'):
+            msg += f" ({lc['active_predictions']} active)"
+    except Exception:
+        pass
 
     if is_silenced():
         try:

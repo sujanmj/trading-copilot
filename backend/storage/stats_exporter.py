@@ -306,6 +306,24 @@ def export_stats():
             safe_print(f"[WARN] ai runtime analytics failed: {e}")
             output['ai_runtime'] = {'status': 'degraded', 'reason': str(e)}
 
+        try:
+            from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
+            lc = get_lifecycle_status()
+            output['lifecycle_status'] = lc
+            cal_hist = DATA_DIR / 'calibration_history.json'
+            if cal_hist.exists():
+                import json
+                with open(cal_hist, 'r', encoding='utf-8') as f:
+                    cal_data = json.load(f)
+                if cal_data.get('latest'):
+                    output['lifecycle_calibration'] = cal_data['latest']
+                    dash = output.get('calibration_dashboard') or {}
+                    dash['lifecycle_calibration'] = cal_data['latest']
+                    output['calibration_dashboard'] = dash
+        except Exception as e:
+            safe_print(f"[WARN] lifecycle status failed: {e}")
+            output['lifecycle_status'] = {'status': 'unknown', 'message': str(e)}
+
         output['last_updated'] = datetime.now(timezone.utc).isoformat()
         output['generation_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         write_stats_output(output)
