@@ -72,14 +72,39 @@
     cache.connected = snapshot.status !== 'degraded';
   }
 
+  function invalidateCache(reason) {
+    const cache = config.cache;
+    if (!cache) return;
+    const keys = [
+      'intelligence', 'indiaMarket', 'globalMarket', 'news', 'youtube', 'govt',
+      'inshorts', 'reddit', 'scanner', 'stats', 'history', 'activePredictions',
+      'predictionHistory', 'lifecycleState', 'runtime',
+    ];
+    keys.forEach((k) => { cache[k] = null; });
+    cache.connected = false;
+    cache._invalidatedAt = Date.now();
+    cache._invalidateReason = reason || 'stale';
+    console.warn('[RuntimeManager] cache invalidated:', reason);
+  }
+
   function applySnapshot(snapshot, seq) {
     if (seq !== fetchSeq) return false;
+    const orch = snapshot && snapshot.panels && snapshot.panels.orchestrator;
+    const runtimePanel = snapshot && snapshot.panels && snapshot.panels.runtime;
+    if (orch && orch.stale) {
+      invalidateCache('orchestrator_stale');
+    } else if (runtimePanel && runtimePanel.stale && orch && !orch.gui_sync_validated) {
+      invalidateCache('gui_sync_stale');
+    }
     state = snapshot;
     applyCacheFromSnapshot(snapshot);
     if (typeof config.onConnectionChange === 'function') {
       config.onConnectionChange(!!cacheConnected());
     }
     notify();
+    if (orch && orch.stale) {
+      setTimeout(() => refresh({ force: true }), 2000);
+    }
     return true;
   }
 
@@ -266,5 +291,6 @@
     formatAgeSeconds,
     getExportAge,
     getPanelBanner,
+    invalidateCache,
   };
 })(window);

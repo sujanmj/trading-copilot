@@ -119,6 +119,21 @@ def is_lock_holder_valid(name: str, info: Optional[Dict[str, Any]] = None) -> bo
     return True
 
 
+def force_clear_lock(name: str, reason: str = 'orchestrator_recovery') -> bool:
+    """Remove lock when heartbeat proves ownership is stale (self-healing)."""
+    ensure_dirs()
+    lock_path = LOCKS_DIR / f'{name}.lock'
+    if not lock_path.exists():
+        return False
+    try:
+        lock_path.unlink(missing_ok=True)
+        print(f"[LOCK] Force cleared {name}: {reason}", flush=True)
+        return True
+    except OSError as e:
+        print(f"[LOCK] Could not force clear {name}: {e}", flush=True)
+        return False
+
+
 def clear_stale_lock(name: str) -> bool:
     """Remove lock file when holder is dead or PID was reused by wrong process."""
     ensure_dirs()

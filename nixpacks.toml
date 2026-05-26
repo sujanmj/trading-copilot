@@ -8,4 +8,4 @@ NIXPACKS_PYTHON_PACKAGE_MANAGER = "requirements"
 nixPkgs = ["python311", "tzdata"]
 
 [start]
-cmd = "TZ=Asia/Kolkata uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT"
+cmd = "TZ=Asia/Kolkata uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT --workers 1"

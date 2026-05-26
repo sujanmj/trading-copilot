@@ -74,6 +74,7 @@ SUBPROCESS_WARN_COOLDOWN_SECONDS = 300
 
 _background_started = False
 _background_lock = threading.Lock()
+_orchestrator_recovery_started = False
 
 try:
     from backend.ai.ai_router import ask_ai
@@ -129,15 +130,62 @@ def _log_subprocess_event(label: str, message: str, *, force: bool = False):
 
 
 def _wait_scheduler_singleton_health():
-    """Poll singleton scheduler health instead of spawning duplicates."""
-    polls = max(1, SCHEDULER_SINGLETON_POLL_SECONDS // 30)
+    """Poll singleton scheduler health; break early on recovery signal or stale lock."""
+    polls = max(1, SCHEDULER_SINGLETON_POLL_SECONDS // 15)
     for _ in range(polls):
-        time.sleep(30)
+        if should_force_scheduler_retry():
+            print("[ORCHESTRATOR] recovery signal — retry scheduler launch immediately", flush=True)
+            return
+        from backend.orchestration.recovery_loop import handle_scheduler_singleton_exit
+        action = handle_scheduler_singleton_exit(SCHEDULER_EXIT_SINGLETON)
+        if action == 'retry_immediate':
+            print("[ORCHESTRATOR] stale singleton — retry scheduler launch immediately", flush=True)
+            return
         if not _scheduler_singleton_active():
             print("[SCHEDULER CRASH DETECTED] Singleton lock lost — recovery launch")
             return
-    print("[SCHEDULER HEALTHY] Singleton scheduler still active")
-    _log_subprocess_event('Scheduler', "[WATCHDOG NO-RESTART] Scheduler singleton healthy")
+        time.sleep(15)
+    if _scheduler_singleton_active():
+        print("[SCHEDULER HEALTHY] Singleton scheduler still active")
+        _log_subprocess_event('Scheduler', "[WATCHDOG NO-RESTART] Scheduler singleton healthy")
+    else:
+        print("[ORCHESTRATOR] singleton lost during wait — recovery launch", flush=True)
+
+
+def should_force_scheduler_retry() -> bool:
+    try:
+        from backend.orchestration.recovery_loop import should_force_scheduler_retry as _retry
+        return _retry()
+    except Exception:
+        return False
+
+
+def orchestrator_recovery_loop():
+    """Autonomous detect → diagnose → recover → verify every 60s."""
+    time.sleep(15)  # allow scheduler subprocess to boot
+    while True:
+        try:
+            from backend.orchestration.recovery_loop import run_orchestrator_health_tick
+            result = run_orchestrator_health_tick()
+            if result.get('healthy') is False and result.get('unhealthy_for_seconds', 0) >= 90:
+                pass  # recovery already attempted inside tick
+        except Exception as e:
+            print(f"[ORCHESTRATOR] health loop error: {e}", flush=True)
+        time.sleep(60)
+
+
+def start_orchestrator_recovery_thread():
+    global _orchestrator_recovery_started
+    if _orchestrator_recovery_started:
+        return
+    _orchestrator_recovery_started = True
+    t = threading.Thread(
+        target=orchestrator_recovery_loop,
+        daemon=True,
+        name='OrchestratorRecovery',
+    )
+    t.start()
+    print("[ORCHESTRATOR] autonomous recovery loop started (60s)", flush=True)
 
 
 def run_subprocess_loop(script_name, label):
@@ -159,10 +207,13 @@ def run_subprocess_loop(script_name, label):
 
             if script_name == SCHEDULER_SCRIPT:
                 if rc == SCHEDULER_EXIT_SINGLETON:
-                    from backend.utils.process_lock import clear_stale_lock, is_lock_holder_valid
-                    if not is_lock_holder_valid('master_scheduler'):
-                        print("[SCHEDULER] Stale singleton lock — clearing and retrying immediately", flush=True)
-                        clear_stale_lock('master_scheduler')
+                    from backend.orchestration.recovery_loop import handle_scheduler_singleton_exit
+                    action = handle_scheduler_singleton_exit(rc)
+                    if action == 'retry_immediate':
+                        print("[ORCHESTRATOR] stale singleton lock — clearing and retrying immediately", flush=True)
+                        continue
+                    if not _scheduler_singleton_active():
+                        print("[ORCHESTRATOR] lock free after singleton exit — retry immediately", flush=True)
                         continue
                     print("[SCHEDULER SINGLETON SKIP] Duplicate launch blocked — primary holds lock")
                     _log_subprocess_event(
@@ -446,6 +497,14 @@ def start_background_processes():
             return
         _background_started = True
 
+    try:
+        from backend.orchestration.recovery_loop import bootstrap_self_healing
+        bootstrap_self_healing(os.getpid())
+    except Exception as e:
+        print(f"[ORCHESTRATOR] bootstrap failed: {e}", flush=True)
+
+    start_orchestrator_recovery_thread()
+
     backend_log.info("Starting background processes (railway=%s)", IS_RAILWAY)
     try:
         from backend.ai.provider_manager import log_provider_startup_diagnostics
@@ -453,7 +512,7 @@ def start_background_processes():
     except Exception as e:
         print(f"[AI PROVIDERS] WARN diagnostics failed: {e}")
 
-    # Scheduler thread
+    # Scheduler thread — PRIMARY runtime only
     if os.environ.get('DISABLE_SCHEDULER') != '1':
         try:
             from backend.utils.process_lock import clear_stale_lock
@@ -470,6 +529,13 @@ def start_background_processes():
         scheduler_thread.start()
         print("[INFO] Scheduler thread started")
         backend_log.info("Scheduler thread started")
+    else:
+        try:
+            from backend.orchestration.orchestrator_state import mark_api_only
+            mark_api_only('DISABLE_SCHEDULER=1')
+        except Exception:
+            pass
+        print("[ORCHESTRATOR] API_ONLY — scheduler disabled", flush=True)
     
     # Telegram listener thread
     if os.environ.get('DISABLE_TELEGRAM_LISTENER') != '1':
@@ -777,11 +843,40 @@ def _build_runtime_snapshot() -> dict:
     except Exception:
         ai_runtime = {'status': 'degraded'}
 
+    orchestrator_panel = {
+        'status': 'waiting',
+        'stale': True,
+        'message': 'Orchestrator heartbeat pending…',
+        'mode': 'RECOVERING',
+    }
+    try:
+        from backend.orchestration.orchestrator_state import get_orchestrator_health_payload
+        from backend.orchestration.recovery_loop import verify_gui_sync
+        orch = get_orchestrator_health_payload()
+        gui = verify_gui_sync()
+        healthy = bool(orch.get('runtime_healthy'))
+        orchestrator_panel = {
+            'status': 'ready' if healthy else 'stale',
+            'stale': not healthy,
+            'message': None if healthy else f"Recovery: {', '.join(orch.get('issues') or ['orchestrator stale'])[:120]}",
+            'mode': orch.get('orchestrator_mode'),
+            'last_scheduler_tick': orch.get('last_scheduler_tick'),
+            'tick_age_seconds': orch.get('tick_age_seconds'),
+            'recovery_attempts_today': orch.get('recovery_attempts_today'),
+            'gui_sync_validated': gui.get('validated'),
+        }
+        if gui.get('validated'):
+            backend_log.debug('GUI sync validated')
+    except Exception as e:
+        orchestrator_panel['message'] = str(e)[:120]
+
+    runtime_stale = any_stale or orchestrator_panel.get('stale', False)
+
     panels = {
         'runtime': {
-            'status': 'ready',
-            'stale': any_stale,
-            'message': None,
+            'status': 'ready' if not runtime_stale else 'stale',
+            'stale': runtime_stale,
+            'message': orchestrator_panel.get('message') if orchestrator_panel.get('stale') else None,
             'generated_at': generated_at,
         },
         'brain': _panel_state_from_source(
@@ -799,6 +894,7 @@ def _build_runtime_snapshot() -> dict:
         'calibration': calibration_panel,
         'journal': journal_panel,
         'lifecycle': lifecycle_panel,
+        'orchestrator': orchestrator_panel,
         'ops': {
             'status': 'ready',
             'stale': any_stale,
@@ -836,6 +932,7 @@ def _build_runtime_snapshot() -> dict:
             'message': journal_panel.get('message'),
         },
         'lifecycle_summary': lifecycle_panel,
+        'orchestrator_summary': orchestrator_panel,
     })
 
 
@@ -917,14 +1014,21 @@ def _build_health_payload() -> dict:
     except Exception:
         provider_analytics = {}
 
+    try:
+        from backend.orchestration.orchestrator_state import get_orchestrator_health_payload
+        orchestrator = get_orchestrator_health_payload()
+    except Exception as e:
+        orchestrator = {'status': 'degraded', 'error': str(e)}
+
     return {
-        "status": "ok",
+        "status": "ok" if orchestrator.get('runtime_healthy', True) else "degraded",
         "timestamp": datetime.now().isoformat(),
         "railway": IS_RAILWAY,
         "db_path": str(DB_PATH),
         "data_freshness": freshness,
         "source_status": source_status,
         "running_jobs": lock_status(),
+        "orchestrator": orchestrator,
         "ai_status": {
             "router_available": AI_AVAILABLE,
             "anthropic_configured": keys.get('anthropic', False),
@@ -1373,6 +1477,11 @@ def main():
         print(f"[AI PROVIDERS] WARN diagnostics failed: {e}")
     print("=" * 60)
     backend_log.info("Uvicorn starting host=%s port=%s railway=%s", host, port, IS_RAILWAY)
+    try:
+        from backend.orchestration.recovery_loop import enforce_single_worker_mode
+        enforce_single_worker_mode()
+    except Exception:
+        pass
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 

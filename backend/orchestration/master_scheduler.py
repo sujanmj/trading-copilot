@@ -292,12 +292,21 @@ def _maybe_periodic_eod_recovery():
 
 
 def main():
-    from backend.utils.process_lock import try_acquire_lock, release_lock
+    from backend.utils.process_lock import try_acquire_lock, release_lock, clear_stale_lock
 
     if not try_acquire_lock('master_scheduler'):
-        print("[SKIP] master_scheduler already running", flush=True)
-        print("[SCHEDULER SINGLETON ACTIVE] Guard exit — primary scheduler lock held", flush=True)
-        sys.exit(SCHEDULER_EXIT_SINGLETON)
+        if clear_stale_lock('master_scheduler') and try_acquire_lock('master_scheduler'):
+            print("[ORCHESTRATOR] stale lock detected — re-acquired after cleanup", flush=True)
+        else:
+            print("[SKIP] master_scheduler already running", flush=True)
+            print("[SCHEDULER SINGLETON ACTIVE] Guard exit — primary scheduler lock held", flush=True)
+            sys.exit(SCHEDULER_EXIT_SINGLETON)
+
+    try:
+        from backend.orchestration.orchestrator_state import mark_primary_acquired
+        mark_primary_acquired(os.getpid())
+    except Exception as e:
+        print(f"[ORCHESTRATOR] primary mark failed: {e}", flush=True)
 
     if not bind_primary_scheduler():
         print("[WARN] Primary scheduler registry already bound in-process", flush=True)

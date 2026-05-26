@@ -109,6 +109,12 @@ def log_scheduler_tick():
         f"jobs={len(_IST_JOBS)} eod_lifecycle@{eod_at} primary={_PRIMARY_SCHEDULER_BOUND}",
         flush=True,
     )
+    try:
+        import os
+        from backend.orchestration.recovery_loop import tick_from_scheduler
+        tick_from_scheduler(os.getpid())
+    except Exception as e:
+        print(f"[ORCHESTRATOR] tick persist failed: {e}", flush=True)
 
 
 def dump_task_registry():

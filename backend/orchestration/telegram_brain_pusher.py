@@ -366,6 +366,14 @@ def push_full_brain():
         send_message("❌ No brain data yet. Run /refresh first.")
         return False
 
+    try:
+        from backend.orchestration.opportunity_filter import rank_opportunities, DEFAULT_OPPS_LIMIT
+        ranked = rank_opportunities(raw_intel, limit=DEFAULT_OPPS_LIMIT)
+        intel['top_opportunities'] = ranked
+        intel['opportunities'] = ranked
+    except Exception as e:
+        safe_print(f"[WARN] opportunity rank failed: {e}")
+
     opps = get_opportunities(intel)
     if not opps:
         safe_print("[BRAIN] No opportunities in intel — pushing analysis with scanner notice")
@@ -406,8 +414,15 @@ def push_opps():
     debug_intel_fields(raw)
     intel = normalize_intel(raw)
     if intel:
-        opps = get_opportunities(intel)
-        send_chunked(f"💎 <b>TOP OPPORTUNITIES</b>\n\n{format_opps(opps)}")
+        try:
+            from backend.orchestration.opportunity_filter import rank_opportunities, DEFAULT_OPPS_LIMIT
+            opps = rank_opportunities(raw, limit=DEFAULT_OPPS_LIMIT)
+            safe_print(f"[BRAIN PUSH] Ranked {len(opps)} opportunities (top {DEFAULT_OPPS_LIMIT})")
+        except Exception as e:
+            safe_print(f"[WARN] opportunity filter failed: {e}")
+            opps = get_opportunities(intel)[:20]
+        stale = stale_warning(raw)
+        send_chunked(f"{stale}💎 <b>TOP OPPORTUNITIES</b> (max {len(opps)})\n\n{format_opps(opps)}")
 
 
 def push_risks():
