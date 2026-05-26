@@ -65,6 +65,7 @@ def empty_stats_output():
             'signal_type_performance': {'categories': []},
             'telegram_precision': {},
             'calibration_health': {},
+            'adaptive_calibration': {'status': 'empty', 'learning_active': False},
         },
         'ai_runtime': {
             'status': 'empty',

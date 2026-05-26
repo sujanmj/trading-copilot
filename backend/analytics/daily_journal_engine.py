@@ -62,6 +62,14 @@ def _format_journal_card(review: dict) -> dict:
         except Exception:
             runtime_notes = []
 
+    adaptive_notes = []
+    if review_date:
+        try:
+            from backend.adaptive.adaptive_calibration_engine import get_adaptive_journal_notes
+            adaptive_notes = get_adaptive_journal_notes(review_date)
+        except Exception:
+            adaptive_notes = []
+
     return {
         'date': review.get('date'),
         'status': review.get('status', 'ok'),
@@ -81,6 +89,8 @@ def _format_journal_card(review: dict) -> dict:
         'observation': review.get('observation') or '',
         'runtime_notes': runtime_notes,
         'runtime_summary': '\n'.join(runtime_notes) if runtime_notes else '',
+        'adaptive_notes': adaptive_notes,
+        'adaptive_summary': '\n'.join(adaptive_notes) if adaptive_notes else '',
         'regime_timeline': regime.get('timeline') or [],
         'warnings': warnings[:8],
         'highlights': highlights,

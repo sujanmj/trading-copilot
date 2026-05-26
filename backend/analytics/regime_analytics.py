@@ -262,6 +262,7 @@ def build_calibration_dashboard() -> dict:
             'signal_type_performance': get_signal_type_performance(),
             'telegram_precision': get_telegram_precision_analytics(),
             'calibration_health': get_calibration_health_scores(),
+            'adaptive_calibration': _get_adaptive_dashboard_safe(),
         }
     except Exception as e:
         return {
@@ -272,4 +273,13 @@ def build_calibration_dashboard() -> dict:
             'signal_type_performance': {'categories': []},
             'telegram_precision': {},
             'calibration_health': {},
+            'adaptive_calibration': {'status': 'empty'},
         }
+
+
+def _get_adaptive_dashboard_safe() -> dict:
+    try:
+        from backend.adaptive.adaptive_calibration_engine import get_adaptive_dashboard_payload
+        return get_adaptive_dashboard_payload()
+    except Exception as e:
+        return {'status': 'degraded', 'reason': str(e)}

@@ -521,6 +521,48 @@
         )}`;
     }
 
+    const adaptive = cal.adaptive_calibration || {};
+    const adaptEl = $('aiOpsAdaptive');
+    if (adaptEl) {
+      const tuning = adaptive.adaptive_tuning || [];
+      const regimeLearn = adaptive.regime_learning || [];
+      const activeAdj = adaptive.active_adjustments || [];
+      adaptEl.innerHTML =
+        renderStatGrid([
+          {
+            label: 'Learning',
+            value: adaptive.learning_active ? 'ACTIVE' : 'COLLECTING',
+            cls: adaptive.learning_active ? 'ai-ops-ok' : 'ai-ops-warn',
+          },
+          {
+            label: 'Realism',
+            value: adaptive.confidence_realism_line || '—',
+            cls: String(adaptive.confidence_realism_line || '').includes('inflation') ? 'ai-ops-warn' : '',
+          },
+          {
+            label: 'Realism score',
+            value: adaptive.confidence_realism_score != null ? String(adaptive.confidence_realism_score) : '—',
+          },
+          {
+            label: 'Last adapt',
+            value: adaptive.last_applied_at ? adaptive.last_applied_at.slice(0, 10) : '—',
+          },
+        ]) +
+        `<div class="ai-ops-subhead">Active tuning</div>${renderList(
+          tuning.length ? tuning : activeAdj.map((a) => `${a.parameter || a.key} ${a.cumulative_delta_pct >= 0 ? '+' : ''}${a.cumulative_delta_pct != null ? a.cumulative_delta_pct : a.pct_display || ''}%`),
+          'No active adjustments — within baseline'
+        )}` +
+        `<div class="ai-ops-subhead">Regime learning</div>${renderList(regimeLearn, 'Regime patterns building…')}` +
+        `<div class="ai-ops-subhead">Safety caps</div>${renderList(
+          [
+            adaptive.safety_caps ? `Max/cycle: ${Math.round((adaptive.safety_caps.max_delta_per_cycle || 0.02) * 100)}%` : null,
+            adaptive.safety_caps ? `Max cumulative: ${Math.round((adaptive.safety_caps.max_cumulative || 0.15) * 100)}%` : null,
+            adaptive.safety_caps ? `Cooldown: ${adaptive.safety_caps.cooldown_hours || 24}h` : null,
+          ].filter(Boolean),
+          '—'
+        )}`;
+    }
+
     const intelAge = intelFresh.age_seconds;
     const intelStale = intelFresh.status === 'stale';
     const staleThreshold = health.watchdog_stale_threshold_seconds ?? obs.watchdog_stale_threshold_seconds;

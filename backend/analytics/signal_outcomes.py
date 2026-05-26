@@ -711,6 +711,7 @@ def get_ops_calibration_payload() -> dict:
             'telegram_precision_proxy': _telegram_precision(),
             'min_samples_global': MIN_SAMPLES_GLOBAL,
             'min_samples_telegram': MIN_SAMPLES_TELEGRAM,
+            'adaptive_calibration': _get_adaptive_ops_safe(),
         }
     except Exception as e:
         return {
@@ -721,6 +722,14 @@ def get_ops_calibration_payload() -> dict:
             'regime_performance': {'regimes': []},
             'signal_quality': {'signal_types': []},
         }
+
+
+def _get_adaptive_ops_safe() -> dict:
+    try:
+        from backend.adaptive.adaptive_calibration_engine import get_adaptive_ops_payload
+        return get_adaptive_ops_payload()
+    except Exception as e:
+        return {'status': 'degraded', 'reason': str(e)}
 
 
 def _telegram_precision() -> Optional[float]:

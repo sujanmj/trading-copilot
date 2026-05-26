@@ -1197,6 +1197,27 @@ def api_debug_provider_analytics():
     })
 
 
+@app.get("/api/debug/adaptive-calibration", dependencies=[Depends(verify_api_key)])
+def api_debug_adaptive_calibration():
+    from backend.adaptive.adaptive_calibration_engine import (
+        get_adaptive_dashboard_payload,
+        get_adaptive_ops_payload,
+        load_adaptive_state,
+    )
+    return sanitize_json_value({
+        'dashboard': get_adaptive_dashboard_payload(),
+        'ops': get_adaptive_ops_payload(),
+        'state': load_adaptive_state(),
+    })
+
+
+@app.post("/api/adaptive/reset", dependencies=[Depends(verify_api_key)])
+def api_adaptive_reset():
+    from backend.adaptive.adaptive_calibration_engine import reset_adaptive_baseline
+    state = reset_adaptive_baseline(reason='operator_api_reset')
+    return sanitize_json_value({'status': 'ok', 'message': 'Adaptive baseline restored.', 'state': state})
+
+
 @app.get("/api/debug/reliability", dependencies=[Depends(verify_api_key)])
 def api_debug_reliability():
     from backend.metrics.execution_metrics import get_reliability_debug

@@ -727,6 +727,10 @@
         <summary>Outcome Learning</summary>
         <div class="ai-ops-section-body" id="aiOpsCalibration"></div>
       </details>
+      <details class="ai-ops-section" open>
+        <summary>Adaptive Intelligence</summary>
+        <div class="ai-ops-section-body" id="aiOpsAdaptive"></div>
+      </details>
       <details class="ai-ops-section">
         <summary>Watchdog / Health</summary>
         <div class="ai-ops-section-body" id="aiOpsHealth"></div>
@@ -1849,6 +1853,35 @@
     if (health.hallucination_detections) html += calibRow('Hallucination detections', health.hallucination_detections, 'bad')
     html += `</div>`
 
+    const adaptive = cal.adaptive_calibration || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Adaptive Calibration</div>`
+    if (!adaptive.learning_active && adaptive.status !== 'adapted' && adaptive.status !== 'stable') {
+      html += `<div class="calib-insufficient">${escapeHtml(adaptive.status_message || 'Collecting evaluation samples before adaptive tuning activates.')}</div>`
+    } else {
+      const realism = adaptive.confidence_realism || {}
+      html += calibRow('Confidence realism', realism.score != null ? `${realism.score}` : '—', pctClass(realism.score))
+      if (realism.inflation != null && realism.inflation > 0.05) {
+        html += calibRow('Inflation signal', `${(realism.inflation * 100).toFixed(1)}%`, 'mid')
+      }
+      const drift = adaptive.calibration_drift || adaptive.active_adjustments || []
+      if (drift.length) {
+        drift.slice(0, 5).forEach(d => {
+          html += calibRow(d.parameter, `${d.cumulative_delta_pct >= 0 ? '+' : ''}${d.cumulative_delta_pct}%`, 'muted')
+        })
+      } else {
+        html += calibRow('Threshold drift', 'none — within baseline', 'good')
+      }
+      const timeline = adaptive.timeline || []
+      if (timeline.length) {
+        const last = timeline[timeline.length - 1]
+        const cnt = (last.adjustments || []).length
+        html += calibRow('Last adaptation', `${last.date || '?'} · ${cnt} change(s)`, 'muted')
+      }
+      const obs = adaptive.observations || []
+      if (obs.length) obs.slice(0, 3).forEach(o => { html += `<div class="calib-insufficient" style="margin-top:6px;">${escapeHtml(o)}</div>` })
+    }
+    html += `</div>`
+
     const rt = data.ai_runtime || {}
     html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">AI Runtime</div>`
     if (rt.status === 'degraded' || rt.status === 'empty') {
@@ -1967,6 +2000,12 @@
     if (runtimeNotes.length) {
       html += `<div class="journal-runtime"><div class="journal-k" style="margin-bottom:6px;">Daily AI Runtime Notes</div>`
       runtimeNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
+      html += `</div>`
+    }
+    const adaptiveNotes = entry.adaptive_notes || []
+    if (adaptiveNotes.length) {
+      html += `<div class="journal-runtime" style="border-left-color:rgba(212,168,83,0.35);background:rgba(212,168,83,0.06);"><div class="journal-k" style="margin-bottom:6px;">Adaptive Observations</div>`
+      adaptiveNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
       html += `</div>`
     }
     const timeline = entry.regime_timeline || []

@@ -508,5 +508,16 @@ if __name__ == "__main__":
         print(f"  Horizon evaluations: {hr.get('evaluated', 0)}")
     except Exception as e:
         print(f"  [WARN] Horizon evaluation skipped: {e}")
+
+    print("\n[STAGE 4] Adaptive calibration cycle...")
+    try:
+        from backend.adaptive.adaptive_calibration_engine import run_adaptive_calibration_cycle
+        ar = run_adaptive_calibration_cycle()
+        print(f"  Adaptive: {ar.get('status')} — {ar.get('message') or 'ok'}")
+        if ar.get('applied'):
+            for adj in ar['applied'][:3]:
+                print(f"    {adj.get('key')}: {adj.get('pct_display', adj.get('delta'))} — {str(adj.get('reason', ''))[:80]}")
+    except Exception as e:
+        print(f"  [WARN] Adaptive calibration skipped: {e}")
     
     print("\n[DONE] All pending outcomes processed.")
