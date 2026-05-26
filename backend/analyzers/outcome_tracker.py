@@ -56,6 +56,13 @@ def fetch_price_for_date(ticker, target_date):
     Fetch closing price for a ticker on or near a specific date.
     Returns (price, actual_date_used) or (None, None)
     """
+    try:
+        from backend.lifecycle.evaluation_price_cache import lifecycle_cache_only
+        if lifecycle_cache_only():
+            return None, None
+    except Exception:
+        pass
+
     symbol = add_nse_suffix(ticker)
     if not symbol:
         return None, None

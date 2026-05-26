@@ -191,8 +191,15 @@ def _fetch_current_price(ticker: Optional[str]) -> Optional[float]:
         except Exception:
             pass
     try:
+        from backend.lifecycle.evaluation_price_cache import lifecycle_cache_only
+        if lifecycle_cache_only():
+            return None
+    except Exception:
+        pass
+    try:
         from backend.utils.angel_one_client import fetch_ltp
-        return fetch_ltp(sym)
+        ltp, _ = fetch_ltp(sym)
+        return ltp
     except Exception:
         return None
 

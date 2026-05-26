@@ -234,14 +234,16 @@ CREATE INDEX IF NOT EXISTS idx_sh_hit ON signal_horizons(hit_miss);
 # DATABASE CONNECTION
 # ============================================================
 
-def get_connection():
-    """Get a database connection"""
+def get_connection(timeout: float = 30.0):
+    """Get a database connection with busy-timeout (avoids indefinite SQLite locks)."""
     from backend.storage.db_finder import resolve_db_path
     db_path = Path(resolve_db_path())
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=timeout)
     conn.row_factory = sqlite3.Row  # Allow dict-like access
     conn.execute("PRAGMA foreign_keys = ON")
+    busy_ms = max(1000, int(timeout * 1000))
+    conn.execute(f"PRAGMA busy_timeout = {busy_ms}")
     return conn
 
 

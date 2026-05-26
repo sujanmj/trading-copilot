@@ -625,9 +625,19 @@ def get_active_predictions_payload() -> dict:
 
 
 def _evaluate_outcomes() -> dict:
-    eval_stats = evaluate_lifecycle_predictions(verbose=True, backfill=True)
-    from backend.analyzers.outcome_tracker import evaluate_signals_outcomes
-    sig = evaluate_signals_outcomes(verbose=False)
+    eval_stats = evaluate_lifecycle_predictions(verbose=True, backfill=True, use_cache_only=True)
+    pipeline_log(
+        f"eval processed={eval_stats.get('processed', 0)} "
+        f"terminal={eval_stats.get('evaluated', 0) + eval_stats.get('expired', 0)} "
+        f"errors={eval_stats.get('errors', 0)} avg={eval_stats.get('avg_time_sec', 0)}s",
+        stage='evaluate_outcomes',
+    )
+    sig = {'evaluated': 0, 'skipped': 'cache_only_eod'}
+    try:
+        from backend.analyzers.outcome_tracker import evaluate_signals_outcomes
+        sig = evaluate_signals_outcomes(verbose=False)
+    except Exception as e:
+        sig = {'evaluated': 0, 'error': str(e)}
     try:
         from backend.analytics.signal_outcomes import evaluate_due_horizons
         hr = evaluate_due_horizons()
@@ -686,6 +696,7 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
         },
     )
     pipeline_log('starting evaluation cycle', stage='start')
+    os.environ['LIFECYCLE_CACHE_ONLY'] = '1'
 
     def _stage(name: str, fn, *, critical: bool = True):
         nonlocal failed_critical
@@ -807,6 +818,7 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
         pipeline_log(f"fatal error: {e}", stage='complete')
         return result
     finally:
+        os.environ.pop('LIFECYCLE_CACHE_ONLY', None)
         release_lock(lock_name)
 
 

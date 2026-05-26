@@ -1,12 +1,20 @@
 """
 Lifecycle prediction evaluator — horizon-aware evaluation, backfill, failure reasons.
+EOD mode uses cached market snapshots only (no per-prediction yfinance/Angel calls).
 """
 
 from __future__ import annotations
 
+import os
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from backend.lifecycle.evaluation_price_cache import (
+    CachedMarketSnapshot,
+    lifecycle_cache_only,
+    resolve_prices_cached,
+)
 from backend.lifecycle.lifecycle_rules import (
     UNRESOLVED_STATE,
     infer_failure_reason,
@@ -18,10 +26,12 @@ from backend.lifecycle.lifecycle_rules import (
     should_expire,
 )
 from backend.storage.db_manager import get_connection, init_db
-from backend.storage.json_io import atomic_write_json
 from backend.utils.config import DATA_DIR
 
 LIFECYCLE_STATE_FILE = DATA_DIR / 'lifecycle_state.json'
+
+EVAL_WARN_SECONDS = 15.0
+EVAL_SKIP_SECONDS = 30.0
 
 
 def _now_iso() -> str:
@@ -29,7 +39,15 @@ def _now_iso() -> str:
 
 
 def _log(msg: str):
-    print(f"[LIFECYCLE-EVAL] {msg}")
+    print(f"[LIFECYCLE-EVAL] {msg}", flush=True)
+
+
+def _eval_log(msg: str):
+    print(f"[EVAL] {msg}", flush=True)
+
+
+def _prediction_state(pred: dict) -> str:
+    return str(pred.get('verdict') or pred.get('state') or 'PENDING').upper()
 
 
 def _ensure_prediction_columns(conn):
@@ -59,17 +77,204 @@ def _backfill_prediction_metadata(conn, prediction: dict) -> dict:
     return prediction
 
 
-def evaluate_lifecycle_predictions(*, verbose: bool = True, backfill: bool = True) -> dict:
+def _evaluate_one_prediction(
+    conn,
+    pred: dict,
+    *,
+    today,
+    intel_regime: str,
+    snapshot: CachedMarketSnapshot,
+    use_cache_only: bool,
+    stats: dict,
+    verbose: bool,
+) -> str:
+    """
+    Evaluate a single prediction. Returns: completed | skipped | expired | unresolved | error
+    """
+    from backend.analyzers.outcome_tracker import calculate_change_pct
+    from backend.storage.db_manager import _normalize_sqlite_value
+
+    outcome_id = pred['outcome_id']
+    ticker = pred.get('ticker')
+    pred_date_str = pred.get('prediction_date')
+    if not ticker or not pred_date_str:
+        return 'skipped'
+
+    try:
+        pred_date = datetime.strptime(pred_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return 'skipped'
+
+    elapsed = sessions_elapsed(pred_date_str, today)
+    horizon = pred.get('prediction_horizon') or 'next_day'
+    signal_type = pred.get('signal_type') or 'breakout'
+    state = _prediction_state(pred)
+
+    if should_expire(signal_type, elapsed, pred.get('verdict') or 'PENDING'):
+        conn.execute(
+            "UPDATE outcomes SET verdict = 'EXPIRED', last_checked = ? WHERE id = ?",
+            (_now_iso(), outcome_id),
+        )
+        stats['expired'] += 1
+        return 'expired'
+
+    if not ready_for_evaluation(horizon, elapsed):
+        stats['skipped_horizon'] += 1
+        return 'skipped'
+
+    entry = pred.get('entry_price') or pred.get('outcome_entry')
+
+    if use_cache_only or lifecycle_cache_only():
+        entry, price_1d, price_3d, price_7d, price_src = resolve_prices_cached(
+            ticker=ticker,
+            entry=entry,
+            elapsed=elapsed,
+            stored=pred,
+            snapshot=snapshot,
+            today=today,
+            pred_date=pred_date,
+        )
+        if entry and not pred.get('outcome_entry') and not pred.get('entry_price'):
+            conn.execute('UPDATE outcomes SET entry_price = ? WHERE id = ?', (entry, outcome_id))
+    else:
+        from backend.analyzers.outcome_tracker import fetch_price_for_date
+        if not entry:
+            entry, _ = fetch_price_for_date(ticker, pred_date)
+            if entry:
+                conn.execute('UPDATE outcomes SET entry_price = ? WHERE id = ?', (entry, outcome_id))
+        price_1d, _ = fetch_price_for_date(ticker, pred_date + timedelta(days=1))
+        price_3d, _ = (fetch_price_for_date(ticker, pred_date + timedelta(days=3)) if elapsed >= 3 else (None, None))
+        price_7d, _ = (fetch_price_for_date(ticker, pred_date + timedelta(days=7)) if elapsed >= 7 else (None, None))
+        price_src = 'network'
+
+    change_1d = calculate_change_pct(entry, price_1d) if price_1d and entry else None
+    change_3d = calculate_change_pct(entry, price_3d) if price_3d and entry else None
+    change_7d = calculate_change_pct(entry, price_7d) if price_7d and entry else None
+    if change_1d is None and pred.get('change_1d_pct') is not None:
+        change_1d = pred.get('change_1d_pct')
+    if change_3d is None and pred.get('change_3d_pct') is not None:
+        change_3d = pred.get('change_3d_pct')
+    if change_7d is None and pred.get('change_7d_pct') is not None:
+        change_7d = pred.get('change_7d_pct')
+
+    if horizon == 'swing_3d' and change_3d is None:
+        stats['skipped_horizon'] += 1
+        return 'skipped'
+    if horizon == 'swing_5d' and elapsed < 5:
+        stats['skipped_horizon'] += 1
+        return 'skipped'
+
+    change_pct = change_7d if change_7d is not None else (change_3d if change_3d is not None else change_1d)
+    all_prices = [p for p in [price_1d, price_3d, price_7d] if p]
+    if all_prices and entry:
+        max_gain = round(((max(all_prices) - entry) / entry) * 100, 2)
+        max_loss = round(((min(all_prices) - entry) / entry) * 100, 2)
+    else:
+        max_gain = max_loss = None
+
+    if change_pct is None:
+        conn.execute(
+            "UPDATE outcomes SET verdict = ?, last_checked = ? WHERE id = ?",
+            (UNRESOLVED_STATE, _now_iso(), outcome_id),
+        )
+        stats['unresolved'] += 1
+        if verbose:
+            _eval_log(f"unresolved {ticker} id={pred.get('id')} — no cached price ({price_src})")
+        return 'unresolved'
+
+    target = pred.get('target_price')
+    stop_loss = pred.get('stop_loss')
+    target_hit = 0
+    stop_hit = 0
+    if target and entry and target > entry and max_gain is not None:
+        need = ((target - entry) / entry) * 100
+        if max_gain >= need:
+            target_hit = 1
+    if stop_loss and entry and stop_loss < entry and max_loss is not None:
+        need = ((stop_loss - entry) / entry) * 100
+        if max_loss <= need:
+            stop_hit = 1
+
+    invalidated = _regime_invalidates(pred, intel_regime)
+    if invalidated:
+        verdict = 'INVALIDATED'
+        target_hit = stop_hit = 0
+        failure = 'regime_reversal'
+    else:
+        verdict, target_hit, stop_hit = resolve_deterministic(
+            category=pred.get('category'),
+            change_pct=change_pct,
+            max_gain=max_gain,
+            max_loss=max_loss,
+            target_hit=bool(target_hit),
+            stop_hit=bool(stop_hit),
+        )
+        failure = infer_failure_reason(
+            verdict=verdict,
+            signal_type=signal_type,
+            change_pct=change_pct,
+            max_gain=max_gain,
+            max_loss=max_loss,
+            target_hit=bool(target_hit),
+            stop_hit=bool(stop_hit),
+            invalidated=False,
+        )
+
+    price_1d = _normalize_sqlite_value(price_1d)
+    change_1d = _normalize_sqlite_value(change_1d)
+    price_3d = _normalize_sqlite_value(price_3d)
+    change_3d = _normalize_sqlite_value(change_3d)
+    price_7d = _normalize_sqlite_value(price_7d)
+    change_7d = _normalize_sqlite_value(change_7d)
+    max_gain = _normalize_sqlite_value(max_gain, 'max_gain_pct')
+    max_loss = _normalize_sqlite_value(max_loss, 'max_loss_pct')
+    target_hit = _normalize_sqlite_value(target_hit, 'target_hit')
+    stop_hit = _normalize_sqlite_value(stop_hit, 'stop_loss_hit')
+    verdict = _normalize_sqlite_value(verdict, 'verdict')
+
+    conn.execute("""
+        UPDATE outcomes SET
+            price_1d = ?, change_1d_pct = ?,
+            price_3d = ?, change_3d_pct = ?,
+            price_7d = ?, change_7d_pct = ?,
+            max_gain_pct = ?, max_loss_pct = ?,
+            target_hit = ?, stop_loss_hit = ?,
+            verdict = ?, last_checked = ?
+        WHERE id = ?
+    """, (
+        price_1d, change_1d,
+        price_3d, change_3d,
+        price_7d, change_7d,
+        max_gain, max_loss,
+        target_hit, stop_hit,
+        verdict, _now_iso(),
+        outcome_id,
+    ))
+    if failure:
+        conn.execute('UPDATE predictions SET failure_reason = ? WHERE id = ?', (failure, pred['id']))
+
+    stats['evaluated'] += 1
+    key = str(verdict).lower()
+    if key in stats:
+        stats[key] += 1
+    elif verdict == UNRESOLVED_STATE:
+        stats['unresolved'] += 1
+
+    if verbose:
+        _log(f"{ticker} [{horizon}] state={state} → {verdict} ({change_pct:+.2f}%) src={price_src}")
+    return 'completed'
+
+
+def evaluate_lifecycle_predictions(
+    *,
+    verbose: bool = True,
+    backfill: bool = True,
+    use_cache_only: bool = True,
+) -> dict:
     """
     Horizon-aware prediction evaluation with deterministic resolution.
-    Does not prematurely evaluate swing horizons.
+    EOD default: use_cache_only=True — no live yfinance/Angel per prediction.
     """
-    from backend.analyzers.outcome_tracker import (
-        add_nse_suffix,
-        calculate_change_pct,
-        fetch_price_for_date,
-    )
-
     init_db()
     conn = get_connection()
     stats = {
@@ -82,7 +287,17 @@ def evaluate_lifecycle_predictions(*, verbose: bool = True, backfill: bool = Tru
         'unresolved': 0,
         'skipped_horizon': 0,
         'backfilled_days': 0,
+        'processed': 0,
+        'completed': 0,
+        'skipped': 0,
+        'errors': 0,
+        'timeouts': 0,
+        'avg_time_sec': 0.0,
+        'cache_only': use_cache_only,
     }
+
+    trace_times: List[float] = []
+    snapshot = CachedMarketSnapshot()
 
     try:
         _ensure_prediction_columns(conn)
@@ -92,7 +307,9 @@ def evaluate_lifecycle_predictions(*, verbose: bool = True, backfill: bool = Tru
             SELECT
                 p.*,
                 o.id as outcome_id, o.verdict, o.entry_price as outcome_entry,
-                o.change_1d_pct, o.max_gain_pct, o.max_loss_pct,
+                o.price_1d, o.price_3d, o.price_7d,
+                o.change_1d_pct, o.change_3d_pct, o.change_7d_pct,
+                o.max_gain_pct, o.max_loss_pct,
                 o.target_hit, o.stop_loss_hit
             FROM predictions p
             INNER JOIN outcomes o ON o.source_type = 'prediction' AND o.source_id = p.id
@@ -100,159 +317,73 @@ def evaluate_lifecycle_predictions(*, verbose: bool = True, backfill: bool = Tru
             ORDER BY p.prediction_date ASC
         """).fetchall()
 
+        total = len(rows)
+        _eval_log(f"starting count={total} cache_only={use_cache_only} snapshot={snapshot.loaded_at or 'missing'}")
+
         intel_regime = _load_current_regime()
 
-        for row in rows:
+        for idx, row in enumerate(rows, 1):
+            stats['processed'] += 1
             pred = _backfill_prediction_metadata(conn, dict(row))
-            outcome_id = pred['outcome_id']
-            ticker = pred.get('ticker')
-            pred_date_str = pred.get('prediction_date')
-            if not ticker or not pred_date_str:
-                continue
+            ticker = str(pred.get('ticker') or '?').upper()
+            pid = pred.get('id')
+            state = _prediction_state(pred)
+            _eval_log(f"{idx}/{total} {ticker} id={pid} state={state} — begin")
 
+            t0 = time.perf_counter()
+            outcome = 'error'
             try:
-                pred_date = datetime.strptime(pred_date_str, '%Y-%m-%d').date()
-            except ValueError:
-                continue
-
-            elapsed = sessions_elapsed(pred_date_str, today)
-            horizon = pred.get('prediction_horizon') or 'next_day'
-            signal_type = pred.get('signal_type') or 'breakout'
-
-            if should_expire(signal_type, elapsed, pred.get('verdict') or 'PENDING'):
-                conn.execute(
-                    "UPDATE outcomes SET verdict = 'EXPIRED', last_checked = ? WHERE id = ?",
-                    (_now_iso(), outcome_id),
+                outcome = _evaluate_one_prediction(
+                    conn,
+                    pred,
+                    today=today,
+                    intel_regime=intel_regime,
+                    snapshot=snapshot,
+                    use_cache_only=use_cache_only,
+                    stats=stats,
+                    verbose=verbose,
                 )
-                stats['expired'] += 1
-                continue
+                conn.commit()
+            except Exception as e:
+                stats['errors'] += 1
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                _eval_log(f"ERROR {ticker} id={pid}: {e}")
+                outcome = 'error'
 
-            if not ready_for_evaluation(horizon, elapsed):
-                stats['skipped_horizon'] += 1
-                continue
+            elapsed = time.perf_counter() - t0
+            trace_times.append(elapsed)
 
-            entry = pred.get('entry_price') or pred.get('outcome_entry')
-            if not entry:
-                entry, _ = fetch_price_for_date(ticker, pred_date)
-                if entry:
-                    conn.execute('UPDATE outcomes SET entry_price = ? WHERE id = ?', (entry, outcome_id))
-
-            price_1d, _ = fetch_price_for_date(ticker, pred_date + timedelta(days=1))
-            price_3d, _ = (fetch_price_for_date(ticker, pred_date + timedelta(days=3)) if elapsed >= 3 else (None, None))
-            price_7d, _ = (fetch_price_for_date(ticker, pred_date + timedelta(days=7)) if elapsed >= 7 else (None, None))
-
-            change_1d = calculate_change_pct(entry, price_1d) if price_1d and entry else None
-            change_3d = calculate_change_pct(entry, price_3d) if price_3d and entry else None
-            change_7d = calculate_change_pct(entry, price_7d) if price_7d and entry else None
-
-            if horizon == 'swing_3d' and change_3d is None:
-                stats['skipped_horizon'] += 1
-                continue
-            if horizon == 'swing_5d' and elapsed < 5:
-                stats['skipped_horizon'] += 1
-                continue
-
-            change_pct = change_7d if change_7d is not None else (change_3d if change_3d is not None else change_1d)
-            all_prices = [p for p in [price_1d, price_3d, price_7d] if p]
-            if all_prices and entry:
-                max_gain = round(((max(all_prices) - entry) / entry) * 100, 2)
-                max_loss = round(((min(all_prices) - entry) / entry) * 100, 2)
+            if elapsed >= EVAL_SKIP_SECONDS:
+                stats['timeouts'] += 1
+                stats['skipped'] += 1
+                _eval_log(f"TIMEOUT skip {ticker} id={pid} elapsed={elapsed:.2f}s (>={EVAL_SKIP_SECONDS}s)")
+            elif elapsed >= EVAL_WARN_SECONDS:
+                _eval_log(f"SLOW WARNING {ticker} id={pid} elapsed={elapsed:.2f}s (>={EVAL_WARN_SECONDS}s)")
             else:
-                max_gain = max_loss = None
+                _eval_log(f"completed {ticker} id={pid} in {elapsed:.2f}s → {outcome}")
 
-            if change_pct is None:
-                conn.execute(
-                    "UPDATE outcomes SET verdict = ?, last_checked = ? WHERE id = ?",
-                    (UNRESOLVED_STATE, _now_iso(), outcome_id),
-                )
-                stats['unresolved'] += 1
-                continue
+            if outcome == 'completed':
+                stats['completed'] += 1
+            elif outcome in ('skipped', 'expired', 'unresolved'):
+                stats['skipped'] += 1
 
-            target = pred.get('target_price')
-            stop_loss = pred.get('stop_loss')
-            target_hit = 0
-            stop_hit = 0
-            if target and entry and target > entry and max_gain is not None:
-                need = ((target - entry) / entry) * 100
-                if max_gain >= need:
-                    target_hit = 1
-            if stop_loss and entry and stop_loss < entry and max_loss is not None:
-                need = ((stop_loss - entry) / entry) * 100
-                if max_loss <= need:
-                    stop_hit = 1
-
-            invalidated = _regime_invalidates(pred, intel_regime)
-            if invalidated:
-                verdict = 'INVALIDATED'
-                target_hit = stop_hit = 0
-                failure = 'regime_reversal'
-            else:
-                verdict, target_hit, stop_hit = resolve_deterministic(
-                    category=pred.get('category'),
-                    change_pct=change_pct,
-                    max_gain=max_gain,
-                    max_loss=max_loss,
-                    target_hit=bool(target_hit),
-                    stop_hit=bool(stop_hit),
-                )
-                failure = infer_failure_reason(
-                    verdict=verdict,
-                    signal_type=signal_type,
-                    change_pct=change_pct,
-                    max_gain=max_gain,
-                    max_loss=max_loss,
-                    target_hit=bool(target_hit),
-                    stop_hit=bool(stop_hit),
-                    invalidated=False,
-                )
-
-            from backend.storage.db_manager import _normalize_sqlite_value
-            price_1d = _normalize_sqlite_value(price_1d)
-            change_1d = _normalize_sqlite_value(change_1d)
-            price_3d = _normalize_sqlite_value(price_3d)
-            change_3d = _normalize_sqlite_value(change_3d)
-            price_7d = _normalize_sqlite_value(price_7d)
-            change_7d = _normalize_sqlite_value(change_7d)
-            max_gain = _normalize_sqlite_value(max_gain, 'max_gain_pct')
-            max_loss = _normalize_sqlite_value(max_loss, 'max_loss_pct')
-            target_hit = _normalize_sqlite_value(target_hit, 'target_hit')
-            stop_hit = _normalize_sqlite_value(stop_hit, 'stop_loss_hit')
-            verdict = _normalize_sqlite_value(verdict, 'verdict')
-
-            conn.execute("""
-                UPDATE outcomes SET
-                    price_1d = ?, change_1d_pct = ?,
-                    price_3d = ?, change_3d_pct = ?,
-                    price_7d = ?, change_7d_pct = ?,
-                    max_gain_pct = ?, max_loss_pct = ?,
-                    target_hit = ?, stop_loss_hit = ?,
-                    verdict = ?, last_checked = ?
-                WHERE id = ?
-            """, (
-                price_1d, change_1d,
-                price_3d, change_3d,
-                price_7d, change_7d,
-                max_gain, max_loss,
-                target_hit, stop_hit,
-                verdict, _now_iso(),
-                outcome_id,
-            ))
-            if failure:
-                conn.execute('UPDATE predictions SET failure_reason = ? WHERE id = ?', (failure, pred['id']))
-
-            stats['evaluated'] += 1
-            key = verdict.lower()
-            if key in stats:
-                stats[key] += 1
-            elif verdict == UNRESOLVED_STATE:
-                stats['unresolved'] += 1
-
-            if verbose:
-                _log(f"{ticker} [{horizon}] → {verdict} ({change_pct:+.2f}%)")
-
-        conn.commit()
     finally:
         conn.close()
+
+    if trace_times:
+        stats['avg_time_sec'] = round(sum(trace_times) / len(trace_times), 3)
+
+    avg = stats['avg_time_sec']
+    terminal = stats['evaluated'] + stats['expired'] + stats['invalidated']
+    _eval_log(
+        f"[EVAL SUMMARY] processed={stats['processed']} completed={terminal} "
+        f"skipped={stats['skipped_horizon']} unresolved={stats['unresolved']} "
+        f"errors={stats['errors']} timeouts={stats['timeouts']} "
+        f"wins={stats['wins']} losses={stats['losses']} avg_time={avg}s"
+    )
 
     if backfill:
         stats['backfilled_days'] = backfill_missed_evaluation_days()
@@ -272,7 +403,7 @@ def backfill_missed_evaluation_days() -> int:
             gap = (datetime.strptime(today, '%Y-%m-%d') - datetime.strptime(last_date, '%Y-%m-%d')).days
             if gap > 0:
                 _log(f"Backfill gap detected: {gap} day(s) since last EOD cycle")
-                result = evaluate_lifecycle_predictions(verbose=False, backfill=False)
+                result = evaluate_lifecycle_predictions(verbose=False, backfill=False, use_cache_only=True)
                 state['backfill_at'] = _now_iso()
                 state['backfill_gap_days'] = gap
                 save_lifecycle_state(state)
