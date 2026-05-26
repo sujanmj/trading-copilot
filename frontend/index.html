@@ -130,6 +130,11 @@
     
     .timestamp { font-size: 10px; color: #8B949E; text-align: right; margin-bottom: 12px; }
     .runtime-stale { color: #D29922; }
+    .panel-status-banner { font-size: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); line-height: 1.45; }
+    .panel-status-banner.ready { background: rgba(0,230,118,0.08); color: #00E676; border-color: rgba(0,230,118,0.2); }
+    .panel-status-banner.waiting, .panel-status-banner.collecting { background: rgba(255,170,0,0.08); color: #ffaa00; border-color: rgba(255,170,0,0.2); }
+    .panel-status-banner.stale { background: rgba(210,153,34,0.12); color: #D29922; border-color: rgba(210,153,34,0.25); }
+    .panel-status-banner.error { background: rgba(255,61,0,0.08); color: #FF3D00; border-color: rgba(255,61,0,0.2); }
     .loading { color: #8B949E; text-align: center; padding: 20px; font-size: 12px; }
     
     .ask-bar { border-top: 1px solid rgba(255,255,255,0.05); padding: 10px; display: flex; gap: 8px; background: #0a0a0a; flex-shrink: 0; }
@@ -819,7 +824,8 @@
     intelligence: null, indiaMarket: null, globalMarket: null,
     news: null, youtube: null, govt: null, inshorts: null,
     reddit: null, scanner: null, stats: null, history: null,
-    lastFetch: 0, connected: false
+    activePredictions: null, predictionHistory: null, lifecycleState: null,
+    runtime: null, lastFetch: 0, connected: false
   }
 
   const dataDir = path.join(__dirname, '..', 'data')
@@ -871,6 +877,8 @@
       apiCache.stats = data.data.stats
       apiCache.history = data.data.history
       apiCache.activePredictions = data.data.active_predictions
+      apiCache.predictionHistory = data.data.prediction_history
+      apiCache.lifecycleState = data.data.lifecycle_state
       apiCache.runtime = data
       apiCache.lastFetch = Date.now()
       apiCache.connected = true
@@ -887,6 +895,24 @@
   function runtimeTimestampHtml(extra) {
     if (window.RuntimeManager && RuntimeManager.timestampHtml) return RuntimeManager.timestampHtml(extra)
     return `<div class="timestamp runtime-ts">Updated: —${extra ? ' • ' + extra : ''}</div>`
+  }
+
+  function panelStatusBannerHtml(panelId, sourceKey) {
+    if (!window.RuntimeManager || !RuntimeManager.getPanelBanner) return ''
+    const banner = RuntimeManager.getPanelBanner(panelId, sourceKey)
+    const parts = [banner.message, banner.age].filter(Boolean)
+    if (banner.stale) parts.push('snapshot stale')
+    if (!parts.length && banner.status === 'ready') return ''
+    const cls = banner.stale ? 'stale' : (banner.status === 'ready' ? 'ready' : (banner.status === 'collecting' ? 'collecting' : 'waiting'))
+    return `<div class="panel-status-banner ${cls}">${escapeHtml(parts.join(' · '))}</div>`
+  }
+
+  function unwrapCachedExport(cached) {
+    if (cached == null) return null
+    if (cached.error && cached.data == null && !cached.metrics_all_time && !cached.predictions && !cached.intelligence_journal) {
+      return null
+    }
+    return cached.data !== undefined ? cached.data : cached
   }
 
   function renderAllTabs() {
@@ -1023,8 +1049,7 @@
       for (const [key, fileP] of Object.entries(files)) {
         if (fileP === filePath) {
           const cached = apiCache[key]
-          if (!cached || cached.error) return null
-          return cached.data !== undefined ? cached.data : cached
+          return unwrapCachedExport(cached)
         }
       }
       return null
@@ -1123,9 +1148,10 @@
     const activeStore = loadJson(files.activePredictions);
     const data = normalizeBrainData(raw);
     const container = document.getElementById('tab-brain');
+    const brainBanner = panelStatusBannerHtml('brain', 'intelligence');
 
     if (!data) {
-      container.innerHTML = `<div class="loading">⏳ Waiting for analysis...</div>`;
+      container.innerHTML = `${brainBanner}<div class="loading">⏳ ${escapeHtml(window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Waiting for intelligence cycle…') : 'Waiting for analysis...')}</div>`;
       return;
     }
 
@@ -1140,21 +1166,31 @@
           entry_zone: p.entry_price,
           target: p.target_price,
           stop_loss: p.stop_loss,
+          regime: p.regime || p.run_type || null,
+          direction: p.direction || 'BUY',
+          signal_type: p.signal_type || 'signal',
+          prediction_horizon: p.prediction_horizon || 'next_day',
+          generated_at: p.prediction_date || activeStore.updated_at,
           logic: `${p.signal_type || 'signal'} · ${p.prediction_horizon || 'next_day'} · ${p.state || 'ACTIVE'}`,
           lifecycle_state: p.state,
         }));
       data.top_opportunities = activeOpps;
       data.lifecycle_active_count = activeStore.count || activeOpps.length;
+      data.active_predictions_updated = activeStore.updated_at;
     }
 
     const summary = displayText(data.executive_summary, '');
+    const moodEarly = data.market_mood || {};
     const hasContent = summary ||
       (data.top_opportunities && data.top_opportunities.length) ||
       (data.risks_and_avoids && data.risks_and_avoids.length) ||
-      displayText(data.action_plan, '');
+      displayText(data.action_plan, '') ||
+      displayText(moodEarly.global_mood, '') ||
+      displayText(moodEarly.india_outlook, '');
 
     if (!hasContent) {
-      container.innerHTML = `<div class="loading">⏳ Waiting for analysis...</div>`;
+      const lcMsg = window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Intelligence export empty — awaiting next analysis cycle.') : 'Waiting for analysis...';
+      container.innerHTML = `${brainBanner}<div class="loading">⏳ ${escapeHtml(lcMsg)}</div>`;
       return;
     }
 
@@ -1164,6 +1200,10 @@
     const mood = data.market_mood || {};
     const opps = data.top_opportunities || [];
     const risks = data.risks_and_avoids || [];
+    const lcPanel = window.RuntimeManager ? RuntimeManager.getPanelState('lifecycle') : null;
+    const activeMeta = data.active_predictions_updated
+      ? `Active predictions refreshed ${formatTime(data.active_predictions_updated) || data.active_predictions_updated.slice(0, 10)}`
+      : (data.lifecycle_active_count != null ? `${data.lifecycle_active_count} active lifecycle predictions` : '');
 
     let sectorHtml = '';
     (rotation.bullish || []).forEach(s => sectorHtml += `<span class="sector-tag bull">⬆ ${escapeHtml(s)}</span>`);
@@ -1171,13 +1211,24 @@
 
     let oppsHtml = '';
     if (opps.length === 0) {
-      oppsHtml = '<div class="glass-text" style="font-style:italic;">No signals yet</div>';
+      const emptyMsg = (lcPanel && lcPanel.pipeline_status === 'COMPLETE')
+        ? 'No active opportunities — EOD lifecycle resolved pending predictions.'
+        : 'No ACTIVE/PENDING opportunities in lifecycle export.';
+      oppsHtml = `<div class="calib-insufficient">${escapeHtml(emptyMsg)}</div>`;
     } else {
     opps.forEach(o => {
       const action = (o.action || 'WATCH').toUpperCase();
       let actionClass = 'watch';
       if (action.includes('BUY') || action.includes('ACCUMULATE')) actionClass = 'buy';
       if (action.includes('SELL') || action.includes('AVOID')) actionClass = 'sell';
+      const metaLine = [
+        o.generated_at ? `Gen ${formatTime(o.generated_at) || String(o.generated_at).slice(0, 10)}` : null,
+        o.confidence ? `Conf ${o.confidence}` : null,
+        o.regime ? `Regime ${o.regime}` : null,
+        o.direction ? o.direction : null,
+        o.signal_type ? `Signal ${o.signal_type}` : null,
+        o.lifecycle_state ? o.lifecycle_state : null,
+      ].filter(Boolean).join(' · ');
       
       oppsHtml += `
         <div class="trade-item ${actionClass}">
@@ -1190,6 +1241,7 @@
             <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
             <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
           </div>
+          ${metaLine ? `<div style="font-size:9px;color:#8B949E;margin:4px 0 6px;">${escapeHtml(metaLine)}</div>` : ''}
           <p class="trade-logic">${brainHtml(o.logic, 'No rationale provided.')}</p>
         </div>
       `;
@@ -1214,7 +1266,8 @@
     }
 
     let html = `
-      ${runtimeTimestampHtml('Sources: ' + (data.sources_used || 8) + '/8')}
+      ${brainBanner}
+      ${runtimeTimestampHtml((activeMeta || ('Sources: ' + (data.sources_used || 8) + '/8')))}
       
       <div class="brain-grid">
         <div class="main-column">
@@ -1770,19 +1823,28 @@
   function loadStats() {
     const data = loadJson(files.stats);
     const container = document.getElementById('tab-stats');
+    const calBanner = panelStatusBannerHtml('calibration', 'stats');
     const lifecycle = window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Post-market evaluation at 15:45 IST populates calibration metrics.') : 'Post-market evaluation at 15:45 IST populates calibration metrics.';
     if (!data) {
-      container.innerHTML = `<div class="empty-stats"><h4>📊 Calibration building...</h4><p>${escapeHtml(lifecycle)}</p></div>`;
+      container.innerHTML = `${calBanner}<div class="empty-stats"><h4>📊 Calibration building...</h4><p>${escapeHtml(lifecycle)}</p></div>`;
       return;
     }
 
     const dbStats = data.db_stats || { total_predictions: 0 };
     const metrics = data.metrics_all_time || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
-    const winRate = metrics.win_rate || 0
-    const profitFactor = metrics.profit_factor || 0
-    const cal = data.calibration_dashboard || {}
+    const lcCal = data.lifecycle_calibration || (data.calibration_dashboard || {}).lifecycle_calibration || {};
+    const lcStatus = data.lifecycle_status || {};
+    const winRate = lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate || 0);
+    const lossRate = lcCal.loss_rate != null ? lcCal.loss_rate : (metrics.total_evaluated ? ((metrics.losses || 0) / metrics.total_evaluated * 100) : 0);
+    const evaluated = lcCal.total_evaluated != null ? lcCal.total_evaluated : (metrics.total_evaluated || 0);
+    const profitFactor = lcCal.profit_factor != null ? lcCal.profit_factor : (metrics.profit_factor || 0);
+    const cal = data.calibration_dashboard || {};
+    const exportAge = window.RuntimeManager ? RuntimeManager.getExportAge('stats') : '';
+    const schemaWarn = cal.status === 'degraded' ? (cal.reason || 'Calibration schema degraded — partial metrics only.') : '';
 
-    let html = runtimeTimestampHtml();
+    let html = calBanner;
+    if (schemaWarn) html += `<div class="panel-status-banner error">${escapeHtml(schemaWarn)}</div>`;
+    html += runtimeTimestampHtml(exportAge || (data.generation_time ? `Exported ${data.generation_time}` : ''));
     
     html += `
       <div class="glass-card" style="padding: 20px;">
@@ -1791,35 +1853,48 @@
           <div class="stat-big-card">
             <div class="stat-big-label">Predictions</div>
             <div class="stat-big-value" style="color:#88ccff;">${dbStats.total_predictions || 0}</div>
-            <div class="stat-big-sub">${metrics.total_evaluated || 0} evaluated</div>
+            <div class="stat-big-sub">${evaluated} evaluated</div>
           </div>
           <div class="stat-big-card">
             <div class="stat-big-label">Win Rate</div>
-            <div class="stat-big-value ${winRate >= 60 ? 'green' : winRate >= 40 ? 'yellow' : 'red'}">${winRate.toFixed(0)}%</div>
+            <div class="stat-big-value ${winRate >= 60 ? 'green' : winRate >= 40 ? 'yellow' : 'red'}">${Number(winRate).toFixed(0)}%</div>
             <div class="stat-big-sub">${metrics.wins || 0}W / ${metrics.losses || 0}L</div>
           </div>
           <div class="stat-big-card">
-            <div class="stat-big-label">Avg Gain</div>
-            <div class="stat-big-value green">+${(metrics.avg_gain_pct || 0).toFixed(1)}%</div>
-            <div class="stat-big-sub">when winning</div>
+            <div class="stat-big-label">Loss Rate</div>
+            <div class="stat-big-value ${lossRate <= 35 ? 'green' : lossRate <= 55 ? 'yellow' : 'red'}">${Number(lossRate).toFixed(0)}%</div>
+            <div class="stat-big-sub">resolved losses</div>
           </div>
           <div class="stat-big-card">
             <div class="stat-big-label">Profit Factor</div>
-            <div class="stat-big-value ${profitFactor >= 2 ? 'green' : profitFactor >= 1 ? 'yellow' : 'red'}">${profitFactor.toFixed(2)}</div>
+            <div class="stat-big-value ${profitFactor >= 2 ? 'green' : profitFactor >= 1 ? 'yellow' : 'red'}">${Number(profitFactor).toFixed(2)}</div>
             <div class="stat-big-sub">gain ÷ loss</div>
           </div>
         </div>
-        ${(metrics.total_evaluated || 0) === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Track record building — post-market EOD cycle evaluates predictions automatically.') : 'Track record building — post-market EOD cycle evaluates predictions automatically.')}</div>` : ''}
+        ${evaluated === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(lcCal.message || lcStatus.calibration_message || (window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Awaiting evaluated sample size — post-market EOD evaluates predictions.') : 'Awaiting evaluated sample size — post-market EOD evaluates predictions.'))}</div>` : ''}
+        ${evaluated > 0 && evaluated < 30 ? `<div class="calib-insufficient">⚠ Sample size ${evaluated}/30 — adaptive calibration collecting samples.</div>` : ''}
       </div>
     `;
 
-    const dayTypes = (cal.market_day_performance || {}).day_types || []
+    if (lcCal.confidence_realism != null || lcCal.false_positive_rate != null) {
+      html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Lifecycle Calibration Snapshot</div>`;
+      html += calibRow('Confidence realism', lcCal.confidence_realism != null ? `${lcCal.confidence_realism}%` : '—', pctClass(lcCal.confidence_realism));
+      html += calibRow('False positive rate', lcCal.false_positive_rate != null ? `${lcCal.false_positive_rate}%` : '—', pctClass(lcCal.false_positive_rate, true));
+      html += calibRow('Pending / expired', `${lcCal.pending || 0} pending · ${lcCal.expired || 0} expired`, 'muted');
+      html += `</div>`;
+    }
+
+    const lcRegimes = (lcCal.regime_performance || {}).regimes || [];
+    const dayTypes = lcRegimes.length ? lcRegimes : ((cal.market_day_performance || {}).day_types || []);
     html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Regime / Day-Type Performance</div>`
     if (dayTypes.length === 0) {
       html += `<div class="calib-insufficient">Need ${(cal.market_day_performance || {}).min_samples_required || 4}+ evaluated signals per day type.</div>`
     } else {
       dayTypes.forEach(d => {
-        html += calibRow(d.day_type, `${d.signal_accuracy_pct}% acc · FP ${d.false_positive_rate_pct}%`, pctClass(d.signal_accuracy_pct))
+        const label = d.regime || d.day_type || '?';
+        const acc = d.alert_precision_pct != null ? d.alert_precision_pct : d.signal_accuracy_pct;
+        const suffix = acc != null ? `${acc}% acc` : 'collecting';
+        html += calibRow(label, suffix + (d.samples != null ? ` (n=${d.samples})` : ''), pctClass(acc))
       })
     }
     html += `</div>`
@@ -1827,8 +1902,8 @@
     const conf = cal.confidence_calibration || {}
     const numBuckets = conf.numeric_buckets || []
     html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Confidence Calibration</div>`
-    if (numBuckets.every(b => !b.statistically_meaningful)) {
-      html += `<div class="calib-insufficient">Collecting confidence vs outcome samples...</div>`
+    if (numBuckets.length === 0 || numBuckets.every(b => !b.statistically_meaningful)) {
+      html += `<div class="calib-insufficient">${escapeHtml(lcCal.message || 'Collecting confidence vs outcome samples...')}</div>`
     } else {
       numBuckets.forEach(b => {
         const val = b.statistically_meaningful ? `${b.accuracy_pct}% accurate (n=${b.samples})` : `${b.bucket} — insufficient`
@@ -1837,13 +1912,16 @@
     }
     html += `</div>`
 
-    const sigPerf = (cal.signal_type_performance || {}).categories || []
+    const lcSigPerf = (lcCal.signal_type_performance || {}).categories || (lcCal.signal_type_performance || []);
+    const sigPerf = lcSigPerf.length ? lcSigPerf : ((cal.signal_type_performance || {}).categories || [])
     html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Signal-Type Performance</div>`
     if (sigPerf.length === 0) {
       html += `<div class="calib-insufficient">Signal categories appear after horizon evaluations.</div>`
     } else {
       sigPerf.slice(0, 8).forEach(s => {
-        html += calibRow(s.category, `${s.accuracy_pct}% · avg ${s.avg_move_pct >= 0 ? '+' : ''}${s.avg_move_pct}%`, pctClass(s.accuracy_pct))
+        const label = s.category || s.signal_type || '?';
+        const acc = s.accuracy_pct != null ? s.accuracy_pct : s.precision_pct;
+        html += calibRow(label, `${acc != null ? acc + '%' : '—'} · avg ${s.avg_move_pct >= 0 ? '+' : ''}${s.avg_move_pct || 0}%`, pctClass(acc))
       })
     }
     html += `</div>`
@@ -2060,17 +2138,20 @@
   function loadHistory() {
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
+    const journalBanner = panelStatusBannerHtml('journal', 'history')
     const journalMsg = window.RuntimeManager
       ? RuntimeManager.lifecycleMessage('journal', 'Daily review generates after post-market EOD cycle (15:45 IST).')
       : 'Daily review generates after post-market EOD cycle (15:45 IST).'
     if (!data) {
-      container.innerHTML = `<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>${escapeHtml(journalMsg)}</p></div>`
+      container.innerHTML = `${journalBanner}<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>${escapeHtml(journalMsg)}</p></div>`
       return
     }
 
     const journal = data.intelligence_journal || {}
     const entries = journal.entries || []
-    let html = runtimeTimestampHtml(`${data.today_weekday || ''} ${data.today_date || ''}`.trim())
+    const exportAge = window.RuntimeManager ? RuntimeManager.getExportAge('history') : ''
+    let html = journalBanner
+    html += runtimeTimestampHtml(`${exportAge || ''} ${data.today_weekday || ''} ${data.today_date || ''}`.trim())
     html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`
 
     if (entries.length === 0) {

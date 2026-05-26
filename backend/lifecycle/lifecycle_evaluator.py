@@ -206,6 +206,19 @@ def evaluate_lifecycle_predictions(*, verbose: bool = True, backfill: bool = Tru
                     invalidated=False,
                 )
 
+            from backend.storage.db_manager import _normalize_sqlite_value
+            price_1d = _normalize_sqlite_value(price_1d)
+            change_1d = _normalize_sqlite_value(change_1d)
+            price_3d = _normalize_sqlite_value(price_3d)
+            change_3d = _normalize_sqlite_value(change_3d)
+            price_7d = _normalize_sqlite_value(price_7d)
+            change_7d = _normalize_sqlite_value(change_7d)
+            max_gain = _normalize_sqlite_value(max_gain, 'max_gain_pct')
+            max_loss = _normalize_sqlite_value(max_loss, 'max_loss_pct')
+            target_hit = _normalize_sqlite_value(target_hit, 'target_hit')
+            stop_hit = _normalize_sqlite_value(stop_hit, 'stop_loss_hit')
+            verdict = _normalize_sqlite_value(verdict, 'verdict')
+
             conn.execute("""
                 UPDATE outcomes SET
                     price_1d = ?, change_1d_pct = ?,

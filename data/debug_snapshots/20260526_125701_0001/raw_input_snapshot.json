@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "5daeb2d2b6cddf1ff6ff",
+    "india_markets": "fffb799f38f8d2e16215",
+    "news": "9fc04dff57ae5587ab48",
+    "youtube": "c64273098434dc2a2a51",
+    "govt": "9e211ce6188e89da2416",
+    "inshorts": "f169a1cbf5346c2b56ea",
+    "reddit": "933e49aeb4e95c9ab976",
+    "telegram": "empty",
+    "scanner": "05ea42f5c340359d8ee4",
+    "twitter": "30cfec8d052d28ce7781",
+    "nse_filings": "f77e406aaf481cde6521",
+    "composite": "8874df83d7eda17841e0"
+  },
+  "metrics": {
+    "india_avg_change": -0.075,
+    "news_count": 140,
+    "govt_high_impact": 12,
+    "scanner_signals": 124,
+    "top_scanner_tickers": [
+      "GREENLAM",
+      "ARE&M",
+      "JWL",
+      "TITAGARH",
+      "KOLTEPATIL"
+    ],
+    "scanner_signature": [
+      "('GREENLAM', 'ULTRA', 5.6)",
+      "('ARE&M', 'ULTRA', 7.7)",
+      "('JWL', 'ULTRA', 7.0)",
+      "('TITAGARH', 'ULTRA', 9.9)",
+      "('KOLTEPATIL', 'ULTRA', -3.1)"
+    ],
+    "top_news_titles": [
+      "corporate actions this week: tcs, bajaj auto, itc, glaxo, bank of india, uno min",
+      "inr slides on renewed geopolitical tensions in west asia",
+      "payment companies raise concerns over rbi's draft ppi norms, seek parity with ba",
+      "rbi's $5 billion fx swap subscribed nearly twice over",
+      "sebi reviews easing disclosure for bonds, to pilot tokenised bond market",
+      "spot gold prices slip by 1% as inflation fears resurface after new u.s. strikes"
+    ],
+    "reddit_sentiment": "neutral",
+    "reddit_confidence": 50,
+    "novelty_avg_score": 4.55,
+    "repetition_suppressed": 70
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 140
+  },
+  "govt_counts": {
+    "high_impact_items": 12
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 22
+  }
+}

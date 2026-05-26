@@ -528,6 +528,16 @@
       const stateLines = Object.entries(states).map(([k, v]) => `${k}: ${v}`);
       const calSnap = lifecycle.calibration || {};
       const pipelineStatus = lifecycle.pipeline_status || (lifecycle.evaluation_cycle_complete ? 'COMPLETE' : 'STALE');
+      const statsAge = lifecycle.stats_age_minutes != null
+        ? `${lifecycle.stats_age_minutes}m`
+        : ((data.sourceStatus && data.sourceStatus.stats && data.sourceStatus.stats.age_seconds != null)
+          ? `${Math.round(data.sourceStatus.stats.age_seconds / 60)}m`
+          : null);
+      const historyAge = lifecycle.history_age_minutes != null
+        ? `${lifecycle.history_age_minutes}m`
+        : ((data.sourceStatus && data.sourceStatus.history && data.sourceStatus.history.age_seconds != null)
+          ? `${Math.round(data.sourceStatus.history.age_seconds / 60)}m`
+          : null);
       const statusCls = pipelineStatus === 'COMPLETE' ? 'ai-ops-ok'
         : pipelineStatus === 'RUNNING' ? 'ai-ops-warn'
         : pipelineStatus === 'FAILED' ? 'ai-ops-warn'
@@ -584,12 +594,12 @@
         ]) +
         `<div class="ai-ops-subhead">Status</div>${renderList(
           [
-            lifecycle.message,
             lifecycle.current_stage ? `Stage: ${lifecycle.current_stage}` : null,
             lifecycle.last_eod_cycle_at ? `Last cycle: ${lifecycle.last_eod_cycle_at.slice(0, 19)}` : null,
             lifecycle.last_failure_reason ? `Last failure: ${lifecycle.last_failure_reason}` : null,
-            lifecycle.stats_age_minutes != null ? `Stats age: ${lifecycle.stats_age_minutes}m` : null,
-            lifecycle.history_age_minutes != null ? `History age: ${lifecycle.history_age_minutes}m` : null,
+            statsAge != null ? `Stats export age: ${statsAge}` : null,
+            historyAge != null ? `History export age: ${historyAge}` : null,
+            lifecycle.message,
           ].filter(Boolean),
           'Post-market evaluation runs at 15:45 IST'
         )}` +
@@ -728,6 +738,10 @@
         fetchJson('/api/debug/lifecycle', true).catch(() => ({})),
       ]);
 
+      const debugLc = lifecycle.lifecycle || lifecycle;
+      const runtimeLc = runtime && (runtime.lifecycle_summary || (runtime.panels && runtime.panels.lifecycle));
+      const mergedLc = Object.assign({}, runtimeLc || {}, debugLc || {});
+
       const data = {
         health,
         preservation,
@@ -739,7 +753,8 @@
         telegram,
         reliability,
         calibration,
-        lifecycle: lifecycle.lifecycle || lifecycle,
+        lifecycle: mergedLc,
+        sourceStatus: (runtime && runtime.source_status) || {},
       };
       renderPanel(data);
       markAlertsSeen(data);

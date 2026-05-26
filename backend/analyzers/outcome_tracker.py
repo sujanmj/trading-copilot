@@ -312,6 +312,13 @@ def evaluate_pending_outcomes(verbose=True):
             verdict = verdict_result
             target_hit, stop_hit = 0, 0
 
+        from backend.storage.db_manager import _normalize_sqlite_value
+        max_gain = _normalize_sqlite_value(max_gain, 'max_gain_pct')
+        max_loss = _normalize_sqlite_value(max_loss, 'max_loss_pct')
+        target_hit = _normalize_sqlite_value(target_hit, 'target_hit')
+        stop_hit = _normalize_sqlite_value(stop_hit, 'stop_loss_hit')
+        verdict = _normalize_sqlite_value(verdict, 'verdict')
+
         # Keep PENDING if we still lack usable price movement data
         if verdict == 'PENDING' and change_1d is None and change_3d is None and change_7d is None:
             if verbose:

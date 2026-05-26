@@ -71,10 +71,53 @@ def _ensure_tables():
     init_db()
 
 
+def _normalize_event_value(value, field_name=None):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (str, int, float, bytes)):
+        return value
+    if isinstance(value, (tuple, list)):
+        if field_name == 'entry_price' and value:
+            for item in value:
+                if isinstance(item, (int, float)):
+                    return float(item)
+            return None
+        if len(value) == 1:
+            return _normalize_event_value(value[0], field_name)
+        for item in value:
+            if isinstance(item, (int, float)):
+                return item
+        return str(value[0]) if value else None
+    if isinstance(value, dict):
+        return json.dumps(value)
+    return str(value)
+
+
 def _insert_event(event: dict) -> Optional[int]:
     _ensure_tables()
     conn = get_connection()
     try:
+        payload = dict(event or {})
+        values = (
+            _normalize_event_value(payload.get('event_ts')),
+            _normalize_event_value(payload.get('event_date')),
+            _normalize_event_value(payload.get('signal_type')),
+            _normalize_event_value(payload.get('source')),
+            _normalize_event_value(payload.get('ticker')),
+            _normalize_event_value(payload.get('direction')),
+            _normalize_event_value(payload.get('confidence')),
+            _normalize_event_value(payload.get('confidence_band')),
+            _normalize_event_value(payload.get('regime')),
+            _normalize_event_value(payload.get('sector')),
+            _normalize_event_value(payload.get('reasoning_summary')),
+            _normalize_event_value(payload.get('contradiction_severity')),
+            _normalize_event_value(payload.get('source_consensus')),
+            _normalize_event_value(payload.get('entry_price'), 'entry_price'),
+            _normalize_event_value(payload.get('dedupe_key')),
+            json.dumps(payload.get('metadata') or {}),
+        )
         cur = conn.execute(
             """
             INSERT OR IGNORE INTO signal_events (
@@ -83,24 +126,7 @@ def _insert_event(event: dict) -> Optional[int]:
                 contradiction_severity, source_consensus, entry_price, dedupe_key, metadata
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                event.get('event_ts'),
-                event.get('event_date'),
-                event.get('signal_type'),
-                event.get('source'),
-                event.get('ticker'),
-                event.get('direction'),
-                event.get('confidence'),
-                event.get('confidence_band'),
-                event.get('regime'),
-                event.get('sector'),
-                event.get('reasoning_summary'),
-                event.get('contradiction_severity'),
-                event.get('source_consensus'),
-                event.get('entry_price'),
-                event.get('dedupe_key'),
-                json.dumps(event.get('metadata') or {}),
-            ),
+            values,
         )
         conn.commit()
         if cur.lastrowid:
@@ -115,6 +141,7 @@ def _insert_event(event: dict) -> Optional[int]:
             _seed_horizons(conn, event_id, event.get('event_ts'))
         return event_id
     except Exception as e:
+        conn.rollback()
         _log('OUTCOME TRACK', f'insert failed: {e}')
         return None
     finally:

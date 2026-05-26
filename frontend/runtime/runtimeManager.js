@@ -41,21 +41,32 @@
     });
   }
 
+  function unwrapExportPayload(cached) {
+    if (cached == null) return null;
+    if (cached.error && cached.data == null && !cached.metrics_all_time && !cached.predictions) {
+      return null;
+    }
+    return cached.data !== undefined ? cached.data : cached;
+  }
+
   function applyCacheFromSnapshot(snapshot) {
     const cache = config.cache;
     if (!cache || !snapshot) return;
     const data = snapshot.data || {};
-    cache.intelligence = data.intelligence;
-    cache.indiaMarket = data.india;
-    cache.globalMarket = data.markets;
-    cache.news = data.news;
-    cache.youtube = data.youtube;
-    cache.govt = data.govt;
-    cache.inshorts = data.inshorts;
-    cache.reddit = data.reddit;
-    cache.scanner = data.scanner;
-    cache.stats = data.stats;
-    cache.history = data.history;
+    cache.intelligence = unwrapExportPayload(data.intelligence);
+    cache.indiaMarket = unwrapExportPayload(data.india);
+    cache.globalMarket = unwrapExportPayload(data.markets);
+    cache.news = unwrapExportPayload(data.news);
+    cache.youtube = unwrapExportPayload(data.youtube);
+    cache.govt = unwrapExportPayload(data.govt);
+    cache.inshorts = unwrapExportPayload(data.inshorts);
+    cache.reddit = unwrapExportPayload(data.reddit);
+    cache.scanner = unwrapExportPayload(data.scanner);
+    cache.stats = unwrapExportPayload(data.stats);
+    cache.history = unwrapExportPayload(data.history);
+    cache.activePredictions = unwrapExportPayload(data.active_predictions);
+    cache.predictionHistory = unwrapExportPayload(data.prediction_history);
+    cache.lifecycleState = unwrapExportPayload(data.lifecycle_state);
     cache.runtime = snapshot;
     cache.lastFetch = Date.now();
     cache.connected = snapshot.status !== 'degraded';
@@ -193,6 +204,34 @@
     return fallback || '';
   }
 
+  function formatAgeSeconds(sec) {
+    if (sec == null || sec === '') return '';
+    const n = Number(sec);
+    if (!Number.isFinite(n)) return '';
+    if (n < 60) return `${n}s ago`;
+    if (n < 3600) return `${Math.floor(n / 60)}m ago`;
+    return `${Math.floor(n / 3600)}h ago`;
+  }
+
+  function getExportAge(sourceKey) {
+    const src = (state && state.source_status && state.source_status[sourceKey]) || {};
+    if (src.status === 'missing') return 'Export not generated yet';
+    if (src.age_seconds != null) return `Export age: ${formatAgeSeconds(src.age_seconds)}`;
+    return '';
+  }
+
+  function getPanelBanner(panelId, sourceKey) {
+    const panel = getPanelState(panelId);
+    const age = sourceKey ? getExportAge(sourceKey) : '';
+    return {
+      status: panel.status || 'waiting',
+      message: panel.message || '',
+      age: age,
+      stale: !!panel.stale,
+      pipelineStatus: panel.pipeline_status || null,
+    };
+  }
+
   function init(opts) {
     config.getApiBase = opts.getApiBase || config.getApiBase;
     config.getHeaders = opts.getHeaders || config.getHeaders;
@@ -214,5 +253,8 @@
     isStale,
     timestampHtml,
     lifecycleMessage,
+    formatAgeSeconds,
+    getExportAge,
+    getPanelBanner,
   };
 })(window);

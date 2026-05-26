@@ -402,8 +402,53 @@ def insert_signal(signal_data):
 # OUTCOME OPERATIONS
 # ============================================================
 
+def _normalize_sqlite_value(value, field_name=None):
+    """Coerce Python values into SQLite-bindable scalars."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (str, int, float, bytes)):
+        return value
+    if isinstance(value, (tuple, list)):
+        if field_name == 'verdict' and value:
+            return str(value[0])
+        if field_name in ('target_hit', 'stop_loss_hit') and value:
+            return int(bool(value[0]))
+        for item in value:
+            if isinstance(item, (int, float)):
+                return item
+            if isinstance(item, str) and item:
+                return item
+        return str(value[0]) if value else None
+    if isinstance(value, dict):
+        return json.dumps(value)
+    return str(value)
+
+
+def _normalize_outcome_data(outcome_data):
+    """Normalize outcome payload — unwrap verdict tuples and coerce bind types."""
+    data = dict(outcome_data or {})
+    verdict = data.get('verdict')
+    if isinstance(verdict, tuple):
+        data['verdict'] = verdict[0]
+        if len(verdict) > 1 and 'target_hit' not in outcome_data:
+            data['target_hit'] = verdict[1]
+        if len(verdict) > 2 and 'stop_loss_hit' not in outcome_data:
+            data['stop_loss_hit'] = verdict[2]
+    for key in (
+        'source_type', 'source_id', 'ticker', 'prediction_date', 'entry_price',
+        'price_1d', 'change_1d_pct', 'price_3d', 'change_3d_pct', 'price_7d', 'change_7d_pct',
+        'target_hit', 'stop_loss_hit', 'max_gain_pct', 'max_loss_pct', 'verdict',
+    ):
+        if key in data:
+            data[key] = _normalize_sqlite_value(data[key], key)
+    return data
+
+
 def upsert_outcome(outcome_data):
     """Insert or update an outcome record"""
+    outcome_data = _normalize_outcome_data(outcome_data)
     conn = get_connection()
     try:
         # Check if exists
@@ -470,6 +515,7 @@ def upsert_outcome(outcome_data):
         conn.commit()
         return True
     except Exception as e:
+        conn.rollback()
         print(f"[DB] ERROR upserting outcome: {e}")
         return False
     finally:
