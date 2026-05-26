@@ -837,9 +837,16 @@
   }
 
   function bindUi() {
-    $('aiOpsBtn').addEventListener('click', togglePanel);
-    $('aiOpsClose').addEventListener('click', closePanel);
-    $('aiOpsBackdrop').addEventListener('click', closePanel);
+    const btn = $('aiOpsBtn');
+    const close = $('aiOpsClose');
+    const backdrop = $('aiOpsBackdrop');
+    if (!btn || !close || !backdrop) {
+      console.warn('[AIOpsPanel] UI elements missing — OPS bindings skipped');
+      return;
+    }
+    btn.addEventListener('click', togglePanel);
+    close.addEventListener('click', closePanel);
+    backdrop.addEventListener('click', closePanel);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && open) closePanel();
     });

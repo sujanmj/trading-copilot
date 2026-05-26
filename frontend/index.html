@@ -894,20 +894,21 @@
       const response = await fetch(API_BASE + '/api/runtime_snapshot', { method: 'GET', headers: apiHeaders() })
       if (!response.ok) throw new Error(`API ${response.status}`)
       const data = await response.json()
-      apiCache.intelligence = data.data.intelligence
-      apiCache.indiaMarket = data.data.india
-      apiCache.globalMarket = data.data.markets
-      apiCache.news = data.data.news
-      apiCache.youtube = data.data.youtube
-      apiCache.govt = data.data.govt
-      apiCache.inshorts = data.data.inshorts
-      apiCache.reddit = data.data.reddit
-      apiCache.scanner = data.data.scanner
-      apiCache.stats = data.data.stats
-      apiCache.history = data.data.history
-      apiCache.activePredictions = data.data.active_predictions
-      apiCache.predictionHistory = data.data.prediction_history
-      apiCache.lifecycleState = data.data.lifecycle_state
+      const payload = data?.data || {}
+      apiCache.intelligence = payload.intelligence
+      apiCache.indiaMarket = payload.india
+      apiCache.globalMarket = payload.markets
+      apiCache.news = payload.news
+      apiCache.youtube = payload.youtube
+      apiCache.govt = payload.govt
+      apiCache.inshorts = payload.inshorts
+      apiCache.reddit = payload.reddit
+      apiCache.scanner = payload.scanner
+      apiCache.stats = payload.stats
+      apiCache.history = payload.history
+      apiCache.activePredictions = payload.active_predictions
+      apiCache.predictionHistory = payload.prediction_history
+      apiCache.lifecycleState = payload.lifecycle_state
       apiCache.runtime = data
       apiCache.lastFetch = Date.now()
       apiCache.connected = true
@@ -947,11 +948,15 @@
   }
 
   function renderAllTabs() {
-    try {
-      loadBrain(); loadGovt(); loadScanner(); loadMarkets(); loadNews(); loadTV(); loadReddit(); loadStats(); loadHistory()
-    } catch (e) {
-      console.error('renderAllTabs failed:', e)
-    }
+    safePanelLoad('brain', loadBrain)
+    safePanelLoad('govt', loadGovt)
+    safePanelLoad('scanner', loadScanner)
+    safePanelLoad('markets', loadMarkets)
+    safePanelLoad('news', loadNews)
+    safePanelLoad('tv', loadTV)
+    safePanelLoad('reddit', loadReddit)
+    safePanelLoad('stats', loadStats)
+    safePanelLoad('history', loadHistory)
     setTimeout(() => {
       try {
         const activeTab = document.querySelector('.tab.active')
@@ -974,6 +979,73 @@
     document.querySelectorAll('.ai-ops-drawer.open, .ai-review-drawer.open').forEach((el) => el.classList.remove('open'))
     const bar = document.getElementById('loadingBar')
     if (bar) bar.classList.remove('active')
+  }
+
+  function safeBind(id, event, handler) {
+    const el = document.getElementById(id)
+    if (!el) {
+      console.warn('[GUI] missing element for binding:', id)
+      return false
+    }
+    try {
+      el.addEventListener(event, handler)
+      return true
+    } catch (e) {
+      console.error('[GUI] bind failed:', id, e)
+      return false
+    }
+  }
+
+  function safePanelLoad(name, fn) {
+    try { fn() } catch (e) {
+      console.error(`[GUI] ${name} render failed:`, e)
+      const map = {
+        brain: 'tab-brain', govt: 'tab-govt', scanner: 'tab-scanner', markets: 'tab-markets',
+        news: 'tab-news', tv: 'tab-tv', reddit: 'tab-reddit', stats: 'tab-stats', history: 'tab-history',
+      }
+      const el = document.getElementById(map[name] || '')
+      if (el) {
+        el.innerHTML = `<div class="loading" style="color:#D29922;">⚠ ${escapeHtml(name)} panel unavailable — ${escapeHtml(e.message || 'render error')}</div>`
+      }
+    }
+  }
+
+  function wireCoreUi() {
+    resetUiOverlays()
+    document.querySelectorAll('.broker-btn, .news-btn').forEach(btn => {
+      btn.addEventListener('click', () => loadSite(btn.dataset.url, btn))
+    })
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        try {
+          const target = tab.dataset.tab
+          if (!target) return
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+          tab.classList.add('active')
+          const container = document.getElementById('tab-' + target)
+          if (container) container.classList.add('active')
+          setTimeout(() => { if (container) renderChatHistory(container) }, 50)
+        } catch (e) {
+          console.error('[GUI] tab switch failed:', e)
+        }
+      })
+    })
+    safeBind('predDetailClose', 'click', () => {
+      document.getElementById('predDetailOverlay')?.classList.remove('active')
+      document.getElementById('predDetailModal')?.classList.remove('active')
+    })
+    safeBind('predDetailOverlay', 'click', () => {
+      document.getElementById('predDetailOverlay')?.classList.remove('active')
+      document.getElementById('predDetailModal')?.classList.remove('active')
+    })
+    safeBind('customDateClose', 'click', closeCustomDatePicker)
+    safeBind('customCancelBtn', 'click', closeCustomDatePicker)
+    safeBind('customApplyBtn', 'click', applyCustomDateRange)
+    safeBind('askBtn', 'click', askClaude)
+    safeBind('askInput', 'keypress', (e) => { if (e.key === 'Enter') askClaude() })
+    safeBind('refreshBtn', 'click', refreshAll)
+    safeBind('apiStatus', 'click', () => { updateApiStatus(USE_API && apiCache.connected) })
   }
 
   const CHAT_STORAGE_KEY = 'tradingcopilot_chat_history'
@@ -1082,19 +1154,11 @@
   }
 
   document.querySelectorAll('.broker-btn, .news-btn').forEach(btn => {
-    btn.addEventListener('click', () => loadSite(btn.dataset.url, btn))
+    /* bound in wireCoreUi() */
   })
 
   document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const target = tab.dataset.tab
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
-      tab.classList.add('active')
-      const container = document.getElementById('tab-' + target)
-      container.classList.add('active')
-      setTimeout(() => renderChatHistory(container), 50)
-    })
+    /* bound in wireCoreUi() */
   })
 
   function loadJson(filePath) {
@@ -1197,10 +1261,11 @@
   // TAB 1: BRAIN
   // ============================================================
   function loadBrain() {
+    const container = document.getElementById('tab-brain')
+    if (!container) return
     const raw = loadJson(files.intelligence);
     const activeStore = loadJson(files.activePredictions);
     const data = normalizeBrainData(raw);
-    const container = document.getElementById('tab-brain');
     const brainBanner = panelStatusBannerHtml('brain', 'intelligence');
 
     if (!data) {
@@ -2319,20 +2384,17 @@
     }
   }
 
-  document.getElementById('predDetailClose').addEventListener('click', () => { document.getElementById('predDetailOverlay').classList.remove('active'); document.getElementById('predDetailModal').classList.remove('active') })
-  document.getElementById('predDetailOverlay').addEventListener('click', () => { document.getElementById('predDetailOverlay').classList.remove('active'); document.getElementById('predDetailModal').classList.remove('active') })
-  document.getElementById('customDateClose').addEventListener('click', closeCustomDatePicker)
-  document.getElementById('customCancelBtn').addEventListener('click', closeCustomDatePicker)
-  document.getElementById('customApplyBtn').addEventListener('click', applyCustomDateRange)
-
   async function askClaude() {
     const input = document.getElementById('askInput'), askBtn = document.getElementById('askBtn')
+    if (!input || !askBtn) return
     const question = input.value.trim(); if (!question) return;
     input.value = ''; askBtn.disabled = true; askBtn.innerText = '...'
     
-    const aiModel = document.getElementById('aiModel').value
+    const aiModel = document.getElementById('aiModel')?.value || 'ask_basic'
     const modelLabel = aiModel === 'ask_basic' ? 'Groq' : aiModel === 'ask_haiku' ? 'Groq Lite' : 'Claude'
-    const container = document.getElementById('tab-' + document.querySelector('.tab.active').dataset.tab)
+    const activeTab = document.querySelector('.tab.active')
+    const container = activeTab ? document.getElementById('tab-' + activeTab.dataset.tab) : null
+    if (!container) { askBtn.disabled = false; askBtn.innerText = 'Ask'; return }
     const qid = 'q' + Date.now()
     addChatMessage('user', question, modelLabel)
     
@@ -2356,12 +2418,9 @@
     } catch (err) {
       askBtn.disabled = false; askBtn.innerText = 'Ask'
       const responseEl = document.getElementById(qid)
-      if (responseEl) responseEl.innerHTML = `<div style="color:#FF3D00;">❌ ${err.message}</div>`
+      if (responseEl) responseEl.innerHTML = `<div style="color:#FF3D00;">❌ ${escapeHtml(err.message)}</div>`
     }
   }
-
-  document.getElementById('askBtn').addEventListener('click', askClaude)
-  document.getElementById('askInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') askClaude() })
 
   async function refreshAll() {
     if (USE_API && window.RuntimeManager) {
@@ -2374,49 +2433,46 @@
     }
   }
 
-  document.getElementById('refreshBtn').addEventListener('click', refreshAll)
-  document.getElementById('apiStatus').addEventListener('click', () => { updateApiStatus(USE_API && apiCache.connected) })
-
-  if (window.RuntimeManager) {
-    resetUiOverlays()
+  async function bootFrontend() {
+    wireCoreUi()
     try {
-      RuntimeManager.init({
-        getApiBase: () => API_BASE,
-        getHeaders: apiHeaders,
-        cache: apiCache,
-        onConnectionChange: updateApiStatus,
-      })
-      RuntimeManager.subscribe(() => {
-        try { renderAllTabs() } catch (e) { console.error('renderAllTabs subscriber failed:', e) }
-      })
-      bootstrapApiConfig().finally(() => {
+      await bootstrapApiConfig()
+      if (window.RuntimeManager) {
+        RuntimeManager.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+          cache: apiCache,
+          onConnectionChange: updateApiStatus,
+        })
+        RuntimeManager.subscribe(() => {
+          try { renderAllTabs() } catch (e) { console.error('renderAllTabs subscriber failed:', e) }
+        })
         try { RuntimeManager.start(30000) } catch (e) { console.error('[RuntimeManager.start]', e) }
-      })
+      } else {
+        await refreshAll()
+        setInterval(refreshAll, 30000)
+      }
+      if (window.AIOpsPanel) {
+        AIOpsPanel.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+          getRuntimeState: () => (window.RuntimeManager ? RuntimeManager.getState() : null),
+          subscribeRuntime: (fn) => (window.RuntimeManager ? RuntimeManager.subscribe(fn) : () => {}),
+        })
+      }
+      if (window.DailyReviewPanel) {
+        DailyReviewPanel.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+        })
+      }
     } catch (e) {
-      console.error('[RuntimeManager.init]', e)
-      refreshAll()
-      setInterval(refreshAll, 30000)
+      console.error('[bootFrontend]', e)
+      try { renderAllTabs() } catch (e2) { console.error('[bootFrontend] fallback render failed:', e2) }
     }
-  } else {
-    resetUiOverlays()
-    refreshAll()
-    setInterval(refreshAll, 30000)
   }
 
-  if (window.AIOpsPanel) {
-    AIOpsPanel.init({
-      getApiBase: () => API_BASE,
-      getHeaders: apiHeaders,
-      getRuntimeState: () => (window.RuntimeManager ? RuntimeManager.getState() : null),
-      subscribeRuntime: (fn) => (window.RuntimeManager ? RuntimeManager.subscribe(fn) : () => {}),
-    })
-  }
-  if (window.DailyReviewPanel) {
-    DailyReviewPanel.init({
-      getApiBase: () => API_BASE,
-      getHeaders: apiHeaders,
-    })
-  }
+  bootFrontend()
 
   function renderSignalRow(s, cls) {
     const ticker = s.ticker || '?', sector = s.sector || '?', strength = s.strength || '?', direction = s.direction || '?', change = s.change_percent || 0, volRatio = s.volume_ratio || 0, price = s.price || 0, signals = s.signals || [];

@@ -21,6 +21,8 @@
   let inFlight = false;
   let fetchSeq = 0;
   let lastRefreshAt = 0;
+  let lastStaleForcedRefreshAt = 0;
+  const STALE_FORCE_REFRESH_MS = 30000;
   const subscribers = new Set();
   const panelHandlers = new Map();
 
@@ -89,21 +91,35 @@
 
   function applySnapshot(snapshot, seq) {
     if (seq !== fetchSeq) return false;
-    const orch = snapshot && snapshot.panels && snapshot.panels.orchestrator;
-    const runtimePanel = snapshot && snapshot.panels && snapshot.panels.runtime;
-    if (orch && orch.stale) {
+    if (!snapshot || typeof snapshot !== 'object') return false;
+
+    const orch = snapshot.panels && snapshot.panels.orchestrator;
+    const runtimePanel = snapshot.panels && snapshot.panels.runtime;
+    const hasData = !!(snapshot.data && (snapshot.data.intelligence || snapshot.data.scanner));
+
+    if (!hasData && orch && orch.stale) {
       invalidateCache('orchestrator_stale');
-    } else if (runtimePanel && runtimePanel.stale && orch && !orch.gui_sync_validated) {
+    } else if (!hasData && runtimePanel && runtimePanel.stale && orch && !orch.gui_sync_validated) {
       invalidateCache('gui_sync_stale');
     }
+
     state = snapshot;
-    applyCacheFromSnapshot(snapshot);
+    try {
+      applyCacheFromSnapshot(snapshot);
+    } catch (e) {
+      console.error('[RuntimeManager] cache apply failed', e);
+    }
     if (typeof config.onConnectionChange === 'function') {
       config.onConnectionChange(!!cacheConnected());
     }
     notify();
-    if (orch && orch.stale) {
-      setTimeout(() => refresh({ force: true }), 2000);
+
+    if (orch && orch.stale && !hasData) {
+      const now = Date.now();
+      if (now - lastStaleForcedRefreshAt >= STALE_FORCE_REFRESH_MS) {
+        lastStaleForcedRefreshAt = now;
+        setTimeout(() => refresh({ force: true }), 2000);
+      }
     }
     return true;
   }
@@ -160,8 +176,10 @@
   function start(pollMs) {
     if (started) return;
     started = true;
-    refresh({ force: true });
-    pollTimer = setInterval(() => refresh(), pollMs || DEFAULT_POLL_MS);
+    refresh({ force: true }).catch((e) => console.error('[RuntimeManager] initial refresh failed', e));
+    pollTimer = setInterval(() => {
+      refresh().catch((e) => console.error('[RuntimeManager] poll refresh failed', e));
+    }, pollMs || DEFAULT_POLL_MS);
   }
 
   function stop() {

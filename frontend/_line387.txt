@@ -1,1 +1,0 @@
-      container.innerHTML = `${brainBanner}<div class="loading">⏳ ${escapeHtml(window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Waiting for intelligence cycle…') : 'Waiting for analysis...')}</div>`;
