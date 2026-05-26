@@ -223,14 +223,24 @@
 
   function isStale() {
     const runtimePanel = getPanelState('runtime');
+    if (runtimePanel && runtimePanel.status === 'idle') return false;
+    const op = state && state.operational;
+    if (op && op.expect_quiet_collectors && runtimePanel && !runtimePanel.stale) return false;
     return !!(runtimePanel && runtimePanel.stale);
   }
 
   function timestampHtml(extra) {
     const ts = formatTimestamp();
-    const staleTag = isStale() ? ' · <span class="runtime-stale">snapshot stale</span>' : '';
+    const runtimePanel = getPanelState('runtime');
+    const op = state && state.operational;
+    let statusTag = '';
+    if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
+      statusTag = ` · <span class="runtime-idle">${op.display_status}</span>`;
+    } else if (isStale()) {
+      statusTag = ' · <span class="runtime-stale">snapshot stale</span>';
+    }
     const suffix = extra ? ` · ${extra}` : '';
-    return `<div class="timestamp runtime-ts">Updated: ${ts}${suffix}${staleTag}</div>`;
+    return `<div class="timestamp runtime-ts">Updated: ${ts}${suffix}${statusTag}</div>`;
   }
 
   function lifecycleMessage(panelId, fallback) {
@@ -258,12 +268,15 @@
   function getPanelBanner(panelId, sourceKey) {
     const panel = getPanelState(panelId);
     const age = sourceKey ? getExportAge(sourceKey) : '';
+    const op = state && state.operational;
+    const isIdle = panel.status === 'idle' || (op && op.expect_quiet_collectors && panel.status === 'ready' && sourceKey in { scanner: 1, news: 1, reddit: 1, youtube: 1, inshorts: 1 });
     return {
       status: panel.status || 'waiting',
-      message: panel.message || '',
-      age: age,
-      stale: !!panel.stale,
+      message: panel.message || (isIdle && op ? op.display_message : ''),
+      age: isIdle ? (op && op.display_message ? op.display_message : age) : age,
+      stale: isIdle ? false : !!panel.stale,
       pipelineStatus: panel.pipeline_status || null,
+      displayStatus: panel.display_status || (op && op.display_status) || null,
     };
   }
 

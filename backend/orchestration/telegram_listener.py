@@ -358,6 +358,15 @@ def cmd_status():
 
     msg = f"<b>📡 System Status</b>\n<i>{datetime.now().strftime('%H:%M:%S')}</i>\n\n"
     now = datetime.now()
+    quiet_mode = False
+    try:
+        from backend.utils.market_hours import get_operational_status
+        op = get_operational_status(now)
+        quiet_mode = bool(op.get('expect_quiet_collectors'))
+        msg += f"🌙 <b>{op.get('display_status', 'OPERATIONAL')}</b>\n"
+        msg += f"<i>{op.get('display_message', '')}</i>\n\n"
+    except Exception:
+        op = {}
 
     try:
         from backend.lifecycle.prediction_lifecycle_engine import get_ml_core_status
@@ -382,11 +391,14 @@ def cmd_status():
             if age_min < 60:
                 emoji = "✅"
                 age_str = f"{age_min}m ago"
+            elif quiet_mode and age_min < 720:
+                emoji = "🌙"
+                age_str = f"idle · {age_min // 60}h ago" if age_min >= 60 else f"idle · {age_min}m ago"
             elif age_min < 360:
                 emoji = "⚠️"
                 age_str = f"{age_min // 60}h ago"
             else:
-                emoji = "❌"
+                emoji = "❌" if not quiet_mode else "🌙"
                 age_str = f"{age_min // 60}h ago"
 
             msg += f"{emoji} {label}: {age_str}\n"

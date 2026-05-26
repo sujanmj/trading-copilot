@@ -172,6 +172,13 @@ def intel_age_hours(intel):
 
 
 def stale_warning(intel):
+    try:
+        from backend.utils.market_hours import get_operational_status
+        op = get_operational_status()
+        if op.get('expect_quiet_collectors'):
+            return f"🌙 <i>{op.get('display_message', 'Market closed')}</i>\n\n"
+    except Exception:
+        pass
     hours = intel_age_hours(intel)
     if hours is not None and hours > 2:
         return f"⚠️ Analysis may be stale — last updated {hours:.1f} hours ago\n\n"
@@ -410,19 +417,19 @@ def push_summary():
 
 
 def push_opps():
+    from backend.orchestration.opportunity_filter import rank_opportunities, DEFAULT_OPPS_LIMIT
     raw = load_intel()
     debug_intel_fields(raw)
     intel = normalize_intel(raw)
     if intel:
         try:
-            from backend.orchestration.opportunity_filter import rank_opportunities, DEFAULT_OPPS_LIMIT
             opps = rank_opportunities(raw, limit=DEFAULT_OPPS_LIMIT)
             safe_print(f"[BRAIN PUSH] Ranked {len(opps)} opportunities (top {DEFAULT_OPPS_LIMIT})")
         except Exception as e:
             safe_print(f"[WARN] opportunity filter failed: {e}")
-            opps = get_opportunities(intel)[:20]
+            opps = get_opportunities(intel)[:DEFAULT_OPPS_LIMIT]
         stale = stale_warning(raw)
-        send_chunked(f"{stale}💎 <b>TOP OPPORTUNITIES</b> (max {len(opps)})\n\n{format_opps(opps)}")
+        send_chunked(f"{stale}💎 <b>ELITE OPPORTUNITIES</b> (top {len(opps)})\n\n{format_opps(opps)}")
 
 
 def push_risks():

@@ -319,6 +319,8 @@ def main():
     print(f"Host TZ: {time.tzname} | IST now: {datetime.now(IST).strftime('%H:%M:%S')}", flush=True)
     print("=" * 60, flush=True)
     print("[SCHEDULER HEALTHY] Lock acquired — orchestrator running", flush=True)
+    if os.environ.get('LOCAL_DEV_MODE') == '1':
+        print("[LOCAL RUNTIME] scheduler PRIMARY (in-process, no cloud locks)", flush=True)
     dump_task_registry()
 
     threading.Thread(target=_run_boot_cycle_async, name='Boot-Cycle', daemon=True).start()

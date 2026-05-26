@@ -32,19 +32,19 @@ TICKER_COOLDOWNS_SEC = {
 
 DEFAULT_CONFIDENCE = {
     PRE_MARKET: 0.45,
-    INTRADAY_OPPORTUNITY: 0.72,
+    INTRADAY_OPPORTUNITY: 0.78,
     MIDDAY_UPDATE: 0.55,
     MARKET_CLOSE_SUMMARY: 0.40,
     EMERGENCY_MACRO_ALERT: 0.65,
-    INTRADAY_EVENT: 0.68,
+    INTRADAY_EVENT: 0.72,
 }
 
 REGIME_CONFIDENCE_BONUS = {
     'sideways': 0.08,
     'bullish_trend': 0.0,
-    'panic_volatile': -0.12,
-    'macro_uncertainty': -0.05,
-    'regime_transition': -0.08,
+    'panic_volatile': -0.18,
+    'macro_uncertainty': -0.08,
+    'regime_transition': -0.10,
 }
 
 
@@ -246,7 +246,9 @@ def effective_confidence_threshold(category: str, regime: str, volatility: float
     base = DEFAULT_CONFIDENCE.get(category, 0.6)
     base += REGIME_CONFIDENCE_BONUS.get(regime or 'sideways', 0)
     if volatility > 0.65:
-        base += 0.05
+        base += 0.08
+    if regime in ('panic_volatile', 'macro_uncertainty', 'regime_transition'):
+        base += 0.04
     return max(0.35, min(0.92, base))
 
 
@@ -258,8 +260,11 @@ def should_send_alert(
     dedupe_key: str = '',
     regime: str = 'sideways',
     volatility: float = 0.0,
+    disagreement_score: float = 0.0,
 ) -> Tuple[bool, str]:
     threshold = effective_confidence_threshold(category, regime, volatility)
+    if disagreement_score >= 0.55 and category == INTRADAY_OPPORTUNITY:
+        threshold += 0.06
     if confidence < threshold:
         _obs.record_suppressed(category, 'low_confidence', f'conf={confidence:.2f}<{threshold:.2f}')
         return False, 'low_confidence'

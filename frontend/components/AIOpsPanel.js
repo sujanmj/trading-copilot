@@ -119,6 +119,7 @@
     const health = ops.health || {};
     return {
       ...health,
+      operational: runtime.operational || health.operational,
       provider_analytics: ops.provider_analytics || health.provider_analytics,
       provider_ops: ops.provider_ops || health.provider_ops,
       operational_alerts: ops.operational_alerts || health.operational_alerts,
@@ -250,7 +251,13 @@
     const intelFresh = (health.source_status && health.source_status.intelligence) || {};
     const jobs = health.running_jobs || {};
 
+    const operational = health.operational || {};
     $('aiOpsStatusGrid').innerHTML = renderStatGrid([
+      {
+        label: 'Ops mode',
+        value: operational.display_status || health.operational_status || '—',
+        cls: operational.night_mode ? '' : 'ai-ops-ok',
+      },
       { label: 'AI Budget', value: `$${budget.spent ?? '—'} / $${budget.limit ?? '—'}` },
       { label: 'Remaining', value: `$${obs.ai_budget_remaining ?? budget.remaining ?? '—'}` },
       { label: 'Regime', value: health.market_regime || obs.market_regime || '—' },
@@ -664,6 +671,7 @@
 
     const intelAge = intelFresh.age_seconds;
     const intelStale = intelFresh.status === 'stale';
+    const intelIdle = intelFresh.status === 'idle' || operational.expect_quiet_collectors;
     const staleThreshold = health.watchdog_stale_threshold_seconds ?? obs.watchdog_stale_threshold_seconds;
     const opAlerts = health.operational_alerts || {};
     const opEvents = (opAlerts.recent_events || []).slice(0, 6);
@@ -674,8 +682,10 @@
     $('aiOpsHealth').innerHTML = renderList(
       [
         `Intelligence: ${intelFresh.status || 'unknown'}${intelAge != null ? ` (${intelAge}s)` : ''}`,
+        operational.display_message ? `Session: ${operational.display_message}` : null,
         staleThreshold != null ? `Watchdog threshold: ${staleThreshold}s (${health.watchdog_mode || obs.watchdog_mode || '—'})` : null,
-        intelStale ? '⚠ Stale intelligence — watchdog may recover (regime-aware)' : null,
+        intelStale && !intelIdle ? '⚠ Stale intelligence — watchdog may recover (market hours)' : null,
+        intelIdle && !intelStale ? '🌙 Collectors idle — expected outside market session' : null,
         opAlerts.counters
           ? `Alert router: ${opAlerts.counters.telegram_sent || 0} TG sent · ${opAlerts.counters.telegram_suppressed || 0} suppressed · ${opAlerts.counters.ops_logged || 0} logged`
           : null,

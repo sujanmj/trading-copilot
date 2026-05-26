@@ -130,10 +130,12 @@
     
     .timestamp { font-size: 10px; color: #8B949E; text-align: right; margin-bottom: 12px; }
     .runtime-stale { color: #D29922; }
+    .runtime-idle { color: #8B949E; }
     .panel-status-banner { font-size: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); line-height: 1.45; }
     .panel-status-banner.ready { background: rgba(0,230,118,0.08); color: #00E676; border-color: rgba(0,230,118,0.2); }
     .panel-status-banner.waiting, .panel-status-banner.collecting { background: rgba(255,170,0,0.08); color: #ffaa00; border-color: rgba(255,170,0,0.2); }
     .panel-status-banner.stale { background: rgba(210,153,34,0.12); color: #D29922; border-color: rgba(210,153,34,0.25); }
+    .panel-status-banner.idle { background: rgba(139,148,158,0.10); color: #8B949E; border-color: rgba(139,148,158,0.20); }
     .panel-status-banner.error { background: rgba(255,61,0,0.08); color: #FF3D00; border-color: rgba(255,61,0,0.2); }
     .loading { color: #8B949E; text-align: center; padding: 20px; font-size: 12px; }
     
@@ -798,6 +800,23 @@
   <script src="components/DailyReviewPanel.js"></script>
   <script src="components/AIOpsPanel.js"></script>
   <script>
+  window.__startupErrors = window.__startupErrors || []
+  window.addEventListener('error', (event) => {
+    window.__startupErrors.push({
+      message: event.message,
+      source: event.filename,
+      line: event.lineno,
+    })
+    console.error('[GUI startup error]', event.message, event.filename, event.lineno)
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    window.__startupErrors.push({
+      message: String(event.reason && event.reason.message ? event.reason.message : event.reason),
+      type: 'unhandledrejection',
+    })
+    console.error('[GUI unhandled rejection]', event.reason)
+  })
+
   const fs = require('fs')
   const path = require('path')
   const dotenv = require('dotenv')
@@ -813,11 +832,21 @@
   const USE_API = true
   const API_BASE = process.env.API_BASE_URL || DEFAULT_API_BASE
   const API_KEY = process.env.API_KEY || ''
+  let localAuthBypass = API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')
 
   function apiHeaders() {
-    const headers = { 'Content-Type': 'application/json' }
-    if (API_KEY) headers['X-API-Key'] = API_KEY
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+    if (API_KEY && !localAuthBypass) headers['X-API-Key'] = API_KEY
     return headers
+  }
+
+  async function bootstrapApiConfig() {
+    try {
+      const res = await fetch(API_BASE.replace(/\/$/, '') + '/api/config', { method: 'GET' })
+      if (!res.ok) return
+      const cfg = await res.json()
+      if (cfg.local_auth_bypass) localAuthBypass = true
+    } catch (e) { /* local backend may not be up yet */ }
   }
 
   let apiCache = {
@@ -903,7 +932,9 @@
     const parts = [banner.message, banner.age].filter(Boolean)
     if (banner.stale) parts.push('snapshot stale')
     if (!parts.length && banner.status === 'ready') return ''
-    const cls = banner.stale ? 'stale' : (banner.status === 'ready' ? 'ready' : (banner.status === 'collecting' ? 'collecting' : 'waiting'))
+    const cls = banner.stale ? 'stale'
+      : (banner.status === 'idle' ? 'idle'
+      : (banner.status === 'ready' ? 'ready' : (banner.status === 'collecting' ? 'collecting' : 'waiting')))
     return `<div class="panel-status-banner ${cls}">${escapeHtml(parts.join(' · '))}</div>`
   }
 
@@ -1177,7 +1208,7 @@
       return;
     }
 
-    if activeStore && Array.isArray(activeStore.predictions) {
+    if (activeStore && Array.isArray(activeStore.predictions)) {
       const activeOpps = (activeStore.predictions || [])
         .filter(p => (p.state === 'ACTIVE' || p.state === 'PENDING') && p.category === 'opportunity')
         .map(p => ({
@@ -2348,14 +2379,24 @@
 
   if (window.RuntimeManager) {
     resetUiOverlays()
-    RuntimeManager.init({
-      getApiBase: () => API_BASE,
-      getHeaders: apiHeaders,
-      cache: apiCache,
-      onConnectionChange: updateApiStatus,
-    })
-    RuntimeManager.subscribe(() => renderAllTabs())
-    RuntimeManager.start(30000)
+    try {
+      RuntimeManager.init({
+        getApiBase: () => API_BASE,
+        getHeaders: apiHeaders,
+        cache: apiCache,
+        onConnectionChange: updateApiStatus,
+      })
+      RuntimeManager.subscribe(() => {
+        try { renderAllTabs() } catch (e) { console.error('renderAllTabs subscriber failed:', e) }
+      })
+      bootstrapApiConfig().finally(() => {
+        try { RuntimeManager.start(30000) } catch (e) { console.error('[RuntimeManager.start]', e) }
+      })
+    } catch (e) {
+      console.error('[RuntimeManager.init]', e)
+      refreshAll()
+      setInterval(refreshAll, 30000)
+    }
   } else {
     resetUiOverlays()
     refreshAll()

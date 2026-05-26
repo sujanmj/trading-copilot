@@ -16,6 +16,9 @@ EOD_HOUR = 15
 EOD_MINUTE = 45
 RECOVERY_COOLDOWN_SECONDS = 300
 _last_recovery_attempt = 0.0
+_eod_recovery_day = ''
+_eod_recovery_count = 0
+MAX_EOD_RECOVERY_PER_DAY = int(__import__('os').environ.get('MAX_EOD_RECOVERY_PER_DAY', '3'))
 
 
 def _now_ist() -> datetime:
@@ -74,7 +77,7 @@ def maybe_trigger_eod_recovery(reason: str, *, force: bool = False) -> bool:
     Trigger run_post_market_pipeline(force=True) when EOD was missed.
     Returns True if recovery was started.
     """
-    global _last_recovery_attempt
+    global _last_recovery_attempt, _eod_recovery_day, _eod_recovery_count
 
     should, why = needs_eod_recovery()
     if not should:
@@ -82,10 +85,19 @@ def maybe_trigger_eod_recovery(reason: str, *, force: bool = False) -> bool:
             print(f"[EOD RECOVERY] Skip ({why})", flush=True)
         return False
 
+    today = _today()
+    if _eod_recovery_day != today:
+        _eod_recovery_day = today
+        _eod_recovery_count = 0
+    if _eod_recovery_count >= MAX_EOD_RECOVERY_PER_DAY:
+        print(f"[EOD RECOVERY] Daily limit reached ({MAX_EOD_RECOVERY_PER_DAY})", flush=True)
+        return False
+
     now = time.time()
     if now - _last_recovery_attempt < RECOVERY_COOLDOWN_SECONDS:
         return False
     _last_recovery_attempt = now
+    _eod_recovery_count += 1
 
     print(
         f"[EOD RECOVERY] Triggering missed EOD — reason={reason} detail={why} "

@@ -151,10 +151,11 @@ def _send(text: str) -> bool:
 
 def _dispatch(category: str, text: str, confidence: float, detail: str, *,
               ticker: str = '', dedupe_key: str = '', regime: str = 'sideways',
-              volatility: float = 0.0, direction: str = 'NEUTRAL') -> bool:
+              volatility: float = 0.0, direction: str = 'NEUTRAL',
+              disagreement_score: float = 0.0) -> bool:
     ok, reason = should_send_alert(
         category, confidence, ticker=ticker, dedupe_key=dedupe_key,
-        regime=regime, volatility=volatility,
+        regime=regime, volatility=volatility, disagreement_score=disagreement_score,
     )
     if not ok:
         return False
@@ -301,14 +302,19 @@ def try_open_opportunity() -> int:
         return 0
 
     sent = 0
+    max_alerts = 2 if regime in ('panic_volatile', 'macro_uncertainty', 'regime_transition') else 3
     for signal in scanner.get('top_signals', [])[:8]:
         if signal.get('strength') != 'ULTRA':
             continue
         vol_r = float(signal.get('volume_ratio') or 0)
         chg = abs(float(signal.get('change_percent') or 0))
-        if vol_r < 1.8 and chg < 2.5:
+        if vol_r < 2.2 and chg < 3.0:
             continue
-        if disagree > 0.5 and vol_r < 3.0:
+        if regime in ('panic_volatile', 'macro_uncertainty') and vol_r < 3.5:
+            get_observability().record_suppressed(
+                INTRADAY_OPPORTUNITY, 'panic_volatility_filter', signal.get('ticker', ''))
+            continue
+        if disagree > 0.45 and vol_r < 3.5:
             get_observability().record_suppressed(
                 INTRADAY_OPPORTUNITY, 'unresolved_contradiction', signal.get('ticker', ''))
             continue
@@ -321,9 +327,10 @@ def try_open_opportunity() -> int:
             INTRADAY_OPPORTUNITY, text, confidence, f'open {ticker}',
             ticker=ticker, dedupe_key=dedupe, regime=regime, volatility=vol,
             direction=str(signal.get('direction') or 'NEUTRAL'),
+            disagreement_score=disagree,
         ):
             sent += 1
-            if sent >= 2:
+            if sent >= max_alerts:
                 break
     return sent
 

@@ -111,6 +111,8 @@ def log_scheduler_tick():
     )
     try:
         import os
+        if os.environ.get('LOCAL_DEV_MODE') == '1':
+            return
         from backend.orchestration.recovery_loop import tick_from_scheduler
         tick_from_scheduler(os.getpid())
     except Exception as e:

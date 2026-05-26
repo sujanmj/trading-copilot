@@ -1,27 +1,33 @@
 """
 Rank and filter trading opportunities for Telegram /opps and brain pushes.
 
-Enforces top-N limit, freshness, and ACTIVE/PENDING-only predictions.
+Enforces elite top-N limit, freshness, regime-aware quality, and ACTIVE/PENDING-only predictions.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pytz
 
-from backend.utils.config import DATA_DIR
+from backend.utils.config import ANALYSIS_STATE_FILE, DATA_DIR
 
 IST = pytz.timezone('Asia/Kolkata')
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
 ACTIVE_PREDICTIONS_FILE = DATA_DIR / 'active_predictions.json'
+SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 
-DEFAULT_OPPS_LIMIT = 20
+DEFAULT_OPPS_LIMIT = int(os.environ.get('TELEGRAM_OPPS_LIMIT', '10'))
 MAX_INTEL_AGE_HOURS = 24
 ACTIVE_STATES = frozenset({'ACTIVE', 'PENDING'})
+MIN_RANK_SCORE = 5.5
+MIN_RANK_SCORE_PANIC = 11.0
+PANIC_REGIMES = frozenset({'panic_volatile', 'macro_uncertainty', 'regime_transition'})
 
 CONFIDENCE_RANK = {
     'ULTRA': 5,
@@ -65,7 +71,7 @@ def _impact_score(item: dict) -> float:
 
 
 def _freshness_score(item: dict, intel_ts: Optional[datetime]) -> float:
-    pred_date = item.get('prediction_date') or item.get('date')
+    pred_date = item.get('prediction_date') or item.get('date') or item.get('session_date')
     if pred_date:
         try:
             pd = datetime.strptime(str(pred_date)[:10], '%Y-%m-%d').date()
@@ -95,16 +101,236 @@ def _regime_alignment(item: dict, intel: dict) -> float:
         return 1.0
     if action in ('WATCH', 'MEDIUM'):
         return 0.6
+    if 'VOLATILE' in india and action in ('BUY', 'LONG'):
+        return 0.45
     return 0.3
 
 
-def _rank_score(item: dict, intel: dict, intel_ts: Optional[datetime]) -> float:
-    return (
+def _load_quality_context(intel: dict) -> dict:
+    ctx: dict = {
+        'regime': '',
+        'volatility_index': 0.0,
+        'disagreement_score': 0.0,
+        'safe_fallback_used': False,
+        'schema_failures': 0,
+    }
+    if ANALYSIS_STATE_FILE.exists():
+        try:
+            state = json.loads(ANALYSIS_STATE_FILE.read_text(encoding='utf-8'))
+            ctx['regime'] = str(state.get('last_regime') or '')
+            qm = state.get('quality_metrics') or {}
+            ctx['volatility_index'] = float(qm.get('volatility_index') or state.get('volatility_index') or 0)
+            ctx['disagreement_score'] = float(
+                qm.get('disagreement_score') or state.get('disagreement_score') or 0
+            )
+        except Exception:
+            pass
+    if not ctx['regime']:
+        blob = ' '.join(
+            str(intel.get(k) or '')
+            for k in ('executive_summary', 'self_calibration', 'analysis')
+        ).lower()
+        if 'panic' in blob and 'volatile' in blob:
+            ctx['regime'] = 'panic_volatile'
+        elif 'macro uncertainty' in blob:
+            ctx['regime'] = 'macro_uncertainty'
+        elif 'regime transition' in blob:
+            ctx['regime'] = 'regime_transition'
+    try:
+        from backend.ai.pipeline_observability import get_observability_summary
+        obs = get_observability_summary() or {}
+        rel = obs.get('reliability_execution') or {}
+        ctx['safe_fallback_used'] = int(rel.get('safe_fallbacks') or 0) > 0
+        ctx['schema_failures'] = int(rel.get('schema_failures') or 0)
+        if not ctx['disagreement_score']:
+            expl = obs.get('explanations') or {}
+            ctx['disagreement_score'] = float(expl.get('disagreement_score') or 0)
+    except Exception:
+        pass
+    return ctx
+
+
+def _load_scanner_index() -> Dict[str, dict]:
+    if not SCANNER_FILE.exists():
+        return {}
+    try:
+        data = json.loads(SCANNER_FILE.read_text(encoding='utf-8'))
+    except Exception:
+        return {}
+    index: Dict[str, dict] = {}
+    for key in ('ultra_bullish', 'strong_bullish', 'moderate_bullish', 'ultra_bearish', 'strong_bearish'):
+        for row in data.get(key) or []:
+            if isinstance(row, dict):
+                sym = str(row.get('ticker') or row.get('symbol') or '').upper()
+                if sym:
+                    index[sym] = {**row, '_bucket': key}
+    for row in data.get('signals') or data.get('stocks') or []:
+        if isinstance(row, dict):
+            sym = str(row.get('ticker') or row.get('symbol') or '').upper()
+            if sym and sym not in index:
+                index[sym] = row
+    return index
+
+
+def _volume_anomaly_boost(item: dict, scanner_index: Dict[str, dict]) -> float:
+    sym = str(item.get('symbol') or item.get('ticker') or '').upper()
+    scan = scanner_index.get(sym) or {}
+    try:
+        vol_ratio = float(scan.get('volume_ratio') or scan.get('vol_ratio') or 0)
+    except (TypeError, ValueError):
+        vol_ratio = 0.0
+    strength = str(scan.get('strength') or scan.get('_bucket') or '').upper()
+    boost = 0.0
+    if vol_ratio >= 5:
+        boost += 2.5
+    elif vol_ratio >= 3:
+        boost += 1.5
+    elif vol_ratio >= 2:
+        boost += 0.8
+    if 'ULTRA' in strength:
+        boost += 1.5
+    elif 'STRONG' in strength:
+        boost += 0.8
+    logic = str(item.get('logic') or item.get('signal_type') or '').upper()
+    if 'ULTRA' in logic:
+        boost += 0.5
+    return boost
+
+
+def _sector_strength_boost(item: dict, intel: dict, scanner_index: Dict[str, dict]) -> float:
+    rotation = intel.get('sector_rotation') if isinstance(intel.get('sector_rotation'), dict) else {}
+    bullish = [str(s).upper() for s in (rotation.get('bullish') or [])]
+    bearish = [str(s).upper() for s in (rotation.get('bearish') or [])]
+    sym = str(item.get('symbol') or item.get('ticker') or '').upper()
+    sector = str(item.get('sector') or (scanner_index.get(sym) or {}).get('sector') or '').upper()
+    action = str(item.get('action') or '').upper()
+
+    def _in_list(sectors: List[str]) -> bool:
+        if not sector:
+            return False
+        return any(s in sector or sector in s for s in sectors)
+
+    if action in ('BUY', 'LONG', 'OPPORTUNITY'):
+        if _in_list(bullish):
+            return 1.8
+        if _in_list(bearish):
+            return -2.5
+    if action in ('SELL', 'SHORT'):
+        if _in_list(bearish):
+            return 1.5
+        if _in_list(bullish):
+            return -2.0
+    return 0.0
+
+
+def _multi_source_boost(item: dict) -> float:
+    sources = item.get('sources') or item.get('confirmation_sources') or []
+    logic = str(item.get('logic') or item.get('signal_type') or '').lower()
+    boost = 0.0
+    if isinstance(sources, list) and len(sources) >= 2:
+        boost += 1.0 + 0.25 * min(len(sources), 4)
+    hits = sum(1 for token in ('govt', 'scanner', 'news', 'reddit', 'volume') if token in logic)
+    if hits >= 2:
+        boost += 1.2
+    if item.get('_source') == 'active_predictions' and str(item.get('state') or '').upper() == 'ACTIVE':
+        boost += 0.9
+    if re.search(r'\bultra\b', logic):
+        boost += 0.4
+    return boost
+
+
+def _contradiction_penalty(item: dict, ctx: dict) -> float:
+    disagree = float(ctx.get('disagreement_score') or 0)
+    item_contra = float(item.get('contradiction_severity') or 0)
+    penalty = disagree * 3.0 + item_contra * 2.5
+    logic = str(item.get('logic') or '').lower()
+    if disagree >= 0.45 and 'watch' in logic:
+        penalty += 1.5
+    return penalty
+
+
+def _hallucination_penalty(item: dict, ctx: dict) -> float:
+    penalty = 0.0
+    if ctx.get('safe_fallback_used'):
+        penalty += 1.8
+    if int(ctx.get('schema_failures') or 0) > 0:
+        penalty += 1.2
+    logic = str(item.get('logic') or '').lower()
+    if not logic or logic in ('no rationale provided.', 'signal'):
+        penalty += 0.8
+    return penalty
+
+
+def _panic_overextension_penalty(item: dict, ctx: dict, scanner_index: Dict[str, dict]) -> float:
+    regime = str(ctx.get('regime') or '')
+    if regime not in PANIC_REGIMES:
+        return 0.0
+    sym = str(item.get('symbol') or item.get('ticker') or '').upper()
+    scan = scanner_index.get(sym) or {}
+    try:
+        change = abs(float(scan.get('change_percent') or scan.get('change_pct') or 0))
+    except (TypeError, ValueError):
+        change = 0.0
+    penalty = 0.0
+    if change >= 9:
+        penalty += 2.5
+    elif change >= 6:
+        penalty += 1.2
+    if _confidence_score(item.get('confidence')) <= 3:
+        penalty += 2.5
+    return penalty
+
+
+def _passes_elite_gate(item: dict, intel: dict, ctx: dict, scanner_index: Dict[str, dict]) -> bool:
+    """Hard gate — weak setups never reach Telegram even if they sort high."""
+    score = _rank_score(item, intel, _parse_ts(intel.get('timestamp')), ctx, scanner_index)
+    regime = str(ctx.get('regime') or '')
+    if regime not in PANIC_REGIMES:
+        return score >= MIN_RANK_SCORE
+
+    if _confidence_score(item.get('confidence')) < 4.0:
+        return False
+
+    vol_boost = _volume_anomaly_boost(item, scanner_index)
+    sector_boost = _sector_strength_boost(item, intel, scanner_index)
+    multi_boost = _multi_source_boost(item)
+    strong_evidence = vol_boost >= 1.0 or sector_boost >= 1.0 or multi_boost >= 1.2
+    if not strong_evidence:
+        return False
+
+    if float(ctx.get('disagreement_score') or 0) >= 0.4 and vol_boost < 1.5:
+        return False
+
+    return score >= MIN_RANK_SCORE_PANIC
+
+
+def _rank_score(
+    item: dict,
+    intel: dict,
+    intel_ts: Optional[datetime],
+    ctx: dict,
+    scanner_index: Dict[str, dict],
+) -> float:
+    base = (
         _confidence_score(item.get('confidence')) * 3.0
         + _impact_score(item) * 2.0
         + _freshness_score(item, intel_ts) * 2.5
         + _regime_alignment(item, intel) * 1.5
+        + _volume_anomaly_boost(item, scanner_index)
+        + _sector_strength_boost(item, intel, scanner_index)
+        + _multi_source_boost(item)
     )
+    penalties = (
+        _contradiction_penalty(item, ctx)
+        + _hallucination_penalty(item, ctx)
+        + _panic_overextension_penalty(item, ctx, scanner_index)
+    )
+    vol = float(ctx.get('volatility_index') or 0)
+    if vol > 0.65:
+        base *= 0.90
+    if str(ctx.get('regime') or '') in PANIC_REGIMES:
+        base *= 0.85
+    return max(0.0, base - penalties)
 
 
 def _normalize_opp(item: dict, source: str) -> dict:
@@ -151,6 +377,8 @@ def _load_active_opportunities() -> List[dict]:
             'logic': p.get('signal_type') or p.get('category'),
             'prediction_date': pd,
             'state': state or 'ACTIVE',
+            'sector': p.get('sector'),
+            'signal_type': p.get('signal_type'),
         }, 'active_predictions'))
     return out
 
@@ -170,7 +398,7 @@ def rank_opportunities(
     limit: int = DEFAULT_OPPS_LIMIT,
     include_active: bool = True,
 ) -> List[dict]:
-    """Return top-N ranked opportunities — fresh, active only."""
+    """Return elite top-N ranked opportunities — fresh, high-conviction only."""
     if intel is None:
         if INTEL_FILE.exists():
             try:
@@ -182,6 +410,9 @@ def rank_opportunities(
 
     intel = intel if isinstance(intel, dict) else {}
     intel_ts = _parse_ts(intel.get('timestamp') or intel.get('generation_time'))
+    ctx = _load_quality_context(intel)
+    scanner_index = _load_scanner_index()
+    score_fn = lambda item: _rank_score(item, intel, intel_ts, ctx, scanner_index)
 
     merged: Dict[str, dict] = {}
     for item in _load_intel_opportunities(intel):
@@ -191,14 +422,17 @@ def rank_opportunities(
     if include_active:
         for item in _load_active_opportunities():
             sym = item['symbol']
-            if sym not in merged or _rank_score(item, intel, intel_ts) > _rank_score(merged[sym], intel, intel_ts):
+            if sym not in merged or score_fn(item) > score_fn(merged[sym]):
                 merged[sym] = item
 
-    ranked = sorted(
-        merged.values(),
-        key=lambda x: _rank_score(x, intel, intel_ts),
-        reverse=True,
-    )
+    ranked = sorted(merged.values(), key=score_fn, reverse=True)
 
-    filtered = [x for x in ranked if _freshness_score(x, intel_ts) > 0 or _rank_score(x, intel, intel_ts) >= 4]
-    return filtered[: max(1, int(limit))]
+    filtered = [
+        x for x in ranked
+        if _freshness_score(x, intel_ts) > 0 and _passes_elite_gate(x, intel, ctx, scanner_index)
+    ]
+
+    elite = filtered[: max(1, int(limit))]
+    for item in elite:
+        item['_rank_score'] = round(score_fn(item), 2)
+    return elite

@@ -24,7 +24,7 @@ except Exception:
     pass
 
 try:
-    from fastapi import FastAPI, HTTPException, Body, Header, Depends, Query
+    from fastapi import FastAPI, HTTPException, Body, Header, Depends, Query, Request
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import FileResponse
     import uvicorn
@@ -38,6 +38,8 @@ setup_project_path()
 
 from backend.utils.config import (
     IS_RAILWAY,
+    IS_LOCAL_DEV,
+    LOCAL_FORCE_EOD,
     PROJECT_ROOT,
     DATA_DIR,
     LOGS_DIR,
@@ -102,9 +104,38 @@ if not API_KEY:
 if IS_RAILWAY:
     print("[INFO] Railway deployment detected")
 
+_local_auth_bypass_logged = False
 
-def verify_api_key(x_api_key: Optional[str] = Header(None)):
+
+def _is_railway_deployed() -> bool:
+    """True on Railway regardless of LOCAL_DEV_MODE — keeps production auth strict."""
+    return bool(
+        os.environ.get('RAILWAY_ENVIRONMENT')
+        or os.environ.get('RAILWAY_PROJECT_ID')
+        or os.environ.get('RAILWAY_SERVICE_NAME')
+    )
+
+
+def _is_local_client(request: Request) -> bool:
+    if request.client is None:
+        return False
+    host = (request.client.host or '').strip().lower()
+    return host in ('127.0.0.1', '::1', 'localhost')
+
+
+def local_auth_bypass_enabled() -> bool:
+    """LOCAL_DEV_MODE auth bypass is available (localhost requests only)."""
+    return IS_LOCAL_DEV and not _is_railway_deployed()
+
+
+def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None)):
+    global _local_auth_bypass_logged
     if not API_KEY:
+        return True
+    if local_auth_bypass_enabled() and _is_local_client(request):
+        if not _local_auth_bypass_logged:
+            print('[LOCAL AUTH] bypass active for localhost', flush=True)
+            _local_auth_bypass_logged = True
         return True
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
@@ -161,14 +192,12 @@ def should_force_scheduler_retry() -> bool:
 
 
 def orchestrator_recovery_loop():
-    """Autonomous detect → diagnose → recover → verify every 60s."""
+    """Lightweight health verification — bounded recovery only (60s tick)."""
     time.sleep(15)  # allow scheduler subprocess to boot
     while True:
         try:
             from backend.orchestration.recovery_loop import run_orchestrator_health_tick
-            result = run_orchestrator_health_tick()
-            if result.get('healthy') is False and result.get('unhealthy_for_seconds', 0) >= 90:
-                pass  # recovery already attempted inside tick
+            run_orchestrator_health_tick()
         except Exception as e:
             print(f"[ORCHESTRATOR] health loop error: {e}", flush=True)
         time.sleep(60)
@@ -176,6 +205,9 @@ def orchestrator_recovery_loop():
 
 def start_orchestrator_recovery_thread():
     global _orchestrator_recovery_started
+    if IS_LOCAL_DEV:
+        print("[LOCAL RUNTIME] cloud orchestrator recovery loop disabled", flush=True)
+        return
     if _orchestrator_recovery_started:
         return
     _orchestrator_recovery_started = True
@@ -185,7 +217,7 @@ def start_orchestrator_recovery_thread():
         name='OrchestratorRecovery',
     )
     t.start()
-    print("[ORCHESTRATOR] autonomous recovery loop started (60s)", flush=True)
+    print("[ORCHESTRATOR] lightweight recovery loop started (60s, 15m cooldown)", flush=True)
 
 
 def run_subprocess_loop(script_name, label):
@@ -207,13 +239,26 @@ def run_subprocess_loop(script_name, label):
 
             if script_name == SCHEDULER_SCRIPT:
                 if rc == SCHEDULER_EXIT_SINGLETON:
-                    from backend.orchestration.recovery_loop import handle_scheduler_singleton_exit
+                    from backend.orchestration.recovery_loop import (
+                        handle_scheduler_singleton_exit,
+                        scheduler_retry_backoff_seconds,
+                    )
                     action = handle_scheduler_singleton_exit(rc)
                     if action == 'retry_immediate':
-                        print("[ORCHESTRATOR] stale singleton lock — clearing and retrying immediately", flush=True)
+                        backoff = scheduler_retry_backoff_seconds()
+                        print(
+                            f"[ORCHESTRATOR] stale singleton — retry scheduler in {backoff}s",
+                            flush=True,
+                        )
+                        time.sleep(backoff)
                         continue
                     if not _scheduler_singleton_active():
-                        print("[ORCHESTRATOR] lock free after singleton exit — retry immediately", flush=True)
+                        backoff = scheduler_retry_backoff_seconds()
+                        print(
+                            f"[ORCHESTRATOR] lock free after singleton exit — retry in {backoff}s",
+                            flush=True,
+                        )
+                        time.sleep(backoff)
                         continue
                     print("[SCHEDULER SINGLETON SKIP] Duplicate launch blocked — primary holds lock")
                     _log_subprocess_event(
@@ -263,13 +308,14 @@ def run_subprocess_loop(script_name, label):
                 continue
 
             if rc == 0:
-                _log_subprocess_event(label, f"[INFO] {label} exited cleanly — restart in 30s")
-            else:
-                _log_subprocess_event(
-                    label,
-                    f"[WARN] {label} exited with code {rc}, restarting in 30s...",
-                    force=True,
-                )
+                _log_subprocess_event(label, f"[INFO] {label} exited cleanly — idle wait (no storm restart)")
+                time.sleep(120)
+                continue
+            _log_subprocess_event(
+                label,
+                f"[WARN] {label} exited with code {rc}, restarting in 30s...",
+                force=True,
+            )
             time.sleep(30)
         except FileNotFoundError as e:
             print(f"[ERROR] {e}")
@@ -317,6 +363,11 @@ def _check_watchdog_emergency() -> tuple:
 def stale_data_watchdog():
     """Background loop: auto-run master_analyzer if intelligence file is stale."""
     global _watchdog_last_trigger, _analyzer_running, _watchdog_last_refresh_at, _watchdog_recovery_failures, _watchdog_refresh_pending
+
+    if IS_LOCAL_DEV:
+        from backend.utils.local_runtime import local_log
+        local_log('LOCAL RUNTIME', 'cloud stale-data watchdog disabled')
+        return
 
     while True:
         time.sleep(WATCHDOG_CHECK_INTERVAL)
@@ -487,6 +538,65 @@ def stale_data_watchdog():
                 pass
 
 
+def _run_local_scheduler_loop():
+    """In-process scheduler — no subprocess singleton complexity."""
+    from backend.utils.local_runtime import local_log
+    while True:
+        try:
+            local_log('LOCAL RUNTIME', 'starting in-process master scheduler')
+            from backend.orchestration.master_scheduler import main as scheduler_main
+            scheduler_main()
+        except Exception as e:
+            local_log('RESTART', f'scheduler exited: {e} — retry in 5s')
+            time.sleep(5)
+
+
+def _run_local_telegram_loop():
+    from backend.utils.local_runtime import local_log
+    while True:
+        try:
+            local_log('LOCAL RUNTIME', 'starting in-process telegram listener')
+            from backend.orchestration.telegram_listener import listen_forever
+            listen_forever()
+        except Exception as e:
+            local_log('RESTART', f'telegram listener exited: {e} — retry in 10s')
+            time.sleep(10)
+
+
+def start_local_background_processes():
+    """Deterministic single-runtime local mode — in-process threads only."""
+    from backend.utils.local_runtime import local_log, run_local_validation_loop, schedule_local_force_eod
+
+    local_log('LOCAL RUNTIME', 'single-process mode — locks/recovery disabled')
+    try:
+        from backend.ai.provider_manager import log_provider_startup_diagnostics
+        log_provider_startup_diagnostics(force=True)
+    except Exception as e:
+        local_log('AUTOFIX', f'provider diagnostics: {e}')
+
+    if os.environ.get('DISABLE_SCHEDULER') != '1':
+        threading.Thread(
+            target=_run_local_scheduler_loop,
+            daemon=True,
+            name='LocalScheduler',
+        ).start()
+        local_log('LOCAL RUNTIME', 'scheduler thread started (in-process)')
+    else:
+        local_log('LOCAL RUNTIME', 'scheduler disabled via DISABLE_SCHEDULER=1')
+
+    if os.environ.get('DISABLE_TELEGRAM_LISTENER') != '1':
+        threading.Thread(
+            target=_run_local_telegram_loop,
+            daemon=True,
+            name='LocalTelegram',
+        ).start()
+        local_log('LOCAL RUNTIME', 'telegram listener thread started (in-process)')
+
+    schedule_local_force_eod(delay_seconds=25)
+    run_local_validation_loop(max_rounds=40, interval=15)
+    local_log('LOCAL RUNTIME', 'GUI hooks: set API_BASE_URL=http://127.0.0.1:8000 then npm start')
+
+
 def start_background_processes():
     """Launch scheduler and telegram listener in daemon threads (once)."""
     global _background_started
@@ -496,6 +606,10 @@ def start_background_processes():
             print("[INFO] Background processes already running — skip duplicate startup")
             return
         _background_started = True
+
+    if IS_LOCAL_DEV:
+        start_local_background_processes()
+        return
 
     try:
         from backend.orchestration.recovery_loop import bootstrap_self_healing
@@ -645,7 +759,8 @@ def root():
         "version": "5.0.0",
         "status": "running",
         "railway": IS_RAILWAY,
-        "auth_required": bool(API_KEY),
+        "auth_required": bool(API_KEY) and not local_auth_bypass_enabled(),
+        "local_auth_bypass": local_auth_bypass_enabled(),
     }
 
 
@@ -654,7 +769,9 @@ def api_config():
     """Public deployment info for GUI bootstrap."""
     return {
         "railway": IS_RAILWAY,
-        "auth_required": bool(API_KEY),
+        "local_dev": IS_LOCAL_DEV,
+        "auth_required": bool(API_KEY) and not local_auth_bypass_enabled(),
+        "local_auth_bypass": local_auth_bypass_enabled(),
         "data_dir": str(DATA_DIR),
         "db_path": str(DB_PATH),
     }
@@ -693,12 +810,22 @@ def _panel_state_from_source(
     ready: bool = True,
     waiting_message: str = '',
     collecting_message: str = '',
+    operational: Optional[dict] = None,
 ) -> dict:
     src = source_status.get(key) or {}
     status_name = src.get('status') or 'missing'
     stale = status_name == 'stale'
     age = src.get('age_seconds')
+    op = operational or {}
 
+    if status_name == 'idle':
+        return {
+            'status': 'idle',
+            'stale': False,
+            'message': src.get('idle_message') or op.get('display_message') or 'Collectors idle — market closed.',
+            'age_seconds': age,
+            'operational_mode': op.get('operational_mode'),
+        }
     if status_name == 'missing' or not ready:
         return {
             'status': 'waiting',
@@ -713,6 +840,14 @@ def _panel_state_from_source(
             'message': collecting_message,
             'age_seconds': age,
         }
+    if stale and op.get('expect_quiet_collectors'):
+        return {
+            'status': 'idle',
+            'stale': False,
+            'message': src.get('idle_message') or op.get('display_message'),
+            'age_seconds': age,
+            'operational_mode': op.get('operational_mode'),
+        }
     return {
         'status': 'stale' if stale else 'ready',
         'stale': stale,
@@ -723,7 +858,9 @@ def _panel_state_from_source(
 
 def _build_runtime_snapshot() -> dict:
     """Single synchronized payload for all frontend intelligence surfaces."""
+    from backend.utils.market_hours import get_operational_status
     generated_at = datetime.now().isoformat()
+    operational = get_operational_status()
     health_payload = _build_health_payload()
     source_status = health_payload.get('source_status') or {}
 
@@ -834,7 +971,7 @@ def _build_runtime_snapshot() -> dict:
     any_stale = any(
         (source_status.get(k) or {}).get('status') == 'stale'
         for k in ('intelligence', 'markets', 'india', 'stats', 'history')
-    )
+    ) and not operational.get('expect_quiet_collectors')
 
     ai_runtime = {}
     try:
@@ -852,53 +989,70 @@ def _build_runtime_snapshot() -> dict:
     try:
         from backend.orchestration.orchestrator_state import get_orchestrator_health_payload
         from backend.orchestration.recovery_loop import verify_gui_sync
-        orch = get_orchestrator_health_payload()
-        gui = verify_gui_sync()
-        healthy = bool(orch.get('runtime_healthy'))
-        orchestrator_panel = {
-            'status': 'ready' if healthy else 'stale',
-            'stale': not healthy,
-            'message': None if healthy else f"Recovery: {', '.join(orch.get('issues') or ['orchestrator stale'])[:120]}",
-            'mode': orch.get('orchestrator_mode'),
-            'last_scheduler_tick': orch.get('last_scheduler_tick'),
-            'tick_age_seconds': orch.get('tick_age_seconds'),
-            'recovery_attempts_today': orch.get('recovery_attempts_today'),
-            'gui_sync_validated': gui.get('validated'),
-        }
-        if gui.get('validated'):
-            backend_log.debug('GUI sync validated')
+        if IS_LOCAL_DEV:
+            from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
+            lc = get_lifecycle_status()
+            healthy = lc.get('pipeline_status') == 'COMPLETE'
+            orchestrator_panel = {
+                'status': 'ready' if healthy else 'collecting',
+                'stale': not healthy,
+                'message': None if healthy else lc.get('message'),
+                'mode': 'LOCAL',
+                'gui_sync_validated': healthy,
+            }
+        else:
+            orch = get_orchestrator_health_payload()
+            gui = verify_gui_sync()
+            healthy = bool(orch.get('runtime_healthy'))
+            orchestrator_panel = {
+                'status': 'ready' if healthy else 'stale',
+                'stale': not healthy,
+                'message': None if healthy else f"Recovery: {', '.join(orch.get('issues') or ['orchestrator stale'])[:120]}",
+                'mode': orch.get('orchestrator_mode'),
+                'last_scheduler_tick': orch.get('last_scheduler_tick'),
+                'tick_age_seconds': orch.get('tick_age_seconds'),
+                'recovery_attempts_today': orch.get('recovery_attempts_today'),
+                'gui_sync_validated': gui.get('validated'),
+            }
+            if gui.get('validated'):
+                backend_log.debug('GUI sync validated')
     except Exception as e:
         orchestrator_panel['message'] = str(e)[:120]
 
-    runtime_stale = any_stale or orchestrator_panel.get('stale', False)
+    runtime_stale = (any_stale or orchestrator_panel.get('stale', False)) and not operational.get('expect_quiet_collectors')
 
     panels = {
         'runtime': {
-            'status': 'ready' if not runtime_stale else 'stale',
+            'status': operational.get('operational_mode') if operational.get('expect_quiet_collectors') and not any_stale else ('ready' if not runtime_stale else 'stale'),
             'stale': runtime_stale,
-            'message': orchestrator_panel.get('message') if orchestrator_panel.get('stale') else None,
+            'message': operational.get('display_message') if operational.get('expect_quiet_collectors') and not any_stale else (orchestrator_panel.get('message') if orchestrator_panel.get('stale') else None),
             'generated_at': generated_at,
+            'display_status': operational.get('display_status'),
+            'operational_mode': operational.get('operational_mode'),
         },
         'brain': _panel_state_from_source(
             'intelligence',
             source_status,
             ready=intel_ok,
             waiting_message='Waiting for intelligence cycle.',
+            operational=operational,
         ),
         'market': _panel_state_from_source(
             'markets',
             source_status,
             ready=market_ok,
             waiting_message='Waiting for market feed refresh.',
+            operational=operational,
         ),
         'calibration': calibration_panel,
         'journal': journal_panel,
         'lifecycle': lifecycle_panel,
         'orchestrator': orchestrator_panel,
         'ops': {
-            'status': 'ready',
+            'status': operational.get('operational_mode') if operational.get('expect_quiet_collectors') and not any_stale else 'ready',
             'stale': any_stale,
-            'message': None,
+            'message': operational.get('display_message') if operational.get('expect_quiet_collectors') and not any_stale else None,
+            'display_status': operational.get('display_status'),
             'degraded_mode': (health_payload.get('provider_analytics') or {}).get('degraded_mode'),
         },
     }
@@ -906,6 +1060,7 @@ def _build_runtime_snapshot() -> dict:
     return sanitize_json_value({
         'status': 'ok',
         'generated_at': generated_at,
+        'operational': operational,
         'panels': panels,
         'freshness': health_payload.get('data_freshness') or {},
         'source_status': source_status,
@@ -937,9 +1092,16 @@ def _build_runtime_snapshot() -> dict:
 
 
 def _build_health_payload() -> dict:
-    from backend.utils.market_hours import get_watchdog_config
+    from backend.utils.market_hours import (
+        classify_source_freshness,
+        get_operational_status,
+        get_watchdog_config,
+        source_idle_message,
+    )
     wd_cfg = get_watchdog_config()
+    operational = get_operational_status()
     dynamic_stale_threshold = int(wd_cfg.get('stale_threshold_seconds') or STALE_THRESHOLD_SECONDS)
+    period = str(operational.get('period') or 'market')
 
     files = {
         "intelligence": "unified_intelligence.json",
@@ -970,12 +1132,13 @@ def _build_health_payload() -> dict:
             source_status[key] = {"file": filename, "status": "ok", "age_seconds": age}
         else:
             freshness[key] = f"{age // 3600}h ago"
-            stale = age > dynamic_stale_threshold
+            status_name, _unhealthy = classify_source_freshness(age, dynamic_stale_threshold, period)
             source_status[key] = {
                 "file": filename,
-                "status": "stale" if stale else "ok",
+                "status": status_name,
                 "age_seconds": age,
                 "exists": filepath.exists(),
+                "idle_message": source_idle_message(key, period) if status_name == 'idle' else None,
             }
 
     try:
@@ -1016,7 +1179,15 @@ def _build_health_payload() -> dict:
 
     try:
         from backend.orchestration.orchestrator_state import get_orchestrator_health_payload
-        orchestrator = get_orchestrator_health_payload()
+        if IS_LOCAL_DEV:
+            orchestrator = {
+                'orchestrator_mode': 'LOCAL',
+                'runtime_healthy': True,
+                'local_dev': True,
+                'components': {'scheduler': {'status': 'healthy'}, 'lifecycle': {}, 'exports': {}, 'gui_sync': {'validated': True}},
+            }
+        else:
+            orchestrator = get_orchestrator_health_payload()
     except Exception as e:
         orchestrator = {'status': 'degraded', 'error': str(e)}
 
@@ -1024,6 +1195,7 @@ def _build_health_payload() -> dict:
         "status": "ok" if orchestrator.get('runtime_healthy', True) else "degraded",
         "timestamp": datetime.now().isoformat(),
         "railway": IS_RAILWAY,
+        "operational": operational,
         "db_path": str(DB_PATH),
         "data_freshness": freshness,
         "source_status": source_status,

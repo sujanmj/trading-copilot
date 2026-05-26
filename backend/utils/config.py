@@ -16,10 +16,16 @@ LOCKS_DIR = DATA_DIR / '.locks'
 DB_PATH = DATA_DIR / 'trading_history.db'
 
 # ── Deployment detection ────────────────────────────────────────────────────
+IS_LOCAL_DEV = os.environ.get('LOCAL_DEV_MODE', '').strip() in ('1', 'true', 'yes')
+LOCAL_FORCE_EOD = os.environ.get('LOCAL_FORCE_EOD', '').strip() in ('1', 'true', 'yes')
+
 IS_RAILWAY = bool(
-    os.environ.get('RAILWAY_ENVIRONMENT')
-    or os.environ.get('RAILWAY_PROJECT_ID')
-    or os.environ.get('RAILWAY_SERVICE_NAME')
+    not IS_LOCAL_DEV
+    and (
+        os.environ.get('RAILWAY_ENVIRONMENT')
+        or os.environ.get('RAILWAY_PROJECT_ID')
+        or os.environ.get('RAILWAY_SERVICE_NAME')
+    )
 )
 
 # ── API (Railway sets PORT; bind 0.0.0.0 in production) ───────────────────

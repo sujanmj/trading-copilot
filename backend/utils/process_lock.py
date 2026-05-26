@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from backend.utils.config import LOCKS_DIR, ensure_dirs
+from backend.utils.config import LOCKS_DIR, ensure_dirs, IS_LOCAL_DEV
 
 _active_locks: list[Path] = []
 
@@ -89,6 +89,8 @@ def _cmdline_matches_lock(name: str, cmdline: str) -> bool:
 
 def is_lock_holder_valid(name: str, info: Optional[Dict[str, Any]] = None) -> bool:
     """True only if lock file points to a live process that owns this lock."""
+    if IS_LOCAL_DEV:
+        return False
     lock_path = LOCKS_DIR / f'{name}.lock'
     if info is None:
         info = _read_lock_file(lock_path)
@@ -153,6 +155,8 @@ def clear_stale_lock(name: str) -> bool:
 
 def try_acquire_lock(name: str) -> bool:
     """Return True if lock acquired, False if another valid holder exists."""
+    if IS_LOCAL_DEV:
+        return True
     ensure_dirs()
     lock_path = LOCKS_DIR / f'{name}.lock'
 
@@ -174,6 +178,8 @@ def try_acquire_lock(name: str) -> bool:
 
 
 def release_lock(name: str):
+    if IS_LOCAL_DEV:
+        return
     lock_path = LOCKS_DIR / f'{name}.lock'
     try:
         if not lock_path.exists():
