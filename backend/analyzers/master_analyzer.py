@@ -794,7 +794,8 @@ def run_master_analysis():
         print("\n[STEP 1] Gathering data...")
         all_data = gather_all_data()
 
-        sources_loaded = sum(1 for v in all_data.values() if v)
+        from backend.runtime.feed_registry import count_analyzer_sources_loaded
+        sources_loaded, sources_total = count_analyzer_sources_loaded(all_data)
         for source, data in all_data.items():
             status = "OK  " if data else "MISS"
             detail = ""
@@ -811,7 +812,7 @@ def run_master_analysis():
             print("\n[ERROR] No data sources available — cannot analyze")
             return None
 
-        print(f"\n[INFO] {sources_loaded}/{len(all_data)} sources loaded")
+        print(f"\n[INFO] {sources_loaded}/{sources_total} sources loaded")
 
         force = os.environ.get('AI_USE_CASE') == 'manual_refresh'
         analysis_dict = None
@@ -840,6 +841,7 @@ def run_master_analysis():
             'generation_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'market_open': is_indian_market_open(),
             'sources_used': sources_loaded,
+            'sources_total': sources_total,
             'memory_augmented': LEARNING_AVAILABLE,
             'data_snapshot': {
                 'govt_high_impact':   _safe_dict(all_data.get('govt')).get('high_impact_count', 0),

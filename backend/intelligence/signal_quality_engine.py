@@ -53,7 +53,7 @@ def assess_signal_quality(item: dict, *, ctx: Optional[dict] = None, scanner_row
             tier_cap = 'WATCH'
         quality_score -= 0.1
         if ml_val is not None:
-            notes.append(f'ML {ml_val:.0f}% below elite threshold (72%)')
+            notes.append(f'ML {ml_val:.0f}% below ML confirmation threshold (72%)')
         else:
             notes.append('No institutional ML confirmation')
 

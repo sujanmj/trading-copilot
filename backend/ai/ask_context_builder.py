@@ -104,10 +104,11 @@ def _calibration_section() -> str:
     evaluated = metrics.get('evaluated') or metrics.get('total_evaluated') or cal.get('evaluated') or cal.get('total_evaluated') or 0
     if evaluated == 0:
         return "Calibration: insufficient evaluated sample — post-market EOD builds metrics."
+    from backend.metrics.format_helpers import safe_pct
     parts = [
-        f"Evaluated outcomes: {evaluated} | Win rate: {metrics.get('win_rate', 0):.1f}%",
+        f"Evaluated outcomes: {evaluated} | Win rate: {safe_pct(metrics.get('win_rate'))}",
         f"Wins: {metrics.get('wins', 0)} | Losses: {metrics.get('losses', 0)} | Pending: {metrics.get('pending', 0)}",
-        f"High-conf win rate: {metrics.get('high_conf_win_rate', 0):.1f}%",
+        f"High-conf win rate: {safe_pct(metrics.get('high_conf_win_rate'), fallback='Confidence building')}",
     ]
     try:
         stats = _load_json(STATS_FILE)

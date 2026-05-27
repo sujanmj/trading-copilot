@@ -52,5 +52,6 @@ def format_win_rate_line(metrics: Dict[str, Any], *, min_sample: int = MIN_WIN_R
         if wins > 0 and denom > 0:
             return '<i>Early positive sample detected.</i>\n'
         return '<i>Win rate withheld — sample below minimum threshold.</i>\n'
+    from backend.metrics.format_helpers import safe_pct
     wr = compute_win_rate(wins, losses)
-    return f"<b>Win Rate:</b> {wr:.1f}% <i>({wins}W / {losses}L)</i>\n"
+    return f"<b>Win Rate:</b> {safe_pct(wr)} <i>({wins}W / {losses}L)</i>\n"

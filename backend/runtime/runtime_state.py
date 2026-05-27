@@ -24,18 +24,9 @@ _CACHE_TTL_SECONDS = 3.0
 
 PRIMARY_RUNTIME_STATES = frozenset({'LIVE', 'AFTER_HOURS', 'DEGRADED', 'RECOVERING'})
 
-_SOURCE_FILES = {
-    'intelligence': 'unified_intelligence.json',
-    'scanner': 'scanner_data.json',
-    'govt': 'govt_intelligence.json',
-    'news': 'news_feed.json',
-    'reddit': 'reddit_data.json',
-    'markets': 'global_markets.json',
-    'india': 'latest_market_data.json',
-    'global': 'global_markets.json',
-    'stats': 'stats_data.json',
-    'history': 'history_data.json',
-}
+def _source_files() -> Dict[str, str]:
+    from backend.runtime.feed_registry import feed_files
+    return feed_files()
 
 
 def _now_iso() -> str:
@@ -321,7 +312,7 @@ def _load_source_freshness(operational: dict) -> Dict[str, Any]:
         pass
 
     rows = {}
-    for key, filename in _SOURCE_FILES.items():
+    for key, filename in _source_files().items():
         age = _file_age_seconds(filename)
         if age is None:
             rows[key] = {'status': 'missing', 'age_seconds': None, 'age_display': 'missing', 'stale': True}

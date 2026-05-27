@@ -20,7 +20,7 @@ COMMAND_LINE_LIMITS: Dict[str, int] = {
     'opps': 35,
     'opportunities': 35,
     'risks': 20,
-    'action': 3,
+    'action': 6,
     'sectors': 12,
     'status': 48,
     'calibration': 25,
@@ -74,13 +74,14 @@ def _sanitize_section_line(prefix: str, body: str) -> str:
 
 def format_action_plan(raw: str, *, max_lines: int = 3) -> str:
     """Compress action plan to posture lines (WATCH / AVOID / posture)."""
+    fallback = (
+        '🛡️ <b>POSTURE</b>\n'
+        'Capital preservation — monitor watchlist for confirmation.\n'
+        'No tactical entries until regime clarity improves.'
+    )
     text = str(raw or '').strip()
-    if not text:
-        return (
-            '🛡️ <b>POSTURE</b>\n'
-            'Capital preservation — monitor watchlist for confirmation.\n'
-            'No tactical entries until regime clarity improves.'
-        )
+    if not text or text.lower() in ('none', 'null', 'nan', 'n/a'):
+        return fallback
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     picked: List[str] = []
     for ln in lines:
@@ -88,16 +89,25 @@ def format_action_plan(raw: str, *, max_lines: int = 3) -> str:
         for tag in ('WATCH:', 'AVOID:', 'ELITE:', 'HIGH CONVICTION:'):
             if tag in upper:
                 head, _, body = ln.partition(':')
-                picked.append(f'{head}: {_sanitize_section_line(head, body)}')
+                sanitized = _sanitize_section_line(head, body)
+                if sanitized and sanitized != '…':
+                    picked.append(f'{head}: {sanitized}')
                 break
         else:
             if any(k in upper for k in ('POSTURE:', 'CAPITAL')):
-                picked.append(ln)
+                cleaned = ln.strip()
+                if cleaned and cleaned != '…':
+                    picked.append(cleaned)
         if len(picked) >= max_lines:
             break
     if not picked:
-        picked = lines[:max_lines]
+        cleaned = [ln for ln in lines[:max_lines] if ln and ln != '…']
+        picked = cleaned if cleaned else []
+    if not picked:
+        return fallback
     body = '\n'.join(picked[:max_lines])
+    if body.strip() in ('…', '...'):
+        return fallback
     return f'🛡️ <b>POSTURE</b>\n{body}'
 
 
@@ -240,16 +250,8 @@ def format_status(runtime_state: dict) -> str:
         f"AI Brain: {brain.get('age_display') or '—'}"
         f"{_status_stale_suffix(bool(brain.get('stale')))}"
     )
-    for key, label in (
-        ('scanner', 'Scanner'),
-        ('reddit', 'Reddit'),
-        ('govt', 'Govt'),
-        ('news', 'News'),
-        ('global', 'Global'),
-        ('india', 'India'),
-        ('stats', 'Stats export'),
-        ('history', 'History export'),
-    ):
+    from backend.runtime.feed_registry import status_feed_labels
+    for key, label in status_feed_labels():
         lines.append(_status_feed_line(label, sources.get(key)))
 
     lines.append('<b>Runtime</b>')
@@ -293,13 +295,18 @@ def format_status(runtime_state: dict) -> str:
 
 
 def format_confidence(value: Any) -> str:
-    if value is None:
-        return 'N/A'
-    try:
-        n = float(str(value).replace('/10', '').strip())
-        return f'{n:.1f}/10'
-    except (TypeError, ValueError):
-        return str(value)
+    from backend.metrics.format_helpers import safe_confidence
+    return safe_confidence(value)
+
+
+def safe_pct(value: Any, *, decimals: int = 1, fallback: str = 'Awaiting statistical confidence') -> str:
+    from backend.metrics.format_helpers import safe_pct as _safe_pct
+    return _safe_pct(value, decimals=decimals, fallback=fallback)
+
+
+def safe_num(value: Any, *, fmt: str = '.1f', fallback: str = 'N/A') -> str:
+    from backend.metrics.format_helpers import safe_num as _safe_num
+    return _safe_num(value, fmt=fmt, fallback=fallback)
 
 
 def format_ticker_line(ticker: str, change: Any = None, note: str = '') -> str:

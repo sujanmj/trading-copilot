@@ -545,9 +545,9 @@ def build_compressed_summary(intel, *, include_stale: bool = True):
     regime = institutional_regime_label(regime)
     conf_raw = mood.get('confidence_level') or mood.get('confidence_score')
     try:
-        conf_num = float(str(conf_raw).replace('/10', '').strip())
-        conf_line = f"{conf_num:.1f}/10"
-    except (TypeError, ValueError):
+        from backend.metrics.format_helpers import safe_confidence
+        conf_line = safe_confidence(conf_raw)
+    except Exception:
         conf_line = _text(conf_raw, 'N/A')
 
     body = format_executive_summary(
@@ -595,10 +595,25 @@ def build_msg1_header(intel):
     mood = _dict(intel.get('market_mood'))
     confidence = _text(mood.get('confidence_level'), 'N/A')
     sources_used = intel.get('sources_used')
-    sources_text = str(sources_used) if sources_used is not None else '8'
+    sources_total = intel.get('sources_total')
+    try:
+        from backend.runtime.runtime_state import get_runtime_state
+        from backend.runtime.feed_registry import count_fresh_sources, format_sources_display, feed_count_total
+        rs = get_runtime_state()
+        loaded, total = count_fresh_sources(rs.get('source_freshness'))
+        if loaded == 0 and sources_used is not None:
+            loaded = min(int(sources_used), sources_total or feed_count_total())
+            total = int(sources_total or feed_count_total())
+        sources_line = format_sources_display(loaded, total=total)
+    except Exception:
+        from backend.runtime.feed_registry import format_sources_display, feed_count_total
+        sources_line = format_sources_display(
+            sources_used,
+            total=sources_total if sources_total is not None else feed_count_total(),
+        )
 
     return f"""{stale}🧠 <b>UNIFIED MARKET INTELLIGENCE</b>
-📅 <i>{ts_str}</i> · Confidence <b>{confidence}</b> · Sources <b>{sources_text}/8</b>"""
+📅 <i>{ts_str}</i> · Confidence <b>{confidence}</b> · Sources <b>{sources_line}</b>"""
 
 
 def build_msg2_summary_govt(intel):
@@ -904,9 +919,9 @@ def push_action(*, command='action', cycle_id=''):
     from backend.runtime.market_snapshot_engine import get_current_market_snapshot
     snap = get_current_market_snapshot()
     action = _text(snap.action_plan, '')
-    if not action.strip():
-        send_message('❌ No action plan in snapshot. Run /refresh first.', command=command, cycle_id=cycle_id)
-        return
+    intel = normalize_intel(load_intel())
+    if not action.strip() and intel:
+        action = _text(intel.get('action_plan'), '')
     prefix = snapshot_meta_line(snap.runtime_state)
     send_chunked(f"{prefix}{format_action_plan(action)}", command=command, cycle_id=cycle_id)
 

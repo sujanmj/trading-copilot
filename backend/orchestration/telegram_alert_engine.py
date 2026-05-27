@@ -512,8 +512,11 @@ def format_close_summary(intel: dict, stats: dict, scanner: dict, state: dict) -
 
     ultra = [s.get('ticker') for s in (scanner or {}).get('top_signals', []) if s.get('strength') == 'ULTRA'][:4]
 
+    from backend.metrics.format_helpers import safe_pct
+    wr_display = safe_pct(win_rate, decimals=0)
+
     return f"""<b>🏁 MARKET CLOSE</b> <code>{regime.replace('_', ' ').upper()}</code>
-<b>Mood:</b> {mood.get('india_outlook', '?')} | AI WR {win_rate:.0f}%
+<b>Mood:</b> {mood.get('india_outlook', '?')} | AI WR {wr_display}
 
 <b>Sectors</b> ↑ {', '.join((sectors.get('bullish') or [])[:4]) or '—'}
 ↓ {', '.join((sectors.get('bearish') or [])[:4]) or '—'}
@@ -552,8 +555,9 @@ def try_close_summary() -> int:
         text = format_telegram_close_summary(report)
         metrics = (_load(FILES['stats']) or {}).get('metrics_all_time') or {}
         from backend.lifecycle.win_rate_engine import win_rate_from_metrics
+        from backend.metrics.format_helpers import safe_pct
         wr = win_rate_from_metrics(metrics)
-        text += f"\n\n<b>Resolved WR:</b> {wr:.1f}% <i>(WIN/(WIN+LOSS))</i>"
+        text += f"\n\n<b>Resolved WR:</b> {safe_pct(wr)} <i>(WIN/(WIN+LOSS))</i>"
     except Exception:
         text = format_close_summary(intel, _load(FILES['stats']), _load(FILES['scanner']), state)
 

@@ -1,11 +1,11 @@
 {
-  "snapshot_id": "snap_a3e073b674fd",
-  "generated_at": "2026-05-28T00:21:01.370750+05:30",
+  "snapshot_id": "snap_fecf3a29413c",
+  "generated_at": "2026-05-28T00:40:47.749354+05:30",
   "market_session": "DEGRADED",
   "lifecycle": {
     "lifecycle_state": "DEGRADED",
     "lifecycle_base": "AFTER_HOURS",
-    "lifecycle_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1408m",
+    "lifecycle_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1428m",
     "transition_valid": true,
     "transition_reason": "ok",
     "market_period": "night",
@@ -17,7 +17,7 @@
     "market_session_open": false
   },
   "runtime_state": {
-    "generated_at": "2026-05-28T00:21:01.369808+05:30",
+    "generated_at": "2026-05-28T00:40:47.746792+05:30",
     "authority": "runtime_state",
     "primary_state": "DEGRADED",
     "secondary_flags": {
@@ -28,72 +28,58 @@
       "cache_mode": true
     },
     "source_freshness": {
-      "intelligence": {
-        "status": "idle",
-        "age_seconds": 31731,
-        "age_display": "8h",
-        "stale": false,
-        "file": "unified_intelligence.json"
-      },
       "scanner": {
         "status": "idle",
-        "age_seconds": 30675,
+        "age_seconds": 31861,
         "age_display": "8h",
         "stale": false,
         "file": "scanner_data.json"
       },
+      "reddit": {
+        "status": "idle",
+        "age_seconds": 30018,
+        "age_display": "8h",
+        "stale": false,
+        "file": "reddit_data.json"
+      },
       "govt": {
         "status": "idle",
-        "age_seconds": 28847,
+        "age_seconds": 30034,
         "age_display": "8h",
         "stale": false,
         "file": "govt_intelligence.json"
       },
       "news": {
         "status": "idle",
-        "age_seconds": 28845,
+        "age_seconds": 30031,
         "age_display": "8h",
         "stale": false,
         "file": "news_feed.json"
       },
-      "reddit": {
+      "global": {
         "status": "idle",
-        "age_seconds": 28832,
-        "age_display": "8h",
-        "stale": false,
-        "file": "reddit_data.json"
-      },
-      "markets": {
-        "status": "idle",
-        "age_seconds": 28847,
+        "age_seconds": 30033,
         "age_display": "8h",
         "stale": false,
         "file": "global_markets.json"
       },
       "india": {
         "status": "idle",
-        "age_seconds": 28857,
+        "age_seconds": 30043,
         "age_display": "8h",
         "stale": false,
         "file": "latest_market_data.json"
       },
-      "global": {
-        "status": "idle",
-        "age_seconds": 28847,
-        "age_display": "8h",
-        "stale": false,
-        "file": "global_markets.json"
-      },
       "stats": {
         "status": "ok",
-        "age_seconds": 8,
-        "age_display": "8s",
+        "age_seconds": 18,
+        "age_display": "18s",
         "stale": false,
         "file": "stats_data.json"
       },
       "history": {
         "status": "idle",
-        "age_seconds": 84539,
+        "age_seconds": 85726,
         "age_display": "23h",
         "stale": false,
         "file": "history_data.json"
@@ -108,7 +94,7 @@
     "lifecycle": {
       "lifecycle_state": "DEGRADED",
       "lifecycle_base": "AFTER_HOURS",
-      "lifecycle_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1408m",
+      "lifecycle_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1428m",
       "transition_valid": true,
       "transition_reason": "ok",
       "market_period": "night",
@@ -121,7 +107,7 @@
     },
     "session": {
       "session_status": "DEGRADED",
-      "session_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1408m",
+      "session_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1428m",
       "market_session_open": false,
       "after_hours_mode": false,
       "suppress_trading_language": true,
@@ -132,16 +118,16 @@
       "stages": {
         "scanner": {
           "status": "test",
-          "at": "2026-05-28T00:20:55.315690+05:30",
-          "last_success_at": "2026-05-28T00:20:55.315690+05:30",
+          "at": "2026-05-28T00:40:38.399380+05:30",
+          "last_success_at": "2026-05-28T00:40:38.399380+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "validate_probe"
         },
         "aggregation": {
           "status": "start",
-          "at": "2026-05-28T00:20:57.569012+05:30",
-          "last_success_at": "2026-05-28T00:20:57.569012+05:30",
+          "at": "2026-05-28T00:40:41.595925+05:30",
+          "last_success_at": "2026-05-28T00:40:41.595925+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "validate"
@@ -154,16 +140,16 @@
         },
         "snapshot_export": {
           "status": "ok",
-          "at": "2026-05-28T00:20:56.406663+05:30",
-          "last_success_at": "2026-05-28T00:20:56.406663+05:30",
+          "at": "2026-05-28T00:40:32.734917+05:30",
+          "last_success_at": "2026-05-28T00:40:32.734917+05:30",
           "age_minutes": 0,
           "stalled": false,
-          "detail": "v46"
+          "detail": "v50"
         },
         "cache": {
           "status": "ok",
-          "at": "2026-05-28T00:20:53.352968+05:30",
-          "last_success_at": "2026-05-28T00:20:53.352968+05:30",
+          "at": "2026-05-28T00:40:29.355472+05:30",
+          "last_success_at": "2026-05-28T00:40:29.355472+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "stats_data.json"
@@ -184,21 +170,21 @@
       ],
       "any_stalled": false,
       "last_stage": "aggregation",
-      "updated_at": "2026-05-28T00:20:57.569012+05:30"
+      "updated_at": "2026-05-28T00:40:41.595925+05:30"
     },
     "scanner_health": {
       "healthy": false,
       "stalled": true,
       "display": "Scanner stalled: 8h",
-      "age_minutes": 511,
-      "file_age_minutes": 511,
+      "age_minutes": 531,
+      "file_age_minutes": 531,
       "heartbeat_age_minutes": null,
       "stall_minutes": 45,
       "expect_quiet": false,
       "market_hours": false,
       "lock_hint": "",
       "scanner_file_exists": true,
-      "checked_at": "2026-05-28T00:21:01.313790+05:30"
+      "checked_at": "2026-05-28T00:40:47.663896+05:30"
     },
     "overnight_posture": {
       "india_open_bias": "FLAT_TO_MIXED",
@@ -213,12 +199,12 @@
       "degraded": true,
       "issues": [
         "scanner_stalled",
-        "export:history_data.json stale 1408m",
+        "export:history_data.json stale 1428m",
         "stage:synthesis"
       ],
       "root_causes": [
         "Scanner stalled: 8h",
-        "history_data.json stale 1408m",
+        "history_data.json stale 1428m",
         "synthesis:never_run"
       ],
       "threshold_minutes": 30,
@@ -226,15 +212,15 @@
         "healthy": false,
         "stalled": true,
         "display": "Scanner stalled: 8h",
-        "age_minutes": 511,
-        "file_age_minutes": 511,
+        "age_minutes": 531,
+        "file_age_minutes": 531,
         "heartbeat_age_minutes": null,
         "stall_minutes": 30,
         "expect_quiet": false,
         "market_hours": false,
         "lock_hint": "",
         "scanner_file_exists": true,
-        "checked_at": "2026-05-28T00:21:01.311301+05:30"
+        "checked_at": "2026-05-28T00:40:47.659572+05:30"
       },
       "snapshot_freshness": {
         "stale": false,
@@ -255,7 +241,7 @@
         ],
         "threshold_minutes": 30
       },
-      "checked_at": "2026-05-28T00:21:01.311832+05:30"
+      "checked_at": "2026-05-28T00:40:47.660505+05:30"
     },
     "collector_activity": {
       "collectors_active": true,
@@ -330,8 +316,8 @@
       "stale_threshold_minutes": 15,
       "degraded_threshold_minutes": 30,
       "pipeline_stalled": true,
-      "snapshot_version": 46,
-      "active_snapshot_id": "snap_20260528_002056",
+      "snapshot_version": 50,
+      "active_snapshot_id": "snap_20260528_004032",
       "freshness_score": 45,
       "suppress_confidence": true,
       "block_elite_outputs": true,
@@ -473,9 +459,9 @@
         "missing_ai_confirmation",
         "suppressed:dedupe"
       ],
-      "suppression_count": 15,
+      "suppression_count": 19,
       "suppression_by_reason": {
-        "dedupe": 15
+        "dedupe": 19
       }
     },
     "metric_sources": {
@@ -497,8 +483,8 @@
     "stale_threshold_minutes": 15,
     "degraded_threshold_minutes": 30,
     "pipeline_stalled": true,
-    "snapshot_version": 46,
-    "active_snapshot_id": "snap_20260528_002056",
+    "snapshot_version": 50,
+    "active_snapshot_id": "snap_20260528_004032",
     "freshness_score": 45,
     "suppress_confidence": true,
     "block_elite_outputs": true,
@@ -750,38 +736,50 @@
   "feeds": {
     "scanner": {
       "status": "idle",
-      "age_seconds": 30675,
-      "age_display": "8h",
-      "stale": false
-    },
-    "govt": {
-      "status": "idle",
-      "age_seconds": 28847,
-      "age_display": "8h",
-      "stale": false
-    },
-    "news": {
-      "status": "idle",
-      "age_seconds": 28845,
+      "age_seconds": 31861,
       "age_display": "8h",
       "stale": false
     },
     "reddit": {
       "status": "idle",
-      "age_seconds": 28832,
+      "age_seconds": 30018,
+      "age_display": "8h",
+      "stale": false
+    },
+    "govt": {
+      "status": "idle",
+      "age_seconds": 30034,
+      "age_display": "8h",
+      "stale": false
+    },
+    "news": {
+      "status": "idle",
+      "age_seconds": 30031,
       "age_display": "8h",
       "stale": false
     },
     "global": {
       "status": "idle",
-      "age_seconds": 28847,
+      "age_seconds": 30033,
       "age_display": "8h",
       "stale": false
     },
-    "tv": {
-      "status": null,
-      "age_seconds": null,
-      "age_display": null,
+    "india": {
+      "status": "idle",
+      "age_seconds": 30043,
+      "age_display": "8h",
+      "stale": false
+    },
+    "stats": {
+      "status": "ok",
+      "age_seconds": 18,
+      "age_display": "18s",
+      "stale": false
+    },
+    "history": {
+      "status": "idle",
+      "age_seconds": 85726,
+      "age_display": "23h",
       "stale": false
     }
   },
@@ -796,23 +794,23 @@
     "Partial degradation — awaiting fresh cycle",
     "Snapshot aging — partial degradation",
     "scanner_stalled",
-    "export:history_data.json stale 1408m",
+    "export:history_data.json stale 1428m",
     "stage:synthesis"
   ],
   "pipeline_health": {
     "stages": {
       "scanner": {
         "status": "test",
-        "at": "2026-05-28T00:20:55.315690+05:30",
-        "last_success_at": "2026-05-28T00:20:55.315690+05:30",
+        "at": "2026-05-28T00:40:38.399380+05:30",
+        "last_success_at": "2026-05-28T00:40:38.399380+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "validate_probe"
       },
       "aggregation": {
         "status": "start",
-        "at": "2026-05-28T00:20:57.569012+05:30",
-        "last_success_at": "2026-05-28T00:20:57.569012+05:30",
+        "at": "2026-05-28T00:40:41.595925+05:30",
+        "last_success_at": "2026-05-28T00:40:41.595925+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "validate"
@@ -825,16 +823,16 @@
       },
       "snapshot_export": {
         "status": "ok",
-        "at": "2026-05-28T00:20:56.406663+05:30",
-        "last_success_at": "2026-05-28T00:20:56.406663+05:30",
+        "at": "2026-05-28T00:40:32.734917+05:30",
+        "last_success_at": "2026-05-28T00:40:32.734917+05:30",
         "age_minutes": 0,
         "stalled": false,
-        "detail": "v46"
+        "detail": "v50"
       },
       "cache": {
         "status": "ok",
-        "at": "2026-05-28T00:20:53.352968+05:30",
-        "last_success_at": "2026-05-28T00:20:53.352968+05:30",
+        "at": "2026-05-28T00:40:29.355472+05:30",
+        "last_success_at": "2026-05-28T00:40:29.355472+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "stats_data.json"
@@ -1022,7 +1020,7 @@
   "calibration": "Past 30-day performance shows 60% win rate with exceptional success in TELECOM (100%). Recent losses in HIGH confidence calls (GREENLAM -4.4%, GNFC -3.6%) indicate need for caution in current panic volatile regime. Sector rotation signals align with past TELECOM success pattern. Avoiding repetition of 10 pending tickers from today. Current regime shows 60% alert precision in panic_volatile conditions, supporting selective aggressive positioning in ultra-scanner breakouts.",
   "executive_summary": "Indian markets trade in panic volatile regime with contradictory signals. Excise duty cut on fuel creates revenue concerns (-₹1 lakh crore) while strong sectoral rotation emerges in Power, Adani Group, and Media with exceptional volume spikes. Global headwinds from inflation risks and AI-driven layoffs persist, but falling crude oil (Iran deal hopes) provides relief. Scanner anomalies show extreme divergence with 7 ultra-bullish vs 2 ultra-bearish signals.",
   "collector_at": null,
-  "snapshot_built_at": "2026-05-28T00:21:01.370776+05:30",
-  "published_at": "2026-05-28T00:21:01.370811+05:30",
-  "_committed_at": "2026-05-28T00:21:01.370811+05:30"
+  "snapshot_built_at": "2026-05-28T00:40:47.749434+05:30",
+  "published_at": "2026-05-28T00:40:47.749508+05:30",
+  "_committed_at": "2026-05-28T00:40:47.749508+05:30"
 }

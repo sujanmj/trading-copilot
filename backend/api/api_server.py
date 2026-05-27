@@ -1330,19 +1330,24 @@ def _build_health_payload() -> dict:
     dynamic_stale_threshold = int(wd_cfg.get('stale_threshold_seconds') or STALE_THRESHOLD_SECONDS)
     period = str(operational.get('period') or 'market')
 
-    files = {
-        "intelligence": "unified_intelligence.json",
-        "scanner": "scanner_data.json",
-        "govt": "govt_intelligence.json",
-        "news": "news_feed.json",
-        "reddit": "reddit_data.json",
-        "markets": "global_markets.json",
-        "india": "latest_market_data.json",
-        "youtube": "youtube_feed.json",
-        "inshorts": "inshorts_feed.json",
-        "stats": "stats_data.json",
-        "history": "history_data.json",
-    }
+    files = {}
+    try:
+        from backend.runtime.feed_registry import HEALTH_FEED_FILES
+        files = dict(HEALTH_FEED_FILES)
+    except Exception:
+        files = {
+            "intelligence": "unified_intelligence.json",
+            "scanner": "scanner_data.json",
+            "govt": "govt_intelligence.json",
+            "news": "news_feed.json",
+            "reddit": "reddit_data.json",
+            "markets": "global_markets.json",
+            "india": "latest_market_data.json",
+            "youtube": "youtube_feed.json",
+            "inshorts": "inshorts_feed.json",
+            "stats": "stats_data.json",
+            "history": "history_data.json",
+        }
     freshness = {}
     source_status = {}
     for key, filename in files.items():

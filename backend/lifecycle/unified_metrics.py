@@ -351,9 +351,10 @@ def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'tod
         msg += f"  ✅ Wins: {m.get('wins', 0)}\n"
         msg += f"  ❌ Losses: {m.get('losses', 0)}\n"
         if actionable >= 5:
-            msg += f"<b>Avg Gain:</b> +{m.get('avg_gain_pct', 0):.2f}%\n"
-            msg += f"<b>Avg Loss:</b> -{m.get('avg_loss_pct', 0):.2f}%\n"
-            msg += f"<b>Profit Factor:</b> {m.get('profit_factor', 0):.2f}\n"
+            from backend.metrics.format_helpers import safe_pct, safe_num
+            msg += f"<b>Avg Gain:</b> +{safe_pct(m.get('avg_gain_pct'), fallback='—')}\n"
+            msg += f"<b>Avg Loss:</b> -{safe_pct(m.get('avg_loss_pct'), fallback='—')}\n"
+            msg += f"<b>Profit Factor:</b> {safe_num(m.get('profit_factor'), fmt='.2f')}\n"
     else:
         msg += "\n<i>⏳ No resolved outcomes yet — pending predictions evaluate at EOD</i>"
     return msg
@@ -392,19 +393,22 @@ def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
         )
         return msg
 
-    msg += f"Win rate: {historical.get('win_rate', 0):.1f}%\n"
+    from backend.metrics.format_helpers import safe_pct
+    msg += f"Win rate: {safe_pct(historical.get('win_rate'))}\n"
     msg += f"✅ Wins: {wins} | ❌ Losses: {losses} | 📊 Evaluated: {hist_evaluated}"
     return msg
 
 
 def format_calibration_telegram(cal: Optional[dict] = None) -> str:
+    from backend.metrics.format_helpers import safe_pct
     c = cal or get_calibration_metrics()
     phase = c.get('calibration_phase') or 'LEARNING'
     msg = f"<b>🎯 Calibration</b> · <b>{phase}</b>\n\n"
     msg += f"Predictions: {c.get('prediction_total', 0)} · Evaluated: {c.get('evaluated', c.get('total_evaluated', 0))}\n"
     msg += f"Pending: {c.get('pending', 0)} · Resolved sample: {c.get('resolved_sample', 0)}\n"
     if c.get('show_win_rate') or (c.get('resolved_sample') or 0) >= 20:
-        msg += f"Win rate: {c.get('win_rate', 0):.1f}% · Wins: {c.get('wins', 0)} · Losses: {c.get('losses', 0)}\n"
+        wr = safe_pct(c.get('win_rate'))
+        msg += f"Win rate: {wr} · Wins: {c.get('wins', 0)} · Losses: {c.get('losses', 0)}\n"
     msg += f"<i>{c.get('message', '')}</i>"
     return msg
 

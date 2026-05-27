@@ -48,9 +48,15 @@
   async function fetchJson(path, requireAuth) {
     const base = config.getApiBase().replace(/\/$/, '');
     const headers = requireAuth ? config.getHeaders() : { Accept: 'application/json' };
-    const res = await fetch(base + path, { method: 'GET', headers });
-    if (!res.ok) throw new Error(`${path} → ${res.status}`);
-    return res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const res = await fetch(base + path, { method: 'GET', headers, signal: controller.signal });
+      if (!res.ok) throw new Error(`${path} → ${res.status}`);
+      return res.json();
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   function loadSeenState() {

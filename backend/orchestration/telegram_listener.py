@@ -508,7 +508,7 @@ def _cmd_elite_body():
                         if o.get('symbol')
                     ]
                     watch_note = (
-                        "\n\n👀 Scanner momentum detected but ML confidence below elite threshold."
+                        "\n\n👀 Scanner momentum detected — ML confirmation pending (>72%)."
                     )
                     if syms:
                         watch_note += f"\nWatch list: {', '.join(syms)} · use /opps"

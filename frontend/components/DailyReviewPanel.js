@@ -39,12 +39,19 @@
   async function fetchReview(rebuild) {
     const base = config.getApiBase().replace(/\/$/, '');
     const q = rebuild ? '?rebuild=1' : '';
-    const res = await fetch(base + '/api/daily-review' + q, {
-      method: 'GET',
-      headers: config.getHeaders(),
-    });
-    if (!res.ok) throw new Error(`daily-review → ${res.status}`);
-    return res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(base + '/api/daily-review' + q, {
+        method: 'GET',
+        headers: config.getHeaders(),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`daily-review → ${res.status}`);
+      return res.json();
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   function stat(label, value, cls) {

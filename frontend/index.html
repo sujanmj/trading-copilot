@@ -1317,6 +1317,34 @@
     return text
   }
 
+  function formatSourcesDisplay(data, runtimeSnap) {
+    const total = (data && data.sources_total) || 8
+    let loaded = data && data.sources_used
+    if (loaded != null) {
+      loaded = Math.min(Math.max(0, Number(loaded) || 0), total)
+    } else {
+      const ms = (runtimeSnap && runtimeSnap.market_snapshot) || {}
+      const feeds = ms.feeds || {}
+      loaded = Object.values(feeds).filter((f) => f && f.status && f.status !== 'missing').length
+      loaded = Math.min(loaded, total)
+    }
+    return `Sources: ${loaded != null && !Number.isNaN(loaded) ? loaded : '—'}/${total}`
+  }
+
+  function truncateRiskLogic(text, maxLines) {
+    maxLines = maxLines || 2
+    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    if (!lines.length) return ''
+    return lines.slice(0, maxLines).join(' ')
+  }
+
+  function formatPctSafe(value, fallback) {
+    if (value === null || value === undefined || value === '') return fallback || 'Awaiting statistical confidence'
+    const n = Number(value)
+    if (!Number.isFinite(n)) return String(value)
+    return `${n.toFixed(1)}%`
+  }
+
   function formatWinRateDisplay(runtimeSnap, metrics, lcCal) {
     const rs = (runtimeSnap && runtimeSnap.runtime_state) || {}
     const wr = rs.win_rate || {}
@@ -1560,6 +1588,7 @@
     const opps = data.top_opportunities || [];
     const risks = data.risks_and_avoids || [];
     const lcPanel = window.RuntimeManager ? RuntimeManager.getPanelState('lifecycle') : null;
+    const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
     const activeMeta = data.active_predictions_updated
       ? `Active predictions refreshed ${formatTime(data.active_predictions_updated) || data.active_predictions_updated.slice(0, 10)}`
       : (data.lifecycle_active_count != null ? `${data.lifecycle_active_count} active lifecycle predictions` : '');
@@ -1572,11 +1601,11 @@
     if (opps.length === 0) {
       const ultra = getScannerHighConvictionSignals();
       if (ultra.length > 0) {
-        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">WATCH signals available — scanner high-conviction below elite threshold.</div>`;
+        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">Watchlist candidates available — pending ML confirmation (&gt;72%).</div>`;
         ultra.forEach((s) => {
           const strengthLabel = String(s.direction || '').toUpperCase().includes('BEAR')
-            ? 'VERY STRONG BEARISH'
-            : 'VERY STRONG BULLISH';
+            ? 'Strong bearish'
+            : 'Strong bullish';
           oppsHtml += renderOpportunityCard({
             symbol: s.ticker,
             ticker: s.ticker,
@@ -1584,7 +1613,7 @@
             confidence: 'MEDIUM',
             logic: `Scanner ${strengthLabel} · vol ${Number(s.volume_ratio || 0).toFixed(1)}x · ${Number(s.change_percent || 0).toFixed(2)}%`,
             display_tier: 'WATCH',
-          }, { fallbackLogic: 'Scanner anomaly — not elite-verified.' });
+          }, { fallbackLogic: 'Scanner signal — observation only, pending ML confirmation.' });
         });
       } else {
         const emptyMsg = 'No high-conviction opportunities detected. Capital preservation mode active.';
@@ -1601,13 +1630,14 @@
       risksHtml = '<div class="glass-text" style="font-style:italic;">No risks identified yet</div>';
     } else {
     risks.forEach(r => {
+      const logicText = truncateRiskLogic(r.logic, 2) || 'No risk rationale provided.'
       risksHtml += `
         <div class="trade-item sell">
           <div class="trade-header">
             <h3>${escapeHtml(r.symbol || 'UNKNOWN')}</h3>
             <span class="trade-badge sell">AVOID</span>
           </div>
-          <p class="trade-logic">${brainHtml(r.logic, 'No risk rationale provided.')}</p>
+          <p class="trade-logic">${brainHtml(logicText, 'No risk rationale provided.')}</p>
         </div>
       `;
     });
@@ -1615,7 +1645,7 @@
 
     let html = `
       ${brainBanner}
-      ${runtimeTimestampHtml(globalExportAgeHtml('intelligence') || activeMeta || ('Sources: ' + (data.sources_used || 8) + '/8'))}
+      ${runtimeTimestampHtml(globalExportAgeHtml('intelligence') || activeMeta || formatSourcesDisplay(data, runtimeSnap))}
       
       <div class="brain-grid">
         <div class="main-column">
@@ -2346,9 +2376,9 @@
     const winRateLabel = formatWinRateDisplay(runtimeSnap, metrics, lcCal);
     const winRateNumeric = (runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.win_rate != null)
       ? runtimeSnap.calibration_summary.win_rate
-      : (lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate || 0));
+      : (lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate != null ? metrics.win_rate : null));
     const winRateConfident = !!(runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.statistically_confident);
-    const lossRate = lcCal.loss_rate != null ? lcCal.loss_rate : (metrics.total_evaluated ? ((metrics.losses || 0) / metrics.total_evaluated * 100) : 0);
+    const lossRate = lcCal.loss_rate != null ? lcCal.loss_rate : (metrics.total_evaluated ? ((metrics.losses || 0) / metrics.total_evaluated * 100) : null);
     const evaluated = lcCal.total_evaluated != null ? lcCal.total_evaluated : (metrics.total_evaluated || 0);
     const profitFactor = lcCal.profit_factor != null ? lcCal.profit_factor : (metrics.profit_factor || 0);
     const cal = data.calibration_dashboard || {};
@@ -2369,12 +2399,12 @@
           </div>
           <div class="stat-big-card">
             <div class="stat-big-label">Win Rate</div>
-            <div class="stat-big-value ${winRateConfident ? (winRateNumeric >= 60 ? 'green' : winRateNumeric >= 40 ? 'yellow' : 'red') : 'muted'}">${escapeHtml(winRateLabel)}</div>
+            <div class="stat-big-value ${winRateConfident && winRateNumeric != null ? (winRateNumeric >= 60 ? 'green' : winRateNumeric >= 40 ? 'yellow' : 'red') : 'muted'}">${escapeHtml(winRateLabel)}</div>
             <div class="stat-big-sub">${metrics.wins || 0}W / ${metrics.losses || 0}L</div>
           </div>
           <div class="stat-big-card">
             <div class="stat-big-label">Loss Rate</div>
-            <div class="stat-big-value ${lossRate <= 35 ? 'green' : lossRate <= 55 ? 'yellow' : 'red'}">${Number(lossRate).toFixed(0)}%</div>
+            <div class="stat-big-value ${lossRate != null && lossRate <= 35 ? 'green' : lossRate != null && lossRate <= 55 ? 'yellow' : lossRate != null ? 'red' : 'muted'}">${escapeHtml(formatPctSafe(lossRate, 'Awaiting statistical confidence'))}</div>
             <div class="stat-big-sub">resolved losses</div>
           </div>
           <div class="stat-big-card">

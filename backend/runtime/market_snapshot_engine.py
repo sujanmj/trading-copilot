@@ -68,18 +68,11 @@ def _load_elite_summary() -> Dict[str, Any]:
 
 
 def _build_feeds(runtime_state: Dict[str, Any]) -> Dict[str, Any]:
+    from backend.runtime.feed_registry import STATUS_FEED_ORDER
     sources = runtime_state.get('source_freshness') or {}
-    mapping = {
-        'scanner': 'scanner',
-        'govt': 'govt',
-        'news': 'news',
-        'reddit': 'reddit',
-        'global': 'global',
-        'tv': 'youtube',
-    }
     feeds: Dict[str, Any] = {}
-    for key, src_key in mapping.items():
-        row = sources.get(src_key) or sources.get(key) or {}
+    for key in STATUS_FEED_ORDER:
+        row = sources.get(key) or {}
         feeds[key] = {
             'status': row.get('status'),
             'age_seconds': row.get('age_seconds'),

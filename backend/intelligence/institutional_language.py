@@ -21,7 +21,8 @@ PHRASE_MAP = [
     (r'\bscanner\s+ULTRA\b', 'High Conviction scanner signal'),
     (r'\bULTRA\s+SIGNALS?\b', 'High Conviction signals'),
     (r'\bULTRA\b', 'High Conviction'),
-    (r'\bMODERATE\b', 'Moderate'),
+    (r'\belite threshold\b', 'ML confirmation threshold'),
+    (r'\bwatch low\b', 'Watchlist — low conviction'),
     (r'\bWEAK\b', 'Weak'),
     (r'\btop\s+opportunities\b', 'priority setups'),
     (r'\bbull\s+run\b', 'risk-on extension'),
@@ -153,14 +154,16 @@ def format_compressed_leaders(sectors: Dict[str, Any]) -> str:
     return apply_institutional_tone(f"Leadership concentration: {leaders}")
 
 
-def format_compressed_risks(risks: List[Any]) -> str:
+def format_compressed_risks(risks: List[Any], *, max_lines_per_ticker: int = 2) -> str:
     if not risks:
         return 'Overnight headline risk — monitor liquidity'
     bits = []
     for r in risks[:3]:
         if isinstance(r, dict):
             sym = str(r.get('symbol') or '').strip()
-            logic = apply_institutional_tone(str(r.get('logic') or '')[:60])
+            logic_raw = str(r.get('logic') or '')
+            logic_lines = [x.strip() for x in logic_raw.splitlines() if x.strip()][:max_lines_per_ticker]
+            logic = apply_institutional_tone(' '.join(logic_lines)[:120])
             bits.append(sym if sym and sym != 'UNKNOWN' else logic)
     return ', '.join(bits) if bits else 'Macro transmission risk'
 
