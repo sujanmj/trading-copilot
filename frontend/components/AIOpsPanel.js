@@ -259,7 +259,9 @@
         cls: operational.night_mode ? '' : 'ai-ops-ok',
       },
       { label: 'AI budget', value: `$${budget.spent ?? '—'} / $${budget.limit ?? '—'}` },
-      { label: 'Regime', value: (health.market_regime || obs.market_regime || '—').replace(/_/g, ' ') },
+      { label: 'Regime', value: (global.RuntimeManager && RuntimeManager.formatMetricDisplay)
+        ? RuntimeManager.formatMetricDisplay((health.market_regime || obs.market_regime || '').replace(/_/g, ' '), 'regime')
+        : ((health.market_regime || obs.market_regime || 'Monitoring regime formation').replace(/_/g, ' ')) },
       {
         label: 'Quality score',
         value: fmtScore(health.last_quality_score ?? quality.intelligence_quality_score),
@@ -587,7 +589,15 @@
           },
           {
             label: 'Win rate',
-            value: calSnap.win_rate != null ? `${calSnap.win_rate}%` : '—',
+            value: (() => {
+              const rs = config.getRuntimeState ? config.getRuntimeState() : null;
+              const wr = rs && rs.runtime_state && rs.runtime_state.win_rate;
+              if (wr && wr.win_rate_display) return wr.win_rate_display;
+              if (calSnap.win_rate != null && (Number(calSnap.wins || 0) + Number(calSnap.losses || 0)) >= 5) {
+                return `${calSnap.win_rate}%`;
+              }
+              return 'Awaiting statistical confidence';
+            })(),
           },
           {
             label: 'Exports',

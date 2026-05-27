@@ -245,8 +245,8 @@ def format_pre_market(intel: dict, state: dict, scanner: dict, govt: dict, globa
 <b>Watchlist</b>
 {chr(10).join(watch) if watch else '—'}
 
-<b>Scanner ULTRA</b>
-{chr(10).join(ultra_lines) if ultra_lines else 'None yet'}
+<b>High Conviction Scanner</b>
+{chr(10).join(ultra_lines) if ultra_lines else 'Awaiting evaluation sample'}
 
 <i>Regime {regime} · vol {vol:.2f}</i>"""
 
@@ -298,7 +298,7 @@ def format_opportunity(signal: dict, intel: dict, state: dict) -> str:
 <b>Confidence:</b> {conf:.0%}
 <b>Risk:</b> {risk}
 
-<i>ULTRA-quality open opportunity filter</i>"""
+<i>High Conviction open opportunity filter</i>"""
 
 
 def try_open_opportunity() -> int:
@@ -519,7 +519,7 @@ def format_close_summary(intel: dict, stats: dict, scanner: dict, state: dict) -
 <b>Avoid</b>
 {chr(10).join(risk_lines) or '—'}
 
-<b>ULTRA today:</b> {', '.join(ultra) or '—'}
+<b>High Conviction today:</b> {', '.join(ultra) or '—'}
 
 <b>Tomorrow</b>
 {str(action)[:400]}

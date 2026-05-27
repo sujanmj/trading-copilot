@@ -1253,8 +1253,31 @@
   function displayText(value, fallback) {
     if (value === null || value === undefined) return fallback
     const text = String(value).trim()
-    if (!text || text.toLowerCase() === 'none') return fallback
+    if (!text || text.toLowerCase() === 'none' || text.toLowerCase() === 'unknown') return fallback
     return text
+  }
+
+  function formatWinRateDisplay(runtimeSnap, metrics, lcCal) {
+    const rs = (runtimeSnap && runtimeSnap.runtime_state) || {}
+    const wr = rs.win_rate || {}
+    if (wr.win_rate_display) return wr.win_rate_display
+    const cal = (runtimeSnap && runtimeSnap.calibration_summary) || {}
+    if (cal.win_rate_display) return cal.win_rate_display
+    const wins = Number((metrics && metrics.wins) || 0)
+    const losses = Number((metrics && metrics.losses) || 0)
+    const denom = wins + losses
+    if (denom < 5) return 'Awaiting statistical confidence'
+    const raw = lcCal && lcCal.win_rate != null ? lcCal.win_rate : (metrics && metrics.win_rate)
+    if (raw == null || raw === 0 && denom === 0) return 'Insufficient statistical sample'
+    return `${Number(raw).toFixed(0)}%`
+  }
+
+  function formatRegimeDisplay(raw, runtimeSnap) {
+    const rs = (runtimeSnap && runtimeSnap.runtime_state) || {}
+    const regime = rs.regime || {}
+    if (regime.regime_display) return regime.regime_display
+    if (runtimeSnap && runtimeSnap.regime_display) return runtimeSnap.regime_display
+    return displayText(raw, 'Monitoring regime formation')
   }
 
   function escapeHtml(text) {
@@ -1518,9 +1541,9 @@
           <div class="glass-card">
             <h2>Market Mood & Govt Intel</h2>
             <div class="mood-grid">
-              <div class="mood-item"><span>Global</span><strong>${escapeHtml(displayText(mood.global_mood, 'Unknown'))}</strong></div>
-              <div class="mood-item"><span>India</span><strong>${escapeHtml(displayText(mood.india_outlook, 'Unknown'))}</strong></div>
-              <div class="mood-item"><span>Retail</span><strong>${escapeHtml(displayText(mood.retail_mood, 'Unknown'))}</strong></div>
+              <div class="mood-item"><span>Global</span><strong>${escapeHtml(displayText(mood.global_mood, 'Confidence building'))}</strong></div>
+              <div class="mood-item"><span>India</span><strong>${escapeHtml(displayText(mood.india_outlook, 'Confidence building'))}</strong></div>
+              <div class="mood-item"><span>Retail</span><strong>${escapeHtml(displayText(mood.retail_mood, 'Awaiting evaluation sample'))}</strong></div>
               <div class="mood-item"><span>AI Confidence</span><strong>${escapeHtml(displayText(mood.confidence_level, 'N/A'))}</strong></div>
             </div>
             <div style="margin-top:14px; font-size:11px; color:#A3B3C8; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;">
@@ -2153,11 +2176,16 @@
       return;
     }
 
+    const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
     const dbStats = data.db_stats || { total_predictions: 0 };
     const metrics = data.metrics_all_time || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
     const lcCal = data.lifecycle_calibration || (data.calibration_dashboard || {}).lifecycle_calibration || {};
     const lcStatus = data.lifecycle_status || {};
-    const winRate = lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate || 0);
+    const winRateLabel = formatWinRateDisplay(runtimeSnap, metrics, lcCal);
+    const winRateNumeric = (runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.win_rate != null)
+      ? runtimeSnap.calibration_summary.win_rate
+      : (lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate || 0));
+    const winRateConfident = !!(runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.statistically_confident);
     const lossRate = lcCal.loss_rate != null ? lcCal.loss_rate : (metrics.total_evaluated ? ((metrics.losses || 0) / metrics.total_evaluated * 100) : 0);
     const evaluated = lcCal.total_evaluated != null ? lcCal.total_evaluated : (metrics.total_evaluated || 0);
     const profitFactor = lcCal.profit_factor != null ? lcCal.profit_factor : (metrics.profit_factor || 0);
@@ -2179,7 +2207,7 @@
           </div>
           <div class="stat-big-card">
             <div class="stat-big-label">Win Rate</div>
-            <div class="stat-big-value ${winRate >= 60 ? 'green' : winRate >= 40 ? 'yellow' : 'red'}">${Number(winRate).toFixed(0)}%</div>
+            <div class="stat-big-value ${winRateConfident ? (winRateNumeric >= 60 ? 'green' : winRateNumeric >= 40 ? 'yellow' : 'red') : 'muted'}">${escapeHtml(winRateLabel)}</div>
             <div class="stat-big-sub">${metrics.wins || 0}W / ${metrics.losses || 0}L</div>
           </div>
           <div class="stat-big-card">
@@ -2396,7 +2424,10 @@
     }
     const period = resolveHistoryPeriod(data);
     const stats = period.stats || {};
-    const winRate = stats.win_rate || 0;
+    const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
+    const winRateLabel = formatWinRateDisplay(runtimeSnap, stats, stats);
+    const winRateNumeric = stats.win_rate || 0;
+    const winRateConfident = (Number(stats.wins || 0) + Number(stats.losses || 0)) >= 5;
     let html = `
       <div class="period-selector" style="margin-top:12px;">
         <button type="button" class="period-btn ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
@@ -2415,7 +2446,7 @@
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00E676;">${stats.wins || 0}</div></div>
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#FF3D00;">${stats.losses || 0}</div></div>
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${stats.pending || 0}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00E676' : winRate >= 40 ? '#ffaa00' : '#FF3D00'};">${winRate.toFixed(0)}%</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRateConfident ? (winRateNumeric >= 60 ? '#00E676' : winRateNumeric >= 40 ? '#ffaa00' : '#FF3D00') : '#8B949E'};">${escapeHtml(winRateLabel)}</div></div>
         </div>
       </div>
     `;

@@ -310,6 +310,45 @@
     return panelContentHashes[panelId] !== previousHash;
   }
 
+  function formatMetricDisplay(value, kind) {
+    if (value === null || value === undefined || value === '') {
+      if (kind === 'win_rate') return 'Awaiting statistical confidence';
+      if (kind === 'regime') return 'Monitoring regime formation';
+      if (kind === 'percent') return 'Confidence building';
+      return 'Awaiting evaluation sample';
+    }
+    if (typeof value === 'string') {
+      const t = value.trim();
+      if (!t || t.toLowerCase() === 'none' || t.toLowerCase() === 'unknown' || t === '—' || t === '—%') {
+        if (kind === 'win_rate') return 'Awaiting statistical confidence';
+        if (kind === 'regime') return 'Monitoring regime formation';
+        return 'Awaiting evaluation sample';
+      }
+      if (t.includes('Awaiting') || t.includes('Confidence') || t.includes('Insufficient') || t.includes('Monitoring')) {
+        return t;
+      }
+    }
+    if (kind === 'win_rate' && typeof value === 'number') {
+      return `${Number(value).toFixed(1)}%`;
+    }
+    return String(value);
+  }
+
+  function getRuntimeStateFields() {
+    const snap = state || {};
+    const rs = snap.runtime_state || {};
+    return {
+      lifecycle: rs.lifecycle || {},
+      regime: rs.regime || {},
+      winRate: rs.win_rate || {},
+      predictionCounts: rs.prediction_counts || {},
+      snapshotFreshness: rs.snapshot_freshness || {},
+      intelligenceStatus: rs.intelligence_status || {},
+      qualityScore: rs.quality_score || {},
+      calibrationSummary: snap.calibration_summary || {},
+    };
+  }
+
   function formatTimestamp() {
     const iso = state && state.generated_at;
     if (!iso) return '—';
@@ -432,5 +471,7 @@
     getExportAge,
     getPanelBanner,
     invalidateCache,
+    formatMetricDisplay,
+    getRuntimeStateFields,
   };
 })(window);

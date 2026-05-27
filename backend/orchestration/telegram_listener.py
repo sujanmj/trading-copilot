@@ -326,7 +326,7 @@ def _do_scan():
     msg += f"Total signals: {data.get('total_signals', 0)}\n\n"
 
     if ultra:
-        msg += "💎 <b>ULTRA SIGNALS:</b>\n"
+        msg += "💎 <b>High Conviction Signals:</b>\n"
         for s in ultra[:5]:
             sign = '+' if s.get('change_percent', 0) >= 0 else ''
             msg += f"• {s.get('ticker')} ({s.get('direction')}): {sign}{s.get('change_percent', 0):.2f}%, vol {s.get('volume_ratio', 0):.1f}x\n"

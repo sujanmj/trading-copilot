@@ -178,6 +178,11 @@ def publish_active_snapshot(
 
         atomic_write_json(ACTIVE_SNAPSHOT_FILE, payload)
         _cycle_publish_guard[guard_key] = now_ts
+        try:
+            from backend.runtime.snapshot_freshness_monitor import record_collector_heartbeat
+            record_collector_heartbeat('intelligence', status='published', detail=snapshot_id)
+        except Exception:
+            pass
         _log.info('[SNAPSHOT] published v%s %s cycle=%s source=%s', new_version, snapshot_id, resolved_cycle, source)
         return payload
 
@@ -217,6 +222,23 @@ def snapshot_age_minutes() -> Optional[int]:
 
 
 def snapshot_health() -> dict:
+    try:
+        from backend.runtime.snapshot_freshness_monitor import evaluate_snapshot_freshness
+        fresh = evaluate_snapshot_freshness()
+        if fresh:
+            return {
+                'score': fresh.get('freshness_score', 0),
+                'stale': fresh.get('stale', True),
+                'warnings': fresh.get('warnings') or [],
+                'age_minutes': fresh.get('age_minutes'),
+                'active_snapshot_id': fresh.get('active_snapshot_id'),
+                'snapshot_version': fresh.get('snapshot_version'),
+                'degraded': fresh.get('degraded'),
+                'suppress_confidence': fresh.get('suppress_confidence'),
+                'block_elite_outputs': fresh.get('block_elite_outputs'),
+            }
+    except Exception:
+        pass
     age = snapshot_age_minutes()
     snap = load_active_snapshot()
     score = 100

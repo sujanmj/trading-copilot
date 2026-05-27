@@ -24,6 +24,8 @@ SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 ELITE_ALERTS_FILE = DATA_DIR / 'high_conviction_alerts.json'
 
 DEFAULT_OPPS_LIMIT = int(os.environ.get('TELEGRAM_OPPS_LIMIT', '10'))
+MAX_WATCHLIST_ITEMS = 5
+MIN_RANK_CONVICTION_DELTA = 0.8
 MAX_INTEL_AGE_HOURS = 24
 ACTIVE_STATES = frozenset({'ACTIVE', 'PENDING'})
 MIN_RANK_SCORE = 5.5
@@ -356,6 +358,74 @@ def _rank_score(
         if _confidence_score(item.get('confidence')) >= 4:
             penalties += 1.5
     return max(0.0, base - penalties)
+
+
+def _correlation_key(item: dict) -> str:
+    """Bucket correlated setups (same sector + action) for dedupe."""
+    sector = str(item.get('sector') or 'unknown').upper().split()[0][:12]
+    action = str(item.get('action') or item.get('category') or 'WATCH').upper()
+    logic = str(item.get('logic') or item.get('signal_type') or '').lower()
+    theme = 'momentum' if any(t in logic for t in ('breakout', 'volume', 'scanner')) else 'macro'
+    return f'{sector}|{action}|{theme}'
+
+
+def _dedupe_correlated(items: List[dict]) -> List[dict]:
+    """Keep highest conviction per correlated bucket."""
+    best: Dict[str, dict] = {}
+    order: List[str] = []
+    for item in items:
+        key = _correlation_key(item)
+        score = float(item.get('_rank_score') or 0)
+        prev = best.get(key)
+        if prev is None or score > float(prev.get('_rank_score') or 0):
+            if key not in best:
+                order.append(key)
+            best[key] = item
+    return [best[k] for k in order if k in best]
+
+
+def _apply_conviction_delta_filter(items: List[dict]) -> List[dict]:
+    """Require minimum score gap between consecutive ranks — reduce alert fatigue."""
+    if len(items) <= 1:
+        return items
+    out = [items[0]]
+    for item in items[1:]:
+        prev_score = float(out[-1].get('_rank_score') or 0)
+        cur_score = float(item.get('_rank_score') or 0)
+        if prev_score - cur_score < MIN_RANK_CONVICTION_DELTA and cur_score < MIN_RANK_SCORE:
+            continue
+        out.append(item)
+    return out
+
+
+def _suppress_low_information_repeats(items: List[dict]) -> List[dict]:
+    """Drop watch items with thin rationale or duplicate logic strings."""
+    seen_logic: set = set()
+    out: List[dict] = []
+    for item in items:
+        logic = str(item.get('logic') or '').strip().lower()
+        if len(logic) < 12 and not item.get('elite_verified'):
+            continue
+        sig = logic[:80]
+        if sig in seen_logic:
+            continue
+        seen_logic.add(sig)
+        out.append(item)
+    return out
+
+
+def _apply_alert_fatigue_caps(tiers: Dict[str, List[dict]]) -> Dict[str, List[dict]]:
+    """Enforce watchlist cap, correlated dedupe, and repeat suppression."""
+    watch = _suppress_low_information_repeats(_dedupe_correlated(list(tiers.get('watch') or [])))
+    watch = _apply_conviction_delta_filter(watch)[:MAX_WATCHLIST_ITEMS]
+    elite = list(tiers.get('elite') or [])
+    avoid = list(tiers.get('avoid') or [])
+    return {
+        'elite': elite,
+        'watch': watch,
+        'avoid': avoid,
+        'all': (elite + watch)[: max(1, int(DEFAULT_OPPS_LIMIT))],
+    }
 
 
 def _load_elite_index() -> Tuple[Dict[str, dict], bool]:
@@ -779,9 +849,10 @@ def rank_opportunities_tiered(
         elite = attach_elite_plans(elite, scanner_index, intel)
     except Exception:
         pass
-    return {
+    result = {
         'elite': elite[:cap],
         'watch': watch[:cap],
         'avoid': avoid[:cap],
         'all': (elite + watch)[: cap * 2],
     }
+    return _apply_alert_fatigue_caps(result)

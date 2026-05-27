@@ -1179,7 +1179,7 @@ def _build_runtime_snapshot() -> dict:
         },
     }
 
-    return sanitize_json_value({
+    payload = sanitize_json_value({
         'status': 'ok',
         'generated_at': generated_at,
         'active_snapshot_id': active_snapshot_meta.get('active_snapshot_id'),
@@ -1230,6 +1230,17 @@ def _build_runtime_snapshot() -> dict:
         'overnight_timeline': overnight_timeline,
         'india_next_open': india_next_open,
     })
+    try:
+        from backend.runtime.runtime_state import apply_to_snapshot_payload
+        return apply_to_snapshot_payload(payload)
+    except Exception:
+        return payload
+
+
+@app.get("/api/runtime/audit", dependencies=[Depends(verify_api_key)])
+def api_runtime_audit(limit: int = Query(50, ge=1, le=200)):
+    from backend.debug.runtime_audit import get_audit_report
+    return get_audit_report(limit=limit)
 
 
 def _build_health_payload() -> dict:

@@ -9,12 +9,12 @@ from typing import Any, Dict, List, Optional
 
 # Retail phrase → institutional replacement (case-insensitive word boundaries where possible)
 PHRASE_MAP = [
-    (r'\bULTRA\s+today\b', 'leadership concentration today'),
+    (r'\bULTRA\s+today\b', 'High Conviction leadership today'),
     (r'\btop\s+movers?\b', 'relative strength leaders'),
     (r'\bmomentum\s+spam\b', 'broad participation extension'),
-    (r'\bULTRA\b', 'high-conviction anomaly'),
+    (r'\bscanner\s+ULTRA\b', 'High Conviction scanner signal'),
+    (r'\bULTRA\b', 'High Conviction'),
     (r'\btop\s+opportunities\b', 'priority setups'),
-    (r'\bscanner\s+ULTRA\b', 'scanner high-conviction'),
     (r'\bbull\s+run\b', 'risk-on extension'),
     (r'\bbear\s+market\b', 'risk-off regime'),
     (r'\bcrash\b', 'dislocation event'),
@@ -35,8 +35,22 @@ SECTOR_TONE = {
 }
 
 EMPTY_ELITE_MESSAGE = (
-    'No high-conviction opportunities detected. Capital preservation mode active.'
+    'No High Conviction setups detected. Capital Preservation mode active.'
 )
+
+DISPLAY_TIER_LABELS = {
+    'ELITE': 'High Conviction',
+    'WATCH': 'Watchlist',
+    'AVOID': 'Elevated Risk',
+    'MOMENTUM': 'Momentum Candidate',
+    'CONFLICT': 'Regime Conflict',
+    'PRESERVE': 'Capital Preservation',
+}
+
+
+def tier_display_label(tier: Optional[str]) -> str:
+    key = str(tier or '').upper().strip()
+    return DISPLAY_TIER_LABELS.get(key, tier or 'Watchlist')
 
 
 def apply_institutional_tone(text: str) -> str:

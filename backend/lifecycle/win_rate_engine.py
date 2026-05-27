@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+MIN_WIN_RATE_SAMPLE = 5
+AWAITING_CONFIDENCE_MSG = 'Awaiting statistical confidence'
+
 
 def win_rate_denominator(wins: int, losses: int) -> int:
     """Resolved outcomes that count toward win rate."""
@@ -40,7 +43,7 @@ def win_rate_from_metrics(metrics: Optional[Dict[str, Any]]) -> float:
     return compute_win_rate(metrics.get('wins', 0), metrics.get('losses', 0))
 
 
-def format_win_rate_line(metrics: Dict[str, Any], *, min_sample: int = 5) -> str:
+def format_win_rate_line(metrics: Dict[str, Any], *, min_sample: int = MIN_WIN_RATE_SAMPLE) -> str:
     """Telegram/HTML win-rate line using canonical formula."""
     wins = int(metrics.get('wins') or 0)
     losses = int(metrics.get('losses') or 0)
