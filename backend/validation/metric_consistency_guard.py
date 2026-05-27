@@ -8,41 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.lifecycle.win_rate_engine import (
-    compute_win_rate,
-    win_rate_denominator,
-)
-
-MIN_WIN_RATE_SAMPLE = 5
-AWAITING_CONFIDENCE_MSG = 'Awaiting statistical confidence'
-
-
-def format_win_rate_display(
-    wins: int,
-    losses: int,
-    *,
-    min_sample: int = MIN_WIN_RATE_SAMPLE,
-) -> Dict[str, Any]:
-    """Canonical win-rate display — never show fake percentages."""
-    denom = win_rate_denominator(wins, losses)
-    if denom < min_sample:
-        return {
-            'win_rate': None,
-            'win_rate_display': AWAITING_CONFIDENCE_MSG,
-            'win_rate_denominator': denom,
-            'statistically_confident': False,
-            'wins': int(wins or 0),
-            'losses': int(losses or 0),
-        }
-    wr = compute_win_rate(wins, losses)
-    return {
-        'win_rate': wr,
-        'win_rate_display': f'{wr:.1f}%',
-        'win_rate_denominator': denom,
-        'statistically_confident': True,
-        'wins': int(wins or 0),
-        'losses': int(losses or 0),
-    }
+from backend.metrics.canonical_metrics import AWAITING_CONFIDENCE_MSG, MIN_WIN_RATE_SAMPLE
+from backend.lifecycle.win_rate_engine import compute_win_rate, win_rate_denominator
 
 
 def _add(issues: List[str], code: str, detail: str) -> None:
@@ -103,6 +70,16 @@ def validate_metric_consistency(state: Optional[Dict[str, Any]] = None) -> Tuple
     pipe = str(lc.get('pipeline_status') or metrics.get('pipeline_status') or '').upper()
     if lc_state == 'MARKET_ACTIVE' and pipe in ('COMPLETE', 'POSTMARKET_EVAL', 'POST_MARKET'):
         _add(issues, 'lifecycle_pipeline_overlap', f'{lc_state}+{pipe}')
+
+    if lc_state == 'MARKET_ACTIVE' and lc.get('after_hours_mode'):
+        _add(issues, 'after_hours_market_active', 'MARKET_ACTIVE during after-hours mode')
+
+    if lc_state in ('AFTER_HOURS', 'WEEKEND', 'HOLIDAY', 'POST_MARKET') and pipe == 'COMPLETE' and lc_state == 'MARKET_ACTIVE':
+        _add(issues, 'impossible_lifecycle', f'{lc_state}+COMPLETE overlap')
+
+    fresh_display = str(fresh.get('age_display') or '')
+    if fresh_display.lower() in ('nonem', 'nullm', 'nonem old', 'nullm old'):
+        _add(issues, 'stale_none_formatting', fresh_display)
 
     regime = state.get('regime') or {}
     internal = str(regime.get('regime_internal') or regime.get('internal') or '')

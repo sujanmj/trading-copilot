@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pytz
 
 from backend.utils.config import ANALYSIS_STATE_FILE, DATA_DIR
+from backend.intelligence.institutional_language import is_high_conviction_strength
 
 IST = pytz.timezone('Asia/Kolkata')
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
@@ -192,12 +193,12 @@ def _volume_anomaly_boost(item: dict, scanner_index: Dict[str, dict]) -> float:
         boost += 1.5
     elif vol_ratio >= 2:
         boost += 0.8
-    if 'ULTRA' in strength:
+    if is_high_conviction_strength(strength):
         boost += 1.5
     elif 'STRONG' in strength:
         boost += 0.8
     logic = str(item.get('logic') or item.get('signal_type') or '').upper()
-    if 'ULTRA' in logic:
+    if is_high_conviction_strength(logic) or 'HIGH CONVICTION' in logic:
         boost += 0.5
     return boost
 
@@ -415,17 +416,22 @@ def _suppress_low_information_repeats(items: List[dict]) -> List[dict]:
 
 
 def _apply_alert_fatigue_caps(tiers: Dict[str, List[dict]]) -> Dict[str, List[dict]]:
-    """Enforce watchlist cap, correlated dedupe, and repeat suppression."""
+    """Enforce watchlist cap, correlated dedupe, repeat suppression, and clustering."""
     watch = _suppress_low_information_repeats(_dedupe_correlated(list(tiers.get('watch') or [])))
     watch = _apply_conviction_delta_filter(watch)[:MAX_WATCHLIST_ITEMS]
     elite = list(tiers.get('elite') or [])
     avoid = list(tiers.get('avoid') or [])
-    return {
+    base = {
         'elite': elite,
         'watch': watch,
         'avoid': avoid,
         'all': (elite + watch)[: max(1, int(DEFAULT_OPPS_LIMIT))],
     }
+    try:
+        from backend.intelligence.watchlist_cluster import apply_cluster_to_tiers
+        return apply_cluster_to_tiers(base)
+    except Exception:
+        return base
 
 
 def _load_elite_index() -> Tuple[Dict[str, dict], bool]:
@@ -461,7 +467,7 @@ def _align_display_confidence(item: dict, elite_index: Dict[str, dict]) -> dict:
         return item
 
     item['elite_verified'] = False
-    if raw_conf in ('HIGH', 'ULTRA'):
+    if raw_conf in ('HIGH',) or is_high_conviction_strength(raw_conf):
         item['display_confidence'] = 'WATCH'
         item['below_elite_threshold'] = True
         item['confidence_note'] = 'Below elite threshold (>72%)'
@@ -548,7 +554,9 @@ def _load_intel_opportunities(intel: dict) -> List[dict]:
 
 
 def _load_scanner_ultra_candidates() -> List[dict]:
-    """Seed ranked pool with scanner ULTRA anomalies (still subject to elite gates)."""
+    """Seed ranked pool with high-conviction scanner anomalies (still subject to elite gates)."""
+    from backend.intelligence.institutional_language import is_high_conviction_strength, normalize_strength_label
+
     if not SCANNER_FILE.exists():
         return []
     try:
@@ -559,24 +567,25 @@ def _load_scanner_ultra_candidates() -> List[dict]:
     for sig in data.get('top_signals') or []:
         if not isinstance(sig, dict):
             continue
-        if str(sig.get('strength') or '').upper() != 'ULTRA':
+        if not is_high_conviction_strength(sig.get('strength')):
             continue
         ticker = str(sig.get('ticker') or '').upper()
         if not ticker:
             continue
+        label = normalize_strength_label(sig.get('strength'), sig.get('direction'))
         out.append(_normalize_opp({
             'symbol': ticker,
             'ticker': ticker,
             'action': 'WATCH',
             'confidence': 'MEDIUM',
             'logic': (
-                f"Scanner ULTRA · vol {sig.get('volume_ratio', '?')}x · "
+                f"Scanner {label} · vol {sig.get('volume_ratio', '?')}x · "
                 f"{sig.get('change_percent', 0)}% move"
             ),
             'sector': sig.get('sector'),
-            'signal_type': 'scanner_ultra',
+            'signal_type': 'scanner_high_conviction',
             'display_tier': 'WATCH',
-        }, 'scanner_ultra'))
+        }, 'scanner_high_conviction'))
     return out
 
 
@@ -709,9 +718,9 @@ def _passes_watch_gate(item: dict, intel: dict, ctx: dict, scanner_index: Dict[s
         return False
     sym = str(item.get('symbol') or '').upper()
     scan = scanner_index.get(sym) or {}
-    if str(scan.get('strength') or '').upper() == 'ULTRA':
+    if is_high_conviction_strength(scan.get('strength')):
         return True
-    if str(item.get('signal_type') or '') == 'scanner_ultra':
+    if str(item.get('signal_type') or '') in ('scanner_high_conviction', 'scanner_ultra'):
         return True
     score = _rank_score(item, intel, _parse_ts(intel.get('timestamp')), ctx, scanner_index)
     return score >= MIN_RANK_SCORE * 0.45

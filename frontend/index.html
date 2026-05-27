@@ -1294,9 +1294,16 @@
   function formatDate(dateStr) {
     if (!dateStr) return ''
     try {
-      const d = new Date(dateStr)
-      return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+      const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00+05:30`)
+      return d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short' })
     } catch { return dateStr }
+  }
+
+  function journalDayBadge(entry) {
+    if (window.RuntimeManager && RuntimeManager.getJournalDayBadge) {
+      return RuntimeManager.getJournalDayBadge(entry && entry.date)
+    }
+    return (entry && entry.day_type) || '—'
   }
 
   function formatPostMortem(text) {
@@ -1386,10 +1393,13 @@
     }
   }
 
-  function getScannerUltraSignals() {
+  function getScannerHighConvictionSignals() {
     const scanner = loadJson(files.scanner);
     if (!scanner || !Array.isArray(scanner.top_signals)) return [];
-    return scanner.top_signals.filter((s) => String(s.strength || '').toUpperCase() === 'ULTRA').slice(0, 6);
+    return scanner.top_signals.filter((s) => {
+      const strength = String(s.strength || '').toUpperCase();
+      return strength === 'ULTRA' || strength.includes('HIGH CONVICTION') || strength.includes('VERY STRONG');
+    }).slice(0, 6);
   }
 
   function renderOpportunityCard(o, opts) {
@@ -1487,16 +1497,19 @@
 
     let oppsHtml = '';
     if (opps.length === 0) {
-      const ultra = getScannerUltraSignals();
+      const ultra = getScannerHighConvictionSignals();
       if (ultra.length > 0) {
-        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">WATCH signals available — scanner ULTRA below elite conviction threshold.</div>`;
+        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">WATCH signals available — scanner high-conviction below elite threshold.</div>`;
         ultra.forEach((s) => {
+          const strengthLabel = String(s.direction || '').toUpperCase().includes('BEAR')
+            ? 'VERY STRONG BEARISH'
+            : 'VERY STRONG BULLISH';
           oppsHtml += renderOpportunityCard({
             symbol: s.ticker,
             ticker: s.ticker,
             action: 'WATCH',
             confidence: 'MEDIUM',
-            logic: `Scanner ULTRA · ${s.direction || '—'} · vol ${Number(s.volume_ratio || 0).toFixed(1)}x · ${Number(s.change_percent || 0).toFixed(2)}%`,
+            logic: `Scanner ${strengthLabel} · vol ${Number(s.volume_ratio || 0).toFixed(1)}x · ${Number(s.change_percent || 0).toFixed(2)}%`,
             display_tier: 'WATCH',
           }, { fallbackLogic: 'Scanner anomaly — not elite-verified.' });
         });
@@ -1686,12 +1699,15 @@
     const topSignals = data.top_signals || []
     
     let leftHtml = '';
-    const ultraSignals = topSignals.filter(s => s.strength === 'ULTRA')
+    const highConvictionSignals = topSignals.filter((s) => {
+      const strength = String(s.strength || '').toUpperCase();
+      return strength === 'ULTRA' || strength.includes('HIGH CONVICTION') || strength.includes('VERY STRONG');
+    })
     const strongSignals = topSignals.filter(s => s.strength === 'STRONG')
     
-    if (ultraSignals.length > 0) {
-      leftHtml += '<h2 style="color:#cc88ff; font-size:10px; margin: 10px 0;">💎 ULTRA SIGNALS</h2>'
-      ultraSignals.slice(0, 6).forEach(s => { leftHtml += renderSignalRow(s, 'ultra') })
+    if (highConvictionSignals.length > 0) {
+      leftHtml += '<h2 style="color:#cc88ff; font-size:10px; margin: 10px 0;">💎 HIGH CONVICTION SIGNALS</h2>'
+      highConvictionSignals.slice(0, 6).forEach(s => { leftHtml += renderSignalRow(s, 'ultra') })
     }
     if (strongSignals.length > 0) {
       leftHtml += '<h2 style="color:#00E676; font-size:10px; margin: 16px 0 10px 0;">🔥 STRONG SIGNALS</h2>'
@@ -2557,7 +2573,7 @@
     const copyId = `journalCopy${idx}`
     let html = `<div class="journal-card" data-date="${escapeHtml(entry.date || '')}">`
     html += `<div class="journal-card-head"><div><div class="journal-date">${formatDate(entry.date)}</div></div>`
-    html += `<span class="journal-day-badge">${escapeHtml(entry.day_type || '—')}</span></div>`
+    html += `<span class="journal-day-badge">${escapeHtml(journalDayBadge(entry))}</span></div>`
     html += `<div class="journal-kv">`
     html += `<span class="journal-k">Regime</span><span class="journal-v">${escapeHtml(entry.regime || '—')}</span>`
     html += `<span class="journal-k">Best signal</span><span class="journal-v win">${escapeHtml(entry.best_signal || '—')}</span>`
@@ -2606,7 +2622,9 @@
   function refreshHistoryJournalEntries(data, journalMsg) {
     const shell = document.getElementById('historyJournalShell')
     if (!shell) return false
-    const entries = (data.intelligence_journal || {}).entries || []
+    const entries = window.RuntimeManager && RuntimeManager.sortJournalEntries
+      ? RuntimeManager.sortJournalEntries((data.intelligence_journal || {}).entries || [])
+      : ((data.intelligence_journal || {}).entries || [])
     if (entries.length === 0) {
       shell.innerHTML = `<div class="calib-insufficient">${escapeHtml(journalMsg)}</div>`
     } else {
@@ -2638,7 +2656,9 @@
     }
 
     const journal = data.intelligence_journal || {}
-    const entries = journal.entries || []
+    const entries = window.RuntimeManager && RuntimeManager.sortJournalEntries
+      ? RuntimeManager.sortJournalEntries(journal.entries || [])
+      : (journal.entries || [])
     let html = ''
     html += runtimeTimestampHtml(`${data.today_weekday || ''} ${data.today_date || ''}`.trim())
     html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`

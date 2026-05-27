@@ -253,27 +253,25 @@ def intel_age_hours(intel):
 
 
 def stale_warning(intel):
+    """Single stale/session notice — suppressed when canonical runtime says idle."""
     try:
-        from backend.utils.market_hours import get_operational_status
-        op = get_operational_status()
-        if op.get('expect_quiet_collectors'):
-            return "🌙 <i>Night mode — awaiting pre-market intelligence cycle</i>\n\n"
+        from backend.runtime.runtime_state import get_runtime_state
+        rs = get_runtime_state()
+        session = rs.get('session') or {}
+        if session.get('after_hours_mode'):
+            msg = session.get('session_message') or 'After-hours intelligence mode active'
+            return f"🌙 <i>{msg}</i>\n"
+        fresh = rs.get('snapshot_freshness') or {}
+        if fresh.get('stale'):
+            age = fresh.get('age_display') or 'freshness unavailable'
+            return f"⚠️ <i>Snapshot stale — {age}</i>\n"
+        if session.get('session_status') in ('WEEKEND', 'HOLIDAY'):
+            return f"🌙 <i>{session.get('session_display') or 'Market closed'}</i>\n"
     except Exception:
         pass
     hours = intel_age_hours(intel)
-    if hours is not None and hours > 2:
-        try:
-            from backend.utils.market_hours import get_operational_status, get_watchdog_config
-            op = get_operational_status()
-            if not op.get('market_hours'):
-                return "🌙 <i>Night mode — awaiting pre-market intelligence cycle</i>\n\n"
-            wd = get_watchdog_config()
-            threshold_h = float(wd.get('stale_threshold_seconds') or 7200) / 3600.0
-            if hours <= threshold_h:
-                return ''
-        except Exception:
-            pass
-        return f"⚠️ Analysis may be stale — last updated {hours:.1f} hours ago\n\n"
+    if hours is not None and hours > 3:
+        return f"⚠️ <i>Analysis age {hours:.1f}h — verify before acting</i>\n"
     return ''
 
 
@@ -399,10 +397,11 @@ def format_opps(opps_list, *, tier_label=None):
 
 
 def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
-    """Format ELITE / WATCH / AVOID — never false-empty when scanner ULTRA exists."""
+    """Format ELITE / WATCH / AVOID — compressed institutional tiers."""
     watch = _list((tiers or {}).get('watch'))
     avoid = _list((tiers or {}).get('avoid'))
     elite = _list((tiers or {}).get('elite'))
+    compressed = str((tiers or {}).get('watch_compressed') or '').strip()
 
     if not watch and not avoid and not (include_elite and elite):
         try:
@@ -411,6 +410,7 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
             watch = _list(refill.get('watch'))
             avoid = _list(refill.get('avoid'))
             elite = _list(refill.get('elite'))
+            compressed = str(refill.get('watch_compressed') or '').strip()
         except Exception:
             pass
 
@@ -420,9 +420,12 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
         if block:
             sections.append(block)
     if watch:
-        block = format_opps(watch, tier_label='👀 WATCH')
-        if block:
-            sections.append(block)
+        if compressed:
+            sections.append(f"👀 <b>WATCH</b>\n<i>{compressed}</i>")
+        else:
+            block = format_opps(watch, tier_label='👀 WATCH')
+            if block:
+                sections.append(block)
     if avoid:
         block = format_opps(avoid, tier_label='🔴 AVOID')
         if block:
@@ -464,6 +467,7 @@ def build_compressed_summary(intel):
             apply_institutional_tone,
             format_compressed_leaders,
             format_compressed_risks,
+            format_executive_summary,
             institutional_regime_label,
         )
     except Exception:
@@ -471,8 +475,15 @@ def build_compressed_summary(intel):
         format_compressed_leaders = None  # type: ignore
         format_compressed_risks = None  # type: ignore
         institutional_regime_label = lambda x: x  # type: ignore
+        format_executive_summary = None  # type: ignore
 
     stale = stale_warning(intel)
+    try:
+        from backend.runtime.runtime_state import get_runtime_state
+        after_hours = bool((get_runtime_state().get('session') or {}).get('after_hours_mode'))
+    except Exception:
+        after_hours = False
+
     mood = _dict(intel.get('market_mood'))
     sectors = _dict(intel.get('sector_rotation'))
     risks = _list(intel.get('risks_and_avoids'))
@@ -515,14 +526,17 @@ def build_compressed_summary(intel):
     except (TypeError, ValueError):
         conf_line = _text(conf_raw, 'N/A')
 
-    return (
-        f"{stale}📋 <b>EXECUTIVE SUMMARY</b>\n\n"
-        f"<b>MARKET REGIME:</b>\n{regime}\n\n"
-        f"<b>LEADERS:</b>\n{leaders}\n\n"
-        f"<b>RISKS:</b>\n{risks_line}\n\n"
-        f"<b>MARKET BIAS:</b>\n{bias}\n\n"
-        f"<b>CONFIDENCE:</b>\n{conf_line}"
+    body = format_executive_summary(
+        regime=regime,
+        leaders=leaders,
+        risks=risks_line,
+        bias=bias,
+        confidence=conf_line,
+        after_hours=after_hours,
+    ) if format_executive_summary else (
+        f"Regime: {regime}\nLeadership: {leaders}\nRisks: {risks_line}\nBias: {bias}\nConfidence: {conf_line}"
     )
+    return f"{stale}📋 <b>EXECUTIVE SUMMARY</b>\n\n{apply_institutional_tone(body)}"
 
 
 def format_risks(risks_list):
@@ -552,13 +566,7 @@ def build_msg1_header(intel):
     sources_text = str(sources_used) if sources_used is not None else '8'
 
     return f"""{stale}🧠 <b>UNIFIED MARKET INTELLIGENCE</b>
-━━━━━━━━━━━━━━━━━━━━
-
-📅 <i>{ts_str}</i>
-📊 System Confidence: <b>{confidence}</b>
-📡 Sources Parsed: <b>{sources_text}/8</b>
-
-<i>📨 Sending full JSON-parsed analysis...</i>"""
+📅 <i>{ts_str}</i> · Confidence <b>{confidence}</b> · Sources <b>{sources_text}/8</b>"""
 
 
 def build_msg2_summary_govt(intel):
@@ -589,7 +597,7 @@ def build_msg4_calibration_opps_top5(intel):
         except Exception:
             opps_text = "<i>Monitoring for ranked setups.</i>"
 
-    return f"🎯 <b>SELF-CALIBRATION</b>\n\n{cal}\n\n━━━━━━━━━━━━━━━━━━━━\n\n💎 <b>TOP OPPORTUNITIES (1-5)</b>\n\n{opps_text}"
+    return f"🎯 <b>SELF-CALIBRATION</b>\n\n{cal}\n\n💎 <b>TOP OPPORTUNITIES</b>\n\n{opps_text}"
 
 
 def build_msg5_opps_top10_risks(intel):

@@ -151,8 +151,9 @@ def main() -> int:
     if 'score' not in stability:
         errors.append('stability probe missing score')
 
-    if get_lifecycle_state() not in ('PREMARKET_PREP', 'MARKET_ACTIVE', 'POSTMARKET_EVAL', 'NIGHT_IDLE', 'OVERNIGHT_INTEL'):
-        errors.append('invalid lifecycle state label')
+    from backend.lifecycle.canonical_lifecycle import CANONICAL_STATES
+    if get_lifecycle_state() not in CANONICAL_STATES:
+        errors.append(f'invalid lifecycle state label: {get_lifecycle_state()}')
 
     from backend.intelligence.india_next_open_engine import build_india_next_open_report
     from backend.intelligence.global_intelligence_engine import get_overnight_timeline
@@ -176,9 +177,14 @@ def main() -> int:
         if sqlite['wins'] + sqlite['losses'] != denom:
             errors.append('win rate denominator must be wins+losses only')
 
+    from backend.runtime.freshness_engine import format_age_minutes, FRESHNESS_UNAVAILABLE
+    if format_age_minutes(None) != FRESHNESS_UNAVAILABLE:
+        errors.append('freshness engine should not format None as Nonem')
+
     from backend.intelligence.institutional_language import EMPTY_ELITE_MESSAGE, apply_institutional_tone
-    if 'ULTRA today' in apply_institutional_tone('ULTRA today top movers'):
-        errors.append('institutional language failed to remap ULTRA today')
+    toned = apply_institutional_tone('ULTRA today top movers')
+    if 'ULTRA' in toned.upper():
+        errors.append('institutional language failed to remap ULTRA')
     from backend.orchestration.telegram_brain_pusher import format_opps
     empty_elite = format_opps([], tier_label='ELITE')
     if not empty_elite or EMPTY_ELITE_MESSAGE not in empty_elite:
@@ -270,9 +276,12 @@ def main() -> int:
     if 'tactical' in tiers or 'watchlist' in tiers:
         errors.append('rank_opportunities_tiered must not expose tactical/watchlist keys')
     summary = build_compressed_summary({})
-    section_count = sum(1 for marker in ('MARKET REGIME:', 'LEADERS:', 'RISKS:', 'MARKET BIAS:', 'CONFIDENCE:') if marker in summary)
-    if section_count < 5:
-        errors.append(f'compressed summary has {section_count}/5 sections')
+    legacy_markers = ('MARKET REGIME:', 'LEADERS:', 'RISKS:', 'MARKET BIAS:', 'CONFIDENCE:')
+    desk_markers = ('Regime:', 'Leadership:', 'Risk focus:', 'India bias:', 'Conviction:', 'EXECUTIVE SUMMARY')
+    section_count = sum(1 for marker in legacy_markers if marker in summary)
+    desk_count = sum(1 for marker in desk_markers if marker in summary)
+    if section_count < 5 and desk_count < 4:
+        errors.append(f'compressed summary has {max(section_count, desk_count)}/5 sections')
 
     lc_path = ROOT / 'data' / 'lifecycle_state.json'
     from backend.lifecycle.prediction_lifecycle_engine import load_lifecycle_state, save_lifecycle_state

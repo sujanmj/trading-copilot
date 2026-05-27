@@ -129,6 +129,41 @@ def _load_quality_score(freshness: dict) -> Dict[str, Any]:
     }
 
 
+def _load_collector_activity(freshness: dict) -> Dict[str, Any]:
+    """Collector heartbeats — separate from market lifecycle."""
+    try:
+        from backend.runtime.snapshot_freshness_monitor import _load_heartbeats
+        hb = _load_heartbeats()
+        sources = hb.get('sources') or {}
+        active = sum(1 for s in sources.values() if s.get('status') == 'ok')
+        return {
+            'collectors_active': bool(freshness.get('collectors_active', active > 0)),
+            'collector_count': len(sources),
+            'collector_ok_count': active,
+            'collector_issues': freshness.get('collector_issues') or [],
+        }
+    except Exception:
+        return {
+            'collectors_active': bool(freshness.get('collectors_active')),
+            'collector_count': 0,
+            'collector_ok_count': 0,
+            'collector_issues': freshness.get('collector_issues') or [],
+        }
+
+
+def _load_session_status(lifecycle: dict, operational: dict) -> Dict[str, Any]:
+    lc_state = lifecycle.get('lifecycle_state')
+    return {
+        'session_status': lc_state,
+        'session_display': lifecycle.get('lifecycle_display'),
+        'market_session_open': bool(lifecycle.get('market_session_open')),
+        'after_hours_mode': bool(lifecycle.get('after_hours_mode')),
+        'suppress_trading_language': bool(lifecycle.get('suppress_trading_language')),
+        'session_message': lifecycle.get('session_message') or operational.get('display_message'),
+        'operational_mode': operational.get('operational_mode'),
+    }
+
+
 def _load_intelligence_status(freshness: dict) -> Dict[str, Any]:
     stale = bool(freshness.get('stale'))
     degraded = bool(freshness.get('degraded'))
@@ -164,10 +199,8 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
 
     from backend.runtime.snapshot_freshness_monitor import evaluate_snapshot_freshness
     from backend.lifecycle.canonical_lifecycle import sync_with_scheduler
-    from backend.validation.metric_consistency_guard import (
-        format_win_rate_display,
-        validate_metric_consistency,
-    )
+    from backend.validation.metric_consistency_guard import validate_metric_consistency
+    from backend.metrics.canonical_metrics import format_win_rate_display
     from backend.utils.market_hours import get_operational_status
 
     freshness = evaluate_snapshot_freshness()
@@ -176,8 +209,11 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         lifecycle = dict(lifecycle)
         lifecycle['lifecycle_state'] = 'DEGRADED'
         lifecycle['lifecycle_display'] = 'Degraded — Stale or Conflicting State'
+        lifecycle['suppress_trading_language'] = True
 
     operational = get_operational_status()
+    session = _load_session_status(lifecycle, operational)
+    collector_activity = _load_collector_activity(freshness)
     metrics = _load_metrics()
     counts = _load_prediction_counts(metrics)
     win_rate = format_win_rate_display(counts['wins'], counts['losses'])
@@ -200,6 +236,8 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         'generated_at': _now_iso(),
         'authority': 'runtime_state',
         'lifecycle': lifecycle,
+        'session': session,
+        'collector_activity': collector_activity,
         'market_phase': operational.get('period'),
         'operational': operational,
         'regime': regime,
@@ -248,7 +286,11 @@ def apply_to_snapshot_payload(snapshot: dict) -> dict:
     runtime_panel['lifecycle_state'] = lc.get('lifecycle_state')
     runtime_panel['lifecycle_display'] = lc.get('lifecycle_display')
     runtime_panel['snapshot_freshness_minutes'] = fresh.get('age_minutes')
+    runtime_panel['snapshot_freshness_display'] = fresh.get('age_display')
     runtime_panel['snapshot_stale'] = fresh.get('stale')
+    runtime_panel['after_hours_mode'] = (state.get('session') or {}).get('after_hours_mode')
+    runtime_panel['session_status'] = (state.get('session') or {}).get('session_status')
+    runtime_panel['collectors_active'] = (state.get('collector_activity') or {}).get('collectors_active')
     runtime_panel['quality_score'] = (state.get('quality_score') or {}).get('quality_score')
     panels['runtime'] = runtime_panel
     out['panels'] = panels

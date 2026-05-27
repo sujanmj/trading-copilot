@@ -1,5 +1,6 @@
 """
 Institutional market language — replace retail phrasing with professional tone.
+Bloomberg-style desk notes for executive summaries.
 """
 
 from __future__ import annotations
@@ -7,12 +8,16 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+# Internal scanner tier still stored as ULTRA in DB — never surface in user copy
+HIGH_CONVICTION_INTERNAL = frozenset({'ULTRA', 'HIGH_CONVICTION', 'HIGH CONVICTION'})
+
 # Retail phrase → institutional replacement (case-insensitive word boundaries where possible)
 PHRASE_MAP = [
     (r'\bULTRA\s+today\b', 'High Conviction leadership today'),
     (r'\btop\s+movers?\b', 'relative strength leaders'),
     (r'\bmomentum\s+spam\b', 'broad participation extension'),
     (r'\bscanner\s+ULTRA\b', 'High Conviction scanner signal'),
+    (r'\bULTRA\s+SIGNALS?\b', 'High Conviction signals'),
     (r'\bULTRA\b', 'High Conviction'),
     (r'\btop\s+opportunities\b', 'priority setups'),
     (r'\bbull\s+run\b', 'risk-on extension'),
@@ -38,6 +43,8 @@ EMPTY_ELITE_MESSAGE = (
     'No High Conviction setups detected. Capital Preservation mode active.'
 )
 
+AFTER_HOURS_HEADER = 'After-hours intelligence mode active — observation only, no execution framing.'
+
 DISPLAY_TIER_LABELS = {
     'ELITE': 'High Conviction',
     'WATCH': 'Watchlist',
@@ -46,6 +53,30 @@ DISPLAY_TIER_LABELS = {
     'CONFLICT': 'Regime Conflict',
     'PRESERVE': 'Capital Preservation',
 }
+
+
+def is_high_conviction_strength(strength: Optional[str]) -> bool:
+    s = str(strength or '').upper().strip()
+    return s in HIGH_CONVICTION_INTERNAL or s.startswith('VERY STRONG')
+
+
+def normalize_strength_label(strength: Optional[str], direction: Optional[str] = None) -> str:
+    """Map legacy ULTRA tier to institutional labels."""
+    s = str(strength or '').upper().strip()
+    d = str(direction or '').upper().strip()
+    if s == 'ULTRA':
+        if 'BEAR' in d:
+            return 'VERY STRONG BEARISH'
+        if 'BULL' in d:
+            return 'VERY STRONG BULLISH'
+        return 'HIGH CONVICTION'
+    if s == 'STRONG':
+        if 'BEAR' in d:
+            return 'STRONG BREAKDOWN'
+        if 'BULL' in d:
+            return 'STRONG BREAKOUT'
+        return 'HIGH MOMENTUM'
+    return apply_institutional_tone(s.replace('_', ' '))
 
 
 def tier_display_label(tier: Optional[str]) -> str:
@@ -84,6 +115,28 @@ def institutional_regime_label(regime: str) -> str:
     return mapping.get(key, apply_institutional_tone(regime.replace('_', ' ')))
 
 
+def format_executive_summary(
+    *,
+    regime: str,
+    leaders: str,
+    risks: str,
+    bias: str,
+    confidence: str,
+    after_hours: bool = False,
+) -> str:
+    """Bloomberg-style compressed desk note."""
+    regime_line = institutional_regime_label(regime)
+    header = AFTER_HOURS_HEADER if after_hours else 'Desk note — session intelligence'
+    return (
+        f"{header}\n"
+        f"Regime: {regime_line}\n"
+        f"Leadership: {leaders}\n"
+        f"Risk focus: {risks}\n"
+        f"India bias: {apply_institutional_tone(bias)}\n"
+        f"Conviction: {confidence}"
+    )
+
+
 def format_compressed_leaders(sectors: Dict[str, Any]) -> str:
     sectors = sectors if isinstance(sectors, dict) else {}
     bullish = sectors.get('bullish') or []
@@ -107,3 +160,7 @@ def format_compressed_risks(risks: List[Any]) -> str:
 
 def elite_empty_block() -> str:
     return f"<i>🛡️ {EMPTY_ELITE_MESSAGE}</i>"
+
+
+def after_hours_notice_html() -> str:
+    return f"<i>🌙 {AFTER_HOURS_HEADER}</i>\n\n"

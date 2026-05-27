@@ -1,13 +1,13 @@
 """
 Canonical lifecycle states — single authority for market/session phase.
 
-States: PRE_MARKET, MARKET_ACTIVE, POST_MARKET, CLOSED, DEGRADED
+States: PRE_MARKET, MARKET_ACTIVE, POST_MARKET, AFTER_HOURS, WEEKEND, HOLIDAY, DEGRADED
 No overlapping MARKET_ACTIVE + COMPLETE + POST_MARKET.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any, Dict, Optional, Tuple
 
 import pytz
@@ -17,26 +17,53 @@ IST = pytz.timezone('Asia/Kolkata')
 PRE_MARKET = 'PRE_MARKET'
 MARKET_ACTIVE = 'MARKET_ACTIVE'
 POST_MARKET = 'POST_MARKET'
-CLOSED = 'CLOSED'
+AFTER_HOURS = 'AFTER_HOURS'
+WEEKEND = 'WEEKEND'
+HOLIDAY = 'HOLIDAY'
 DEGRADED = 'DEGRADED'
 
-CANONICAL_STATES = frozenset({PRE_MARKET, MARKET_ACTIVE, POST_MARKET, CLOSED, DEGRADED})
+CANONICAL_STATES = frozenset({
+    PRE_MARKET, MARKET_ACTIVE, POST_MARKET, AFTER_HOURS, WEEKEND, HOLIDAY, DEGRADED,
+})
 
 # Legacy market_hours labels → canonical
 _LEGACY_MAP = {
     'PREMARKET_PREP': PRE_MARKET,
+    'PRE_MARKET': PRE_MARKET,
     'MARKET_ACTIVE': MARKET_ACTIVE,
     'POSTMARKET_EVAL': POST_MARKET,
-    'OVERNIGHT_INTEL': POST_MARKET,
-    'NIGHT_IDLE': CLOSED,
+    'POST_MARKET': POST_MARKET,
+    'OVERNIGHT_INTEL': AFTER_HOURS,
+    'NIGHT_IDLE': AFTER_HOURS,
+    'CLOSED': AFTER_HOURS,
+    'AFTER_HOURS': AFTER_HOURS,
+    'WEEKEND': WEEKEND,
+    'HOLIDAY': HOLIDAY,
 }
 
 # Mutually exclusive terminal pipeline labels that must not overlap MARKET_ACTIVE
 _PIPELINE_CONFLICTS = frozenset({'COMPLETE', 'POSTMARKET_EVAL', 'POST_MARKET'})
 
+# IST session boundaries (NSE)
+_MARKET_OPEN = time(9, 15)
+_MARKET_ACTIVE_END = time(15, 29)
+_POST_MARKET_START = time(15, 31)
+_AFTER_HOURS_START = time(17, 0)
+_PRE_MARKET_START = time(8, 30)
+_NIGHT_START = time(23, 0)
+
 
 def _now(now: Optional[datetime] = None) -> datetime:
-    return now or datetime.now(IST)
+    n = now or datetime.now(IST)
+    return n.astimezone(IST) if n.tzinfo else IST.localize(n)
+
+
+def _is_holiday(now: datetime) -> bool:
+    try:
+        from backend.utils.market_hours import is_market_holiday
+        return bool(is_market_holiday(now))
+    except Exception:
+        return False
 
 
 def _market_period(now: Optional[datetime] = None) -> str:
@@ -46,20 +73,36 @@ def _market_period(now: Optional[datetime] = None) -> str:
 
 def resolve_base_lifecycle(now: Optional[datetime] = None) -> str:
     """Map IST clock to canonical lifecycle (before degradation overlay)."""
+    now = _now(now)
+    if _is_holiday(now):
+        return HOLIDAY
+    if now.weekday() >= 5:
+        return WEEKEND
     period = _market_period(now)
     mapping = {
         'pre_market': PRE_MARKET,
         'market': MARKET_ACTIVE,
-        'after_hours': POST_MARKET,
-        'night': CLOSED,
-        'weekend': CLOSED,
+        'post_market': POST_MARKET,
+        'after_hours': AFTER_HOURS,
+        'night': AFTER_HOURS,
     }
-    return mapping.get(period, CLOSED)
+    return mapping.get(period, AFTER_HOURS)
 
 
 def from_legacy_label(label: Optional[str]) -> str:
     key = str(label or '').upper().strip()
-    return _LEGACY_MAP.get(key, key if key in CANONICAL_STATES else CLOSED)
+    return _LEGACY_MAP.get(key, key if key in CANONICAL_STATES else AFTER_HOURS)
+
+
+def is_after_hours_mode(state: Optional[str] = None, *, now: Optional[datetime] = None) -> bool:
+    """True when trading/execution language should be suppressed."""
+    st = from_legacy_label(state) if state else resolve_base_lifecycle(now)
+    return st in (AFTER_HOURS, POST_MARKET, WEEKEND, HOLIDAY)
+
+
+def is_market_active(state: Optional[str] = None, *, now: Optional[datetime] = None) -> bool:
+    st = from_legacy_label(state) if state else resolve_base_lifecycle(now)
+    return st == MARKET_ACTIVE
 
 
 def apply_degradation(
@@ -90,7 +133,22 @@ def validate_transition(
         return False, f'market_active_pipeline_conflict:{pipe}'
     if cur == POST_MARKET and nxt == MARKET_ACTIVE:
         return False, 'cannot_reopen_from_post_market_same_day'
+    if cur in (AFTER_HOURS, WEEKEND, HOLIDAY) and nxt == MARKET_ACTIVE:
+        return False, 'cannot_be_market_active_after_close'
     return True, 'ok'
+
+
+def lifecycle_display(state: str) -> str:
+    display = {
+        PRE_MARKET: 'Pre-Market Analysis',
+        MARKET_ACTIVE: 'Market Active',
+        POST_MARKET: 'Post-Market Evaluation',
+        AFTER_HOURS: 'After-Hours Intelligence Mode',
+        WEEKEND: 'Weekend — Market Closed',
+        HOLIDAY: 'Holiday — Market Closed',
+        DEGRADED: 'Degraded — Stale or Conflicting State',
+    }
+    return display.get(from_legacy_label(state), state)
 
 
 def build_canonical_lifecycle(
@@ -109,21 +167,24 @@ def build_canonical_lifecycle(
         metric_conflicts=metric_conflicts,
     )
     ok, reason = validate_transition(state, state, pipeline_status=pipeline_status)
-    display = {
-        PRE_MARKET: 'Pre-Market Analysis',
-        MARKET_ACTIVE: 'Market Active',
-        POST_MARKET: 'Post-Market Evaluation',
-        CLOSED: 'Market Closed',
-        DEGRADED: 'Degraded — Stale or Conflicting State',
-    }
+    after_hours = is_after_hours_mode(state)
     return {
         'lifecycle_state': state,
         'lifecycle_base': base,
-        'lifecycle_display': display.get(state, state),
+        'lifecycle_display': lifecycle_display(state),
         'transition_valid': ok,
         'transition_reason': reason,
         'market_period': _market_period(now),
         'pipeline_status': pipeline_status,
+        'after_hours_mode': after_hours,
+        'suppress_trading_language': after_hours or state == DEGRADED,
+        'session_message': (
+            'After-hours intelligence mode active'
+            if after_hours and state != DEGRADED
+            else None
+        ),
+        'collectors_may_run': True,
+        'market_session_open': base == MARKET_ACTIVE,
     }
 
 
@@ -132,6 +193,7 @@ def sync_with_scheduler() -> Dict[str, Any]:
     now = _now()
     snapshot_stale = False
     orchestrator_unhealthy = False
+    metric_conflicts = False
     pipeline_status = None
     try:
         from backend.intelligence.active_snapshot import snapshot_health
@@ -153,5 +215,6 @@ def sync_with_scheduler() -> Dict[str, Any]:
         now=now,
         snapshot_stale=snapshot_stale,
         orchestrator_unhealthy=orchestrator_unhealthy,
+        metric_conflicts=metric_conflicts,
         pipeline_status=pipeline_status,
     )

@@ -146,7 +146,9 @@ def send_alert(text, alert_key=None):
 
 
 def send_ultra_signal(signal):
-    """Send alert for ULTRA scanner signal"""
+    """Send alert for high-conviction scanner signal (legacy ULTRA tier)."""
+    from backend.intelligence.institutional_language import normalize_strength_label
+
     ticker = signal.get('ticker', '?')
     sector = signal.get('sector', '?')
     direction = signal.get('direction', '?')
@@ -154,6 +156,7 @@ def send_ultra_signal(signal):
     volume_ratio = signal.get('volume_ratio', 0)
     price = signal.get('price', 0)
     signals = signal.get('signals', [])
+    label = normalize_strength_label(signal.get('strength', 'HIGH CONVICTION'), direction)
     
     # Dedupe: same ticker + direction within 4 hours
     today = datetime.now().date().isoformat()
@@ -166,15 +169,15 @@ def send_ultra_signal(signal):
     emoji = "🚀" if direction == 'BULLISH' else "💥"
     sign = "+" if change >= 0 else ""
     
-    text = f"""<b>{emoji} ULTRA ALERT</b>
-<b>{ticker}</b> ({sector})
+    text = f"""<b>{emoji} HIGH CONVICTION ALERT</b>
+<b>{ticker}</b> ({sector}) · {label}
 {sign}{change:.2f}% | <b>{volume_ratio:.1f}x avg volume</b>
 Price: Rs.{price:,.2f}
 
 <b>Signals:</b> {' + '.join(signals)}
 <b>Direction:</b> {direction}
 
-<i>Multiple strong signals stacked - act with conviction</i>"""
+<i>Stacked confirmation — verify against regime before sizing</i>"""
     
     success = send_message(text)
     if success:

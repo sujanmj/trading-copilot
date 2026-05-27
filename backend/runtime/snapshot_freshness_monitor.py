@@ -70,6 +70,7 @@ def _snapshot_sla_seconds() -> int:
 def evaluate_snapshot_freshness() -> Dict[str, Any]:
     """Assess active snapshot + collector heartbeats against SLA."""
     from backend.intelligence.active_snapshot import get_active_snapshot_meta, snapshot_health
+    from backend.runtime.freshness_engine import format_freshness_display, merge_freshness_payload
 
     snap_health = snapshot_health() or {}
     meta = get_active_snapshot_meta() or {}
@@ -99,7 +100,7 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
     block_elite = stale
     quality_penalty = 0.35 if stale else (0.15 if degraded else 0.0)
 
-    return {
+    result = {
         'fresh': not stale,
         'stale': stale,
         'degraded': degraded,
@@ -113,7 +114,9 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'collector_issues': collector_issues,
         'sla_seconds': _snapshot_sla_seconds(),
         'warnings': list(snap_health.get('warnings') or []) + collector_issues,
+        'collectors_active': len(collector_issues) < len(DEFAULT_SLA_SECONDS),
     }
+    return merge_freshness_payload(result, timestamp=meta.get('published_at'))
 
 
 def apply_stale_degradation(intelligence: dict, freshness: Optional[dict] = None) -> dict:

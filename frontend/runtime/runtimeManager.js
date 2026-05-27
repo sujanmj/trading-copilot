@@ -310,6 +310,51 @@
     return panelContentHashes[panelId] !== previousHash;
   }
 
+  function formatFreshnessDisplay(minutes, displayFromState) {
+    if (displayFromState && displayFromState !== 'freshness unavailable') {
+      return displayFromState;
+    }
+    if (minutes == null || minutes === '' || Number.isNaN(Number(minutes))) {
+      return 'freshness unavailable';
+    }
+    const n = Number(minutes);
+    if (!Number.isFinite(n) || n < 0) return 'freshness unavailable';
+    if (n < 60) return `${n}m`;
+    return `${Math.floor(n / 60)}h ${n % 60}m`;
+  }
+
+  function getIstDateKey(dateLike) {
+    if (!dateLike) return '';
+    try {
+      const d = new Date(dateLike);
+      return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    } catch (e) {
+      return String(dateLike).slice(0, 10);
+    }
+  }
+
+  function getJournalDayBadge(dateStr) {
+    const rs = (state && state.runtime_state) || {};
+    const generated = rs.generated_at || (state && state.generated_at);
+    const todayKey = getIstDateKey(generated || new Date().toISOString());
+    const entryKey = getIstDateKey(dateStr);
+    if (!entryKey) return '—';
+    if (entryKey === todayKey) return 'Today';
+    const yesterday = new Date(todayKey);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayKey = getIstDateKey(yesterday.toISOString());
+    if (entryKey === yesterdayKey) return 'Yesterday';
+    return entryKey;
+  }
+
+  function sortJournalEntries(entries) {
+    return (entries || []).slice().sort((a, b) => {
+      const da = getIstDateKey(a && a.date);
+      const db = getIstDateKey(b && b.date);
+      return db.localeCompare(da);
+    });
+  }
+
   function formatMetricDisplay(value, kind) {
     if (value === null || value === undefined || value === '') {
       if (kind === 'win_rate') return 'Awaiting statistical confidence';
@@ -385,7 +430,12 @@
     const op = state && state.operational;
     const fresh = getFreshnessState();
     const snapVer = (state && state.snapshot_version) || runtimePanel.snapshot_version;
-    const snapFresh = runtimePanel.snapshot_freshness_minutes;
+    const rs = snap.runtime_state || {};
+    const freshPanel = rs.snapshot_freshness || {};
+    const snapFreshRaw = runtimePanel.snapshot_freshness_display
+      || freshPanel.age_display
+      || runtimePanel.snapshot_freshness_minutes;
+    const snapFresh = formatFreshnessDisplay(runtimePanel.snapshot_freshness_minutes, snapFreshRaw);
     let statusTag = '';
     if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
       statusTag = ` · <span class="runtime-idle">${op.display_status}</span>`;
@@ -395,7 +445,7 @@
       statusTag = ' · <span class="runtime-stale">snapshot stale</span>';
     }
     const snapTag = snapVer != null ? ` · snap v${snapVer}` : '';
-    const freshTag = snapFresh != null ? ` · ${snapFresh}m old` : '';
+    const freshTag = snapFresh && snapFresh !== 'freshness unavailable' ? ` · ${snapFresh} old` : (snapFresh === 'freshness unavailable' ? ' · freshness unavailable' : '');
     const suffix = extra ? ` · ${extra}` : '';
     return `<div class="timestamp runtime-ts">Updated: ${ts}${snapTag}${freshTag}${suffix}${statusTag}</div>`;
   }
@@ -472,6 +522,10 @@
     getPanelBanner,
     invalidateCache,
     formatMetricDisplay,
+    formatFreshnessDisplay,
+    getJournalDayBadge,
+    sortJournalEntries,
+    getIstDateKey,
     getRuntimeStateFields,
   };
 })(window);

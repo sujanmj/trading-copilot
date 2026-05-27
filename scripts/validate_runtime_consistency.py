@@ -110,6 +110,31 @@ def main() -> int:
     if ok_t:
         errors.append('lifecycle should reject MARKET_ACTIVE + COMPLETE overlap')
 
+    from backend.runtime.freshness_engine import format_age_minutes, FRESHNESS_UNAVAILABLE, validate_timestamp_order
+    if format_age_minutes(None) != FRESHNESS_UNAVAILABLE:
+        errors.append('freshness None must not format as Nonem/nullm')
+    ok_ts, ts_issue = validate_timestamp_order('2099-01-01T00:00:00+05:30', '2020-01-01T00:00:00+05:30')
+    if ok_ts:
+        errors.append('future timestamp should fail validation')
+
+    from backend.intelligence.institutional_language import apply_institutional_tone
+    if 'ULTRA' in apply_institutional_tone('scanner ULTRA signal').upper():
+        errors.append('ULTRA contamination in institutional output')
+
+    session = state.get('session') or {}
+    if session.get('after_hours_mode') and lc.get('lifecycle_state') == 'MARKET_ACTIVE':
+        errors.append('after-hours market_active violation')
+
+    if len({lc.get('lifecycle_state'), session.get('session_status')}) > 1 and session.get('session_status') != lc.get('lifecycle_state'):
+        if session.get('session_status') and lc.get('lifecycle_state') not in ('DEGRADED',):
+            errors.append('multiple lifecycle states in runtime_state')
+
+    from backend.intelligence.watchlist_cluster import cluster_watchlist
+    sample = [{'symbol': f'T{i}', 'logic': 'breakout watch'} for i in range(6)]
+    clusters = cluster_watchlist(sample)
+    if len(clusters) > 2:
+        errors.append('watchlist cluster exceeds max 2 clusters')
+
     print('=== RUNTIME CONSISTENCY VALIDATION ===')
     print(f"Lifecycle: {lc.get('lifecycle_state')} ({lc.get('lifecycle_display')})")
     print(f"Regime: {regime.get('regime_display')}")

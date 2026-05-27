@@ -318,16 +318,17 @@ def _do_scan():
         data = json.load(f)
 
     top = data.get('top_signals', [])
-    ultra = [s for s in top if s.get('strength') == 'ULTRA']
+    from backend.intelligence.institutional_language import is_high_conviction_strength
+    high_conv = [s for s in top if is_high_conviction_strength(s.get('strength'))]
     strong = [s for s in top if s.get('strength') == 'STRONG'][:5]
 
     msg = f"📊 <b>Scanner Results</b>\n"
     msg += f"Scanned: {data.get('total_scanned', 0)} stocks\n"
     msg += f"Total signals: {data.get('total_signals', 0)}\n\n"
 
-    if ultra:
+    if high_conv:
         msg += "💎 <b>High Conviction Signals:</b>\n"
-        for s in ultra[:5]:
+        for s in high_conv[:5]:
             sign = '+' if s.get('change_percent', 0) >= 0 else ''
             msg += f"• {s.get('ticker')} ({s.get('direction')}): {sign}{s.get('change_percent', 0):.2f}%, vol {s.get('volume_ratio', 0):.1f}x\n"
         msg += "\n"

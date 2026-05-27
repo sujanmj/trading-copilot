@@ -289,8 +289,12 @@ def snapshot_stale_warning() -> str:
     health = snapshot_health()
     if not health.get('stale'):
         return ''
-    age = health.get('age_minutes')
-    return f"⚠️ <i>Snapshot may be stale — last refresh {age}m ago</i>\n\n"
+    try:
+        from backend.runtime.freshness_engine import format_age_minutes
+        age = format_age_minutes(health.get('age_minutes'))
+    except Exception:
+        age = 'freshness unavailable'
+    return f"⚠️ <i>Snapshot may be stale — {age}</i>\n\n"
 
 
 def get_canonical_intelligence() -> dict:

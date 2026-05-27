@@ -19,7 +19,7 @@ def _volatility_regime(ctx: dict) -> str:
 def assess_signal_quality(item: dict, *, ctx: Optional[dict] = None, scanner_row: Optional[dict] = None) -> Dict[str, Any]:
     """
     Rules:
-    - ULTRA scanner ≠ elite trade
+    - High-conviction scanner ≠ elite trade
     - strong momentum without ML confirmation = watch only
     - volatility regime reduces confidence automatically
     """
@@ -42,10 +42,11 @@ def assess_signal_quality(item: dict, *, ctx: Optional[dict] = None, scanner_row
     tier_cap = 'ELITE'
     notes = []
 
-    if strength == 'ULTRA' and not elite_verified:
+    from backend.intelligence.institutional_language import is_high_conviction_strength
+    if is_high_conviction_strength(strength) and not elite_verified:
         tier_cap = 'WATCH'
         quality_score -= 0.15
-        notes.append('ULTRA scanner momentum — watch only until ML confirms')
+        notes.append('High-conviction scanner momentum — watch only until ML confirms')
 
     if ml_val is None or ml_val < 72:
         if tier_cap == 'ELITE':
