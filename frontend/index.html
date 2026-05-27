@@ -32,6 +32,10 @@
       background: #3d2a00; color: #ffb347; padding: 8px 12px; font-size: 11px;
       border-bottom: 1px solid #ffb347; text-align: center;
     }
+    .runtime-error-boundary {
+      background: #4a1515; color: #ff8a8a; padding: 8px 12px; font-size: 11px;
+      border-bottom: 1px solid #ff6b6b; text-align: center;
+    }
     webview { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; border: none; }
     .ai-panel { flex: 0 0 40%; background: #0d0d0d; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
     .ai-header { background: #111; padding: 10px 15px; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -879,11 +883,15 @@
 
   <script src="runtime/uiState.js"></script>
   <script src="runtime/snapshotAdapter.js"></script>
+  <script src="runtime/runtimeErrorBoundary.js"></script>
   <script src="runtime/runtimeManager.js"></script>
   <script src="components/DailyReviewPanel.js"></script>
   <script src="components/AIOpsPanel.js"></script>
   <script>
   window.__startupErrors = window.__startupErrors || []
+  if (window.RuntimeErrorBoundary) {
+    RuntimeErrorBoundary.install()
+  }
   window.addEventListener('error', (event) => {
     window.__startupErrors.push({
       message: event.message,
@@ -1198,7 +1206,35 @@
 
   let lastRenderedPanelHashes = {}
 
+  function clearTabLoadingPlaceholders(message) {
+    const subtitle = message || 'Initializing intelligence runtime…'
+    Object.keys(PANEL_TAB_MAP).forEach((panelId) => {
+      const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+      if (!el) return
+      if (isPanelPending(panelId)) {
+        el.innerHTML = staleIntelligenceFallbackHtml(panelId) || emptyStateHtml('Initializing intelligence runtime…', subtitle)
+      }
+    })
+    setGlobalLoading(false)
+    console.log('[Hydration] shell placeholders cleared')
+  }
+
+  function renderShellImmediately() {
+    console.log('[GUI] app boot — render shell')
+    clearTabLoadingPlaceholders('Snapshot warming up — tabs remain interactive.')
+    updateRuntimeDegradedBanner()
+  }
+
   function renderAllTabs(opts) {
+    if (window.RuntimeErrorBoundary) {
+      return RuntimeErrorBoundary.runSafe('renderAllTabs', () => renderAllTabsInner(opts), () => {
+        clearTabLoadingPlaceholders('Runtime delayed — using degraded intelligence cache')
+      })
+    }
+    return renderAllTabsInner(opts)
+  }
+
+  function renderAllTabsInner(opts) {
     opts = opts || {}
     const panelHashes = (window.RuntimeManager && RuntimeManager.getPanelHashes)
       ? RuntimeManager.getPanelHashes()
@@ -1274,6 +1310,7 @@
         console.error('[Hydration] renderChatHistory failed:', e)
       }
     }, 150)
+    console.log('[Hydration] render complete (all tabs scheduled)')
   }
 
   function resetUiOverlays() {
@@ -3388,7 +3425,9 @@
 
 
   async function bootFrontend() {
+    console.log('[GUI] app boot')
     wireCoreUi()
+    renderShellImmediately()
     try {
       const params = new URLSearchParams(window.location.search)
       if (params.get('debug') === '1') toggleDebugOverlay(true)
@@ -3398,8 +3437,12 @@
           toggleDebugOverlay()
         }
       })
-      await bootstrapApiConfig()
-      console.log('[Hydration] hydration start — rendering shell')
+      if (window.RuntimeErrorBoundary) {
+        await RuntimeErrorBoundary.runSafeAsync('bootstrapApiConfig', () => bootstrapApiConfig())
+      } else {
+        await bootstrapApiConfig()
+      }
+      console.log('[Hydration] hydration start — rendering panels')
       renderAllTabs({ force: true })
       updateRuntimeDegradedBanner()
       if (window.RuntimeManager) {
@@ -3478,8 +3521,13 @@
         })
       }
     } catch (e) {
-      console.error('[bootFrontend]', e)
-      try { renderAllTabs() } catch (e2) { console.error('[bootFrontend] fallback render failed:', e2) }
+      console.error('[Hydration] hydration fail — bootFrontend', e)
+      if (window.RuntimeErrorBoundary) RuntimeErrorBoundary.showFallback(e.message || String(e))
+      try { renderAllTabs({ force: true }) } catch (e2) { console.error('[bootFrontend] fallback render failed:', e2) }
+      clearTabLoadingPlaceholders('Runtime delayed — using degraded intelligence cache')
+    } finally {
+      setGlobalLoading(false)
+      console.log('[Hydration] boot complete')
     }
   }
 

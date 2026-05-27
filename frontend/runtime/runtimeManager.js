@@ -137,13 +137,28 @@
   function createEmptyDegradedSnapshot(errorMsg) {
     return {
       status: 'degraded',
+      runtime_state: 'warming_up',
       generated_at: null,
       snapshot_id: null,
-      market_snapshot: {},
+      market_snapshot: {
+        executive_summary: null,
+        sector_rotation: { bullish: [], bearish: [] },
+        top_opportunities: [],
+        risk_list: [],
+        runtime_state: 'warming_up',
+      },
       exports: {},
       panels: {},
-      operational: { display_status: 'Runtime degraded', display_message: errorMsg || 'Using stale intelligence cache' },
+      operational: {
+        display_status: 'Runtime delayed',
+        display_message: errorMsg || 'Using degraded intelligence cache',
+      },
     };
+  }
+
+  function ensureLoadingCleared(source) {
+    setLoading(false);
+    console.log('[Hydration] loading false', source || 'ensure');
   }
 
   function applyEmptyDegradedFallback(seq, errorMsg) {
@@ -166,7 +181,7 @@
 
   function forceFinishHydration(reason) {
     console.warn('[Hydration] timeout — forceFinishHydration:', reason || 'watchdog');
-    setLoading(false);
+    ensureLoadingCleared('forceFinishHydration');
     if (!state) {
       applyEmptyDegradedFallback(++fetchSeq, reason || 'Runtime delayed — using degraded intelligence cache');
     } else {
@@ -669,7 +684,7 @@
       return state;
     } finally {
       inFlight = false;
-      setLoading(false);
+      ensureLoadingCleared('refresh-finally');
       if (!hydrationFinished && !opts.warmingBoot) {
         markHydrationFinished(!!refreshError || usingStaleCache);
       }
@@ -681,10 +696,11 @@
           hydrationComplete: true,
         });
       }
-      console.log('[RuntimeManager] refresh cycle complete', {
+      console.log('[Hydration] render complete cycle', {
         hasState: !!state,
         error: refreshError,
         staleCache: usingStaleCache,
+        phase: hydrationPhase,
       });
     }
   }
@@ -692,7 +708,7 @@
   function start(pollMs) {
     if (started) return;
     started = true;
-    console.log('[Hydration] hydration start');
+    console.log('[Hydration] hydration start (runtimeManager)');
     setHydrationPhase(HYDRATION_INITIALIZING);
     armHydrationWatchdog();
 
@@ -1200,6 +1216,7 @@
     HYDRATION_WARMING_UP,
     HYDRATION_READY,
     HYDRATION_DEGRADED,
+    ensureLoadingCleared,
     isSnapshotMissing,
     fetchWithTimeout,
     FETCH_TIMEOUT_MS,

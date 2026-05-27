@@ -66,6 +66,17 @@ EXCLUDE_DIR_NAMES = {
     "htmlcov",
     ".tox",
     ".npm",
+    ".next",
+    "tmp",
+    "logs",
+    "log",
+}
+
+# Never copy secret env files (keep .env.example).
+EXCLUDE_FILE_NAMES = {
+    ".env",
+    ".env.local",
+    ".env.production",
 }
 
 # Warn if snapshot exceeds this size (likely recursive inclusion).
@@ -152,6 +163,8 @@ def path_has_excluded_segment(rel_path: Path) -> bool:
 
 def should_exclude_file(name: str) -> bool:
     lower = name.lower()
+    if lower in EXCLUDE_FILE_NAMES:
+        return True
     if lower.endswith(EXCLUDE_FILE_SUFFIXES):
         return True
     if lower.endswith(".bak") or lower.endswith(".old"):
