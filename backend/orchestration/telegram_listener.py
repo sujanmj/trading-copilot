@@ -301,6 +301,17 @@ def _rebuild_canonical_snapshot() -> bool:
 
 def _do_refresh():
     """Heavy lifting for /refresh — force scanner, invalidate cache, rebuild snapshot."""
+    from backend.runtime.global_job_locks import duplicate_job_message, job_guard
+
+    with job_guard('aggregation', owner='telegram_refresh') as acquired:
+        if not acquired:
+            send_message(duplicate_job_message('aggregation'))
+            return
+        _do_refresh_body()
+
+
+def _do_refresh_body():
+    """Refresh pipeline body — must run under aggregation job_guard."""
     started = time.time()
     deadline = started + REFRESH_TIMEOUT_SEC
 
@@ -421,7 +432,13 @@ def cmd_refresh():
     run_in_background(_wrapped)
 
 def _do_scan():
-    run_module('stock_scanner')
+    from backend.runtime.global_job_locks import duplicate_job_message, job_guard
+
+    with job_guard('scanner', owner='cmd_scan') as acquired:
+        if not acquired:
+            send_message(duplicate_job_message('scanner'))
+            return
+        run_module('stock_scanner')
 
     scanner_file = DATA_DIR / 'scanner_data.json'
     if not scanner_file.exists():
@@ -559,52 +576,65 @@ def cmd_brief():
     def _do():
         cycle_id = ''
         try:
-            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+            from backend.runtime.global_job_locks import (
+                DEFAULT_TIMEOUT_SEC,
+                duplicate_job_message,
+                job_guard,
+                run_with_timeout,
+            )
             from backend.orchestration.telegram_outbound_guard import bind_cycle, clear_loading, new_cycle_id
             from backend.orchestration.delayed_loading import run_with_delayed_loading
 
-            cycle_id = new_cycle_id('brief')
-            bind_cycle('brief', cycle_id)
-
-            def _work():
-                sent = 0
-                try:
-                    from backend.orchestration import telegram_alert_engine as engine
-                    sent = engine.try_pre_market()
-                except Exception as exc:
-                    safe_print(f"[BRIEF] pre-market engine: {exc}")
-                if sent:
+            with job_guard('brief', owner='cmd_brief') as acquired:
+                if not acquired:
+                    send_message(duplicate_job_message('brief'), command='brief')
                     return
-                from backend.orchestration import telegram_brain_pusher as tbp
-                intel = tbp.normalize_intel(tbp.load_intel())
-                if intel:
-                    tbp.push_summary(command='brief', cycle_id=cycle_id)
-                else:
-                    send_message(
-                        '📋 <i>No brief available — run /refresh or retry during pre-market.</i>',
-                        command='brief',
-                        cycle_id=cycle_id,
-                    )
 
-            def _work_with_timeout():
-                with ThreadPoolExecutor(max_workers=1) as pool:
-                    fut = pool.submit(_work)
+                cycle_id = new_cycle_id('brief')
+                bind_cycle('brief', cycle_id)
+
+                def _work():
+                    sent = 0
                     try:
-                        fut.result(timeout=120)
-                    except FuturesTimeout:
+                        from backend.orchestration import telegram_alert_engine as engine
+                        sent = engine.try_pre_market()
+                    except Exception as exc:
+                        safe_print(f"[BRIEF] pre-market engine: {exc}")
+                    if sent:
+                        return
+                    from backend.orchestration import telegram_brain_pusher as tbp
+                    intel = tbp.normalize_intel(tbp.load_intel())
+                    if intel:
+                        tbp.push_summary(command='brief', cycle_id=cycle_id)
+                    else:
+                        send_message(
+                            '📋 <i>No brief available — run /refresh or retry during pre-market.</i>',
+                            command='brief',
+                            cycle_id=cycle_id,
+                        )
+
+                def _work_with_timeout():
+                    try:
+                        run_with_timeout(
+                            _work,
+                            job='brief',
+                            timeout=DEFAULT_TIMEOUT_SEC,
+                            owner='cmd_brief',
+                        )
+                    except TimeoutError:
                         send_message(
                             '⏱️ Brief timed out — use /summary for the latest desk note.',
                             command='brief',
                             cycle_id=cycle_id,
                         )
 
-            run_with_delayed_loading(
-                send_fn=send_message,
-                loading_text='📊 Building market brief...',
-                command='brief',
-                cycle_id=cycle_id,
-                work_fn=_work_with_timeout,
-            )
+                run_with_delayed_loading(
+                    send_fn=send_message,
+                    loading_text='📊 Building market brief...',
+                    command='brief',
+                    cycle_id=cycle_id,
+                    work_fn=_work_with_timeout,
+                )
         except Exception as e:
             send_message(
                 f'❌ Brief failed: {str(e)[:200]}',
@@ -665,6 +695,11 @@ def cmd_history():
 
 def cmd_brain_pusher(mode, status_msg=None):
     """Run brain pusher in-process with debounce guard (no duplicate status spam)."""
+    from backend.runtime.global_job_locks import duplicate_job_message, is_job_locked
+
+    if is_job_locked('brain'):
+        send_message(duplicate_job_message('brain'), command=mode)
+        return
 
     def _do():
         guard_key = None

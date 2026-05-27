@@ -1469,13 +1469,55 @@ def _build_health_payload() -> dict:
 @app.get("/api/runtime/snapshot", dependencies=[Depends(verify_api_key)])
 def api_market_snapshot():
     """Canonical GUI snapshot — market state + exports + panels, validated."""
-    return _build_gui_snapshot()
+    from backend.runtime.global_job_locks import DEFAULT_TIMEOUT_SEC, run_with_timeout
+
+    try:
+        return run_with_timeout(
+            _build_gui_snapshot,
+            job='aggregation',
+            timeout=DEFAULT_TIMEOUT_SEC,
+            owner='api_runtime_snapshot',
+        )
+    except TimeoutError as exc:
+        return _build_gui_snapshot_cached_fallback(str(exc))
 
 
 @app.get("/api/runtime_snapshot", dependencies=[Depends(verify_api_key)])
 def api_runtime_snapshot():
     """Legacy alias — same payload as /api/runtime/snapshot."""
-    return _build_gui_snapshot()
+    return api_market_snapshot()
+
+
+def _build_gui_snapshot_cached_fallback(reason: str = '') -> dict:
+    """Return degraded cached snapshot so the GUI always receives a response."""
+    warning = f'api_build_timeout: {reason[:120]}' if reason else 'api_build_timeout'
+    cached = None
+    try:
+        from backend.runtime.global_job_locks import load_committed_snapshot_dict
+        cached = load_committed_snapshot_dict()
+    except Exception:
+        pass
+
+    try:
+        payload = _build_runtime_snapshot()
+    except Exception:
+        payload = {
+            'data': {},
+            'panels': {},
+            'generated_at': datetime.now().isoformat(),
+        }
+
+    ms_raw = cached or {}
+    ms_dict = ms_raw.get('market_snapshot') if isinstance(ms_raw.get('market_snapshot'), dict) else ms_raw
+    payload['market_snapshot'] = ms_dict or {}
+    payload['snapshot_id'] = payload.get('snapshot_id') or ms_raw.get('snapshot_id')
+    payload['status'] = 'degraded'
+    warnings = list(payload.get('validation_warnings') or [])
+    warnings.extend([warning, 'stale_cache_response'])
+    payload['validation_warnings'] = warnings
+    payload['exports'] = dict(payload.get('data') or {})
+    payload.setdefault('generated_at', ms_raw.get('generated_at') or datetime.now().isoformat())
+    return payload
 
 
 def _build_gui_snapshot() -> dict:

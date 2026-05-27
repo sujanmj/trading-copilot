@@ -897,7 +897,8 @@ def _prepare_intel_from_snapshot(snap):
     return intel, raw_intel
 
 
-def _push_full_brain_impl(*, command='full', cycle_id=''):
+def _push_full_brain_body(*, command='full', cycle_id=''):
+    """Core brain render/send — caller owns job lock + timeout."""
     global _brain_stale_prefix
     cycle_id = _bind_snapshot_cycle(cycle_id)
 
@@ -944,6 +945,38 @@ def _push_full_brain_impl(*, command='full', cycle_id=''):
     safe_print("[BRAIN] Done.")
     _brain_stale_prefix = ''
     return True
+
+
+def _push_full_brain_impl(*, command='full', cycle_id=''):
+    from backend.runtime.global_job_locks import (
+        DEFAULT_TIMEOUT_SEC,
+        duplicate_job_message,
+        job_guard,
+        run_with_timeout,
+    )
+
+    with job_guard('brain', owner=command or 'full') as acquired:
+        if not acquired:
+            send_message(
+                duplicate_job_message('brain'),
+                command=command,
+                cycle_id=cycle_id or _bind_snapshot_cycle(''),
+            )
+            return False
+        try:
+            return run_with_timeout(
+                lambda: _push_full_brain_body(command=command, cycle_id=cycle_id),
+                job='brain',
+                timeout=DEFAULT_TIMEOUT_SEC,
+                owner=command or 'full',
+            )
+        except TimeoutError:
+            send_message(
+                '⏱️ Brain analysis timed out — use /summary for the latest desk note.',
+                command=command,
+                cycle_id=cycle_id or _bind_snapshot_cycle(''),
+            )
+            return False
 
 
 def _bind_snapshot_cycle(cycle_id: str = '') -> str:

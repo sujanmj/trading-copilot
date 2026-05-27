@@ -37,6 +37,25 @@ def run_snapshot_cycle(
 
     Collector steps are assumed complete when this runs after /refresh or scheduler tick.
     """
+    from backend.runtime.global_job_locks import duplicate_job_message, job_guard
+
+    with job_guard('aggregation', owner=trigger) as acquired:
+        if not acquired:
+            return {
+                'ok': False,
+                'trigger': trigger,
+                'error': 'aggregation_locked',
+                'message': duplicate_job_message('aggregation'),
+                'stages': [],
+            }
+        return _run_snapshot_cycle_body(trigger=trigger, force_refresh=force_refresh)
+
+
+def _run_snapshot_cycle_body(
+    *,
+    trigger: str = 'manual',
+    force_refresh: bool = True,
+) -> Dict[str, Any]:
     started = time.time()
     result: Dict[str, Any] = {
         'ok': False,

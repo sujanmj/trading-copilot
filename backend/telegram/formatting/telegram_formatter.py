@@ -417,7 +417,7 @@ def confirmation_phrase(kind: str = 'processing', *, command: str = '') -> str:
         if cmd in ('calibration', 'cal'):
             return '⏳ Calibration request already processing...'
         if cmd in ('brain', 'full', 'all'):
-            return '⏳ Brain analysis already processing...'
+            return '🧠 Analysis already running...'
         if cmd == 'action':
             return '⏳ Action plan request already processing...'
     phrases = {
