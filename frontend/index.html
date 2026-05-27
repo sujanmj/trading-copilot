@@ -28,6 +28,10 @@
     .broker-placeholder h2 { font-size: 20px; color: #555; }
     .loading-bar { position: absolute; top: 0; left: 0; right: 0; background: #1a1a2e; padding: 6px 12px; font-size: 11px; color: #00ff88; border-bottom: 1px solid #00ff88; z-index: 100; display: none; }
     .loading-bar.active { display: block; }
+    .runtime-degraded-banner {
+      background: #3d2a00; color: #ffb347; padding: 8px 12px; font-size: 11px;
+      border-bottom: 1px solid #ffb347; text-align: center;
+    }
     webview { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; border: none; }
     .ai-panel { flex: 0 0 40%; background: #0d0d0d; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
     .ai-header { background: #111; padding: 10px 15px; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -700,6 +704,7 @@
         <h3>🤖 AI Intelligence Hub</h3>
         <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
       </div>
+      <div id="runtimeDegradedBanner" style="display:none;"></div>
 
       <div class="tabs">
         <div class="tab active" data-tab="brain">🧠 Brain</div>
@@ -1080,15 +1085,32 @@
     return `<div class="panel-error-card"><strong>${escapeHtml(panelId)} panel</strong><p>${escapeHtml(msg)}</p></div>`
   }
 
+  function updateRuntimeDegradedBanner() {
+    const el = document.getElementById('runtimeDegradedBanner')
+    if (!el) return
+    const html = (window.RuntimeManager && RuntimeManager.runtimeDegradedBannerHtml)
+      ? RuntimeManager.runtimeDegradedBannerHtml()
+      : ''
+    if (html) {
+      el.innerHTML = html
+      el.style.display = 'block'
+    } else {
+      el.innerHTML = ''
+      el.style.display = 'none'
+    }
+  }
+
   function staleIntelligenceFallbackHtml(panelId) {
     const usingStale = window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache()
     const meta = window.RuntimeManager && RuntimeManager.getStaleCacheMeta ? RuntimeManager.getStaleCacheMeta() : null
     const ageText = meta && meta.ageMinutes != null ? `${meta.ageMinutes} min ago` : 'unknown'
     const lastErr = window.RuntimeManager && RuntimeManager.getLastFetchError ? RuntimeManager.getLastFetchError() : null
-    if (usingStale || lastErr) {
+    const degraded = window.RuntimeManager && RuntimeManager.getHydrationPhase
+      && RuntimeManager.getHydrationPhase() === RuntimeManager.HYDRATION_DEGRADED
+    if (usingStale || lastErr || degraded) {
       return emptyStateHtml(
-        '⚠ Stale intelligence cache',
-        `Last successful export: ${ageText}${lastErr ? ' · ' + lastErr : ''}`
+        '⚠ Runtime degraded',
+        `Using stale intelligence cache${ageText !== 'unknown' ? ' · last export ' + ageText : ''}${lastErr ? ' · ' + lastErr : ''}`
       )
     }
     const lcMsg = window.RuntimeManager
@@ -1232,6 +1254,8 @@
     maybeLoad('history', loadHistory)
 
     if (panelHashes) lastRenderedPanelHashes = { ...panelHashes }
+
+    updateRuntimeDegradedBanner()
 
     if (window.UiState) {
       UiState.restoreUiState(document)
@@ -3397,6 +3421,7 @@
             renderAllTabs({
               force: anyPending || !!(meta && (meta.failed || meta.staleCache || !meta || !meta.unchanged)),
             })
+            updateRuntimeDegradedBanner()
             if (debugOverlayOpen) renderDebugOverlay()
           } catch (e) {
             console.error('[Hydration] renderAllTabs subscriber failed:', e)
@@ -3414,10 +3439,14 @@
         renderAllTabs({ force: true })
         setTimeout(() => {
           const pending = Object.keys(PANEL_TAB_MAP).some((id) => isPanelPending(id))
-          if (pending) {
-            console.warn('[Hydration] boot safety render — panels still pending after timeout')
+          if (pending || !(window.RuntimeManager && RuntimeManager.isHydrationFinished && RuntimeManager.isHydrationFinished())) {
+            console.warn('[Hydration] boot safety render — panels still pending or hydration incomplete')
+            if (window.RuntimeManager && RuntimeManager.forceFinishHydration) {
+              RuntimeManager.forceFinishHydration('Boot safety timeout')
+            }
             renderAllTabs({ force: true })
           }
+          updateRuntimeDegradedBanner()
           setGlobalLoading(false)
         }, FETCH_TIMEOUT_MS + 2000)
       } else {

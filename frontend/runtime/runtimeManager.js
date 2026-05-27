@@ -33,6 +33,11 @@
   const STALE_FORCE_REFRESH_MS = 30000;
   const STALE_CACHE_KEY = 'trading_copilot_runtime_snapshot_v1';
   const STALE_CACHE_META_KEY = 'trading_copilot_runtime_snapshot_meta_v1';
+  const HYDRATION_WATCHDOG_MS = 20000;
+  const HYDRATION_BOOTING = 'BOOTING';
+  const HYDRATION_HYDRATING = 'HYDRATING';
+  const HYDRATION_READY = 'READY';
+  const HYDRATION_DEGRADED = 'DEGRADED';
   const subscribers = new Set();
   const panelHandlers = new Map();
 
@@ -42,6 +47,9 @@
   let loading = false;
   let usingStaleCache = false;
   let lastSuccessfulFetchAt = null;
+  let hydrationPhase = HYDRATION_BOOTING;
+  let hydrationWatchdogTimer = null;
+  let hydrationFinished = false;
 
   function stableHash(value) {
     const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -85,6 +93,73 @@
       panels: snapshot && snapshot.panels,
     };
     return stableHash({ panels, meta });
+  }
+
+  function setHydrationPhase(phase) {
+    hydrationPhase = phase || HYDRATION_DEGRADED;
+  }
+
+  function markHydrationFinished(degraded) {
+    hydrationFinished = true;
+    setHydrationPhase(degraded ? HYDRATION_DEGRADED : HYDRATION_READY);
+    if (hydrationWatchdogTimer) {
+      clearTimeout(hydrationWatchdogTimer);
+      hydrationWatchdogTimer = null;
+    }
+  }
+
+  function createEmptyDegradedSnapshot(errorMsg) {
+    return {
+      status: 'degraded',
+      generated_at: null,
+      snapshot_id: null,
+      market_snapshot: {},
+      exports: {},
+      panels: {},
+      operational: { display_status: 'Runtime degraded', display_message: errorMsg || 'Using stale intelligence cache' },
+    };
+  }
+
+  function applyEmptyDegradedFallback(seq, errorMsg) {
+    const empty = createEmptyDegradedSnapshot(errorMsg);
+    usingStaleCache = false;
+    const applied = applySnapshot(empty, seq, { force: true, degradedFallback: true });
+    if (applied && applied.ok) {
+      markHydrationFinished(true);
+      scheduleNotify({
+        unchanged: false,
+        hydrationComplete: true,
+        failed: true,
+        degradedFallback: true,
+        error: errorMsg,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  function forceFinishHydration(reason) {
+    console.warn('[RuntimeManager] forceFinishHydration:', reason || 'watchdog');
+    setLoading(false);
+    if (!state) {
+      applyEmptyDegradedFallback(++fetchSeq, reason || 'Hydration timeout — using degraded fallback');
+    } else {
+      markHydrationFinished(usingStaleCache || !!lastFetchError || state.status === 'degraded');
+      scheduleNotify({
+        unchanged: false,
+        hydrationComplete: true,
+        forced: true,
+        failed: !!(lastFetchError || usingStaleCache),
+        error: reason || lastFetchError,
+      });
+    }
+  }
+
+  function armHydrationWatchdog() {
+    if (hydrationWatchdogTimer) clearTimeout(hydrationWatchdogTimer);
+    hydrationWatchdogTimer = setTimeout(() => {
+      if (!hydrationFinished) forceFinishHydration('Hydration watchdog timeout');
+    }, HYDRATION_WATCHDOG_MS);
   }
 
   function setLoading(isLoading) {
@@ -283,6 +358,7 @@
       usingStaleCache = false;
       return false;
     }
+    markHydrationFinished(true);
     scheduleNotify({
       unchanged: false,
       hydrationComplete: true,
@@ -370,6 +446,11 @@
       hydrationComplete: true,
       normalized: !!normalizedState,
     };
+
+    const degraded = opts.degradedFallback || opts.staleCache || snapshot.status === 'degraded';
+    if (!hydrationFinished) {
+      markHydrationFinished(degraded || !!lastFetchError);
+    }
 
     if (unchanged && !opts.force) {
       scheduleNotify(notifyMeta);
@@ -496,6 +577,9 @@
       refreshError = msg;
       console.error('[RuntimeManager] refresh failed:', msg);
       staleCacheNotified = tryRestoreStaleCache(msg, seq);
+      if (!staleCacheNotified) {
+        staleCacheNotified = applyEmptyDegradedFallback(seq, msg);
+      }
       if (staleCacheNotified) {
         if (config.cache) config.cache.connected = true;
         if (typeof config.onConnectionChange === 'function') {
@@ -511,6 +595,9 @@
     } finally {
       inFlight = false;
       setLoading(false);
+      if (!hydrationFinished) {
+        markHydrationFinished(!!refreshError || usingStaleCache);
+      }
       if (refreshError && !staleCacheNotified) {
         scheduleNotify({
           unchanged: false,
@@ -530,6 +617,8 @@
   function start(pollMs) {
     if (started) return;
     started = true;
+    setHydrationPhase(HYDRATION_HYDRATING);
+    armHydrationWatchdog();
     const bootCached = loadSnapshotCache();
     if (bootCached) {
       usingStaleCache = true;
@@ -545,7 +634,9 @@
     refresh({ force: true }).catch((e) => {
       console.error('[RuntimeManager] initial refresh failed', e);
       if (!state) {
-        scheduleNotify({ unchanged: false, error: e.message, failed: true, hydrationComplete: true });
+        applyEmptyDegradedFallback(++fetchSeq, e.message || 'Initial refresh failed');
+      } else if (!hydrationFinished) {
+        forceFinishHydration(e.message || 'Initial refresh failed');
       }
     });
     pollTimer = setInterval(() => {
@@ -957,6 +1048,23 @@
     return lastFetchError;
   }
 
+  function runtimeDegradedBannerHtml() {
+    if (hydrationPhase === HYDRATION_READY && !usingStaleCache && !lastFetchError) return '';
+    const parts = ['⚠ Runtime degraded'];
+    if (usingStaleCache) parts.push('Using stale intelligence cache');
+    else if (lastFetchError) parts.push(lastFetchError);
+    else if (hydrationPhase === HYDRATION_DEGRADED) parts.push('Using stale intelligence cache');
+    return `<div class="runtime-degraded-banner">${parts.join(' · ')}</div>`;
+  }
+
+  function getHydrationPhase() {
+    return hydrationPhase;
+  }
+
+  function isHydrationFinished() {
+    return hydrationFinished;
+  }
+
   function init(opts) {
     config.getApiBase = opts.getApiBase || config.getApiBase;
     config.getHeaders = opts.getHeaders || config.getHeaders;
@@ -993,6 +1101,12 @@
     staleCacheBadgeHtml,
     getStaleCacheMeta,
     getLastFetchError,
+    getHydrationPhase,
+    isHydrationFinished,
+    forceFinishHydration,
+    runtimeDegradedBannerHtml,
+    HYDRATION_READY,
+    HYDRATION_DEGRADED,
     fetchWithTimeout,
     FETCH_TIMEOUT_MS,
     timestampHtml,

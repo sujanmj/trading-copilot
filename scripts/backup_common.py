@@ -56,6 +56,7 @@ EXCLUDE_DIR_NAMES = {
     ".pytest_cache",
     "temp",
     "cache",
+    ".cache",
     "ai_cache",
     "debug_snapshots",
     ".locks",
@@ -66,6 +67,9 @@ EXCLUDE_DIR_NAMES = {
     ".tox",
     ".npm",
 }
+
+# Warn if snapshot exceeds this size (likely recursive inclusion).
+MAX_BACKUP_SIZE_WARN_BYTES = 150 * 1024 * 1024  # 150 MB
 
 EXCLUDE_FILE_SUFFIXES = (".log", ".pyc", ".pyo")
 
@@ -141,6 +145,11 @@ def should_exclude_dir(name: str) -> bool:
     return name in EXCLUDE_DIR_NAMES
 
 
+def path_has_excluded_segment(rel_path: Path) -> bool:
+    """True if any path component is in EXCLUDE_DIR_NAMES (defense in depth)."""
+    return any(part in EXCLUDE_DIR_NAMES for part in rel_path.parts)
+
+
 def should_exclude_file(name: str) -> bool:
     lower = name.lower()
     if lower.endswith(EXCLUDE_FILE_SUFFIXES):
@@ -150,22 +159,31 @@ def should_exclude_file(name: str) -> bool:
     return False
 
 
-def copy_tree_filtered(src: Path, dst: Path) -> None:
-    """Copy directory tree skipping excluded dirs/files."""
+def copy_tree_filtered(src: Path, dst: Path, *, root: Path | None = None) -> int:
+    """Copy directory tree skipping excluded dirs/files. Returns excluded dir count."""
     if not src.is_dir():
-        return
+        return 0
+    if root is None:
+        root = src
     dst.mkdir(parents=True, exist_ok=True)
+    excluded = 0
     for item in src.iterdir():
+        rel = item.relative_to(root)
+        if path_has_excluded_segment(rel):
+            excluded += 1
+            continue
         if item.is_dir():
             if should_exclude_dir(item.name):
+                excluded += 1
                 continue
-            copy_tree_filtered(item, dst / item.name)
+            excluded += copy_tree_filtered(item, dst / item.name, root=root)
         elif item.is_file():
             if should_exclude_file(item.name):
                 continue
             target = dst / item.name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(item, target)
+    return excluded
 
 
 def copy_file_if_exists(src: Path, dst: Path) -> bool:
@@ -255,6 +273,18 @@ def estimate_project_backup_size() -> int:
 def disk_free_bytes(path: Path) -> int:
     usage = shutil.disk_usage(path)
     return usage.free
+
+
+def validate_backup_size(snapshot_dir: Path) -> tuple[bool, str]:
+    """Return (ok, message). Warn if backup is unusually large."""
+    size = directory_size_bytes(snapshot_dir)
+    size_mb = size / (1024 * 1024)
+    if size > MAX_BACKUP_SIZE_WARN_BYTES:
+        return False, (
+            f"Backup size {size_mb:.1f} MB exceeds {MAX_BACKUP_SIZE_WARN_BYTES // (1024 * 1024)} MB — "
+            "check for recursive inclusion (node_modules, .git, backups/)"
+        )
+    return True, f"Backup size OK: {size_mb:.2f} MB"
 
 
 def validate_backup_preflight() -> tuple[bool, str]:

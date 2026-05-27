@@ -37,14 +37,14 @@
     const base = isObject(intel) ? intel : {};
     const moodSrc = base.market_mood || ms.market_mood || {};
     const rotation = base.sector_rotation || ms.sector_rotation || { bullish: [], bearish: [] };
-    const opps = asArray(base.top_opportunities || base.opportunities || ms.top_opportunities);
-    const risks = asArray(base.risks_and_avoids || base.risks || ms.risk_list);
-    const summary = asString(base.executive_summary || base.analysis || ms.executive_summary, '');
+    const opps = asArray(base.top_opportunities || base.opportunities || ms.top_opportunities || ms.opportunities);
+    const risks = asArray(base.risks_and_avoids || base.risks || base.avoid_list || ms.risk_list || ms.risks);
+    const summary = asString(base.executive_summary || base.analysis || base.summary || ms.executive_summary, '');
     const actionPlan = asString(
-      ms.action_plan || snap.action_plan || base.action_plan,
+      ms.action_plan || snap.action_plan || base.action_plan || base.actionPlan,
       ''
     );
-    const selfCalibration = asString(base.self_calibration || ms.calibration, '');
+    const selfCalibration = asString(base.self_calibration || base.calibration || ms.calibration, '');
     const hasContent = !!(summary || actionPlan || selfCalibration || opps.length || risks.length
       || asString(moodSrc.global_mood) || asString(moodSrc.india_outlook));
 
@@ -71,24 +71,33 @@
     };
   }
 
+  function pickField(obj, keys, fallback) {
+    if (!isObject(obj)) return fallback;
+    for (let i = 0; i < keys.length; i += 1) {
+      const v = obj[keys[i]];
+      if (v != null && v !== '') return v;
+    }
+    return fallback;
+  }
+
   function normalizeExports(raw) {
     const exports = (raw && (raw.exports || raw.data)) || {};
     const ms = (raw && raw.market_snapshot) || {};
     return {
-      intelligence: unwrapExport(exports.intelligence || ms.intelligence),
-      india: unwrapExport(exports.india),
-      markets: unwrapExport(exports.markets),
-      news: unwrapExport(exports.news),
-      youtube: unwrapExport(exports.youtube),
-      govt: unwrapExport(exports.govt),
-      inshorts: unwrapExport(exports.inshorts),
-      reddit: unwrapExport(exports.reddit),
-      scanner: unwrapExport(exports.scanner),
-      stats: unwrapExport(exports.stats),
-      history: unwrapExport(exports.history),
-      activePredictions: unwrapExport(exports.active_predictions),
-      predictionHistory: unwrapExport(exports.prediction_history),
-      lifecycleState: unwrapExport(exports.lifecycle_state),
+      intelligence: unwrapExport(pickField(exports, ['intelligence'], null) || ms.intelligence),
+      india: unwrapExport(pickField(exports, ['india', 'india_market'], null)),
+      markets: unwrapExport(pickField(exports, ['markets', 'global_market', 'global_markets'], null)),
+      news: unwrapExport(pickField(exports, ['news'], null)),
+      youtube: unwrapExport(pickField(exports, ['youtube', 'tv'], null)),
+      govt: unwrapExport(pickField(exports, ['govt', 'government'], null)),
+      inshorts: unwrapExport(pickField(exports, ['inshorts'], null)),
+      reddit: unwrapExport(pickField(exports, ['reddit'], null)),
+      scanner: unwrapExport(pickField(exports, ['scanner', 'scanner_data'], null)),
+      stats: unwrapExport(pickField(exports, ['stats', 'stats_data'], null)),
+      history: unwrapExport(pickField(exports, ['history', 'prediction_history'], null)),
+      activePredictions: unwrapExport(pickField(exports, ['active_predictions', 'activePredictions'], null)),
+      predictionHistory: unwrapExport(pickField(exports, ['prediction_history', 'predictionHistory'], null)),
+      lifecycleState: unwrapExport(pickField(exports, ['lifecycle_state', 'lifecycleState'], null)),
     };
   }
 
@@ -170,6 +179,7 @@
           version: null,
           status: 'degraded',
           stale: true,
+          hydrationReady: true,
           warnings: ['invalid_payload'],
           missingFields: ['snapshot'],
         },
@@ -193,12 +203,14 @@
 
     return {
       meta: {
-        snapshotId: raw.snapshot_id || raw.active_snapshot_id || ms.snapshot_id || null,
-        generatedAt: raw.generated_at || ms.generated_at || null,
+        snapshotId: pickField(raw, ['snapshot_id', 'active_snapshot_id'], null)
+          || pickField(ms, ['snapshot_id'], null),
+        generatedAt: pickField(raw, ['generated_at'], null) || pickField(ms, ['generated_at'], null),
         version: raw.snapshot_version != null ? raw.snapshot_version
           : ((ms.freshness || {}).snapshot_version ?? null),
-        status: asString(raw.status, 'unknown'),
+        status: asString(raw.status || raw.primary_state, 'unknown'),
         stale: detectStale(raw, ms),
+        hydrationReady: true,
         warnings: shape.warnings,
         missingFields: shape.missingFields,
       },

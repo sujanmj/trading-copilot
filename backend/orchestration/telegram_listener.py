@@ -1080,37 +1080,31 @@ def listen_forever():
     safe_print("TELEGRAM LISTENER v4 - ML Elite Integration")
     safe_print(f"Bot: @{os.environ.get('BOT_USERNAME', 'sujan_trading_bot')}")
     safe_print(f"Chat ID: {CHAT_ID}")
-    try:
-        from backend.ai.provider_manager import log_provider_startup_diagnostics
-        log_provider_startup_diagnostics(force=True)
-    except Exception as e:
-        safe_print(f"[AI PROVIDERS] WARN diagnostics failed: {e}")
     safe_print("=" * 60)
 
     if not BOT_TOKEN or not CHAT_ID:
         safe_print("[ERROR] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
         return
 
-    send_message("""<b>🤖 Command Bot Online!</b>
-
-You can now control Trading Copilot from Telegram.
-
-Type /help to see all commands.
-
-<i>NEW Brain & ML Commands:</i>
-• /elite - Show ML-Filtered setups
-• /brain - Full analysis (6 messages)
-• /opps - Top opportunities
-• /risks - Avoid list
-
-<i>Existing:</i>
-• /scan - Quick scanner
-• /status - Health check
-• /ask &lt;question&gt;""")
-
     offset = load_offset()
     safe_print(f"[INFO] Starting from offset: {offset}")
     safe_print("[INFO] Listening for commands... (Ctrl+C to stop)")
+
+    # Announce online only after startup readiness validation (last step).
+    try:
+        from backend.runtime.startup_readiness import (
+            format_startup_telegram_message,
+            run_startup_sequence,
+        )
+        final_state, checks, summary = run_startup_sequence(on_log=safe_print)
+        send_message(format_startup_telegram_message(final_state, checks, summary))
+    except Exception as e:
+        safe_print(f"[STARTUP] readiness announcement failed: {e}")
+        send_message(
+            "⚠️ <b>Trading Copilot started in DEGRADED MODE</b>\n"
+            "Startup validation incomplete — command interface is online.\n"
+            "Type /help for commands."
+        )
 
     while True:
         try:
