@@ -993,15 +993,20 @@
   }
 
   function resetUiOverlays() {
-    ['customDateOverlay', 'predDetailOverlay', 'aiOpsBackdrop', 'reviewBackdrop'].forEach((id) => {
+    ['customDateOverlay', 'predDetailOverlay', 'aiOpsBackdrop'].forEach((id) => {
       const el = document.getElementById(id)
       if (el) {
         el.classList.remove('active')
         el.classList.remove('open')
       }
     })
+    if (!(window.DailyReviewPanel && DailyReviewPanel.isPanelOpen && DailyReviewPanel.isPanelOpen())) {
+      const reviewBackdrop = document.getElementById('reviewBackdrop')
+      if (reviewBackdrop) reviewBackdrop.classList.remove('open')
+      document.querySelectorAll('.ai-review-drawer.open').forEach((el) => el.classList.remove('open'))
+    }
     document.querySelectorAll('.pred-detail-modal.active').forEach((el) => el.classList.remove('active'))
-    document.querySelectorAll('.ai-ops-drawer.open, .ai-review-drawer.open').forEach((el) => el.classList.remove('open'))
+    document.querySelectorAll('.ai-ops-drawer.open').forEach((el) => el.classList.remove('open'))
     const bar = document.getElementById('loadingBar')
     if (bar) bar.classList.remove('active')
   }
@@ -2222,8 +2227,122 @@
   // ============================================================
   // TAB 9: HISTORY & AI CHAT (Restored)
   // ============================================================
-  let currentPeriod = 'this_week'
-  let customPeriodData = null
+  const STORAGE_KEY = 'tradingcopilot_daily_review_period';
+
+  let activeDailyReviewTab = (function loadActiveDailyReviewTab() {
+    try {
+      return localStorage.getItem(STORAGE_KEY) || 'this_week';
+    } catch (e) {
+      return 'this_week';
+    }
+  })();
+  let currentPeriod = activeDailyReviewTab;
+  let customPeriodData = null;
+  let historyTimelinePinnedOpen = false;
+
+  function saveActiveDailyReviewTab(period) {
+    if (!period) return;
+    activeDailyReviewTab = period;
+    currentPeriod = period;
+    historyTimelinePinnedOpen = true;
+    try { localStorage.setItem(STORAGE_KEY, period); } catch (e) {}
+    if (window.UiState) UiState.setExpanded('journal-legacy-timeline', true);
+  }
+
+  function pinHistoryTimelineOpen() {
+    historyTimelinePinnedOpen = true;
+    if (window.UiState) UiState.setExpanded('journal-legacy-timeline', true);
+    const details = document.getElementById('historyTimelineDetails');
+    if (details) details.open = true;
+  }
+
+  function resolveHistoryPeriod(data) {
+    if (currentPeriod === 'custom' && customPeriodData) return customPeriodData;
+    return (data.periods && data.periods[currentPeriod]) || {
+      stats: {}, top_winners: [], top_losers: [], timeline: [], label: currentPeriod,
+    };
+  }
+
+  function buildHistoryTimelineBodyHtml(data) {
+    if (!data || !data.periods) {
+      return '<div class="calib-insufficient">Prediction history unavailable.</div>';
+    }
+    const period = resolveHistoryPeriod(data);
+    const stats = period.stats || {};
+    const winRate = stats.win_rate || 0;
+    let html = `
+      <div class="period-selector" style="margin-top:12px;">
+        <button type="button" class="period-btn ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
+        <button type="button" class="period-btn ${currentPeriod === 'yesterday' ? 'active' : ''}" data-period="yesterday">Yesterday</button>
+        <button type="button" class="period-btn ${currentPeriod === 'this_week' ? 'active' : ''}" data-period="this_week">This Week</button>
+        <button type="button" class="period-btn ${currentPeriod === 'last_week' ? 'active' : ''}" data-period="last_week">Last Week</button>
+        <button type="button" class="period-btn ${currentPeriod === '15d' ? 'active' : ''}" data-period="15d">15 Days</button>
+        <button type="button" class="period-btn ${currentPeriod === 'custom' ? 'active' : ''}" data-period="custom">📅 Custom</button>
+      </div>
+    `;
+    html += `
+      <div class="history-summary-card" id="historyTimelineSummary">
+        <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">${escapeHtml(period.label || currentPeriod)}</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">TOTAL</div><div style="font-size:18px;font-weight:bold;color:#88ccff;">${stats.total || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00E676;">${stats.wins || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#FF3D00;">${stats.losses || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${stats.pending || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00E676' : winRate >= 40 ? '#ffaa00' : '#FF3D00'};">${winRate.toFixed(0)}%</div></div>
+        </div>
+      </div>
+    `;
+    const timeline = period.timeline || [];
+    if (timeline.length > 0) {
+      timeline.slice(0, 5).forEach(day => {
+        const dStats = day.stats || {};
+        html += `<div class="glass-card" style="padding:10px;margin-bottom:8px;"><div class="day-header"><div class="day-date">${formatDate(day.date)}</div><div class="day-stats">${dStats.total || 0} predictions</div></div></div>`;
+      });
+    }
+    return html;
+  }
+
+  function wireHistoryPeriodButtons(container, data) {
+    if (!container) return;
+    container.querySelectorAll('.period-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const period = btn.dataset.period;
+        if (period === 'custom') {
+          pinHistoryTimelineOpen();
+          openCustomDatePicker();
+          return;
+        }
+        saveActiveDailyReviewTab(period);
+        customPeriodData = null;
+        updateHistoryTimelinePanel(data);
+      });
+    });
+  }
+
+  function updateHistoryTimelinePanel(data) {
+    const body = document.getElementById('historyTimelineBody');
+    const details = document.getElementById('historyTimelineDetails');
+    if (!body) {
+      loadHistory();
+      return;
+    }
+    pinHistoryTimelineOpen();
+    body.innerHTML = buildHistoryTimelineBodyHtml(data);
+    wireHistoryPeriodButtons(details || document.getElementById('tab-history'), data);
+    if (details) details.open = true;
+  }
+
+  function bindJournalCopyButtons(container) {
+    if (!container) return;
+    container.querySelectorAll('.journal-copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn);
+      });
+    });
+  }
 
   function openCustomDatePicker() {
     const modal = document.getElementById('customDateModal')
@@ -2263,9 +2382,9 @@
         return
       }
       customPeriodData = data
-      currentPeriod = 'custom'
+      saveActiveDailyReviewTab('custom')
       closeCustomDatePicker()
-      loadHistory()
+      updateHistoryTimelinePanel(loadJson(files.history))
     } catch (e) {
       alert('Failed to fetch: ' + e.message)
       applyBtn.disabled = false
@@ -2326,6 +2445,19 @@
     return html
   }
 
+  function refreshHistoryJournalEntries(data, journalMsg) {
+    const shell = document.getElementById('historyJournalShell')
+    if (!shell) return false
+    const entries = (data.intelligence_journal || {}).entries || []
+    if (entries.length === 0) {
+      shell.innerHTML = `<div class="calib-insufficient">${escapeHtml(journalMsg)}</div>`
+    } else {
+      shell.innerHTML = entries.map((entry, idx) => renderJournalCard(entry, idx)).join('')
+    }
+    bindJournalCopyButtons(document.getElementById('tab-history'))
+    return true
+  }
+
   function loadHistory() {
     const data = loadJson(files.history)
     const container = document.getElementById('tab-history')
@@ -2338,6 +2470,15 @@
       return
     }
 
+    const timelineBody = document.getElementById('historyTimelineBody')
+    if (timelineBody) {
+      pinHistoryTimelineOpen()
+      refreshHistoryJournalEntries(data, journalMsg)
+      updateHistoryTimelinePanel(data)
+      patchPanelBanner(container, journalBanner)
+      return
+    }
+
     const journal = data.intelligence_journal || {}
     const entries = journal.entries || []
     const exportAge = window.RuntimeManager ? RuntimeManager.getExportAge('history') : ''
@@ -2345,68 +2486,27 @@
     html += runtimeTimestampHtml(`${exportAge || ''} ${data.today_weekday || ''} ${data.today_date || ''}`.trim())
     html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`
 
+    html += `<div id="historyJournalShell">`
     if (entries.length === 0) {
       html += `<div class="calib-insufficient">${escapeHtml(journalMsg)}</div>`
     } else {
       entries.forEach((entry, idx) => { html += renderJournalCard(entry, idx) })
     }
+    html += `</div>`
 
-    html += `<details class="journal-details" data-ui-section="journal-legacy-timeline" style="margin-top:16px;"><summary style="font-size:11px;color:#8B949E;">Legacy prediction timeline</summary>`
+    html += `<details id="historyTimelineDetails" class="journal-details" data-ui-section="journal-legacy-timeline" style="margin-top:16px;"><summary style="font-size:11px;color:#8B949E;">Legacy prediction timeline</summary><div id="historyTimelineBody">`
+    html += buildHistoryTimelineBodyHtml(data)
+    html += `</div></details>`
 
-    if (!data.periods) {
-      html += `<div class="calib-insufficient">Prediction history unavailable.</div></details>`
-      setPanelHtml(container, journalBanner, html)
-      container.querySelectorAll('.journal-copy-btn').forEach(btn => {
-        btn.addEventListener('click', () => copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn))
-      })
-      return
+    if (historyTimelinePinnedOpen && window.UiState) {
+      UiState.setExpanded('journal-legacy-timeline', true)
     }
 
-    html += `
-      <div class="period-selector" style="margin-top:12px;">
-        <button class="period-btn ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
-        <button class="period-btn ${currentPeriod === 'yesterday' ? 'active' : ''}" data-period="yesterday">Yesterday</button>
-        <button class="period-btn ${currentPeriod === 'this_week' ? 'active' : ''}" data-period="this_week">This Week</button>
-        <button class="period-btn ${currentPeriod === 'last_week' ? 'active' : ''}" data-period="last_week">Last Week</button>
-        <button class="period-btn ${currentPeriod === '15d' ? 'active' : ''}" data-period="15d">15 Days</button>
-        <button class="period-btn ${currentPeriod === 'custom' ? 'active' : ''}" data-period="custom">📅 Custom</button>
-      </div>
-    `
-    const period = (currentPeriod === 'custom' && customPeriodData) ? customPeriodData : (data.periods[currentPeriod] || { stats: {}, top_winners: [], top_losers: [], timeline: [] })
-    const stats = period.stats || {}
-    const winRate = stats.win_rate || 0
-    
-    html += `
-      <div class="history-summary-card">
-        <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">${escapeHtml(period.label || currentPeriod)}</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">TOTAL</div><div style="font-size:18px;font-weight:bold;color:#88ccff;">${stats.total || 0}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00E676;">${stats.wins || 0}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#FF3D00;">${stats.losses || 0}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${stats.pending || 0}</div></div>
-          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRate >= 60 ? '#00E676' : winRate >= 40 ? '#ffaa00' : '#FF3D00'};">${winRate.toFixed(0)}%</div></div>
-        </div>
-      </div>
-    `
-    const timeline = period.timeline || []
-    if (timeline.length > 0) {
-      timeline.slice(0, 5).forEach(day => {
-        const dStats = day.stats || {}
-        html += `<div class="glass-card" style="padding:10px;margin-bottom:8px;"><div class="day-header"><div class="day-date">${formatDate(day.date)}</div><div class="day-stats">${dStats.total || 0} predictions</div></div></div>`
-      })
-    }
-    html += `</details>`
     setPanelHtml(container, journalBanner, html)
 
-    container.querySelectorAll('.journal-copy-btn').forEach(btn => {
-      btn.addEventListener('click', () => copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn))
-    })
-    container.querySelectorAll('.period-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (btn.dataset.period === 'custom') openCustomDatePicker()
-        else { currentPeriod = btn.dataset.period; customPeriodData = null; loadHistory() }
-      })
-    })
+    bindJournalCopyButtons(container)
+    wireHistoryPeriodButtons(document.getElementById('historyTimelineDetails') || container, data)
+    pinHistoryTimelineOpen()
   }
 
   function showPredictionDetail(p) {
@@ -2539,6 +2639,7 @@
         DailyReviewPanel.init({
           getApiBase: () => API_BASE,
           getHeaders: apiHeaders,
+          subscribeRuntime: (fn) => (window.RuntimeManager ? RuntimeManager.subscribe(fn) : () => {}),
         })
       }
     } catch (e) {

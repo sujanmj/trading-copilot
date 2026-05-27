@@ -4,8 +4,14 @@
 (function (global) {
   'use strict';
 
-  let config = { getApiBase: () => '', getHeaders: () => ({}) };
+  let config = {
+    getApiBase: () => '',
+    getHeaders: () => ({}),
+    subscribeRuntime: null,
+  };
   let open = false;
+  let runtimeUnsub = null;
+  let escBound = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -24,6 +30,10 @@
     if (v == null || v === '') return '—';
     const n = Number(v);
     return Number.isFinite(n) ? `${n}%` : escapeHtml(v);
+  }
+
+  function persistOpenState(isOpen) {
+    open = !!isOpen;
   }
 
   async function fetchReview(rebuild) {
@@ -146,17 +156,26 @@
     }
   }
 
+  function applyOpenClasses(isOpen) {
+    const drawer = $('reviewDrawer');
+    const backdrop = $('reviewBackdrop');
+    if (drawer) drawer.classList.toggle('open', isOpen);
+    if (backdrop) backdrop.classList.toggle('open', isOpen);
+  }
+
   function closePanel() {
-    open = false;
-    $('reviewDrawer').classList.remove('open');
-    $('reviewBackdrop').classList.remove('open');
+    persistOpenState(false);
+    applyOpenClasses(false);
   }
 
   function openPanel() {
-    open = true;
-    $('reviewDrawer').classList.add('open');
-    $('reviewBackdrop').classList.add('open');
+    persistOpenState(true);
+    applyOpenClasses(true);
     refreshPanel(false);
+  }
+
+  function isPanelOpen() {
+    return open;
   }
 
   async function copyReview() {
@@ -170,7 +189,6 @@
         setTimeout(() => { btn.textContent = prev; }, 1500);
       }
     } catch (e) {
-      /* fallback for older webviews */
       const ta = document.createElement('textarea');
       ta.value = text;
       document.body.appendChild(ta);
@@ -180,22 +198,68 @@
     }
   }
 
+  function onBackdropClick(e) {
+    if (e.target === e.currentTarget) closePanel();
+  }
+
+  function onDrawerPointer(e) {
+    e.stopPropagation();
+  }
+
+  function onDocumentKeydown(e) {
+    if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      closePanel();
+    }
+  }
+
+  function bindEscOnce() {
+    if (escBound) return;
+    document.addEventListener('keydown', onDocumentKeydown);
+    escBound = true;
+  }
+
+  function onRuntimeUpdate(_snap, meta) {
+    if (!open) return;
+    if (meta && meta.unchanged) return;
+    refreshPanel(false);
+  }
+
   function init(opts) {
     config.getApiBase = opts.getApiBase || config.getApiBase;
     config.getHeaders = opts.getHeaders || config.getHeaders;
+    config.subscribeRuntime = opts.subscribeRuntime || config.subscribeRuntime;
 
     const btn = $('reviewBtn');
     const closeBtn = $('reviewClose');
     const backdrop = $('reviewBackdrop');
+    const drawer = $('reviewDrawer');
     const copyBtn = $('reviewCopyBtn');
     const refreshBtn = $('reviewRefreshBtn');
 
-    if (btn) btn.addEventListener('click', openPanel);
-    if (closeBtn) closeBtn.addEventListener('click', closePanel);
-    if (backdrop) backdrop.addEventListener('click', closePanel);
-    if (copyBtn) copyBtn.addEventListener('click', copyReview);
-    if (refreshBtn) refreshBtn.addEventListener('click', () => refreshPanel(true));
+    if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); openPanel(); });
+    if (closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closePanel(); });
+    if (backdrop) backdrop.addEventListener('click', onBackdropClick);
+    if (drawer) {
+      drawer.addEventListener('click', onDrawerPointer);
+      drawer.addEventListener('mousedown', onDrawerPointer);
+    }
+    if (copyBtn) copyBtn.addEventListener('click', (e) => { e.stopPropagation(); copyReview(); });
+    if (refreshBtn) refreshBtn.addEventListener('click', (e) => { e.stopPropagation(); refreshPanel(true); });
+
+    bindEscOnce();
+
+    if (typeof config.subscribeRuntime === 'function') {
+      if (runtimeUnsub) runtimeUnsub();
+      runtimeUnsub = config.subscribeRuntime(onRuntimeUpdate);
+    }
   }
 
-  global.DailyReviewPanel = { init, openPanel, closePanel, refreshPanel };
+  global.DailyReviewPanel = {
+    init,
+    openPanel,
+    closePanel,
+    refreshPanel,
+    isPanelOpen,
+  };
 })(typeof window !== 'undefined' ? window : global);

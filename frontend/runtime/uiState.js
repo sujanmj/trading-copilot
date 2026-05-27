@@ -54,10 +54,16 @@
     wired = true;
   }
 
+  function setExpanded(key, open) {
+    if (!key) return;
+    expanded[key] = !!open;
+  }
+
   global.UiState = {
     saveUiState,
     restoreUiState,
     persistExpandedSections,
+    setExpanded,
     getExpanded: () => ({ ...expanded }),
   };
 })(window);
