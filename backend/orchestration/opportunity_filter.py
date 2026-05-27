@@ -477,6 +477,39 @@ def _load_intel_opportunities(intel: dict) -> List[dict]:
     return [_normalize_opp(o, 'intelligence') for o in opps if isinstance(o, dict)]
 
 
+def _load_scanner_ultra_candidates() -> List[dict]:
+    """Seed ranked pool with scanner ULTRA anomalies (still subject to elite gates)."""
+    if not SCANNER_FILE.exists():
+        return []
+    try:
+        data = json.loads(SCANNER_FILE.read_text(encoding='utf-8'))
+    except Exception:
+        return []
+    out: List[dict] = []
+    for sig in data.get('top_signals') or []:
+        if not isinstance(sig, dict):
+            continue
+        if str(sig.get('strength') or '').upper() != 'ULTRA':
+            continue
+        ticker = str(sig.get('ticker') or '').upper()
+        if not ticker:
+            continue
+        out.append(_normalize_opp({
+            'symbol': ticker,
+            'ticker': ticker,
+            'action': 'WATCH',
+            'confidence': 'MEDIUM',
+            'logic': (
+                f"Scanner ULTRA · vol {sig.get('volume_ratio', '?')}x · "
+                f"{sig.get('change_percent', 0)}% move"
+            ),
+            'sector': sig.get('sector'),
+            'signal_type': 'scanner_ultra',
+            'display_tier': 'TACTICAL',
+        }, 'scanner_ultra'))
+    return out
+
+
 def rank_opportunities(
     intel: Optional[dict] = None,
     *,
@@ -510,6 +543,11 @@ def rank_opportunities(
             if sym not in merged or score_fn(item) > score_fn(merged[sym]):
                 merged[sym] = item
 
+    for item in _load_scanner_ultra_candidates():
+        sym = item['symbol']
+        if sym not in merged or score_fn(item) > score_fn(merged[sym]):
+            merged[sym] = item
+
     ranked = sorted(merged.values(), key=score_fn, reverse=True)
 
     filtered = [
@@ -522,4 +560,10 @@ def rank_opportunities(
     for item in elite:
         item['_rank_score'] = round(score_fn(item), 2)
         _align_display_confidence(item, elite_index)
+        if item.get('elite_verified'):
+            item['display_tier'] = 'ELITE'
+        elif item.get('below_elite_threshold'):
+            item['display_tier'] = 'WATCHLIST'
+        elif not item.get('display_tier'):
+            item['display_tier'] = 'TACTICAL'
     return elite

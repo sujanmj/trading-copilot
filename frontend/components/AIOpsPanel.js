@@ -254,50 +254,22 @@
     const operational = health.operational || {};
     $('aiOpsStatusGrid').innerHTML = renderStatGrid([
       {
-        label: 'Ops mode',
-        value: operational.display_status || health.operational_status || '—',
+        label: 'System health',
+        value: operational.display_status || health.operational_status || 'Healthy',
         cls: operational.night_mode ? '' : 'ai-ops-ok',
       },
-      { label: 'AI Budget', value: `$${budget.spent ?? '—'} / $${budget.limit ?? '—'}` },
-      { label: 'Remaining', value: `$${obs.ai_budget_remaining ?? budget.remaining ?? '—'}` },
-      { label: 'Regime', value: health.market_regime || obs.market_regime || '—' },
-      { label: 'Compression', value: health.compression_mode || obs.compression_mode || '—' },
+      { label: 'AI budget', value: `$${budget.spent ?? '—'} / $${budget.limit ?? '—'}` },
+      { label: 'Regime', value: (health.market_regime || obs.market_regime || '—').replace(/_/g, ' ') },
       {
-        label: 'Quality IQ',
+        label: 'Quality score',
         value: fmtScore(health.last_quality_score ?? quality.intelligence_quality_score),
         cls: scoreClass(health.last_quality_score ?? quality.intelligence_quality_score, 0.55),
       },
-      { label: 'Cache', value: `${cacheRate} (${cacheEntries} entries)` },
+      { label: 'Live activity', value: obs.latest_cycle_id ? 'Cycle active' : 'Idle' },
       {
-        label: 'Low-cost',
-        value: routing.low_cost_mode ? 'ON' : 'OFF',
-        cls: routing.low_cost_mode ? 'ai-ops-warn' : '',
-      },
-      { label: 'Cycle', value: obs.latest_cycle_id || preservation.cycle_id || '—' },
-      { label: 'Watchdog', value: obs.watchdog_mode || health.watchdog_mode || '—' },
-      {
-        label: 'Sent diversity',
-        value: fmtScore(quality.sentiment_diversity_score ?? obs.sentiment_diversity_score),
-        cls: scoreClass(quality.sentiment_diversity_score ?? obs.sentiment_diversity_score, 0.45),
-      },
-      {
-        label: 'Novelty',
-        value: fmtScore(quality.novelty_avg_score ?? obs.novelty_avg_score),
-        cls: scoreClass(quality.novelty_avg_score ?? obs.novelty_avg_score, 3.0),
-      },
-      {
-        label: 'Truncation',
-        value: fmtScore(quality.truncation_severity ?? quality.compression_ratio),
-        cls: scoreClass(quality.truncation_severity ?? quality.compression_ratio, 0.25),
-      },
-      {
-        label: 'Market src',
-        value: obs.market_active_source || '—',
-        cls: obs.market_source_degraded ? 'ai-ops-warn' : '',
-      },
-      {
-        label: 'Angel/Yahoo',
-        value: `${obs.market_angel_count ?? '—'}/${obs.market_yahoo_fallback_count ?? '—'}`,
+        label: 'Providers',
+        value: (health.provider_analytics && health.provider_analytics.degraded_mode) ? 'Degraded' : 'Active',
+        cls: (health.provider_analytics && health.provider_analytics.degraded_mode) ? 'ai-ops-warn' : 'ai-ops-ok',
       },
     ]);
 
@@ -329,10 +301,13 @@
       [
         expl.why_claude_ran,
         expl.why_gemini_used,
-        expl.why_cache_skipped,
+        expl.why_cache_skipped ? 'Context refresh — cache bypassed for fresh synthesis' : null,
         routing.last_expensive_call_reason
-          ? `Last expensive: ${JSON.stringify(routing.last_expensive_call_reason).slice(0, 120)}`
+          ? `Last strategic call: ${JSON.stringify(routing.last_expensive_call_reason).slice(0, 120)}`
           : null,
+        `Context cache: ${cacheRate} hit rate (${cacheEntries} entries)`,
+        quality.truncation_severity != null ? `Compression active (${fmtScore(quality.truncation_severity)})` : null,
+        quality.novelty_avg_score != null ? `Signal repetition score ${fmtScore(quality.novelty_avg_score)}` : null,
       ].filter(Boolean),
       'No routing explainability yet'
     );

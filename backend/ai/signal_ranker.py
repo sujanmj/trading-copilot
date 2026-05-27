@@ -13,20 +13,43 @@ def _safe_list(v):
     return v if isinstance(v, list) else []
 
 
-def rank_scanner_signals(scanner: dict, limit: int = 12) -> List[dict]:
+def rank_scanner_signals(scanner: dict, limit: int = 12, *, all_data: dict = None) -> List[dict]:
     signals = _safe_list(_safe_dict(scanner).get('top_signals'))
     strength_order = {'ULTRA': 4, 'STRONG': 3, 'MODERATE': 2, 'WEAK': 1}
+    ctx = all_data if isinstance(all_data, dict) else {}
 
     def score(s):
         s = _safe_dict(s)
         base = strength_order.get(str(s.get('strength', '')).upper(), 0)
         vol = float(s.get('volume_ratio') or 0)
         chg = abs(float(s.get('change_percent') or 0))
-        india_boost = 0.0
         sector = str(s.get('sector', '')).upper()
-        if sector and sector not in ('UNKNOWN', 'US', 'GLOBAL'):
-            india_boost = 5.0
-        return (base * 100) + (vol * 10) + chg + india_boost
+        india_boost = 5.0 if sector and sector not in ('UNKNOWN', 'US', 'GLOBAL') else 0.0
+        liquidity_penalty = 3.0 if vol > 8 and chg > 12 else 0.0
+        pump_penalty = 2.5 if vol > 6 and chg > 15 and base <= 3 else 0.0
+        macro_penalty = 0.0
+        try:
+            from backend.utils.config import ANALYSIS_STATE_FILE
+            import json
+            if ANALYSIS_STATE_FILE.exists():
+                st = json.loads(ANALYSIS_STATE_FILE.read_text(encoding='utf-8'))
+                regime = str(st.get('regime') or '')
+                if regime in ('panic_volatile', 'macro_uncertainty', 'risk_off'):
+                    macro_penalty = 1.5
+        except Exception:
+            pass
+        rel_strength = min(chg * 1.2, 12.0)
+        breakout = 2.0 if 'BREAKOUT' in ' '.join(s.get('signals') or []).upper() else 0.0
+        return (
+            (base * 100)
+            + (vol * 6)
+            + rel_strength
+            + india_boost
+            + breakout
+            - liquidity_penalty
+            - pump_penalty
+            - macro_penalty
+        )
 
     ranked = sorted(signals, key=score, reverse=True)
     return ranked[:limit]

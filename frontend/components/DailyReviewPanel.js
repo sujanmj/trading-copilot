@@ -55,6 +55,20 @@
       </div>`;
   }
 
+  function formatCalibrationLabel(raw, evaluated) {
+    const mapping = {
+      calibration_in_progress: 'Calibration in progress',
+      collecting_samples: 'Collecting outcome samples',
+      insufficient_data: 'Calibration in progress',
+      strong: 'Strong',
+      needs_tuning: 'Needs tuning',
+    };
+    const key = String(raw || '').toLowerCase();
+    const base = mapping[key] || String(raw || '—');
+    if (evaluated != null && evaluated < 20) return `${base} (${evaluated}/20)`;
+    return base;
+  }
+
   function renderReview(data) {
     const day = data.market_day_classification || {};
     const perf = data.performance_summary || {};
@@ -83,8 +97,8 @@
         ${stat('False +', String(perf.false_positives ?? '—'), perf.false_positives > 0 ? 'ai-review-warn' : '')}
         ${stat('Suppressed', String(perf.suppressed_alerts ?? '—'))}
         ${stat('Missed', String(perf.missed_opportunities ?? '—'))}
-        ${stat('TG precision', fmtPct(perf.telegram_precision_pct), '')}
-        ${stat('Calibration', perf.confidence_calibration_quality || '—')}
+        ${stat('TG precision', perf.evaluated_signals >= 20 ? fmtPct(perf.telegram_precision_pct) : '—', '')}
+        ${stat('Calibration', formatCalibrationLabel(perf.confidence_calibration_display || perf.confidence_calibration_quality, perf.evaluated_signals))}
       </div>`;
 
     const winLines = [
@@ -117,14 +131,27 @@
       timeline ||
       '<div class="ai-review-empty">No regime transitions logged for this session.</div>';
 
-    $('reviewWarnings').innerHTML = warnings.length
-      ? warnings
-          .map(
-            (w) =>
-              `<div class="ai-review-warning-chip ai-review-sev-${escapeHtml(w.severity || 'medium')}">${escapeHtml(w.message || w.code)}</div>`
-          )
-          .join('')
-      : '<div class="ai-review-empty">No actionable quality warnings today.</div>';
+    const visibleWarnings = warnings.filter((w) => !w.diagnostic && w.ui_tier !== 'info');
+    const diagnosticWarnings = warnings.filter((w) => w.diagnostic || w.ui_tier === 'info');
+    let warningsHtml = '';
+    if (visibleWarnings.length) {
+      warningsHtml += visibleWarnings
+        .map(
+          (w) =>
+            `<div class="ai-review-warning-chip ai-review-sev-${escapeHtml(w.severity || 'medium')}">${escapeHtml(w.message || w.code)}</div>`
+        )
+        .join('');
+    } else {
+      warningsHtml += '<div class="ai-review-empty">No actionable quality warnings today.</div>';
+    }
+    if (diagnosticWarnings.length) {
+      warningsHtml += `<details class="journal-details" data-ui-section="review-advanced-diagnostics" style="margin-top:10px;"><summary style="font-size:10px;color:#8B949E;">Advanced diagnostics</summary>`;
+      warningsHtml += diagnosticWarnings
+        .map((w) => `<div class="ai-review-warning-chip ai-review-sev-info" style="opacity:0.85;">${escapeHtml(w.message || w.code)}</div>`)
+        .join('');
+      warningsHtml += `</details>`;
+    }
+    $('reviewWarnings').innerHTML = warningsHtml;
 
     $('reviewTelegram').innerHTML = `
       <div class="ai-review-stat-grid">

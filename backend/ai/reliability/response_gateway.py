@@ -138,6 +138,9 @@ def _validate_parsed(
     from backend.intelligence.canonical_rankings import align_intelligence
 
     intel_dict = align_intelligence(intel_dict)
+    from backend.intelligence.content_dedup import deduplicate_intelligence_fields
+
+    intel_dict = deduplicate_intelligence_fields(intel_dict)
     hallucinations = detect_hallucinations(intel_dict, context=ctx)
 
     if hallucinations:

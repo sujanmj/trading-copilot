@@ -43,9 +43,11 @@ HIGH_IMPACT_KEYWORDS = (
 REGIME_NAMES = (
     'bullish_trend',
     'sideways',
-    'panic_volatile',
-    'macro_uncertainty',
+    'volatile',
+    'risk_off',
     'regime_transition',
+    'macro_uncertainty',
+    'panic_volatile',
 )
 
 
@@ -443,28 +445,42 @@ def detect_market_regime(
     articles = _safe_list(news.get('articles'))
     shock_count = sum(1 for a in articles[:25] if _contains_high_impact(str(_safe_dict(a).get('title', ''))))
 
+    disagree = float((contradictions or {}).get('overall_disagreement_score') or 0)
     scores = {name: 0.0 for name in REGIME_NAMES}
+
+    volatility_index = _clamp(
+        avg_abs / 6.0 + ultra_count * 0.08 + abs(india_avg) / 4.0 + shock_count * 0.05 + disagree * 0.25
+    )
 
     if india_avg > 0.35 and avg_abs < 2.5:
         scores['bullish_trend'] += 0.45
     if abs(india_avg) < 0.3 and avg_abs < 1.8:
         scores['sideways'] += 0.5
-    if avg_abs >= 3.0 or ultra_count >= 3 or abs(india_avg) >= 1.2:
-        scores['panic_volatile'] += 0.55
+    if avg_abs >= 2.0 or ultra_count >= 2:
+        scores['volatile'] += 0.35
+    if disagree >= 0.4 and volatility_index >= 0.42:
+        scores['risk_off'] += 0.35
+    if (
+        (avg_abs >= 4.0 or ultra_count >= 4)
+        and disagree >= 0.35
+        and volatility_index >= 0.55
+    ):
+        scores['panic_volatile'] += 0.65
+    elif avg_abs >= 3.0 and ultra_count >= 3 and volatility_index >= 0.5:
+        scores['volatile'] += 0.25
     if int(metrics.get('govt_high_impact') or 0) >= 3 or shock_count >= 3:
         scores['macro_uncertainty'] += 0.5
-    disagree = float((contradictions or {}).get('overall_disagreement_score') or 0)
     if disagree >= 0.35 or (previous_regime and previous_regime != max(scores, key=scores.get)):
         scores['regime_transition'] += 0.35 + disagree * 0.4
+
+    if previous_regime == 'panic_volatile' and scores['panic_volatile'] < scores.get('volatile', 0) + 0.12:
+        scores['panic_volatile'] = max(scores['panic_volatile'], scores.get('volatile', 0) + 0.12)
 
     primary = max(scores, key=lambda k: scores[k])
     if scores[primary] < 0.25:
         primary = 'sideways'
         scores['sideways'] = 0.5
 
-    volatility_index = _clamp(
-        avg_abs / 6.0 + ultra_count * 0.08 + abs(india_avg) / 4.0 + shock_count * 0.05 + disagree * 0.25
-    )
     sentiment_instability = _clamp(disagree + (shock_count * 0.06))
     news_shock_intensity = _clamp(shock_count / 8.0)
     scanner_anomaly_strength = _clamp(ultra_count / 5.0 + avg_abs / 8.0)
@@ -476,6 +492,8 @@ def detect_market_regime(
         compression_aggressiveness = 0.62
     elif primary == 'panic_volatile' or volatility_index > 0.65:
         compression_aggressiveness = 0.22
+    elif primary in ('volatile', 'risk_off'):
+        compression_aggressiveness = 0.35
     elif primary == 'macro_uncertainty':
         compression_aggressiveness = 0.18
     elif primary == 'regime_transition':

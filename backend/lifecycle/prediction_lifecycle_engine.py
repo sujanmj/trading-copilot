@@ -424,6 +424,11 @@ def refresh_brain_opportunities() -> dict:
         })
 
     intel['top_opportunities'] = opps
+    try:
+        from backend.intelligence.canonical_rankings import align_intelligence
+        intel = align_intelligence(intel)
+    except Exception:
+        pass
     intel['timestamp'] = _now_iso()
     intel['generated_date'] = _today()
     intel['active_predictions_source'] = str(ACTIVE_PREDICTIONS_FILE.name)

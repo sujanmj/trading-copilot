@@ -561,10 +561,10 @@ def try_emergency_macro() -> int:
     candidates.sort(key=lambda x: x[0], reverse=True)
     conf, headline, _ = candidates[0]
     dedupe = f"emergency_{headline[:50]}"
-    text = f"""<b>🚨 EMERGENCY MACRO</b>
+    text = f"""<b>🚨 Emergency Macro</b>
 {headline[:900]}
 <b>Confidence:</b> {conf:.0%}
-<i>Immediate attention required</i>"""
+<i>High market impact detected</i>"""
 
     ok, _ = should_send_alert(
         EMERGENCY_MACRO_ALERT, conf, dedupe_key=dedupe, regime=regime, volatility=vol,

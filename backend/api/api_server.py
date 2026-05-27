@@ -856,6 +856,20 @@ def _panel_state_from_source(
     }
 
 
+def _collectors_recently_active(source_status: dict, operational: dict) -> bool:
+    """True when scanner/news/reddit or market feeds refreshed within watchdog cadence."""
+    cadence_keys = ('scanner', 'news', 'reddit', 'youtube', 'inshorts', 'markets', 'india')
+    threshold = int(operational.get('watchdog_stale_threshold_seconds') or STALE_THRESHOLD_SECONDS)
+    for key in cadence_keys:
+        src = source_status.get(key) or {}
+        if src.get('status') not in ('ok', 'idle'):
+            continue
+        age = src.get('age_seconds')
+        if age is not None and age <= threshold:
+            return True
+    return False
+
+
 def _build_runtime_snapshot() -> dict:
     """Single synchronized payload for all frontend intelligence surfaces."""
     from backend.utils.market_hours import get_operational_status
@@ -1035,13 +1049,37 @@ def _build_runtime_snapshot() -> dict:
     except Exception as e:
         orchestrator_panel['message'] = str(e)[:120]
 
-    runtime_stale = (any_stale or orchestrator_panel.get('stale', False)) and not operational.get('expect_quiet_collectors')
+    collectors_active = _collectors_recently_active(source_status, operational)
+    orchestrator_alive = not orchestrator_panel.get('stale', False)
+    export_stale = any_stale
+    collectors_lag_refresh = (
+        export_stale
+        and (collectors_active or orchestrator_alive)
+        and not operational.get('expect_quiet_collectors')
+    )
+    runtime_stale = (
+        export_stale
+        and not collectors_active
+        and not orchestrator_alive
+        and not operational.get('expect_quiet_collectors')
+    )
+
+    if collectors_lag_refresh:
+        runtime_message = 'Live collectors active — export refreshing'
+    elif runtime_stale:
+        runtime_message = orchestrator_panel.get('message') or 'Snapshot stale — no collector updates detected'
+    elif operational.get('expect_quiet_collectors') and not any_stale:
+        runtime_message = operational.get('display_message')
+    else:
+        runtime_message = None
 
     panels = {
         'runtime': {
             'status': operational.get('operational_mode') if operational.get('expect_quiet_collectors') and not any_stale else ('ready' if not runtime_stale else 'stale'),
             'stale': runtime_stale,
-            'message': operational.get('display_message') if operational.get('expect_quiet_collectors') and not any_stale else (orchestrator_panel.get('message') if orchestrator_panel.get('stale') else None),
+            'collectors_active': collectors_active,
+            'export_lag': collectors_lag_refresh,
+            'message': runtime_message,
             'generated_at': generated_at,
             'display_status': operational.get('display_status'),
             'operational_mode': operational.get('operational_mode'),
@@ -1107,6 +1145,12 @@ def _build_runtime_snapshot() -> dict:
         },
         'lifecycle_summary': lifecycle_panel,
         'orchestrator_summary': orchestrator_panel,
+        'freshness_state': {
+            'export_stale': export_stale,
+            'collectors_active': collectors_active,
+            'orchestrator_alive': orchestrator_alive,
+            'partial_lag': collectors_lag_refresh,
+        },
     })
 
 

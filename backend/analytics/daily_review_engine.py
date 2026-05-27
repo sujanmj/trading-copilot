@@ -28,7 +28,32 @@ EXECUTION_METRICS_FILE = DATA_DIR / 'execution_metrics.json'
 INTELLIGENCE_FILE = DATA_DIR / 'unified_intelligence.json'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 
-MIN_SAMPLES_OBSERVATION = 5
+MIN_SAMPLES_OBSERVATION = 20
+MIN_SAMPLES_CALIBRATION = 50
+
+
+def _calibration_quality_label(evaluated: int, useful: int, false_pos: int) -> str:
+    if evaluated < MIN_SAMPLES_OBSERVATION:
+        return 'calibration_in_progress'
+    if evaluated < MIN_SAMPLES_CALIBRATION:
+        return 'collecting_samples'
+    if false_pos <= useful:
+        return 'strong'
+    return 'needs_tuning'
+
+
+def format_calibration_display(code: str, evaluated: int = 0) -> str:
+    mapping = {
+        'calibration_in_progress': 'Calibration in progress',
+        'collecting_samples': 'AI collecting outcome samples before adaptive tuning activates.',
+        'insufficient_data': 'Calibration in progress',
+        'strong': 'Strong',
+        'needs_tuning': 'Needs tuning',
+    }
+    base = mapping.get(str(code or ''), str(code or '').replace('_', ' ').title())
+    if evaluated and evaluated < MIN_SAMPLES_OBSERVATION:
+        return f'{base} ({evaluated}/{MIN_SAMPLES_OBSERVATION} evaluated)'
+    return base
 
 
 def _log(tag: str, msg: str):
@@ -356,73 +381,82 @@ def _regime_timeline(review_date: str, features: dict) -> List[dict]:
 
 def _reliability_warnings(features: dict) -> List[dict]:
     warnings = []
+    diagnostics = []
     explanations = _load_json(ANALYSIS_EXPLANATIONS_FILE, {})
     latest_q = (explanations.get('latest') or {}).get('quality') or {}
     code_map = {
-        'overtruncation_risk': 'Truncation risk — intelligence compression may have dropped nuance',
-        'low_novelty': 'Low novelty — signals repeating without fresh evidence',
-        'sentiment_collapse_risk': 'Weak sentiment preservation — mood diversity collapsed',
+        'overtruncation_risk': ('Compression active — detail preserved selectively', 'info'),
+        'low_novelty': ('Signal repetition detected — novelty filter engaged', 'info'),
+        'sentiment_collapse_risk': ('Sentiment diversity narrowed — monitoring preservation', 'warning'),
     }
     for w in (explanations.get('latest') or {}).get('warnings') or []:
         code = w.get('code', '')
-        warnings.append({
-            'code': code,
-            'message': code_map.get(code, code.replace('_', ' ')),
-            'severity': 'medium',
-        })
+        msg, tier = code_map.get(code, (code.replace('_', ' '), 'warning'))
+        entry = {'code': code, 'message': msg, 'severity': tier, 'ui_tier': tier}
+        (warnings if tier in ('warning', 'critical') else diagnostics).append(entry)
 
     if _safe_float(latest_q.get('contradiction_retention_score'), 1) < 0.55:
         warnings.append({
             'code': 'contradiction_retention_drop',
-            'message': 'Contradiction retention below target — opposing signals may be flattened',
-            'severity': 'high',
+            'message': 'Contradiction handling under target — review opposing signals',
+            'severity': 'warning',
+            'ui_tier': 'warning',
         })
     if _safe_float(latest_q.get('sentiment_diversity_score'), 1) < 0.45:
-        warnings.append({
+        diagnostics.append({
             'code': 'weak_sentiment_preservation',
-            'message': 'Sentiment diversity weak — mood calibration may be unreliable',
-            'severity': 'medium',
+            'message': 'Sentiment diversity monitoring — calibration collecting samples',
+            'severity': 'info',
+            'ui_tier': 'info',
         })
 
     metrics = _load_json(EXECUTION_METRICS_FILE, {})
     counters = metrics.get('counters') or {}
     if counters.get('safe_fallbacks', 0) > 0:
-        warnings.append({
+        diagnostics.append({
             'code': 'fallback_activations',
-            'message': f"Safe fallback used {counters.get('safe_fallbacks')} time(s) — degraded intelligence served",
-            'severity': 'high',
+            'message': f"Quality guard used prior intelligence {counters.get('safe_fallbacks')} time(s) — outputs validated",
+            'severity': 'info',
+            'ui_tier': 'info',
         })
     if counters.get('hallucination_detections', 0) > 0:
-        warnings.append({
+        diagnostics.append({
             'code': 'hallucination_detections',
-            'message': f"Hallucination guard triggered {counters.get('hallucination_detections')} time(s)",
-            'severity': 'medium',
+            'message': f"Symbol validation guard active ({counters.get('hallucination_detections')} checks)",
+            'severity': 'info',
+            'ui_tier': 'info',
         })
     if counters.get('schema_failures', 0) > 0:
-        warnings.append({
+        diagnostics.append({
             'code': 'schema_failures',
-            'message': f"Schema validation failures: {counters.get('schema_failures')}",
-            'severity': 'medium',
+            'message': f"Schema auto-corrected {counters.get('schema_failures')} time(s)",
+            'severity': 'info',
+            'ui_tier': 'info',
         })
 
     cache_hits = counters.get('cache_hits', 0)
     cache_miss = counters.get('cache_misses', 0)
     total_cache = cache_hits + cache_miss
     if total_cache >= 10 and cache_hits / total_cache < 0.15:
-        warnings.append({
+        diagnostics.append({
             'code': 'low_cache_reuse',
-            'message': 'Low semantic cache reuse — higher AI cost and less stable outputs',
-            'severity': 'low',
+            'message': 'Context refresh frequent — higher synthesis churn',
+            'severity': 'info',
+            'ui_tier': 'info',
         })
 
     if features.get('market_source_degraded'):
         warnings.append({
             'code': 'degraded_market_source',
-            'message': 'Market feed degraded — Angel One fallback / preserved snapshots in use',
-            'severity': 'high',
+            'message': 'Market feed degraded — preserved snapshots in use',
+            'severity': 'critical',
+            'ui_tier': 'critical',
         })
 
-    return warnings[:10]
+    visible = warnings[:6]
+    for d in diagnostics[:8]:
+        d['diagnostic'] = True
+    return visible + diagnostics[:8]
 
 
 def _telegram_effectiveness(review_date: str) -> dict:
@@ -546,10 +580,18 @@ def build_daily_review(review_date: Optional[str] = None, *, persist: bool = Tru
         'missed_opportunities': signal_stats.get('failed_signals', 0),
         'telegram_precision_pct': tg_precision,
         'evaluated_signals': signal_stats.get('evaluated_signals', 0),
-        'confidence_calibration_quality': (
-            'insufficient_data' if signal_stats.get('evaluated_signals', 0) < MIN_SAMPLES_OBSERVATION
-            else ('strong' if signal_stats.get('false_positives', 0) <= signal_stats.get('useful_signals', 0)
-                  else 'needs_tuning')
+        'confidence_calibration_quality': _calibration_quality_label(
+            signal_stats.get('evaluated_signals', 0),
+            signal_stats.get('useful_signals', 0),
+            signal_stats.get('false_positives', 0),
+        ),
+        'confidence_calibration_display': format_calibration_display(
+            _calibration_quality_label(
+                signal_stats.get('evaluated_signals', 0),
+                signal_stats.get('useful_signals', 0),
+                signal_stats.get('false_positives', 0),
+            ),
+            signal_stats.get('evaluated_signals', 0),
         ),
     }
 

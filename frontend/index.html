@@ -130,6 +130,7 @@
     
     .timestamp { font-size: 10px; color: #8B949E; text-align: right; margin-bottom: 12px; }
     .runtime-stale { color: #D29922; }
+    .runtime-live { color: #00E676; font-weight: 600; }
     .runtime-idle { color: #8B949E; }
     .panel-status-banner { font-size: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); line-height: 1.45; }
     .panel-status-banner.ready { background: rgba(0,230,118,0.08); color: #00E676; border-color: rgba(0,230,118,0.2); }
@@ -710,11 +711,11 @@
         <summary>Preservation Inspector</summary>
         <div class="ai-ops-section-body" id="aiOpsPreservation"></div>
       </details>
-      <details class="ai-ops-section" data-ui-section="aiops-providers" open>
+      <details class="ai-ops-section" data-ui-section="aiops-providers">
         <summary>AI Providers</summary>
         <div class="ai-ops-section-body" id="aiOpsProviders"></div>
       </details>
-      <details class="ai-ops-section" data-ui-section="aiops-runtime" open>
+      <details class="ai-ops-section" data-ui-section="aiops-runtime">
         <summary>AI Runtime Analytics</summary>
         <div class="ai-ops-section-body" id="aiOpsRuntime"></div>
       </details>
@@ -730,7 +731,7 @@
         <summary>AI Reliability</summary>
         <div class="ai-ops-section-body" id="aiOpsReliability"></div>
       </details>
-      <details class="ai-ops-section" data-ui-section="aiops-lifecycle" open>
+      <details class="ai-ops-section" data-ui-section="aiops-lifecycle">
         <summary>Prediction Lifecycle</summary>
         <div class="ai-ops-section-body" id="aiOpsLifecycle"></div>
       </details>
@@ -931,13 +932,22 @@
   function panelStatusBannerHtml(panelId, sourceKey) {
     if (!window.RuntimeManager || !RuntimeManager.getPanelBanner) return ''
     const banner = RuntimeManager.getPanelBanner(panelId, sourceKey)
-    const parts = [banner.message, banner.age].filter(Boolean)
+    const parts = [banner.message].filter(Boolean)
     if (banner.stale) parts.push('snapshot stale')
+    else if (banner.collectorsActive) parts.push('live collectors active')
     if (!parts.length && banner.status === 'ready') return ''
     const cls = banner.stale ? 'stale'
+      : (banner.collectorsActive ? 'ready'
       : (banner.status === 'idle' ? 'idle'
-      : (banner.status === 'ready' ? 'ready' : (banner.status === 'collecting' ? 'collecting' : 'waiting')))
+      : (banner.status === 'ready' ? 'ready' : (banner.status === 'collecting' ? 'collecting' : 'waiting'))))
     return `<div class="panel-status-banner ${cls}">${escapeHtml(parts.join(' · '))}</div>`
+  }
+
+  function globalExportAgeHtml(sourceKey) {
+    if (!window.RuntimeManager || !RuntimeManager.getExportAge) return ''
+    const age = RuntimeManager.getExportAge(sourceKey || 'intelligence')
+    if (!age || age.indexOf('Export age:') !== 0) return ''
+    return age
   }
 
   function unwrapCachedExport(cached) {
@@ -1350,6 +1360,44 @@
     }
   }
 
+  function getScannerUltraSignals() {
+    const scanner = loadJson(files.scanner);
+    if (!scanner || !Array.isArray(scanner.top_signals)) return [];
+    return scanner.top_signals.filter((s) => String(s.strength || '').toUpperCase() === 'ULTRA').slice(0, 6);
+  }
+
+  function renderOpportunityCard(o, opts) {
+    opts = opts || {};
+    const action = (o.action || 'WATCH').toUpperCase();
+    let actionClass = 'watch';
+    if (action.includes('BUY') || action.includes('ACCUMULATE')) actionClass = 'buy';
+    if (action.includes('SELL') || action.includes('AVOID')) actionClass = 'sell';
+    const tier = o.display_tier || (o.elite_verified ? 'ELITE' : (o.below_elite_threshold ? 'WATCHLIST' : (opts.tactical ? 'TACTICAL' : 'TACTICAL')));
+    const metaLine = [
+      o.generated_at ? `Gen ${formatTime(o.generated_at) || String(o.generated_at).slice(0, 10)}` : null,
+      o.confidence ? `Conf ${o.confidence}` : null,
+      o.regime ? `Regime ${o.regime}` : null,
+      o.direction ? o.direction : null,
+      o.signal_type ? `Signal ${o.signal_type}` : null,
+      o.lifecycle_state ? o.lifecycle_state : null,
+    ].filter(Boolean).join(' · ');
+    return `
+      <div class="trade-item ${actionClass}">
+        <div class="trade-header">
+          <h3>${escapeHtml(o.symbol || o.ticker || 'UNKNOWN')}</h3>
+          <span class="trade-badge ${actionClass}">${escapeHtml(tier)}</span>
+        </div>
+        <div class="trade-metrics">
+          <span>Entry: ₹${escapeHtml(displayText(o.entry_zone, '-'))}</span>
+          <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
+          <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
+        </div>
+        ${metaLine ? `<div style="font-size:9px;color:#8B949E;margin:4px 0 6px;">${escapeHtml(metaLine)}</div>` : ''}
+        <p class="trade-logic">${brainHtml(o.logic, opts.fallbackLogic || 'No rationale provided.')}</p>
+      </div>
+    `;
+  }
+
   // ============================================================
   // TAB 1: BRAIN
   // ============================================================
@@ -1407,40 +1455,28 @@
 
     let oppsHtml = '';
     if (opps.length === 0) {
-      const emptyMsg = (lcPanel && lcPanel.pipeline_status === 'COMPLETE')
-        ? 'No active opportunities — EOD lifecycle resolved pending predictions.'
-        : 'No ACTIVE/PENDING opportunities in lifecycle export.';
-      oppsHtml = `<div class="calib-insufficient">${escapeHtml(emptyMsg)}</div>`;
+      const ultra = getScannerUltraSignals();
+      if (ultra.length > 0) {
+        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">Tactical opportunities available — scanner ULTRA signals below elite conviction threshold.</div>`;
+        ultra.forEach((s) => {
+          oppsHtml += renderOpportunityCard({
+            symbol: s.ticker,
+            ticker: s.ticker,
+            action: 'WATCH',
+            confidence: 'MEDIUM',
+            logic: `Scanner ULTRA · ${s.direction || '—'} · vol ${Number(s.volume_ratio || 0).toFixed(1)}x · ${Number(s.change_percent || 0).toFixed(2)}%`,
+            display_tier: 'TACTICAL',
+          }, { tactical: true, fallbackLogic: 'Scanner anomaly — not elite-verified.' });
+        });
+      } else {
+        const emptyMsg = (lcPanel && lcPanel.pipeline_status === 'COMPLETE')
+          ? 'No ranked setups pass elite gates — preserve capital until scanner confirms.'
+          : 'No tactical or elite opportunities in current ranked feed.';
+        oppsHtml = `<div class="calib-insufficient">${escapeHtml(emptyMsg)}</div>`;
+      }
     } else {
     opps.forEach(o => {
-      const action = (o.action || 'WATCH').toUpperCase();
-      let actionClass = 'watch';
-      if (action.includes('BUY') || action.includes('ACCUMULATE')) actionClass = 'buy';
-      if (action.includes('SELL') || action.includes('AVOID')) actionClass = 'sell';
-      const metaLine = [
-        o.generated_at ? `Gen ${formatTime(o.generated_at) || String(o.generated_at).slice(0, 10)}` : null,
-        o.confidence ? `Conf ${o.confidence}` : null,
-        o.regime ? `Regime ${o.regime}` : null,
-        o.direction ? o.direction : null,
-        o.signal_type ? `Signal ${o.signal_type}` : null,
-        o.lifecycle_state ? o.lifecycle_state : null,
-      ].filter(Boolean).join(' · ');
-      
-      oppsHtml += `
-        <div class="trade-item ${actionClass}">
-          <div class="trade-header">
-            <h3>${escapeHtml(o.symbol || 'UNKNOWN')}</h3>
-            <span class="trade-badge ${actionClass}">${escapeHtml(action)}</span>
-          </div>
-          <div class="trade-metrics">
-            <span>Entry: ₹${escapeHtml(displayText(o.entry_zone, '-'))}</span>
-            <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
-            <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
-          </div>
-          ${metaLine ? `<div style="font-size:9px;color:#8B949E;margin:4px 0 6px;">${escapeHtml(metaLine)}</div>` : ''}
-          <p class="trade-logic">${brainHtml(o.logic, 'No rationale provided.')}</p>
-        </div>
-      `;
+      oppsHtml += renderOpportunityCard(o);
     });
     }
 
@@ -1463,7 +1499,7 @@
 
     let html = `
       ${brainBanner}
-      ${runtimeTimestampHtml((activeMeta || ('Sources: ' + (data.sources_used || 8) + '/8')))}
+      ${runtimeTimestampHtml(globalExportAgeHtml('intelligence') || activeMeta || ('Sources: ' + (data.sources_used || 8) + '/8'))}
       
       <div class="brain-grid">
         <div class="main-column">
@@ -2035,12 +2071,11 @@
     const evaluated = lcCal.total_evaluated != null ? lcCal.total_evaluated : (metrics.total_evaluated || 0);
     const profitFactor = lcCal.profit_factor != null ? lcCal.profit_factor : (metrics.profit_factor || 0);
     const cal = data.calibration_dashboard || {};
-    const exportAge = window.RuntimeManager ? RuntimeManager.getExportAge('stats') : '';
     const schemaWarn = cal.status === 'degraded' ? (cal.reason || 'Calibration schema degraded — partial metrics only.') : '';
 
     let html = calBanner;
     if (schemaWarn) html += `<div class="panel-status-banner error">${escapeHtml(schemaWarn)}</div>`;
-    html += runtimeTimestampHtml(exportAge || (data.generation_time ? `Exported ${data.generation_time}` : ''));
+    html += runtimeTimestampHtml((data.generation_time ? `Exported ${data.generation_time}` : ''));
     
     html += `
       <div class="glass-card" style="padding: 20px;">
@@ -2067,8 +2102,9 @@
             <div class="stat-big-sub">gain ÷ loss</div>
           </div>
         </div>
-        ${evaluated === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(lcCal.message || lcStatus.calibration_message || (window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Awaiting evaluated sample size — post-market EOD evaluates predictions.') : 'Awaiting evaluated sample size — post-market EOD evaluates predictions.'))}</div>` : ''}
-        ${evaluated > 0 && evaluated < 30 ? `<div class="calib-insufficient">⚠ Sample size ${evaluated}/30 — adaptive calibration collecting samples.</div>` : ''}
+        ${evaluated === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(lcCal.message || lcStatus.calibration_message || (window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Calibration in progress — AI collecting outcome samples before adaptive tuning activates.') : 'Calibration in progress — AI collecting outcome samples before adaptive tuning activates.'))}</div>` : ''}
+        ${evaluated > 0 && evaluated < 20 ? `<div class="calib-insufficient">⚠ Calibration in progress — sample size ${evaluated}/20 for win-rate confidence.</div>` : ''}
+        ${evaluated >= 20 && evaluated < 50 ? `<div class="calib-insufficient">⚠ Collecting calibration samples (${evaluated}/50) before precision bands activate.</div>` : ''}
       </div>
     `;
 
@@ -2481,9 +2517,8 @@
 
     const journal = data.intelligence_journal || {}
     const entries = journal.entries || []
-    const exportAge = window.RuntimeManager ? RuntimeManager.getExportAge('history') : ''
     let html = ''
-    html += runtimeTimestampHtml(`${exportAge || ''} ${data.today_weekday || ''} ${data.today_date || ''}`.trim())
+    html += runtimeTimestampHtml(`${data.today_weekday || ''} ${data.today_date || ''}`.trim())
     html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`
 
     html += `<div id="historyJournalShell">`

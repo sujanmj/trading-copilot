@@ -316,11 +316,23 @@
     }
   }
 
+  function getFreshnessState() {
+    const fs = (state && state.freshness_state) || {};
+    const runtimePanel = getPanelState('runtime');
+    return {
+      exportStale: !!fs.export_stale,
+      collectorsActive: !!fs.collectors_active || !!runtimePanel.collectors_active,
+      partialLag: !!fs.partial_lag || !!runtimePanel.export_lag,
+    };
+  }
+
   function isStale() {
     const runtimePanel = getPanelState('runtime');
     if (runtimePanel && runtimePanel.status === 'idle') return false;
     const op = state && state.operational;
     if (op && op.expect_quiet_collectors && runtimePanel && !runtimePanel.stale) return false;
+    const fresh = getFreshnessState();
+    if (fresh.partialLag || fresh.collectorsActive) return false;
     return !!(runtimePanel && runtimePanel.stale);
   }
 
@@ -328,9 +340,12 @@
     const ts = formatTimestamp();
     const runtimePanel = getPanelState('runtime');
     const op = state && state.operational;
+    const fresh = getFreshnessState();
     let statusTag = '';
     if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
       statusTag = ` · <span class="runtime-idle">${op.display_status}</span>`;
+    } else if (fresh.partialLag || (fresh.collectorsActive && fresh.exportStale)) {
+      statusTag = ' · <span class="runtime-live">live collectors active</span>';
     } else if (isStale()) {
       statusTag = ' · <span class="runtime-stale">snapshot stale</span>';
     }
@@ -362,14 +377,17 @@
 
   function getPanelBanner(panelId, sourceKey) {
     const panel = getPanelState(panelId);
-    const age = sourceKey ? getExportAge(sourceKey) : '';
     const op = state && state.operational;
+    const fresh = getFreshnessState();
     const isIdle = panel.status === 'idle' || (op && op.expect_quiet_collectors && panel.status === 'ready' && sourceKey in { scanner: 1, news: 1, reddit: 1, youtube: 1, inshorts: 1 });
+    const panelStale = isIdle ? false : !!panel.stale;
+    const showStale = panelStale && !fresh.collectorsActive && !fresh.partialLag;
     return {
       status: panel.status || 'waiting',
       message: panel.message || (isIdle && op ? op.display_message : ''),
-      age: isIdle ? (op && op.display_message ? op.display_message : age) : age,
-      stale: isIdle ? false : !!panel.stale,
+      age: '',
+      stale: showStale,
+      collectorsActive: fresh.collectorsActive || fresh.partialLag,
       pipelineStatus: panel.pipeline_status || null,
       displayStatus: panel.display_status || (op && op.display_status) || null,
     };
@@ -394,6 +412,7 @@
     getPanelState,
     getPanelHashes,
     getSnapshotHash,
+    getFreshnessState,
     panelChanged,
     formatTimestamp,
     isStale,
