@@ -94,7 +94,14 @@ def is_silenced():
 # TELEGRAM IO
 # ============================================================
 
-def send_message(text, parse_mode='HTML'):
+def send_message(
+    text,
+    parse_mode='HTML',
+    *,
+    command='',
+    cycle_id='',
+    message_kind='final',
+):
     if not BOT_TOKEN or not CHAT_ID:
         return False
 
@@ -102,6 +109,43 @@ def send_message(text, parse_mode='HTML'):
         text = text[:3950] + "\n... (truncated)"
 
     try:
+        from backend.orchestration.telegram_outbound_guard import (
+            get_cycle_id,
+            prepare_send,
+            record_outbound,
+        )
+        prep = prepare_send(
+            text,
+            command=command,
+            cycle_id=cycle_id or get_cycle_id(command),
+            message_kind=message_kind,
+        )
+        if prep.get('action') == 'skip':
+            return False
+
+        if prep.get('action') == 'edit':
+            response = requests.post(
+                f"{API_URL}/editMessageText",
+                json={
+                    'chat_id': CHAT_ID,
+                    'message_id': prep['message_id'],
+                    'text': text,
+                    'parse_mode': parse_mode,
+                    'disable_web_page_preview': True,
+                },
+                timeout=10,
+            )
+            if response.status_code == 200:
+                record_outbound(
+                    prep['msg_hash'],
+                    command=command,
+                    message_kind='loading',
+                    message_id=prep['message_id'],
+                    text=text,
+                )
+                return True
+            return False
+
         response = requests.post(
             f"{API_URL}/sendMessage",
             json={
@@ -110,9 +154,23 @@ def send_message(text, parse_mode='HTML'):
                 'parse_mode': parse_mode,
                 'disable_web_page_preview': True,
             },
-            timeout=10
+            timeout=10,
         )
-        return response.status_code == 200
+        if response.status_code == 200:
+            message_id = None
+            try:
+                message_id = response.json().get('result', {}).get('message_id')
+            except Exception:
+                pass
+            record_outbound(
+                prep['msg_hash'],
+                command=command,
+                message_kind=message_kind,
+                message_id=message_id,
+                text=text,
+            )
+            return True
+        return False
     except Exception as e:
         safe_print(f"[TG] Send error: {e}")
         return False
@@ -304,7 +362,7 @@ def _cmd_elite_body():
             msg = (
                 "🛡️ <b>ELITE: NONE PASSED THRESHOLD</b>\n\n"
                 "No setups exceeded the &gt;72% meta-labeler probability gate. "
-                "Use /opps for scanner WATCHLIST items (below elite threshold)."
+                "Use /opps for TACTICAL scanner plays (below elite ML threshold)."
             )
             send_message(msg)
             return
@@ -389,13 +447,22 @@ def cmd_brain_pusher(mode, status_msg=None):
 
     def _do():
         guard_key = None
+        cycle_id = None
         try:
             from backend.orchestration.telegram_command_guard import begin_command, finish_command
+            from backend.orchestration.telegram_outbound_guard import bind_cycle, clear_loading, new_cycle_id
             skip, _, guard_key = begin_command(mode, '', CHAT_ID)
             if skip:
                 return
+            cycle_id = new_cycle_id(mode)
+            bind_cycle(mode, cycle_id)
             if status_msg:
-                send_message(status_msg)
+                send_message(
+                    status_msg,
+                    command=mode,
+                    cycle_id=cycle_id,
+                    message_kind='loading',
+                )
             from backend.orchestration import telegram_brain_pusher as tbp
             dispatch = {
                 'full': tbp.push_full_brain,
@@ -415,12 +482,21 @@ def cmd_brain_pusher(mode, status_msg=None):
             }
             fn = dispatch.get(mode)
             if fn:
-                fn()
+                fn(command=mode, cycle_id=cycle_id)
             else:
-                send_message(f"❌ Unknown brain mode: <code>{mode}</code>")
+                send_message(
+                    f"❌ Unknown brain mode: <code>{mode}</code>",
+                    command=mode,
+                    cycle_id=cycle_id,
+                )
         except Exception as e:
-            send_message(f"❌ Brain push failed: {str(e)[:200]}")
+            send_message(
+                f"❌ Brain push failed: {str(e)[:200]}",
+                command=mode,
+                cycle_id=cycle_id or '',
+            )
         finally:
+            clear_loading(mode)
             if guard_key:
                 from backend.orchestration.telegram_command_guard import finish_command
                 finish_command(guard_key)
@@ -534,12 +610,12 @@ def cmd_stats():
     if skip:
         return
     try:
-        from backend.lifecycle.unified_metrics import get_metrics_for_telegram, format_stats_telegram
+        from backend.lifecycle.unified_metrics import format_stats_telegram
         from backend.storage.stats_exporter import export_stats
         export_stats()
-        send_message(format_stats_telegram(get_metrics_for_telegram()['metrics']))
+        send_message(format_stats_telegram(session='today'), command='stats')
     except Exception as e:
-        send_message(f"❌ Stats failed: {str(e)[:200]}")
+        send_message(f"❌ Stats failed: {str(e)[:200]}", command='stats')
     finally:
         finish_command(key)
 

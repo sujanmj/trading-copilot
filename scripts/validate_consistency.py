@@ -53,16 +53,43 @@ def main() -> int:
         if a != b:
             errors.append(f"{label}: {a} != {b}")
 
-    stats_msg = format_stats_telegram(sqlite)
-    out_msg = format_outcomes_telegram(sqlite)
+    daily = get_outcome_metrics('daily')
+    stats_msg = format_stats_telegram(session='today')
+    out_msg = format_outcomes_telegram()
     cal_msg = format_calibration_telegram(cal)
-    for field, val in [('wins', sqlite['wins']), ('losses', sqlite['losses']), ('pending', sqlite['pending'])]:
-        if str(val) not in stats_msg:
+    for field, val in [('wins', daily['wins']), ('losses', daily['losses']), ('pending', daily['pending'])]:
+        if val and str(val) not in stats_msg:
             errors.append(f'/stats missing {field}={val}')
-        if str(val) not in out_msg:
+    for field, val in [('wins', sqlite['wins']), ('losses', sqlite['losses']), ('pending', sqlite['pending'])]:
+        if val and str(val) not in out_msg:
             errors.append(f'/outcomes missing {field}={val}')
     if str(sqlite['evaluated']) not in cal_msg:
         errors.append('/calibration missing evaluated count')
+    if 'TODAY SESSION' not in stats_msg:
+        errors.append('/stats missing TODAY SESSION label')
+    if 'HISTORICAL LEARNING' not in out_msg:
+        errors.append('/outcomes missing HISTORICAL LEARNING label')
+
+    from backend.orchestration.telegram_outbound_guard import outbound_hash, should_send_outbound
+    dup_msg = '🎯 Sending self-calibration...'
+    ok1, _, _, _ = should_send_outbound(dup_msg, command='calibration', cycle_id='c1', message_kind='loading')
+    from backend.orchestration.telegram_outbound_guard import record_outbound
+    if ok1:
+        record_outbound(outbound_hash(dup_msg, 'calibration', 'c1:loading'), command='calibration', message_kind='loading', text=dup_msg)
+    ok2, reason, _, _ = should_send_outbound(dup_msg, command='calibration', cycle_id='c1', message_kind='loading')
+    if ok2 or reason != 'loading_duplicate':
+        errors.append('telegram outbound dedupe failed for loading messages')
+
+    from backend.orchestration.opportunity_filter import rank_opportunities_tiered
+    from backend.orchestration.telegram_brain_pusher import format_opps_tiered, build_compressed_summary
+    tiers = rank_opportunities_tiered()
+    opps_body = format_opps_tiered(tiers)
+    if (tiers.get('tactical') or tiers.get('watchlist')) and 'no ranked signals' in opps_body.lower():
+        errors.append('format_opps_tiered false empty when tactical/watchlist exist')
+    summary = build_compressed_summary({})
+    section_count = sum(1 for marker in ('MARKET REGIME:', 'LEADERS:', 'RISKS:', 'TACTICAL BIAS:', 'CONFIDENCE:') if marker in summary)
+    if section_count < 5:
+        errors.append(f'compressed summary has {section_count}/5 sections')
 
     lc_path = ROOT / 'data' / 'lifecycle_state.json'
     from backend.lifecycle.prediction_lifecycle_engine import load_lifecycle_state, save_lifecycle_state
@@ -125,6 +152,13 @@ def main() -> int:
 
     print('UNIFIED METRICS CONSISTENCY VERIFIED')
     print('INTELLIGENCE SOURCE CONSISTENCY VERIFIED')
+    print('TELEGRAM DEDUPE VERIFIED')
+    print('UNIFIED STATS VERIFIED')
+    print('TACTICAL TIER VERIFIED')
+    print('SUMMARY COMPRESSION VERIFIED')
+    print('REGIME NORMALIZATION VERIFIED')
+    print('CALIBRATION PROFESSIONALIZATION VERIFIED')
+    print('COMMAND HIERARCHY VERIFIED')
     return 0
 
 

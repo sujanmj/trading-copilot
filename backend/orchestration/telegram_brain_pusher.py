@@ -44,13 +44,48 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / 'data'
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
 
 
-def send_message(text, parse_mode='HTML'):
+def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_kind='final'):
     if not BOT_TOKEN or not CHAT_ID:
         safe_print("[ERROR] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
         return False
     if len(text) > 4000:
         text = text[:3950] + "\n... (truncated)"
     try:
+        from backend.orchestration.telegram_outbound_guard import (
+            get_cycle_id,
+            prepare_send,
+            record_outbound,
+        )
+        prep = prepare_send(
+            text,
+            command=command,
+            cycle_id=cycle_id or get_cycle_id(command),
+            message_kind=message_kind,
+        )
+        if prep.get('action') == 'skip':
+            return False
+        if prep.get('action') == 'edit':
+            r = requests.post(
+                f"{API_URL}/editMessageText",
+                json={
+                    'chat_id': CHAT_ID,
+                    'message_id': prep['message_id'],
+                    'text': text,
+                    'parse_mode': parse_mode,
+                    'disable_web_page_preview': True,
+                },
+                timeout=10,
+            )
+            if r.status_code == 200:
+                record_outbound(
+                    prep['msg_hash'],
+                    command=command,
+                    message_kind='loading',
+                    message_id=prep['message_id'],
+                    text=text,
+                )
+                return True
+            return False
         r = requests.post(
             f"{API_URL}/sendMessage",
             json={
@@ -59,9 +94,23 @@ def send_message(text, parse_mode='HTML'):
                 'parse_mode': parse_mode,
                 'disable_web_page_preview': True,
             },
-            timeout=10
+            timeout=10,
         )
-        return r.status_code == 200
+        if r.status_code == 200:
+            message_id = None
+            try:
+                message_id = r.json().get('result', {}).get('message_id')
+            except Exception:
+                pass
+            record_outbound(
+                prep['msg_hash'],
+                command=command,
+                message_kind=message_kind,
+                message_id=message_id,
+                text=text,
+            )
+            return True
+        return False
     except Exception as e:
         safe_print(f"[TG] Send error: {e}")
         return False
@@ -84,9 +133,9 @@ def chunk_message(text, max_len=3900):
         remaining = remaining[split_at:].lstrip()
     return chunks
 
-def send_chunked(text):
+def send_chunked(text, *, command='', cycle_id='', message_kind='final'):
     for chunk in chunk_message(text):
-        send_message(chunk)
+        send_message(chunk, command=command, cycle_id=cycle_id, message_kind=message_kind)
         time.sleep(0.5)
 
 def load_intel():
@@ -235,45 +284,143 @@ def normalize_intel(intel):
 # FORMATTING HELPERS FOR JSON
 # ============================================================
 
-def format_opps(opps_list):
+def format_opps(opps_list, *, tier_label=None):
     opps_list = _list(opps_list)
     if not opps_list:
-        return "<i>📊 Scanner running — no ranked signals pass quality gates right now</i>"
+        return None
     try:
         from backend.orchestration.opportunity_filter import elite_alignment_summary
         summary = elite_alignment_summary(opps_list)
     except Exception:
         summary = {}
     header = ""
-    if summary.get('all_below_elite'):
+    if tier_label:
+        header = f"<b>{tier_label}</b>\n"
+    elif summary.get('all_below_elite'):
         header = (
-            "<i>🛡️ No setups passed elite meta-labeler (&gt;72%). "
-            "Labels below are scanner-ranked WATCHLIST/MEDIUM — not elite HIGH conviction.</i>\n\n"
+            "<i>🛡️ Scanner-ranked setups below elite meta-labeler threshold.</i>\n\n"
         )
     elif summary.get('has_elite_verified'):
-        header = f"<i>✅ {summary.get('elite_verified_count', 0)} elite-verified · "
-        wl = summary.get('watchlist_count', 0)
-        if wl:
-            header += f"{wl} watchlist (below elite threshold)</i>\n\n"
-        else:
-            header += "all shown are elite-aligned</i>\n\n"
+        header = f"<i>✅ {summary.get('elite_verified_count', 0)} elite-verified</i>\n\n"
     res = [header] if header else []
     for i, o in enumerate(opps_list, 1):
         o = _dict(o)
         action = _text(o.get('action'), 'WATCH').upper()
         icon = "🟢" if action == "BUY" else "🟡"
+        tier = o.get('display_tier') or ''
+        tier_tag = f" [{tier}]" if tier else ''
         conf = _text(o.get('display_confidence') or o.get('confidence'), 'MEDIUM').upper()
         note = o.get('confidence_note') or ''
         note_html = f"\n   ⚠️ <i>{note}</i>" if note else ""
         ml = o.get('ml_confidence')
         ml_html = f" · ML {ml}" if ml and o.get('elite_verified') else ""
         res.append(
-            f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b> [{action}]\n"
+            f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b>{tier_tag} [{action}]\n"
             f"   💰 Entry: {_text(o.get('entry_zone'))} | Tgt: {_text(o.get('target'))} | SL: {_text(o.get('stop_loss'))}\n"
             f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html}\n"
             f"   <i>{_text(o.get('logic'), 'No rationale provided.')}</i>"
         )
     return "\n\n".join(res)
+
+
+def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
+    """Format ELITE / TACTICAL / WATCHLIST — never false-empty when scanner ULTRA exists."""
+    tactical = _list((tiers or {}).get('tactical'))
+    watchlist = _list((tiers or {}).get('watchlist'))
+    elite = _list((tiers or {}).get('elite'))
+
+    if not tactical and not watchlist and not (include_elite and elite):
+        try:
+            from backend.orchestration.opportunity_filter import rank_opportunities_tiered
+            refill = rank_opportunities_tiered()
+            tactical = _list(refill.get('tactical'))
+            watchlist = _list(refill.get('watchlist'))
+            elite = _list(refill.get('elite'))
+        except Exception:
+            pass
+
+    sections = []
+    if include_elite and elite:
+        block = format_opps(elite, tier_label='🎯 ELITE')
+        if block:
+            sections.append(block)
+    if tactical:
+        block = format_opps(tactical, tier_label='⚡ TACTICAL')
+        if block:
+            sections.append(block)
+    if watchlist:
+        block = format_opps(watchlist, tier_label='👀 WATCHLIST')
+        if block:
+            sections.append(block)
+
+    if sections:
+        return "\n\n".join(sections)
+    return "<i>📊 Scanner active — monitoring for fresh anomalies</i>"
+
+
+def _professionalize_calibration_text(raw: str) -> str:
+    text = _text(raw, '')
+    if not text or text == 'No calibration data available.':
+        return (
+            '<i>Adaptive learning still collecting statistically meaningful samples.</i>'
+        )
+    lowered = text.lower()
+    if '100%' in text and ('1/1' in text or '1-1' in lowered):
+        return '<i>Early positive sample detected.</i>'
+    if 'awaiting evaluated' in lowered or 'insufficient_data' in lowered:
+        return '<i>Adaptive learning still collecting statistically meaningful samples.</i>'
+    if 'win rate' in lowered and any(x in text for x in ('1/', '2/', '3/', '4/')):
+        return '<i>Low-confidence calibration — sample still developing.</i>'
+    return text[:1200]
+
+
+def build_compressed_summary(intel):
+    """Max 5 short sections — readable in under 5 seconds."""
+    intel = normalize_intel(intel)
+    stale = stale_warning(intel)
+    mood = _dict(intel.get('market_mood'))
+    sectors = _dict(intel.get('sector_rotation'))
+    risks = _list(intel.get('risks_and_avoids'))
+
+    regime = 'VOLATILE'
+    try:
+        from backend.utils.config import ANALYSIS_STATE_FILE
+        if ANALYSIS_STATE_FILE.exists():
+            state = json.loads(ANALYSIS_STATE_FILE.read_text(encoding='utf-8'))
+            regime = str(state.get('last_regime') or 'volatile').replace('_', ' ').upper()
+    except Exception:
+        pass
+
+    leaders = _join_list(sectors.get('bullish'), 'Not identified')
+    if len(leaders) > 48:
+        leaders = leaders[:45] + '...'
+
+    risk_bits = []
+    for r in risks[:3]:
+        r = _dict(r)
+        sym = _text(r.get('symbol'), '')
+        logic = _text(r.get('logic'), '')
+        bit = sym if sym and sym != 'UNKNOWN' else logic[:40]
+        if bit:
+            risk_bits.append(bit)
+    risks_line = ', '.join(risk_bits) if risk_bits else 'Macro headline risk — monitor liquidity'
+
+    bias = _text(mood.get('india_outlook') or mood.get('global_mood'), 'Selective')
+    conf_raw = mood.get('confidence_level') or mood.get('confidence_score')
+    try:
+        conf_num = float(str(conf_raw).replace('/10', '').strip())
+        conf_line = f"{conf_num:.1f}/10"
+    except (TypeError, ValueError):
+        conf_line = _text(conf_raw, 'N/A')
+
+    return (
+        f"{stale}📋 <b>EXECUTIVE SUMMARY</b>\n\n"
+        f"<b>MARKET REGIME:</b>\n{regime}\n\n"
+        f"<b>LEADERS:</b>\n{leaders}\n\n"
+        f"<b>RISKS:</b>\n{risks_line}\n\n"
+        f"<b>TACTICAL BIAS:</b>\n{bias}\n\n"
+        f"<b>CONFIDENCE:</b>\n{conf_line}"
+    )
 
 
 def format_risks(risks_list):
@@ -313,14 +460,7 @@ def build_msg1_header(intel):
 
 
 def build_msg2_summary_govt(intel):
-    intel = normalize_intel(intel)
-    summary = _text(intel.get('executive_summary'), 'Analysis pending...')
-    govt = _dict(intel.get('government_impact'))
-
-    govt_text = f"<b>Impact:</b> {_text(govt.get('summary'), 'No government impact data available.')}\n"
-    govt_text += f"<b>Confidence:</b> {_text(govt.get('confidence_score'), 'N/A')}"
-
-    return f"📋 <b>EXECUTIVE SUMMARY</b>\n\n{summary}\n\n━━━━━━━━━━━━━━━━━━━━\n\n🏛️ <b>GOVT POLICY IMPACT</b>\n\n{govt_text}"
+    return build_compressed_summary(intel)
 
 
 def build_msg3_scanner_sentiment(intel):
@@ -337,10 +477,15 @@ def build_msg3_scanner_sentiment(intel):
 
 def build_msg4_calibration_opps_top5(intel):
     intel = normalize_intel(intel)
-    cal = _text(intel.get('self_calibration'), 'No calibration data available.')
+    cal = _professionalize_calibration_text(intel.get('self_calibration'))
     opps = get_opportunities(intel)
-
     opps_text = format_opps(opps[:5])
+    if not opps_text:
+        try:
+            from backend.orchestration.opportunity_filter import rank_opportunities_tiered
+            opps_text = format_opps_tiered(rank_opportunities_tiered(intel), include_elite=True)
+        except Exception:
+            opps_text = "<i>Monitoring for ranked setups.</i>"
 
     return f"🎯 <b>SELF-CALIBRATION</b>\n\n{cal}\n\n━━━━━━━━━━━━━━━━━━━━\n\n💎 <b>TOP OPPORTUNITIES (1-5)</b>\n\n{opps_text}"
 
@@ -350,7 +495,9 @@ def build_msg5_opps_top10_risks(intel):
     opps = get_opportunities(intel)
     risks = _list(intel.get('risks_and_avoids'))
 
-    opps_text = format_opps(opps[5:10]) if len(opps) > 5 else "<i>No additional opportunities.</i>"
+    opps_text = format_opps(opps[5:10]) if len(opps) > 5 else None
+    if not opps_text:
+        opps_text = "<i>No additional opportunities.</i>"
     risks_text = format_risks(risks)
 
     return f"💎 <b>TOP OPPORTUNITIES (6-10)</b>\n\n{opps_text}\n\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{risks_text}"
@@ -417,7 +564,7 @@ def check_intel_file_stale(max_age_hours=2):
     return False, file_age_hours
 
 
-def push_full_brain():
+def push_full_brain(*, command='full', cycle_id=''):
     is_stale, age = check_intel_file_stale()
     if is_stale:
         safe_print(f"[BRAIN] Blocked push — intel file stale or missing (age={age})")
@@ -427,12 +574,13 @@ def push_full_brain():
     debug_intel_fields(raw_intel)
     intel = normalize_intel(raw_intel)
     if not intel:
-        send_message("❌ No brain data yet. Run /refresh first.")
+        send_message("❌ No brain data yet. Run /refresh first.", command=command, cycle_id=cycle_id)
         return False
 
     try:
-        from backend.orchestration.opportunity_filter import rank_opportunities, DEFAULT_OPPS_LIMIT
-        ranked = rank_opportunities(raw_intel, limit=DEFAULT_OPPS_LIMIT)
+        from backend.orchestration.opportunity_filter import rank_opportunities_tiered, DEFAULT_OPPS_LIMIT
+        tiers = rank_opportunities_tiered(raw_intel, limit=DEFAULT_OPPS_LIMIT)
+        ranked = tiers.get('all') or []
         intel['top_opportunities'] = ranked
         intel['opportunities'] = ranked
     except Exception as e:
@@ -454,12 +602,16 @@ def push_full_brain():
     for label, builder in builders:
         try:
             text = builder(intel)
-            send_chunked(text)
+            send_chunked(text, command=command, cycle_id=cycle_id)
             safe_print(f"  ✓ {label}")
             time.sleep(0.8)
         except Exception as e:
             safe_print(f"[ERROR] {label}: {e}")
-            send_message(f"❌ Error in {label}: {str(e)[:150]}")
+            send_message(
+                f"❌ Error in {label}: {str(e)[:150]}",
+                command=command,
+                cycle_id=cycle_id,
+            )
     safe_print("[BRAIN] Done.")
     return True
 
@@ -467,75 +619,95 @@ def push_full_brain():
 # COMMAND DISPATCHERS
 # ============================================================
 
-def push_summary():
+def push_summary(*, command='summary', cycle_id=''):
     intel = normalize_intel(load_intel())
     if intel:
-        from backend.lifecycle.unified_metrics import format_stats_telegram
-        send_chunked(
-            f"{build_msg2_summary_govt(intel)}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{format_stats_telegram()}"
-        )
+        send_chunked(build_compressed_summary(intel), command=command, cycle_id=cycle_id)
 
 
-def push_opps():
-    from backend.orchestration.opportunity_filter import rank_opportunities, DEFAULT_OPPS_LIMIT
+def push_opps(*, command='opps', cycle_id=''):
+    from backend.orchestration.opportunity_filter import rank_opportunities_tiered, DEFAULT_OPPS_LIMIT
     raw = load_intel()
     debug_intel_fields(raw)
     intel = normalize_intel(raw)
     if intel:
         try:
-            opps = rank_opportunities(raw, limit=DEFAULT_OPPS_LIMIT)
-            safe_print(f"[BRAIN PUSH] Ranked {len(opps)} opportunities (top {DEFAULT_OPPS_LIMIT})")
+            tiers = rank_opportunities_tiered(raw, limit=DEFAULT_OPPS_LIMIT)
+            tactical_n = len(tiers.get('tactical') or [])
+            watch_n = len(tiers.get('watchlist') or [])
+            safe_print(f"[BRAIN PUSH] Tactical={tactical_n} Watchlist={watch_n}")
         except Exception as e:
             safe_print(f"[WARN] opportunity filter failed: {e}")
-            opps = get_opportunities(intel)[:DEFAULT_OPPS_LIMIT]
+            tiers = {'tactical': get_opportunities(intel)[:DEFAULT_OPPS_LIMIT], 'watchlist': []}
         stale = stale_warning(raw)
-        try:
-            from backend.orchestration.opportunity_filter import elite_alignment_summary
-            align = elite_alignment_summary(opps)
-            title = "ELITE-ALIGNED OPPORTUNITIES" if align.get('has_elite_verified') else "SCANNER WATCHLIST (below elite threshold)"
-        except Exception:
-            title = "RANKED OPPORTUNITIES"
-        send_chunked(f"{stale}💎 <b>{title}</b> (top {len(opps)})\n\n{format_opps(opps)}")
-
-
-def push_risks():
-    intel = normalize_intel(load_intel())
-    if intel:
-        risks = _list(intel.get('risks_and_avoids'))
-        send_chunked(f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}")
-
-
-def push_action():
-    intel = normalize_intel(load_intel())
-    if intel:
-        send_chunked(f"🚀 <b>ACTION PLAN</b>\n\n{_text(intel.get('action_plan'), 'No action plan provided.')}")
-
-
-def push_calibration():
-    intel = normalize_intel(load_intel())
-    if intel:
-        from backend.lifecycle.unified_metrics import format_calibration_telegram
-        cal_text = _text(intel.get('self_calibration'), 'No calibration data available.')
+        body = format_opps_tiered(tiers, include_elite=False)
         send_chunked(
-            f"🎯 <b>SELF-CALIBRATION</b>\n\n{cal_text}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{format_calibration_telegram()}"
+            f"{stale}💎 <b>TACTICAL OPPORTUNITIES</b>\n<i>Tactical + watchlist · use /elite for ML-only setups</i>\n\n{body}",
+            command=command,
+            cycle_id=cycle_id,
         )
 
 
-def push_sectors():
+def push_risks(*, command='risks', cycle_id=''):
+    intel = normalize_intel(load_intel())
+    if intel:
+        risks = _list(intel.get('risks_and_avoids'))
+        send_chunked(
+            f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}",
+            command=command,
+            cycle_id=cycle_id,
+        )
+
+
+def push_action(*, command='action', cycle_id=''):
+    intel = normalize_intel(load_intel())
+    if intel:
+        action = _text(intel.get('action_plan'), 'Maintain capital preservation — await tactical confirmation.')
+        send_chunked(
+            f"🛡️ <b>ACTION</b>\n"
+            f"<i>Capital preservation + tactical positioning</i>\n\n{action[:2400]}",
+            command=command,
+            cycle_id=cycle_id,
+        )
+
+
+def push_calibration(*, command='calibration', cycle_id=''):
+    intel = normalize_intel(load_intel())
+    if intel:
+        from backend.lifecycle.unified_metrics import format_calibration_telegram
+        cal_text = _professionalize_calibration_text(intel.get('self_calibration'))
+        send_chunked(
+            f"🎯 <b>CALIBRATION</b>\n"
+            f"<i>AI learning state only · resolved metrics via /outcomes</i>\n\n"
+            f"{cal_text}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{format_calibration_telegram()}",
+            command=command,
+            cycle_id=cycle_id,
+        )
+
+
+def push_sectors(*, command='sectors', cycle_id=''):
     intel = normalize_intel(load_intel())
     if intel:
         sectors = _dict(intel.get('sector_rotation'))
         bullish = _join_list(sectors.get('bullish'))
         bearish = _join_list(sectors.get('bearish'))
-        send_chunked(f"🔄 <b>SECTOR ROTATION</b>\n\n🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}")
+        send_chunked(
+            f"🔄 <b>SECTOR ROTATION</b>\n\n🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}",
+            command=command,
+            cycle_id=cycle_id,
+        )
 
 
-def push_global():
+def push_global(*, command='global', cycle_id=''):
     """Overnight global impact — mood + indices from latest intel/global feed."""
     raw = load_intel()
     intel = normalize_intel(raw)
     if not intel:
-        send_message("❌ No intelligence yet. Run /refresh or wait for US Pulse cycle.")
+        send_message(
+            "❌ No intelligence yet. Run /refresh or wait for US Pulse cycle.",
+            command=command,
+            cycle_id=cycle_id,
+        )
         return
     mood = _dict(intel.get('market_mood'))
     stale = stale_warning(raw)
@@ -566,7 +738,7 @@ def push_global():
     summary = _text(intel.get('executive_summary'), '')[:600]
     if summary and summary != 'N/A':
         body += f"\n<i>{summary}</i>"
-    send_chunked(body)
+    send_chunked(body, command=command, cycle_id=cycle_id)
 
 
 if __name__ == "__main__":

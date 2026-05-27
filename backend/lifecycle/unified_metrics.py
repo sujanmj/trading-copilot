@@ -219,12 +219,18 @@ def get_calibration_metrics() -> Dict[str, Any]:
         'avg_gain_pct': core['avg_gain_pct'],
         'avg_loss_pct': core['avg_loss_pct'],
         'profit_factor': core['profit_factor'],
-        'message': (
-            'Awaiting evaluated prediction sample size.'
-            if actionable < 30
-            else 'Calibration metrics synchronized from SQLite.'
-        ),
+        'message': _calibration_status_message(actionable),
     }
+
+
+def _calibration_status_message(actionable: int) -> str:
+    if actionable < 5:
+        return 'Adaptive learning still collecting statistically meaningful samples.'
+    if actionable < 20:
+        return 'Low-confidence calibration — sample still developing.'
+    if actionable >= 50:
+        return 'Adaptive confidence enabled — metrics synchronized from SQLite.'
+    return 'Calibration metrics synchronized from SQLite.'
 
 
 def get_unified_snapshot() -> Dict[str, Any]:
@@ -245,49 +251,81 @@ def get_unified_snapshot() -> Dict[str, Any]:
 def get_metrics_for_telegram() -> Dict[str, Any]:
     """Identical snapshot for /stats, /outcomes, /calibration, /summary."""
     snap = get_unified_snapshot()
-    metrics = snap['metrics_all_time']
     return {
         'snapshot': snap,
-        'metrics': metrics,
+        'metrics': snap['metrics_all_time'],
+        'metrics_daily': snap['metrics_daily'],
+        'metrics_all_time': snap['metrics_all_time'],
         'calibration': snap['calibration'],
         'predictions': snap['predictions'],
     }
 
 
-def format_stats_telegram(metrics: Optional[dict] = None) -> str:
-    bundle = get_metrics_for_telegram() if metrics is None else {'metrics': metrics}
-    m = bundle['metrics']
-    msg = "<b>📊 Trading Copilot Stats</b>\n\n"
+def _win_rate_line(m: dict, actionable: int) -> str:
+    if actionable < 5:
+        if (m.get('wins') or 0) > 0 and actionable > 0:
+            return '<i>Early positive sample detected.</i>\n'
+        return '<i>Win rate withheld — sample below minimum threshold.</i>\n'
+    return f"<b>Win Rate:</b> {m.get('win_rate', 0):.1f}%\n"
+
+
+def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'today') -> str:
+    snap = get_unified_snapshot()
+    if metrics is not None:
+        m = metrics
+        label = 'TODAY SESSION' if session == 'today' else 'HISTORICAL LEARNING'
+    elif session == 'historical':
+        m = snap['metrics_all_time']
+        label = 'HISTORICAL LEARNING'
+    else:
+        m = snap['metrics_daily']
+        label = 'TODAY SESSION'
+
+    actionable = (m.get('wins') or 0) + (m.get('losses') or 0) + (m.get('neutral') or 0)
+    msg = f"<b>📊 Trading Copilot Stats</b>\n<b>{label}</b>\n\n"
     msg += f"<b>Predictions:</b> {m.get('prediction_total', m.get('total_predictions', 0))}\n"
     msg += f"<b>Evaluated:</b> {m.get('evaluated', m.get('total_evaluated', 0))}\n"
     msg += f"<b>Pending:</b> {m.get('pending', 0)}\n"
     if m.get('wins') or m.get('losses') or m.get('evaluated'):
-        msg += f"<b>Win Rate:</b> {m.get('win_rate', 0):.1f}%\n"
+        msg += _win_rate_line(m, actionable)
         msg += f"  ✅ Wins: {m.get('wins', 0)}\n"
         msg += f"  ❌ Losses: {m.get('losses', 0)}\n"
-        msg += f"<b>Avg Gain:</b> +{m.get('avg_gain_pct', 0):.2f}%\n"
-        msg += f"<b>Avg Loss:</b> -{m.get('avg_loss_pct', 0):.2f}%\n"
-        msg += f"<b>Profit Factor:</b> {m.get('profit_factor', 0):.2f}\n"
+        if actionable >= 5:
+            msg += f"<b>Avg Gain:</b> +{m.get('avg_gain_pct', 0):.2f}%\n"
+            msg += f"<b>Avg Loss:</b> -{m.get('avg_loss_pct', 0):.2f}%\n"
+            msg += f"<b>Profit Factor:</b> {m.get('profit_factor', 0):.2f}\n"
     else:
         msg += "\n<i>⏳ No resolved outcomes yet — pending predictions evaluate at EOD</i>"
     return msg
 
 
 def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
-    bundle = get_metrics_for_telegram() if metrics is None else {'metrics': metrics}
-    m = bundle['metrics']
+    snap = get_unified_snapshot()
+    m = metrics or snap['metrics_all_time']
     evaluated = m.get('evaluated', m.get('total_evaluated', 0))
     pending = m.get('pending', 0)
     wins = m.get('wins', 0)
     losses = m.get('losses', 0)
+    actionable = wins + losses + (m.get('neutral') or 0)
+    header = '<b>📊 Outcomes</b>\n<b>RESOLVED METRICS · HISTORICAL LEARNING</b>\n\n'
+
     if not (wins or losses or evaluated):
         return (
-            "<b>📊 Outcomes</b>\n\n"
+            f"{header}"
             f"Evaluated: {evaluated} | Pending: {pending}\n"
             "<i>Outcomes evaluate at post-market EOD and 8 AM cycle.</i>"
         )
+
+    if actionable < 5:
+        return (
+            f"{header}"
+            f"Evaluated: {evaluated} | Pending: {pending}\n"
+            f"✅ Wins: {wins} | ❌ Losses: {losses}\n"
+            "<i>Early positive sample detected.</i>"
+        )
+
     return (
-        f"<b>📊 Outcomes</b>\n\n"
+        f"{header}"
         f"Evaluated: {evaluated} | Win rate: {m.get('win_rate', 0):.1f}%\n"
         f"✅ Wins: {wins} | ❌ Losses: {losses} | ⏳ Pending: {pending}"
     )
@@ -295,15 +333,26 @@ def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
 
 def format_calibration_telegram(cal: Optional[dict] = None) -> str:
     c = cal or get_calibration_metrics()
-    return (
-        f"<b>🎯 Calibration Metrics</b>\n\n"
-        f"Predictions: {c.get('prediction_total', 0)}\n"
-        f"Evaluated: {c.get('evaluated', c.get('total_evaluated', 0))}\n"
-        f"Pending: {c.get('pending', 0)}\n"
-        f"Win rate: {c.get('win_rate', 0):.1f}%\n"
-        f"Wins: {c.get('wins', 0)} | Losses: {c.get('losses', 0)}\n"
-        f"<i>{c.get('message', '')}</i>"
-    )
+    actionable = (c.get('wins') or 0) + (c.get('losses') or 0) + (c.get('neutral') or 0)
+    msg = "<b>🎯 Calibration Metrics</b>\n<b>AI LEARNING STATE · HISTORICAL LEARNING</b>\n\n"
+    msg += f"Predictions: {c.get('prediction_total', 0)}\n"
+    msg += f"Evaluated: {c.get('evaluated', c.get('total_evaluated', 0))}\n"
+    msg += f"Pending: {c.get('pending', 0)}\n"
+    if actionable < 5:
+        if (c.get('wins') or 0) > 0:
+            msg += "<i>Early positive sample detected.</i>\n"
+        else:
+            msg += "<i>Adaptive learning still collecting statistically meaningful samples.</i>\n"
+    elif actionable < 20:
+        msg += f"Wins: {c.get('wins', 0)} | Losses: {c.get('losses', 0)}\n"
+        msg += "<i>Low-confidence calibration — sample still developing.</i>\n"
+    else:
+        msg += f"Win rate: {c.get('win_rate', 0):.1f}%\n"
+        msg += f"Wins: {c.get('wins', 0)} | Losses: {c.get('losses', 0)}\n"
+    if actionable >= 50:
+        msg += "<i>Adaptive confidence enabled.</i>\n"
+    msg += f"<i>{c.get('message', '')}</i>"
+    return msg
 
 
 def embed_metrics_in_lifecycle_state(state: dict) -> dict:

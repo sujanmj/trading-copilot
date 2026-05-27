@@ -8,6 +8,7 @@ reach Claude even when bulk context is compressed.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.ai.signal_ranker import (
@@ -44,11 +45,14 @@ REGIME_NAMES = (
     'bullish_trend',
     'sideways',
     'volatile',
+    'high_risk',
     'risk_off',
     'regime_transition',
     'macro_uncertainty',
     'panic_volatile',
 )
+
+MIN_REGIME_DURATION_SEC = float(__import__('os').environ.get('REGIME_MIN_DURATION_SEC', '900'))
 
 
 def _safe_dict(v) -> dict:
@@ -431,6 +435,7 @@ def detect_market_regime(
     all_data: Dict[str, Any],
     contradictions: Optional[dict] = None,
     previous_regime: Optional[str] = None,
+    regime_since: Optional[str] = None,
 ) -> Dict[str, Any]:
     metrics = extract_key_metrics(all_data)
     india_avg = float(metrics.get('india_avg_change') or 0)
@@ -458,16 +463,25 @@ def detect_market_regime(
         scores['sideways'] += 0.5
     if avg_abs >= 2.0 or ultra_count >= 2:
         scores['volatile'] += 0.35
+    if disagree >= 0.32 and volatility_index >= 0.38:
+        scores['high_risk'] += 0.42
     if disagree >= 0.4 and volatility_index >= 0.42:
         scores['risk_off'] += 0.35
-    if (
-        (avg_abs >= 4.0 or ultra_count >= 4)
-        and disagree >= 0.35
-        and volatility_index >= 0.55
+    liquidity_stress = ultra_count >= 3 and avg_abs >= 3.5 and shock_count >= 2
+    macro_contradiction = disagree >= 0.45 and shock_count >= 3
+    vix_like_extreme = avg_abs >= 5.0 and ultra_count >= 5 and volatility_index >= 0.62
+    if vix_like_extreme and macro_contradiction and liquidity_stress:
+        scores['panic_volatile'] += 0.72
+    elif (
+        (avg_abs >= 4.5 or ultra_count >= 5)
+        and disagree >= 0.4
+        and volatility_index >= 0.58
+        and liquidity_stress
     ):
-        scores['panic_volatile'] += 0.65
+        scores['panic_volatile'] += 0.55
     elif avg_abs >= 3.0 and ultra_count >= 3 and volatility_index >= 0.5:
         scores['volatile'] += 0.25
+        scores['high_risk'] += 0.18
     if int(metrics.get('govt_high_impact') or 0) >= 3 or shock_count >= 3:
         scores['macro_uncertainty'] += 0.5
     if disagree >= 0.35 or (previous_regime and previous_regime != max(scores, key=scores.get)):
@@ -476,10 +490,40 @@ def detect_market_regime(
     if previous_regime == 'panic_volatile' and scores['panic_volatile'] < scores.get('volatile', 0) + 0.12:
         scores['panic_volatile'] = max(scores['panic_volatile'], scores.get('volatile', 0) + 0.12)
 
-    primary = max(scores, key=lambda k: scores[k])
-    if scores[primary] < 0.25:
-        primary = 'sideways'
+    candidate = max(scores, key=lambda k: scores[k])
+    if scores[candidate] < 0.25:
+        candidate = 'sideways'
         scores['sideways'] = 0.5
+
+    primary = candidate
+    now = datetime.now()
+    elapsed_sec = MIN_REGIME_DURATION_SEC + 1
+    if regime_since and previous_regime:
+        try:
+            since_dt = datetime.fromisoformat(str(regime_since).replace('Z', '+00:00'))
+            if since_dt.tzinfo:
+                since_dt = since_dt.replace(tzinfo=None)
+            elapsed_sec = (now - since_dt).total_seconds()
+        except Exception:
+            elapsed_sec = MIN_REGIME_DURATION_SEC + 1
+
+    if previous_regime and candidate != previous_regime and elapsed_sec < MIN_REGIME_DURATION_SEC:
+        allow_shift = (
+            candidate == 'panic_volatile' and vix_like_extreme
+        ) or (
+            previous_regime == 'panic_volatile'
+            and scores.get('panic_volatile', 0) < scores.get('volatile', 0)
+        )
+        if not allow_shift:
+            primary = previous_regime
+            candidate = previous_regime
+
+    regime_shift = bool(previous_regime and previous_regime != primary)
+    new_regime_since = regime_since
+    if regime_shift or not regime_since:
+        new_regime_since = now.isoformat()
+    elif not previous_regime:
+        new_regime_since = now.isoformat()
 
     sentiment_instability = _clamp(disagree + (shock_count * 0.06))
     news_shock_intensity = _clamp(shock_count / 8.0)
@@ -492,7 +536,7 @@ def detect_market_regime(
         compression_aggressiveness = 0.62
     elif primary == 'panic_volatile' or volatility_index > 0.65:
         compression_aggressiveness = 0.22
-    elif primary in ('volatile', 'risk_off'):
+    elif primary in ('volatile', 'high_risk', 'risk_off'):
         compression_aggressiveness = 0.35
     elif primary == 'macro_uncertainty':
         compression_aggressiveness = 0.18
@@ -503,13 +547,13 @@ def detect_market_regime(
     else:
         compression_aggressiveness = 0.55
 
-    regime_shift = bool(previous_regime and previous_regime != primary)
     if regime_shift:
         _log('REGIME SHIFT', f'{previous_regime} -> {primary} (vol={volatility_index:.2f})')
 
     summary_lines = [
         '=== MARKET REGIME ===',
         f"  Primary: {primary.replace('_', ' ').upper()} | volatility={volatility_index:.2f}",
+        f"  Persistence: {int(elapsed_sec // 60)}m in current regime",
         f"  Compression mode: {'AGGRESSIVE' if compression_aggressiveness >= 0.7 else 'PRESERVE DETAIL'} "
         f"(aggressiveness={compression_aggressiveness:.2f})",
         f"  Signals: news_shock={news_shock_intensity:.2f} sentiment_instability={sentiment_instability:.2f} "
@@ -526,6 +570,7 @@ def detect_market_regime(
         'compression_aggressiveness': round(compression_aggressiveness, 3),
         'regime_shift': regime_shift,
         'previous_regime': previous_regime,
+        'regime_since': new_regime_since,
         'summary_block': '\n'.join(summary_lines),
     }
 
@@ -826,8 +871,14 @@ def evaluate_compression_quality(
 def should_block_stale_reuse(all_data: Dict[str, Any], state: dict) -> bool:
     """Prevent stale compressed context during volatile or contradictory regimes."""
     prev_regime = state.get('last_regime')
+    regime_since = state.get('regime_since')
     contradictions = detect_contradictions(all_data)
-    regime = detect_market_regime(all_data, contradictions, previous_regime=prev_regime)
+    regime = detect_market_regime(
+        all_data,
+        contradictions,
+        previous_regime=prev_regime,
+        regime_since=regime_since,
+    )
 
     if regime.get('regime_shift'):
         return True
@@ -871,8 +922,14 @@ def build_preservation_layer(
 ) -> dict:
     """Full preservation package consumed by intelligence_compressor."""
     prev_regime = (previous_state or {}).get('last_regime')
+    regime_since = (previous_state or {}).get('regime_since')
     contradictions = detect_contradictions(all_data)
-    regime = detect_market_regime(all_data, contradictions, previous_regime=prev_regime)
+    regime = detect_market_regime(
+        all_data,
+        contradictions,
+        previous_regime=prev_regime,
+        regime_since=regime_since,
+    )
     scored = build_scored_signals(all_data, contradictions)
     raw_evidence = extract_raw_high_impact(all_data, scored)
     profile = build_compression_profile(regime, contradictions, scored)

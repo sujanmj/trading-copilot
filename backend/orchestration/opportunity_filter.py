@@ -567,3 +567,109 @@ def rank_opportunities(
         elif not item.get('display_tier'):
             item['display_tier'] = 'TACTICAL'
     return elite
+
+
+def _passes_tactical_gate(item: dict, intel: dict, ctx: dict, scanner_index: Dict[str, dict]) -> bool:
+    """Lighter gate for scanner-led tactical plays (below elite ML threshold)."""
+    if str(item.get('signal_type') or '') == 'scanner_ultra':
+        return True
+    if str(item.get('_source') or '') == 'scanner_ultra':
+        return True
+    sym = str(item.get('symbol') or '').upper()
+    scan = scanner_index.get(sym) or {}
+    if str(scan.get('strength') or '').upper() == 'ULTRA':
+        return True
+    score = _rank_score(item, intel, _parse_ts(intel.get('timestamp')), ctx, scanner_index)
+    sector_boost = _sector_strength_boost(item, intel, scanner_index)
+    vol_boost = _volume_anomaly_boost(item, scanner_index)
+    if sector_boost >= 0.8 and vol_boost >= 0.5:
+        return score >= max(4.0, MIN_RANK_SCORE * 0.55)
+    return score >= MIN_RANK_SCORE * 0.65
+
+
+def rank_opportunities_tiered(
+    intel: Optional[dict] = None,
+    *,
+    limit: int = DEFAULT_OPPS_LIMIT,
+) -> Dict[str, List[dict]]:
+    """
+    Split opportunities into ELITE / TACTICAL / WATCHLIST tiers.
+    Scanner ULTRA anomalies always populate TACTICAL when elite gate excludes them.
+    """
+    if intel is None:
+        if INTEL_FILE.exists():
+            try:
+                intel = json.loads(INTEL_FILE.read_text(encoding='utf-8'))
+            except Exception:
+                intel = {}
+        else:
+            intel = {}
+
+    intel = intel if isinstance(intel, dict) else {}
+    intel_ts = _parse_ts(intel.get('timestamp') or intel.get('generation_time'))
+    ctx = _load_quality_context(intel)
+    scanner_index = _load_scanner_index()
+    score_fn = lambda item: _rank_score(item, intel, intel_ts, ctx, scanner_index)
+    elite_index, _ = _load_elite_index()
+
+    merged: Dict[str, dict] = {}
+    for item in _load_intel_opportunities(intel):
+        merged[item['symbol']] = item
+    for item in _load_active_opportunities():
+        sym = item['symbol']
+        if sym not in merged or score_fn(item) > score_fn(merged[sym]):
+            merged[sym] = item
+    for item in _load_scanner_ultra_candidates():
+        sym = item['symbol']
+        if sym not in merged or score_fn(item) > score_fn(merged[sym]):
+            merged[sym] = item
+
+    ranked = sorted(merged.values(), key=score_fn, reverse=True)
+    fresh = [x for x in ranked if _freshness_score(x, intel_ts) > 0]
+
+    elite: List[dict] = []
+    tactical: List[dict] = []
+    watchlist: List[dict] = []
+    seen: set = set()
+
+    for item in fresh:
+        sym = item['symbol']
+        if sym in seen:
+            continue
+        _align_display_confidence(item, elite_index)
+        item['_rank_score'] = round(score_fn(item), 2)
+
+        if item.get('elite_verified'):
+            item['display_tier'] = 'ELITE'
+            elite.append(item)
+            seen.add(sym)
+            continue
+
+        if _passes_elite_gate(item, intel, ctx, scanner_index):
+            if item.get('below_elite_threshold'):
+                item['display_tier'] = 'WATCHLIST'
+                watchlist.append(item)
+            else:
+                item['display_tier'] = 'TACTICAL'
+                tactical.append(item)
+            seen.add(sym)
+            continue
+
+        if _passes_tactical_gate(item, intel, ctx, scanner_index):
+            item['display_tier'] = 'TACTICAL'
+            tactical.append(item)
+            seen.add(sym)
+            continue
+
+        if score_fn(item) >= MIN_RANK_SCORE * 0.45:
+            item['display_tier'] = 'WATCHLIST'
+            watchlist.append(item)
+            seen.add(sym)
+
+    cap = max(1, int(limit))
+    return {
+        'elite': elite[:cap],
+        'tactical': tactical[:cap],
+        'watchlist': watchlist[:cap],
+        'all': (elite + tactical + watchlist)[: cap * 3],
+    }
