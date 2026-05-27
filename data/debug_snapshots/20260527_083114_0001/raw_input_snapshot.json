@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "ce02bc5072d11c30285a",
+    "india_markets": "42b64c0bb9bb381a0d74",
+    "news": "fd428bff1b7112a81568",
+    "youtube": "d1bc0e9de583415373f3",
+    "govt": "d3f8880ad292d5722c26",
+    "inshorts": "1af48666c7395b78e9e3",
+    "reddit": "41574b70bd5dfa3e7071",
+    "telegram": "empty",
+    "scanner": "3180e4e83a5e0cd58dcf",
+    "twitter": "cebbc0b2cc43651630a1",
+    "nse_filings": "02ffabaaf1e3cd74ea90",
+    "composite": "e982b62e217d8020cca0"
+  },
+  "metrics": {
+    "india_avg_change": -0.115,
+    "news_count": 127,
+    "govt_high_impact": 12,
+    "scanner_signals": 96,
+    "top_scanner_tickers": [
+      "FINPIPE",
+      "AIAENG",
+      "NDTV",
+      "INDORAMA",
+      "JKTYRE"
+    ],
+    "scanner_signature": [
+      "('FINPIPE', 'ULTRA', 9.3)",
+      "('AIAENG', 'ULTRA', 7.5)",
+      "('NDTV', 'ULTRA', 11.8)",
+      "('INDORAMA', 'ULTRA', -1.1)",
+      "('JKTYRE', 'ULTRA', 4.8)"
+    ],
+    "top_news_titles": [
+      "bajaj auto, bank of india, glaxo, icici lombard, torrent pharma, uno minda divid",
+      "fir against mamata banerjee over alleged provocative remarks, police begin probe",
+      "hdfc bank shares drop as governance report deepens ceo's woes",
+      "pushp brand files ipo papers with sebi",
+      "sbi says ai-driven banking still needs people, skills and leadership",
+      "yen stays near 160 as boj signals caution on rate hikes"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 100,
+    "novelty_avg_score": 4.445,
+    "repetition_suppressed": 54
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 127
+  },
+  "govt_counts": {
+    "high_impact_items": 12
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 22
+  }
+}

@@ -64,16 +64,17 @@ def get_watchdog_config(now: Optional[datetime] = None) -> Dict[str, object]:
 
 
 def get_collection_profile(now: Optional[datetime] = None) -> Dict[str, object]:
-    """Collector scheduling profile — reduce overnight noise."""
+    """Collector scheduling profile — night allows global/macro ingestion."""
     period = get_market_period(now)
     return {
         'period': period,
         'lightweight_only': period in ('night', 'weekend'),
-        'run_india_collector': True,
+        'run_india_collector': period not in ('weekend',),
         'run_parallel_ingestion': period in ('market', 'pre_market', 'after_hours'),
+        'run_global_overnight': period in ('night', 'pre_market'),
         'run_scanner': period in ('market', 'pre_market'),
-        'run_analyzer': period in ('market', 'pre_market', 'after_hours'),
-        'skip_heavy_overnight': period in ('night', 'weekend'),
+        'run_analyzer': period in ('market', 'pre_market', 'after_hours', 'night'),
+        'skip_heavy_overnight': period in ('weekend',),
     }
 
 
@@ -87,7 +88,7 @@ def get_lifecycle_state(now: Optional[datetime] = None) -> str:
         'pre_market': 'PREMARKET_PREP',
         'market': 'MARKET_ACTIVE',
         'after_hours': 'POSTMARKET_EVAL',
-        'night': 'NIGHT_IDLE',
+        'night': 'OVERNIGHT_INTEL',
         'weekend': 'NIGHT_IDLE',
     }
     return mapping.get(period, period.upper())
@@ -110,7 +111,7 @@ def get_operational_status(now: Optional[datetime] = None) -> Dict[str, object]:
             'POST-MARKET EVAL',
             'Post-close evaluation and lifecycle resolution',
         ),
-        'night': ('night_idle', 'NIGHT IDLE', 'Overnight idle — awaiting pre-market cycle'),
+        'night': ('night_intel', 'OVERNIGHT GLOBAL INTEL', 'US→Asia→India pipeline active — macro synthesis running'),
         'weekend': ('night_idle', 'WEEKEND IDLE', 'Market closed — awaiting Monday open'),
     }
     mode_key, display_status, display_message = labels.get(
@@ -136,8 +137,8 @@ def get_operational_status(now: Optional[datetime] = None) -> Dict[str, object]:
         'night_mode': period in ('night', 'weekend'),
         'watchdog_mode': wd.get('mode'),
         'stale_threshold_seconds': wd.get('stale_threshold_seconds'),
-        'expect_quiet_collectors': period in ('night', 'weekend'),
-        'collectors_active': period in ('market', 'pre_market', 'after_hours'),
+        'expect_quiet_collectors': period in ('weekend',),
+        'collectors_active': period in ('market', 'pre_market', 'after_hours', 'night'),
         'orchestrator_mode': orchestrator_mode,
     }
 

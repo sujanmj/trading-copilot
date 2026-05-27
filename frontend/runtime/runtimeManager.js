@@ -47,7 +47,7 @@
       brain: stableHash({ i: data.intelligence, a: data.active_predictions }),
       govt: stableHash(data.govt),
       scanner: stableHash(data.scanner),
-      markets: stableHash({ m: data.markets, india: data.india }),
+      global: stableHash({ m: data.markets, o: data.overnight_impact, i: data.india_next_open }),
       news: stableHash({ n: data.news, inshorts: data.inshorts }),
       tv: stableHash(data.youtube),
       reddit: stableHash(data.reddit),

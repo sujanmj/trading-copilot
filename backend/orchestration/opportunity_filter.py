@@ -668,13 +668,27 @@ def rank_opportunities_tiered(
     try:
         from backend.trading.tactical_trade_engine import attach_tactical_plans
         from backend.analytics.confidence_hierarchy import normalize_confidence
-        tactical = attach_tactical_plans(tactical, scanner_index, intel)
-        watchlist = attach_tactical_plans(watchlist, scanner_index, intel)
+        from backend.intelligence.signal_quality_engine import assess_signal_quality, apply_signal_quality
+        ctx_vol = dict(ctx)
+        vix_row = (scanner_index.get('VIX') or {})
+        if vix_row.get('change_percent') is not None:
+            ctx_vol['vix'] = abs(float(vix_row.get('change_percent') or 0)) * 4 + 12
         for bucket in (elite, tactical, watchlist):
+            enriched = []
             for item in bucket:
+                sym = str(item.get('symbol') or '').upper()
+                quality = assess_signal_quality(item, ctx=ctx_vol, scanner_row=scanner_index.get(sym))
+                item = apply_signal_quality(item, quality)
                 norm = normalize_confidence(item)
                 item['confidence_hierarchy'] = norm
                 item['display_confidence'] = norm.get('display_label') or item.get('display_confidence')
+                if not quality.get('allow_full_levels') and item.get('display_tier') == 'ELITE':
+                    item['display_tier'] = 'TACTICAL'
+                enriched.append(item)
+            bucket[:] = enriched
+        tactical = attach_tactical_plans(tactical, scanner_index, intel)
+        watchlist = attach_tactical_plans(watchlist, scanner_index, intel)
+        elite = attach_tactical_plans(elite, scanner_index, intel)
     except Exception:
         pass
     return {

@@ -744,45 +744,66 @@ def push_sectors(*, command='sectors', cycle_id=''):
 
 
 def push_global(*, command='global', cycle_id=''):
-    """Overnight global impact — mood + indices from latest intel/global feed."""
+    """Overnight global impact — US→Asia→India transmission summary."""
     raw = load_intel()
     intel = normalize_intel(raw)
-    if not intel:
-        send_message(
-            "❌ No intelligence yet. Run /refresh or wait for US Pulse cycle.",
-            command=command,
-            cycle_id=cycle_id,
-        )
-        return
-    mood = _dict(intel.get('market_mood'))
     stale = stale_warning(raw)
+    mood = _dict(intel.get('market_mood')) if intel else {}
+    report = {}
+    gm = {}
+    try:
+        from backend.intelligence.global_intelligence_engine import get_overnight_global_impact
+        from backend.intelligence.india_next_open_engine import build_india_next_open_report
+        report = get_overnight_global_impact().get('india_next_open') or {}
+        if not report:
+            report = build_india_next_open_report()
+    except Exception:
+        report = raw.get('overnight_impact') if isinstance(raw, dict) else {}
     global_path = DATA_DIR / 'global_markets.json'
-    indices_text = ''
     if global_path.exists():
         try:
             gm = json.loads(global_path.read_text(encoding='utf-8'))
-            indices = gm.get('indices') or gm.get('markets') or []
-            if isinstance(indices, list) and indices:
-                lines = []
-                for row in indices[:6]:
-                    if isinstance(row, dict):
-                        name = _text(row.get('name') or row.get('symbol'), '?')
-                        ch = row.get('change_percent') or row.get('change_pct') or 0
-                        lines.append(f"• {name}: {ch:+.2f}%" if isinstance(ch, (int, float)) else f"• {name}")
-                if lines:
-                    indices_text = "\n".join(lines)
         except Exception:
-            pass
+            gm = {}
+
+    def _move(name):
+        flat = gm.get('flat_markets') or {}
+        if name in flat:
+            return flat[name].get('change_percent') or flat[name].get('change_pct')
+        for grp in (gm.get('markets') or {}).values():
+            if isinstance(grp, dict) and name in grp:
+                return grp[name].get('change_percent') or grp[name].get('change_pct')
+        return None
+
+    lines = []
+    for label, key in (
+        ('Nasdaq', 'NASDAQ'), ('S&P500', 'S&P_500'), ('VIX', 'VIX'),
+        ('Gold', 'GOLD'), ('Oil', 'CRUDE_OIL'), ('DXY', 'DXY'),
+    ):
+        ch = _move(key)
+        if ch is not None:
+            lines.append(f"• {label}: {float(ch):+.2f}%")
+
+    geo = gm.get('geopolitics') or gm.get('alerts') or []
+    geo_line = ''
+    if geo:
+        geo_line = f"\n⚠️ <i>{_text(geo[0].get('message'), '')[:140]}</i>"
+
     body = (
-        f"{stale}🌍 <b>OVERNIGHT GLOBAL IMPACT</b>\n\n"
-        f"<b>Global mood:</b> {_text(mood.get('global_mood'), 'Unknown')}\n"
-        f"<b>India outlook:</b> {_text(mood.get('india_outlook'), 'Unknown')}\n"
+        f"{stale}{_snapshot_prefix()}🌍 <b>OVERNIGHT GLOBAL IMPACT</b>\n\n"
+        f"<b>India open bias:</b> {_text(report.get('india_open_bias') or mood.get('global_mood'), 'Unknown')}\n"
+        f"<b>India outlook:</b> {_text(report.get('india_outlook') or mood.get('india_outlook'), 'Unknown')}\n"
     )
-    if indices_text:
-        body += f"\n<b>Key indices:</b>\n{indices_text}\n"
-    summary = _text(intel.get('executive_summary'), '')[:600]
-    if summary and summary != 'N/A':
-        body += f"\n<i>{summary}</i>"
+    if lines:
+        body += f"\n<b>Macro:</b>\n" + "\n".join(lines) + "\n"
+    narrative = report.get('narrative') or mood.get('overnight_narrative') or ''
+    if narrative:
+        body += f"\n<i>{_text(narrative)[:500]}</i>"
+    if report.get('sectors_at_risk'):
+        body += f"\n\n🔴 <b>At risk:</b> {_join_list(report.get('sectors_at_risk'))}"
+    if report.get('sectors_supported'):
+        body += f"\n🟢 <b>Supported:</b> {_join_list(report.get('sectors_supported'))}"
+    body += geo_line
     send_chunked(body, command=command, cycle_id=cycle_id)
 
 

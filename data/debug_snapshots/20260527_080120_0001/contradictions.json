@@ -1,0 +1,49 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [JPPOWER, NDTV, FINPIPE, ATGL] vs SHORT [EASEMYTRIP, POLYMED, COALINDIA, RVNL]",
+      "disagreement_score": 0.154,
+      "long_count": 26,
+      "short_count": 4
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 1 bullish vs 4 bearish high-impact items",
+      "disagreement_score": 0.25
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly FINPIPE ULTRA move +8.90%",
+      "disagreement_score": 0.89,
+      "ticker": "FINPIPE"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly EASEMYTRIP ULTRA move -7.50%",
+      "disagreement_score": 0.75,
+      "ticker": "EASEMYTRIP"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly AIAENG ULTRA move +7.00%",
+      "disagreement_score": 0.7,
+      "ticker": "AIAENG"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly EXIDEIND ULTRA move +5.82%",
+      "disagreement_score": 0.582,
+      "ticker": "EXIDEIND"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly POLYMED ULTRA move -5.65%",
+      "disagreement_score": 0.565,
+      "ticker": "POLYMED"
+    }
+  ],
+  "overall_disagreement_score": 0.556,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.15 | Scanner split: LONG [JPPOWER, NDTV, FINPIPE, ATGL] vs SHORT [EASEMYTRIP, POLYMED, COALINDIA, RVNL]\n  [institutional_policy_divergence] disagreement=0.25 | Govt policy mix: 1 bullish vs 4 bearish high-impact items\n  [scanner_anomaly] disagreement=0.89 | Anomaly FINPIPE ULTRA move +8.90%\n  [scanner_anomaly] disagreement=0.75 | Anomaly EASEMYTRIP ULTRA move -7.50%\n  [scanner_anomaly] disagreement=0.70 | Anomaly AIAENG ULTRA move +7.00%\n  [scanner_anomaly] disagreement=0.58 | Anomaly EXIDEIND ULTRA move +5.82%\n  [scanner_anomaly] disagreement=0.56 | Anomaly POLYMED ULTRA move -5.65%",
+  "count": 7
+}

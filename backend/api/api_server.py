@@ -894,6 +894,23 @@ def _build_runtime_snapshot() -> dict:
         'prediction_history': load_json_file('prediction_history.json'),
         'lifecycle_state': load_json_file('lifecycle_state.json'),
     }
+    overnight_impact = {}
+    overnight_timeline = {}
+    india_next_open = {}
+    try:
+        from backend.intelligence.global_intelligence_engine import (
+            get_overnight_global_impact,
+            get_overnight_timeline,
+        )
+        from backend.intelligence.india_next_open_engine import build_india_next_open_report
+        overnight_impact = get_overnight_global_impact()
+        overnight_timeline = get_overnight_timeline()
+        if (DATA_DIR / 'india_next_open.json').exists():
+            india_next_open = load_json_file('india_next_open.json')
+        elif overnight_impact.get('india_next_open'):
+            india_next_open = overnight_impact['india_next_open']
+    except Exception:
+        pass
     active_snapshot_meta = {}
     snapshot_health_payload = {}
     stability_payload = {}
@@ -926,6 +943,9 @@ def _build_runtime_snapshot() -> dict:
         if live_agg.get('calibration'):
             stats['lifecycle_calibration'] = live_agg['calibration']
         data['stats'] = stats
+        data['overnight_impact'] = overnight_impact
+        data['india_next_open'] = india_next_open
+        data['overnight_timeline'] = overnight_timeline
     except Exception:
         pass
     db_stats = stats.get('db_stats') or {}
@@ -1190,6 +1210,9 @@ def _build_runtime_snapshot() -> dict:
             'orchestrator_alive': orchestrator_alive,
             'partial_lag': collectors_lag_refresh,
         },
+        'overnight_impact': overnight_impact,
+        'overnight_timeline': overnight_timeline,
+        'india_next_open': india_next_open,
     })
 
 

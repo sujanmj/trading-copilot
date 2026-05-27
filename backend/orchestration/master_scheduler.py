@@ -67,6 +67,10 @@ def run_all_collectors_parallel(push_telegram_brain: bool = False, run_analyzer:
         ]
         with ThreadPoolExecutor(max_workers=len(ingestion_scripts)) as executor:
             executor.map(run_standalone_script, ingestion_scripts)
+    elif profile.get('run_global_overnight'):
+        print(f"[COLLECTOR] {period} — overnight global/macro ingestion only", flush=True)
+        for script in ("global_collector.py", "live_news_tracker.py", "govt_tracker.py"):
+            run_standalone_script(script)
     else:
         print(f"[COLLECTOR] {period} — skipping parallel news/social ingestion", flush=True)
 
@@ -167,9 +171,34 @@ def run_post_market_pipeline(force: bool = False, trigger: str = 'scheduled'):
 
 
 # ── IST daily jobs (Railway-safe — host TZ may be UTC) ─────────────────────
+@ist_daily(4, 0, name='us_close_scan')
+def _job_us_close_scan():
+    from backend.intelligence.global_intelligence_engine import run_us_close_scan
+    run_us_close_scan()
+
+
+@ist_daily(4, 15, name='macro_synthesis')
+def _job_macro_synthesis():
+    from backend.intelligence.global_intelligence_engine import run_macro_synthesis
+    run_macro_synthesis()
+
+
 @ist_daily(5, 0, name='overnight_brief')
 def _job_overnight_brief():
-    run_full_cycle("Overnight Brief")
+    from backend.intelligence.global_intelligence_engine import run_india_next_open_report
+    run_india_next_open_report(run_analyzer=True)
+
+
+@ist_daily(8, 30, name='premarket_scanner')
+def _job_premarket_scanner():
+    from backend.intelligence.global_intelligence_engine import run_premarket_scanner
+    run_premarket_scanner()
+
+
+@ist_daily(9, 0, name='market_open_tactical')
+def _job_market_open_tactical():
+    from backend.intelligence.global_intelligence_engine import run_market_open_tactical
+    run_market_open_tactical()
 
 
 @ist_daily(8, 0, name='outcome_tracker')

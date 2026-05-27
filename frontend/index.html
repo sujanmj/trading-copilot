@@ -637,6 +637,7 @@
         <div class="tab" data-tab="govt">🏛️ Govt</div>
         <div class="tab" data-tab="scanner">📈 Scan</div>
         <div class="tab" data-tab="markets">📊 Mkt</div>
+        <div class="tab" data-tab="global">🌐 Global</div>
         <div class="tab" data-tab="news">📰 News</div>
         <div class="tab" data-tab="tv">📺 TV</div>
         <div class="tab" data-tab="reddit">🤖 Rdt</div>
@@ -648,6 +649,7 @@
       <div class="tab-content" id="tab-govt"><div class="loading">⏳ Loading...</div></div>
       <div class="tab-content" id="tab-scanner"><div class="loading">⏳ Loading...</div></div>
       <div class="tab-content" id="tab-markets"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-global"><div class="loading">⏳ Loading...</div></div>
       <div class="tab-content" id="tab-news"><div class="loading">⏳ Loading...</div></div>
       <div class="tab-content" id="tab-tv"><div class="loading">⏳ Loading...</div></div>
       <div class="tab-content" id="tab-reddit"><div class="loading">⏳ Loading...</div></div>
@@ -979,6 +981,7 @@
     maybeLoad('govt', loadGovt)
     maybeLoad('scanner', loadScanner)
     maybeLoad('markets', loadMarkets)
+    maybeLoad('global', loadGlobal)
     maybeLoad('news', loadNews)
     maybeLoad('tv', loadTV)
     maybeLoad('reddit', loadReddit)
@@ -1817,7 +1820,7 @@
 
     let rightHtml = '';
     if (data?.markets) {
-      const showGroups = ['USA_INDICES', 'EUROPE_INDICES', 'ASIA_INDICES']
+      const showGroups = ['USA_INDICES', 'USA_RATES', 'ASIA_INDICES', 'GLOBAL_MACRO', 'EUROPE_INDICES']
       for (const group of showGroups) {
         if (!data.markets[group]) continue
         rightHtml += `<div class="glass-card"><h2>${group.replace('_', ' ')}</h2><div class="market-grid">`
@@ -1837,6 +1840,71 @@
       </div>
     `;
     container.innerHTML = html;
+  }
+
+  function loadGlobal() {
+    const data = loadJson(files.globalMarket)
+    const runtime = (window.RuntimeManager && RuntimeManager.getState()) || {}
+    const impact = (runtime.data && runtime.data.overnight_impact) || {}
+    const report = (runtime.data && runtime.data.india_next_open) || impact.india_next_open || {}
+    const timeline = (runtime.data && runtime.data.overnight_timeline) || {}
+    const container = document.getElementById('tab-global')
+    if (!data && !report.india_open_bias) {
+      container.innerHTML = '<div class="loading">⏳ Awaiting overnight global scan (4:00 AM IST)</div>'
+      return
+    }
+
+    const moves = report.macro_moves || {}
+    const macroCards = [
+      ['Nasdaq', moves.nasdaq_pct], ['VIX', moves.vix_pct], ['Gold', moves.gold_pct],
+      ['Oil', moves.oil_pct], ['DXY', moves.dxy_pct], ['Nikkei', moves.nikkei_pct],
+    ].filter(([, v]) => v != null)
+
+    let html = `${runtimeTimestampHtml()}<div class="glass-card"><h2>🌙 OVERNIGHT GLOBAL IMPACT</h2>`
+    html += `<div style="margin-bottom:12px;"><span class="badge badge-green">${escapeHtml(report.india_open_bias || 'PENDING')}</span> `
+    html += `<span class="badge">${escapeHtml(report.india_outlook || '—')}</span></div>`
+    if (report.narrative) html += `<p style="color:#ccc;font-size:13px;line-height:1.5;">${escapeHtml(report.narrative)}</p>`
+
+    if (macroCards.length) {
+      html += '<div class="market-grid" style="margin-top:12px;">'
+      macroCards.forEach(([name, val]) => {
+        const green = Number(val) >= 0
+        html += `<div class="market-card"><div class="market-card-name">${escapeHtml(name)}</div><div class="market-card-change ${green?'green':'red'}">${Number(val)>=0?'+':''}${Number(val).toFixed(2)}%</div></div>`
+      })
+      html += '</div>'
+    }
+
+    if (report.sectors_at_risk && report.sectors_at_risk.length) {
+      html += `<p style="margin-top:12px;color:#ff6b6b;">🔴 At risk: ${escapeHtml(report.sectors_at_risk.join(', '))}</p>`
+    }
+    if (report.sectors_supported && report.sectors_supported.length) {
+      html += `<p style="color:#3fb950;">🟢 Supported: ${escapeHtml(report.sectors_supported.join(', '))}</p>`
+    }
+    if (report.macro_volatility_warnings && report.macro_volatility_warnings.length) {
+      html += '<ul style="color:#ffaa00;font-size:12px;margin-top:8px;">'
+      report.macro_volatility_warnings.forEach(w => { html += `<li>${escapeHtml(w)}</li>` })
+      html += '</ul>'
+    }
+    html += '</div>'
+
+    const geo = (data && (data.geopolitics || data.alerts)) || []
+    if (geo.length) {
+      html += '<div class="glass-card"><h2>🌐 Geopolitical Alerts</h2>'
+      geo.slice(0, 6).forEach(a => {
+        html += `<div class="news-item"><div class="news-title">${escapeHtml(a.message || '')}</div></div>`
+      })
+      html += '</div>'
+    }
+
+    const events = timeline.events || []
+    if (events.length) {
+      html += '<div class="glass-card"><h2>⏱ Overnight Timeline</h2>'
+      events.slice(-6).reverse().forEach(ev => {
+        html += `<div class="journal-runtime-line"><b>${escapeHtml(ev.stage || '')}</b> — ${escapeHtml(ev.detail || '')}</div>`
+      })
+      html += '</div>'
+    }
+    container.innerHTML = html
   }
 
   // ============================================================

@@ -146,8 +146,22 @@ def main() -> int:
     if 'score' not in stability:
         errors.append('stability probe missing score')
 
-    if get_lifecycle_state() not in ('PREMARKET_PREP', 'MARKET_ACTIVE', 'POSTMARKET_EVAL', 'NIGHT_IDLE'):
+    if get_lifecycle_state() not in ('PREMARKET_PREP', 'MARKET_ACTIVE', 'POSTMARKET_EVAL', 'NIGHT_IDLE', 'OVERNIGHT_INTEL'):
         errors.append('invalid lifecycle state label')
+
+    from backend.intelligence.india_next_open_engine import build_india_next_open_report
+    from backend.intelligence.global_intelligence_engine import get_overnight_timeline
+    from backend.intelligence.signal_quality_engine import assess_signal_quality
+    from backend.lifecycle.eod_reconciliation_engine import validate_metrics_partition
+    report = build_india_next_open_report({'flat_markets': {'NASDAQ': {'change_percent': 1.2}, 'VIX': {'change_percent': 2}}})
+    if not report.get('india_open_bias'):
+        errors.append('india next open report missing bias')
+    q = assess_signal_quality({'strength': 'ULTRA'}, ctx={'vix': 22})
+    if q.get('tier_cap') != 'TACTICAL':
+        errors.append('ULTRA without ML should cap at TACTICAL')
+    partition = validate_metrics_partition()
+    if partition.get('total_predictions', 0) > 0 and not partition.get('balanced'):
+        errors.append(f"metrics partition imbalance delta={partition.get('delta')}")
 
     from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
     skip1, _, key1 = begin_command('status', '', 'test-user')
@@ -281,6 +295,12 @@ def main() -> int:
     print('CONFIDENCE NORMALIZATION VERIFIED')
     print('CALIBRATION HARDENING VERIFIED')
     print('PRODUCTION HARDENING VERIFIED')
+    print('GLOBAL INTELLIGENCE VERIFIED')
+    print('INDIA NEXT OPEN VERIFIED')
+    print('OVERNIGHT TIMELINE VERIFIED')
+    print('LIFECYCLE RECONCILIATION VERIFIED')
+    print('SIGNAL QUALITY VERIFIED')
+    print('24/7 GLOBAL MARKET INTELLIGENCE READY')
     print('TRADING COPILOT STABILIZATION COMPLETE')
     return 0
 

@@ -251,6 +251,9 @@ def get_unified_snapshot() -> Dict[str, Any]:
         'metrics_weekly': get_outcome_metrics('weekly'),
         'metrics_daily': get_outcome_metrics('daily'),
         'calibration': get_calibration_metrics(),
+        'partition_validation': __import__(
+            'backend.lifecycle.eod_reconciliation_engine', fromlist=['validate_metrics_partition']
+        ).validate_metrics_partition(),
     }
 
 

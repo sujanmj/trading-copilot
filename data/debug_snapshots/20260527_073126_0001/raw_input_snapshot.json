@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "424fb5abc5b2708b801a",
+    "india_markets": "1b1b2bc9118e2f82e5cc",
+    "news": "e0934e3858a6ad24097b",
+    "youtube": "c64273098434dc2a2a51",
+    "govt": "56db32413c18f5ed6fa5",
+    "inshorts": "65763018ca3f287c7e64",
+    "reddit": "d9f890b8f26f5865741b",
+    "telegram": "empty",
+    "scanner": "299c03030157fb065f68",
+    "twitter": "8c799e4afb00be3f581e",
+    "nse_filings": "908d35ead4fffa81c436",
+    "composite": "bcdd16bd06eedb96922a"
+  },
+  "metrics": {
+    "india_avg_change": -0.017,
+    "news_count": 125,
+    "govt_high_impact": 13,
+    "scanner_signals": 87,
+    "top_scanner_tickers": [
+      "FINPIPE",
+      "AIAENG",
+      "INDORAMA",
+      "NDTV",
+      "JKTYRE"
+    ],
+    "scanner_signature": [
+      "('FINPIPE', 'ULTRA', 8.4)",
+      "('AIAENG', 'ULTRA', 6.7)",
+      "('INDORAMA', 'ULTRA', 0.6)",
+      "('NDTV', 'ULTRA', 13.4)",
+      "('JKTYRE', 'ULTRA', 4.9)"
+    ],
+    "top_news_titles": [
+      "axis bank allots 3.26 lakh equity shares under esop",
+      "bajaj auto, bank of india, glaxo, icici lombard, torrent pharma, uno minda divid",
+      "pushp brand files ipo papers with sebi",
+      "sbi says ai-driven banking still needs people, skills and leadership",
+      "super el nino warning: scorching heat, weaker monsoon ahead — what it means for",
+      "yen stays near 160 as boj signals caution on rate hikes"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.53,
+    "repetition_suppressed": 55
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 125
+  },
+  "govt_counts": {
+    "high_impact_items": 13
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 21
+  }
+}

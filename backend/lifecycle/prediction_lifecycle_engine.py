@@ -910,6 +910,9 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
         pipeline_log('evaluating predictions complete', stage='evaluate_outcomes')
         expire_stats = _stage('expire_stale', expire_stale_pending, critical=False) or {}
         overnight_stats = _stage('overnight_reset', reset_overnight_intraday_pending, critical=False) or {}
+        recon_stats = _stage('eod_reconciliation', lambda: __import__(
+            'backend.lifecycle.eod_reconciliation_engine', fromlist=['run_eod_reconciliation']
+        ).run_eod_reconciliation(), critical=False) or {}
         inv_stats = _stage('invalidate_contradicted', invalidate_contradicted_predictions, critical=False) or {}
         sync_stats = _stage('sync_predictions', sync_prediction_json_files)
         pipeline_log('refreshing active predictions', stage='sync_predictions')
