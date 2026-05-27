@@ -908,6 +908,8 @@
     console.error('[GUI unhandled rejection]', event.reason)
   })
 
+  console.log('[BOOT] frontend parsed')
+
   const fs = require('fs')
   const path = require('path')
   const dotenv = require('dotenv')
@@ -1363,6 +1365,7 @@
 
   function wireCoreUi() {
     resetUiOverlays()
+    console.log('[BOOT] tabs mounted')
     document.querySelectorAll('.broker-btn, .news-btn').forEach(btn => {
       btn.addEventListener('click', () => loadSite(btn.dataset.url, btn))
     })
@@ -2345,7 +2348,7 @@
             const isGreen = ch >= 0
             rightHtml += `<div class="market-card"><div class="market-card-name">${escapeHtml(name)}</div><div class="market-card-value ${isGreen ? 'green' : 'red'}">${price.toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen ? 'green' : 'red'}">${isGreen ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%</div></div>`
           }
-          rightHtml += '</div></div>`
+          rightHtml += '</div></div>'
         }
       }
 
@@ -3425,6 +3428,7 @@
 
 
   async function bootFrontend() {
+    console.log('[BOOT] hydration starting')
     console.log('[GUI] app boot')
     wireCoreUi()
     renderShellImmediately()
