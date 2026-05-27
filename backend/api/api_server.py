@@ -894,6 +894,19 @@ def _build_runtime_snapshot() -> dict:
         'prediction_history': load_json_file('prediction_history.json'),
         'lifecycle_state': load_json_file('lifecycle_state.json'),
     }
+    active_snapshot_meta = {}
+    snapshot_health_payload = {}
+    try:
+        from backend.intelligence.active_snapshot import (
+            get_active_snapshot_meta,
+            get_canonical_intelligence,
+            snapshot_health,
+        )
+        data['intelligence'] = get_canonical_intelligence()
+        active_snapshot_meta = get_active_snapshot_meta()
+        snapshot_health_payload = snapshot_health()
+    except Exception:
+        pass
 
     stats = data.get('stats') or {}
     history = data.get('history') or {}
@@ -1083,6 +1096,8 @@ def _build_runtime_snapshot() -> dict:
             'generated_at': generated_at,
             'display_status': operational.get('display_status'),
             'operational_mode': operational.get('operational_mode'),
+            'lifecycle_state': operational.get('lifecycle_state'),
+            'active_snapshot_id': active_snapshot_meta.get('active_snapshot_id'),
         },
         'brain': _panel_state_from_source(
             'intelligence',
@@ -1114,6 +1129,10 @@ def _build_runtime_snapshot() -> dict:
     return sanitize_json_value({
         'status': 'ok',
         'generated_at': generated_at,
+        'active_snapshot_id': active_snapshot_meta.get('active_snapshot_id'),
+        'snapshot_cycle_id': active_snapshot_meta.get('cycle_id'),
+        'snapshot_published_at': active_snapshot_meta.get('published_at'),
+        'snapshot_health': snapshot_health_payload,
         'operational': operational,
         'panels': panels,
         'freshness': health_payload.get('data_freshness') or {},

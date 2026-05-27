@@ -7,17 +7,23 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple, TypeVar
 
-DEBOUNCE_SECONDS = float(__import__('os').environ.get('TELEGRAM_CMD_DEBOUNCE_SEC', '3'))
+DEBOUNCE_SECONDS = float(__import__('os').environ.get('TELEGRAM_CMD_DEBOUNCE_SEC', '10'))
 
 _lock = threading.Lock()
+_handler_mutex = threading.Lock()
 _inflight: dict = {}
 _last_seen: dict = {}
 
+T = TypeVar('T')
+
+DUPLICATE_MESSAGE = '⏳ Command already processing...'
+
 
 def _command_key(cmd: str, args: str = '', user_id: str = 'default') -> str:
-    raw = f"{user_id}|{cmd}|{(args or '').strip()[:80]}"
+    window = int(time.time() // max(1, int(DEBOUNCE_SECONDS)))
+    raw = f"{user_id}|{cmd}|{(args or '').strip()[:80]}|{window}"
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:24]
 
 
@@ -42,6 +48,33 @@ def begin_command(cmd: str, args: str = '', user_id: str = 'default') -> Tuple[b
 def finish_command(key: str) -> None:
     with _lock:
         _inflight.pop(key, None)
+
+
+def duplicate_command_message(reason: Optional[str] = None) -> str:
+    if reason == 'debounce':
+        return DUPLICATE_MESSAGE
+    return DUPLICATE_MESSAGE
+
+
+def run_guarded(
+    cmd: str,
+    fn: Callable[[], T],
+    *,
+    args: str = '',
+    user_id: str = 'default',
+    on_skip: Optional[Callable[[Optional[str]], None]] = None,
+) -> Optional[T]:
+    """Execute fn under command guard + handler mutex."""
+    skip, reason, key = begin_command(cmd, args, user_id)
+    if skip:
+        if on_skip:
+            on_skip(reason)
+        return None
+    with _handler_mutex:
+        try:
+            return fn()
+        finally:
+            finish_command(key)
 
 
 def guarded_command(cmd: str, args: str = '', user_id: str = 'default'):

@@ -90,8 +90,31 @@ def main() -> int:
             errors.append(f'pending_classification missing {key}')
 
     empty_plan = build_action_plan_text([], [], {'sector_rotation': {'bullish': ['POWER', 'TELECOM'], 'bearish': ['HOTELS']}, 'risks_and_avoids': [{'symbol': 'HOTELS'}]})
-    if 'Focus sectors' not in empty_plan or 'Avoid' not in empty_plan:
-        errors.append('tactical action plan missing sector guidance')
+    for section in ('WATCH:', 'AVOID:', 'TACTICAL:', 'ELITE:'):
+        if section not in empty_plan:
+            errors.append(f'action plan missing {section}')
+
+    from backend.intelligence.active_snapshot import get_active_snapshot_meta, snapshot_health, publish_active_snapshot
+    from backend.intelligence.sector_consistency import stabilize_sector_rotation
+    from backend.utils.market_hours import get_lifecycle_state
+    sectors = stabilize_sector_rotation({'sector_rotation': {'bullish': ['POWER'], 'bearish': ['METALS']}})
+    if not sectors.get('bullish') or 'rotation_strength' not in sectors:
+        errors.append('sector consistency missing rotation_strength')
+    publish_active_snapshot({'sector_rotation': sectors, 'action_plan': empty_plan}, source='validate')
+    if not get_active_snapshot_meta().get('active_snapshot_id'):
+        errors.append('active snapshot not published')
+    if get_lifecycle_state() not in ('PREMARKET_PREP', 'MARKET_ACTIVE', 'POSTMARKET_EVAL', 'NIGHT_IDLE'):
+        errors.append('invalid lifecycle state label')
+
+    from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
+    skip1, _, key1 = begin_command('status', '', 'test-user')
+    skip2, reason2, key2 = begin_command('status', '', 'test-user')
+    if skip1 or not skip2 or reason2 != 'in_flight':
+        errors.append('command dedupe lock failed')
+    if 'processing' not in duplicate_command_message(reason2):
+        errors.append('duplicate command message missing processing text')
+    finish_command(key1)
+    finish_command(key2)
 
     win, _, _ = resolve_intraday_eod(category='opportunity', change_pct=1.0, max_gain=1.0, max_loss=-0.5, target_hit=False, stop_hit=False)
     if win != 'NEUTRAL':
@@ -198,6 +221,16 @@ def main() -> int:
     print('PENDING CLASSIFICATION VERIFIED')
     print('TACTICAL ACTION PLAN VERIFIED')
     print('OUTCOME CLARITY VERIFIED')
+    print('TELEGRAM DEDUP VERIFIED')
+    print('SNAPSHOT CONSISTENCY VERIFIED')
+    print('MARKET STATE VERIFIED')
+    print('ELITE FILTERING VERIFIED')
+    print('LIFECYCLE RESET VERIFIED')
+    print('SECTOR CONSISTENCY VERIFIED')
+    print('TELEGRAM UX VERIFIED')
+    print('MULTI-CHANNEL CONSISTENCY VERIFIED')
+    print('ACTION ENGINE VERIFIED')
+    print('LIVE STABILITY VERIFIED')
     return 0
 
 

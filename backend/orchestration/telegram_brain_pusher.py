@@ -115,6 +115,14 @@ def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_ki
         safe_print(f"[TG] Send error: {e}")
         return False
 
+def _snapshot_prefix():
+    try:
+        from backend.intelligence.active_snapshot import snapshot_header, snapshot_stale_warning
+        return snapshot_stale_warning() + snapshot_header()
+    except Exception:
+        return ''
+
+
 def chunk_message(text, max_len=3900):
     if len(text) <= max_len:
         return [text]
@@ -139,6 +147,11 @@ def send_chunked(text, *, command='', cycle_id='', message_kind='final'):
         time.sleep(0.5)
 
 def load_intel():
+    try:
+        from backend.intelligence.active_snapshot import get_canonical_intelligence
+        return get_canonical_intelligence()
+    except Exception:
+        pass
     if not INTEL_FILE.exists():
         return {}
     try:
@@ -642,7 +655,8 @@ def push_opps(*, command='opps', cycle_id=''):
         stale = stale_warning(raw)
         body = format_opps_tiered(tiers, include_elite=False)
         send_chunked(
-            f"{stale}💎 <b>TACTICAL OPPORTUNITIES</b>\n<i>Tactical + watchlist · use /elite for ML-only setups</i>\n\n{body}",
+            f"{stale}{_snapshot_prefix()}💎 <b>TACTICAL OPPORTUNITIES</b>\n"
+            f"<i>Tactical scanner plays · /elite for ML-validated only</i>\n\n{body}",
             command=command,
             cycle_id=cycle_id,
         )
@@ -664,8 +678,7 @@ def push_action(*, command='action', cycle_id=''):
     if intel:
         action = _text(intel.get('action_plan'), 'Maintain capital preservation — await tactical confirmation.')
         send_chunked(
-            f"🛡️ <b>ACTION</b>\n"
-            f"<i>Capital preservation + tactical positioning</i>\n\n{action[:2400]}",
+            f"{_snapshot_prefix()}🛡️ <b>ACTION</b>\n\n{action[:2400]}",
             command=command,
             cycle_id=cycle_id,
         )
@@ -692,7 +705,9 @@ def push_sectors(*, command='sectors', cycle_id=''):
         bullish = _join_list(sectors.get('bullish'))
         bearish = _join_list(sectors.get('bearish'))
         send_chunked(
-            f"🔄 <b>SECTOR ROTATION</b>\n\n🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}",
+            f"{_snapshot_prefix()}🔄 <b>SECTOR ROTATION</b>\n"
+            f"<i>Strength: {sectors.get('rotation_strength', '—')}</i>\n\n"
+            f"🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}",
             command=command,
             cycle_id=cycle_id,
         )

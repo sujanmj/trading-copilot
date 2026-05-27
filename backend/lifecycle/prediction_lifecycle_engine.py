@@ -541,6 +541,11 @@ def refresh_brain_opportunities() -> dict:
         intel = align_intelligence(intel)
     except Exception:
         pass
+    try:
+        from backend.intelligence.active_snapshot import publish_active_snapshot
+        publish_active_snapshot(intel, source='brain_refresh')
+    except Exception:
+        pass
     intel['timestamp'] = _now_iso()
     intel['generated_date'] = _today()
     intel['active_predictions_source'] = str(ACTIVE_PREDICTIONS_FILE.name)
@@ -724,6 +729,67 @@ def get_active_predictions_payload() -> dict:
     return data
 
 
+def reset_overnight_intraday_pending() -> dict:
+    """Force-close intraday/scalp pending so morning counts stay low."""
+    from backend.lifecycle.lifecycle_rules import infer_trade_style, infer_prediction_horizon, infer_signal_type
+    stats = {'neutralized': 0, 'expired': 0, 'skipped': 0, 'errors': 0}
+    try:
+        init_db()
+        conn = get_connection()
+        today = datetime.now(IST).date()
+        try:
+            rows = conn.execute("""
+                SELECT o.id, o.verdict, o.prediction_date, p.prediction_horizon, p.signal_type, p.reasoning
+                FROM outcomes o
+                INNER JOIN predictions p ON o.source_type='prediction' AND o.source_id=p.id
+                WHERE o.verdict IN ('PENDING', 'UNRESOLVED', 'ACTIVE') OR o.verdict IS NULL
+            """).fetchall()
+            for row in rows:
+                try:
+                    pred = dict(row)
+                    pred_date = str(pred.get('prediction_date') or '')[:10]
+                    if not pred_date:
+                        stats['skipped'] += 1
+                        continue
+                    signal_type = pred.get('signal_type') or infer_signal_type(pred)
+                    horizon = pred.get('prediction_horizon') or infer_prediction_horizon(pred, signal_type)
+                    style = infer_trade_style(pred, signal_type, horizon)
+                    if style not in ('intraday', 'scalp') and horizon != 'intraday':
+                        stats['skipped'] += 1
+                        continue
+                    try:
+                        pd = datetime.strptime(pred_date, '%Y-%m-%d').date()
+                    except ValueError:
+                        stats['skipped'] += 1
+                        continue
+                    if pd >= today and str(pred.get('verdict') or '').upper() != 'UNRESOLVED':
+                        stats['skipped'] += 1
+                        continue
+                    new_verdict = 'NEUTRAL' if style in ('intraday', 'scalp') else 'EXPIRED'
+                    conn.execute(
+                        "UPDATE outcomes SET verdict = ?, last_checked = ? WHERE id = ?",
+                        (new_verdict, _now_iso(), row['id']),
+                    )
+                    if new_verdict == 'NEUTRAL':
+                        stats['neutralized'] += 1
+                    else:
+                        stats['expired'] += 1
+                except Exception:
+                    stats['errors'] += 1
+            conn.commit()
+        finally:
+            conn.close()
+        if stats['neutralized'] or stats['expired']:
+            pipeline_log(
+                f"Overnight reset neutralized={stats['neutralized']} expired={stats['expired']}",
+                stage='overnight_reset',
+            )
+    except Exception as e:
+        stats['errors'] += 1
+        log_error('reset_overnight_intraday_pending', e, stage='overnight_reset')
+    return stats
+
+
 def _evaluate_outcomes() -> dict:
     eod_intraday = resolve_eod_intraday_predictions(verbose=True)
     eval_stats = evaluate_lifecycle_predictions(
@@ -837,6 +903,7 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
         _stage('evaluate_outcomes', _evaluate_outcomes)
         pipeline_log('evaluating predictions complete', stage='evaluate_outcomes')
         expire_stats = _stage('expire_stale', expire_stale_pending, critical=False) or {}
+        overnight_stats = _stage('overnight_reset', reset_overnight_intraday_pending, critical=False) or {}
         inv_stats = _stage('invalidate_contradicted', invalidate_contradicted_predictions, critical=False) or {}
         sync_stats = _stage('sync_predictions', sync_prediction_json_files)
         pipeline_log('refreshing active predictions', stage='sync_predictions')

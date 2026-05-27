@@ -14,6 +14,7 @@ from backend.orchestration.opportunity_filter import (
     DEFAULT_OPPS_LIMIT,
     ELITE_ALERTS_FILE,
     rank_opportunities,
+    rank_opportunities_tiered,
 )
 
 ACTION_PLAN_SYMBOL = re.compile(r'\*\*([A-Z][A-Z0-9&.-]{2,14})\*\*')
@@ -110,47 +111,64 @@ def validate_action_plan_symbols(action_plan: str, allowed: Set[str]) -> List[st
 
 
 def build_action_plan_text(symbols: List[str], ranked: List[dict], intel: Optional[dict] = None) -> str:
-    if symbols:
-        lines: List[str] = []
-        for idx, sym in enumerate(symbols[:5], 1):
-            item = next(
-                (x for x in ranked if str(x.get('symbol') or x.get('ticker') or '').upper() == sym),
-                {},
-            )
-            conf = item.get('display_confidence') or item.get('confidence') or 'MEDIUM'
-            action = str(item.get('action') or 'WATCH').upper()
-            entry = item.get('entry_zone') or item.get('entry_price') or '—'
-            logic = str(item.get('logic') or '').strip()
-            if len(logic) > 90:
-                logic = logic[:87] + '...'
-            detail = f"{idx}. **{sym}** ({action}, {conf}) — entry ₹{entry}."
-            if logic:
-                detail += f" {logic}"
-            lines.append(detail)
-        return '\n'.join(lines)
-
     intel = intel if isinstance(intel, dict) else {}
-    sectors = intel.get('sector_rotation') if isinstance(intel.get('sector_rotation'), dict) else {}
-    bullish = sectors.get('bullish') if isinstance(sectors.get('bullish'), list) else []
-    bearish = sectors.get('bearish') if isinstance(sectors.get('bearish'), list) else []
-    risks = intel.get('risks_and_avoids') if isinstance(intel.get('risks_and_avoids'), list) else []
+    tiers = rank_opportunities_tiered(intel)
+    elite = tiers.get('elite') or get_elite_rankings(limit=5)
+    tactical = tiers.get('tactical') or []
+    watchlist = tiers.get('watchlist') or []
 
-    focus = ', '.join(str(s).upper() for s in bullish[:3]) or 'Defensive leaders with volume confirmation'
+    def _syms(items: List[dict], limit: int = 4) -> str:
+        out = []
+        for item in items[:limit]:
+            sym = str(item.get('symbol') or item.get('ticker') or '').upper()
+            if sym:
+                out.append(sym)
+        return ', '.join(out) if out else 'None flagged'
+
+    watch_syms = _syms(watchlist or ranked[:4])
+    tactical_syms = _syms(tactical)
+    elite_syms = _syms(elite)
+
+    sectors = intel.get('sector_rotation') if isinstance(intel.get('sector_rotation'), dict) else {}
+    risks = intel.get('risks_and_avoids') if isinstance(intel.get('risks_and_avoids'), list) else []
     avoid_items = []
     for r in risks[:4]:
         if isinstance(r, dict):
             sym = str(r.get('symbol') or '').upper()
             if sym and sym not in ('UNKNOWN', 'MACRO', 'NEWS'):
                 avoid_items.append(sym)
-    if not avoid_items and bearish:
+    if not avoid_items:
+        bearish = sectors.get('bearish') if isinstance(sectors.get('bearish'), list) else []
         avoid_items = [str(s).upper() for s in bearish[:3]]
     avoid = ', '.join(avoid_items) or 'Extended momentum without volume confirmation'
 
+    tactical_line = (
+        f"Momentum setups: {tactical_syms}."
+        if tactical_syms != 'None flagged'
+        else 'Momentum trading only — wait for scanner confirmation.'
+    )
+    elite_line = (
+        f"High-conviction swing setups: {elite_syms}."
+        if elite_syms != 'None flagged'
+        else 'No high-confidence swing setups.'
+    )
+
+    if symbols:
+        primary = []
+        for idx, sym in enumerate(symbols[:3], 1):
+            item = next(
+                (x for x in ranked if str(x.get('symbol') or x.get('ticker') or '').upper() == sym),
+                {},
+            )
+            conf = item.get('display_confidence') or item.get('confidence') or 'MEDIUM'
+            primary.append(f"**{sym}** ({conf})")
+        watch_syms = ', '.join(symbols[:4]) if symbols else watch_syms
+
     return (
-        "No elite setups currently.\n"
-        f"Focus sectors: {focus}.\n"
-        f"Avoid: {avoid}.\n"
-        "Wait for scanner confirmation before aggressive entries."
+        f"WATCH:\n{watch_syms}\n\n"
+        f"AVOID:\n{avoid}\n\n"
+        f"TACTICAL:\n{tactical_line}\n\n"
+        f"ELITE:\n{elite_line}"
     )
 
 
@@ -163,11 +181,14 @@ def _strip_internal_keys(items: List[dict]) -> List[dict]:
     return clean
 
 
-def align_intelligence(intel: dict, *, limit: int = DEFAULT_OPPS_LIMIT) -> dict:
+def align_intelligence(intel: dict, *, limit: int = DEFAULT_OPPS_LIMIT, cycle_id: Optional[str] = None) -> dict:
     """Rewrite top_opportunities and action_plan from canonical ranked feed."""
     if not isinstance(intel, dict):
         return intel
+    from backend.intelligence.sector_consistency import stabilize_sector_rotation
+
     out = dict(intel)
+    out['sector_rotation'] = stabilize_sector_rotation(out)
     ranked = get_top_ranked_signals(out, limit=limit)
     clean_ranked = _strip_internal_keys(ranked)
     out['top_opportunities'] = clean_ranked
@@ -179,4 +200,9 @@ def align_intelligence(intel: dict, *, limit: int = DEFAULT_OPPS_LIMIT) -> dict:
         'top_count': len(clean_ranked),
         'elite_count': sum(1 for o in clean_ranked if o.get('elite_verified')),
     }
+    try:
+        from backend.intelligence.active_snapshot import publish_active_snapshot
+        publish_active_snapshot(out, cycle_id=cycle_id, source='align_intelligence')
+    except Exception:
+        pass
     return out

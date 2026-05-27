@@ -77,16 +77,41 @@ def get_collection_profile(now: Optional[datetime] = None) -> Dict[str, object]:
     }
 
 
+def get_lifecycle_state(now: Optional[datetime] = None) -> str:
+    """
+    Canonical lifecycle label for GUI/Telegram:
+    PREMARKET_PREP | MARKET_ACTIVE | POSTMARKET_EVAL | NIGHT_IDLE
+    """
+    period = get_market_period(now)
+    mapping = {
+        'pre_market': 'PREMARKET_PREP',
+        'market': 'MARKET_ACTIVE',
+        'after_hours': 'POSTMARKET_EVAL',
+        'night': 'NIGHT_IDLE',
+        'weekend': 'NIGHT_IDLE',
+    }
+    return mapping.get(period, period.upper())
+
+
 def get_operational_status(now: Optional[datetime] = None) -> Dict[str, object]:
     """Human-facing operational mode for GUI, OPS, and Telegram status."""
     period = get_market_period(now)
     wd = get_watchdog_config(now)
+    lifecycle_state = get_lifecycle_state(now)
     labels = {
-        'market': ('healthy_active', 'HEALTHY ACTIVE', 'Live session — collectors active'),
-        'pre_market': ('waiting_market_open', 'WAITING MARKET OPEN', 'Pre-market — awaiting 9:00 IST open'),
-        'after_hours': ('idle_after_hours', 'IDLE (after hours)', 'Post-close — light collection mode'),
-        'night': ('idle_night', 'IDLE (night mode)', 'Market closed — awaiting market open'),
-        'weekend': ('idle_weekend', 'IDLE (weekend)', 'Market closed — awaiting Monday open'),
+        'market': ('market_active', 'MARKET ACTIVE', 'Live session — collectors active'),
+        'pre_market': (
+            'premarket_prep',
+            'PREMARKET ANALYSIS',
+            'Pre-market prep — scanner, news, and sector synthesis active',
+        ),
+        'after_hours': (
+            'postmarket_eval',
+            'POST-MARKET EVAL',
+            'Post-close evaluation and lifecycle resolution',
+        ),
+        'night': ('night_idle', 'NIGHT IDLE', 'Overnight idle — awaiting pre-market cycle'),
+        'weekend': ('night_idle', 'WEEKEND IDLE', 'Market closed — awaiting Monday open'),
     }
     mode_key, display_status, display_message = labels.get(
         period, ('unknown', period.upper(), 'Operational status unknown')
@@ -103,6 +128,7 @@ def get_operational_status(now: Optional[datetime] = None) -> Dict[str, object]:
         pass
     return {
         'operational_mode': mode_key,
+        'lifecycle_state': lifecycle_state,
         'display_status': display_status,
         'display_message': display_message,
         'period': period,
@@ -110,7 +136,8 @@ def get_operational_status(now: Optional[datetime] = None) -> Dict[str, object]:
         'night_mode': period in ('night', 'weekend'),
         'watchdog_mode': wd.get('mode'),
         'stale_threshold_seconds': wd.get('stale_threshold_seconds'),
-        'expect_quiet_collectors': period in ('night', 'weekend', 'after_hours', 'pre_market'),
+        'expect_quiet_collectors': period in ('night', 'weekend'),
+        'collectors_active': period in ('market', 'pre_market', 'after_hours'),
         'orchestrator_mode': orchestrator_mode,
     }
 
@@ -122,7 +149,7 @@ def source_idle_message(source_key: str, period: str) -> str:
     if period == 'night':
         return 'Market closed — awaiting market open'
     if period == 'pre_market':
-        return 'Pre-market — awaiting session open'
+        return 'Pre-market analysis — scanner and macro prep active'
     if period == 'after_hours':
         return 'After hours — light collection mode'
     if source_key in ('scanner', 'news', 'reddit', 'youtube', 'inshorts'):

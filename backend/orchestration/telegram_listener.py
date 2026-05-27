@@ -334,9 +334,10 @@ def cmd_scan():
 
 def cmd_elite():
     """Reads the ML Meta-Labeler output and formats it for Telegram."""
-    from backend.orchestration.telegram_command_guard import begin_command, finish_command
-    skip, _, key = begin_command('elite', '', CHAT_ID)
+    from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
+    skip, reason, key = begin_command('elite', '', CHAT_ID)
     if skip:
+        send_message(duplicate_command_message(reason), command='elite')
         return
     try:
         _cmd_elite_body()
@@ -359,12 +360,29 @@ def _cmd_elite_body():
         engine = data.get("engine_mode", "Initializing...")
         
         if not elite_signals:
+            tactical_note = ''
+            try:
+                from backend.orchestration.opportunity_filter import rank_opportunities_tiered
+                tiers = rank_opportunities_tiered()
+                if tiers.get('tactical') or tiers.get('watchlist'):
+                    syms = [
+                        str(o.get('symbol') or '').upper()
+                        for o in (tiers.get('tactical') or [])[:3]
+                        if o.get('symbol')
+                    ]
+                    tactical_note = (
+                        "\n\n⚡ Scanner momentum detected but ML confidence below elite threshold."
+                    )
+                    if syms:
+                        tactical_note += f"\nTactical watch: {', '.join(syms)} · use /opps"
+            except Exception:
+                pass
             msg = (
                 "🛡️ <b>ELITE: NONE PASSED THRESHOLD</b>\n\n"
-                "No setups exceeded the &gt;72% meta-labeler probability gate. "
-                "Use /opps for TACTICAL scanner plays (below elite ML threshold)."
+                "No setups exceeded the &gt;72% meta-labeler probability gate."
+                f"{tactical_note}"
             )
-            send_message(msg)
+            send_message(msg, command='elite')
             return
             
         msg = f"🎯 <b>ELITE SETUPS ({len(elite_signals)})</b> · HIGH conviction\n"
@@ -387,14 +405,23 @@ def _cmd_elite_body():
 
 
 def cmd_brief():
-    from backend.orchestration.telegram_command_guard import begin_command, finish_command
-    skip, _, key = begin_command('brief', '', CHAT_ID)
+    from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
+    skip, reason, key = begin_command('brief', '', CHAT_ID)
     if skip:
+        send_message(duplicate_command_message(reason), command='brief')
         return
 
     def _do():
         try:
-            send_message("📋 Generating morning brief...")
+            from backend.orchestration.telegram_outbound_guard import bind_cycle, new_cycle_id
+            cycle_id = new_cycle_id('brief')
+            bind_cycle('brief', cycle_id)
+            send_message(
+                '📊 Building market brief...',
+                command='brief',
+                cycle_id=cycle_id,
+                message_kind='loading',
+            )
             run_module_with_arg('alert_engine', 'morning', 120)
         finally:
             finish_command(key)
@@ -453,6 +480,8 @@ def cmd_brain_pusher(mode, status_msg=None):
             from backend.orchestration.telegram_outbound_guard import bind_cycle, clear_loading, new_cycle_id
             skip, _, guard_key = begin_command(mode, '', CHAT_ID)
             if skip:
+                from backend.orchestration.telegram_command_guard import duplicate_command_message
+                send_message(duplicate_command_message('in_flight'), command=mode)
                 return
             cycle_id = new_cycle_id(mode)
             bind_cycle(mode, cycle_id)
@@ -504,6 +533,18 @@ def cmd_brain_pusher(mode, status_msg=None):
     run_in_background(_do)
 
 def cmd_status():
+    from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
+    skip, reason, key = begin_command('status', '', CHAT_ID)
+    if skip:
+        send_message(duplicate_command_message(reason), command='status')
+        return
+    try:
+        _cmd_status_body()
+    finally:
+        finish_command(key)
+
+
+def _cmd_status_body():
     files_to_check = [
         ('unified_intelligence.json', 'AI Brain'),
         ('scanner_data.json', 'Scanner'),
@@ -523,10 +564,23 @@ def cmd_status():
         from backend.utils.market_hours import get_operational_status
         op = get_operational_status(now)
         quiet_mode = bool(op.get('expect_quiet_collectors'))
-        msg += f"🌙 <b>{op.get('display_status', 'OPERATIONAL')}</b>\n"
-        msg += f"<i>{op.get('display_message', '')}</i>\n\n"
+        lifecycle = op.get('lifecycle_state') or op.get('operational_mode')
+        msg += f"<b>{op.get('display_status', 'OPERATIONAL')}</b>\n"
+        msg += f"<i>{op.get('display_message', '')}</i>\n"
+        msg += f"Lifecycle: <code>{lifecycle}</code>\n\n"
     except Exception:
         op = {}
+
+    try:
+        from backend.intelligence.active_snapshot import get_active_snapshot_meta, snapshot_health
+        snap = get_active_snapshot_meta()
+        health = snapshot_health()
+        if snap.get('active_snapshot_id'):
+            msg += f"📸 Snapshot: <code>{snap['active_snapshot_id'][-8:]}</code> · health {health.get('score', 0)}\n"
+        if health.get('stale'):
+            msg += f"⚠️ <i>Snapshot stale ({health.get('age_minutes')}m)</i>\n"
+    except Exception:
+        pass
 
     try:
         from backend.lifecycle.prediction_lifecycle_engine import get_ml_core_status
@@ -602,12 +656,13 @@ def cmd_status():
         except Exception:
             pass
 
-    send_message(msg)
+    send_message(msg, command='status')
 
 def cmd_stats():
-    from backend.orchestration.telegram_command_guard import begin_command, finish_command
-    skip, _, key = begin_command('stats', '', CHAT_ID)
+    from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
+    skip, reason, key = begin_command('stats', '', CHAT_ID)
     if skip:
+        send_message(duplicate_command_message(reason), command='stats')
         return
     try:
         from backend.lifecycle.unified_metrics import format_stats_telegram
@@ -783,21 +838,21 @@ def handle_command(text, from_user):
         cmd_elite()
     # Brain commands (NEW v3)
     elif cmd in ('brain', 'analysis', 'ai'):
-        cmd_brain_pusher('full', '🧠 Sending full brain analysis...')
+        cmd_brain_pusher('full', '🧠 Building full analysis...')
     elif cmd in ('summary', 'sum', 'exec'):
-        cmd_brain_pusher('summary', '📋 Sending executive summary...')
+        cmd_brain_pusher('summary', '📋 Building summary...')
     elif cmd in ('opps', 'opportunities', 'picks'):
-        cmd_brain_pusher('opps', '💎 Sending opportunities...')
+        cmd_brain_pusher('opps', '💎 Loading opportunities...')
     elif cmd in ('risks', 'risk', 'avoid', 'warnings'):
-        cmd_brain_pusher('risks', '⚠️ Sending risk warnings...')
+        cmd_brain_pusher('risks', '⚠️ Loading risks...')
     elif cmd in ('action', 'plan', 'actionplan'):
-        cmd_brain_pusher('action', '🚀 Sending action plan...')
+        cmd_brain_pusher('action', '🛡️ Loading action plan...')
     elif cmd in ('calibration', 'cal', 'memory'):
-        cmd_brain_pusher('calibration', '🎯 Sending self-calibration...')
+        cmd_brain_pusher('calibration', '🎯 Loading calibration...')
     elif cmd in ('sectors', 'sector', 'rotation'):
-        cmd_brain_pusher('sectors', '🔄 Sending sector rotation...')
+        cmd_brain_pusher('sectors', '🔄 Loading sectors...')
     elif cmd in ('global', 'world', 'overnight'):
-        cmd_brain_pusher('global', '🌍 Sending global impact...')
+        cmd_brain_pusher('global', '🌍 Loading global impact...')
     # Pipelines
     elif cmd in ('refresh', 'r'):
         cmd_refresh()
