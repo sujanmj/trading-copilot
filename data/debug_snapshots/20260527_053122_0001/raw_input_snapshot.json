@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "8aa9599117bedcc24661",
+    "india_markets": "d08683b66c5a7f2ebec6",
+    "news": "cbee844bc44c6801c91d",
+    "youtube": "c64273098434dc2a2a51",
+    "govt": "33ff78e398eb4febd3e4",
+    "inshorts": "71c6096a290301d13c58",
+    "reddit": "664480fac573b45bba93",
+    "telegram": "empty",
+    "scanner": "ed16071186c0cedcb2d5",
+    "twitter": "aa6e17aff264b1f260e4",
+    "nse_filings": "b9694e95c0bed430e5ae",
+    "composite": "ffd1950abeeb35b88459"
+  },
+  "metrics": {
+    "india_avg_change": -0.121,
+    "news_count": 124,
+    "govt_high_impact": 18,
+    "scanner_signals": 66,
+    "top_scanner_tickers": [
+      "FINPIPE",
+      "INDORAMA",
+      "AIAENG",
+      "JKTYRE",
+      "GRANULES"
+    ],
+    "scanner_signature": [
+      "('FINPIPE', 'ULTRA', 8.5)",
+      "('INDORAMA', 'ULTRA', 1.7)",
+      "('AIAENG', 'ULTRA', 7.5)",
+      "('JKTYRE', 'ULTRA', 5.8)",
+      "('GRANULES', 'ULTRA', 4.8)"
+    ],
+    "top_news_titles": [
+      "bajaj auto, bank of india, glaxo, icici lombard, torrent pharma, uno minda: divi",
+      "dollar down slightly as yields slip, traders trim expectations for fed rate hike",
+      "inr turns lower amid renewed signs of geopolitical tensions",
+      "listed brokers, exchanges rake in profits even as war clouds linger",
+      "sebi turns to etfs, derivatives for debt market push",
+      "spacex ipo gets another greenlight toward faster index inclusion"
+    ],
+    "reddit_sentiment": "bearish",
+    "reddit_confidence": 0,
+    "novelty_avg_score": 4.315,
+    "repetition_suppressed": 67
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 124
+  },
+  "govt_counts": {
+    "high_impact_items": 18
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 22
+  }
+}

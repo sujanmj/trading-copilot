@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "29c98b9a7b21a9d69fef",
+    "india_markets": "9283013be0055f11c1fd",
+    "news": "de5ce44952cb6101e883",
+    "youtube": "c64273098434dc2a2a51",
+    "govt": "3d862e0d558457be5b23",
+    "inshorts": "e01c47aae4a138df8ad5",
+    "reddit": "ae9cc06a1174f302793c",
+    "telegram": "empty",
+    "scanner": "9d706c3726a626dff8b3",
+    "twitter": "e621e06941e4788616d0",
+    "nse_filings": "c7e9bf80dcbedb6e99a1",
+    "composite": "3272fed113987fc15d66"
+  },
+  "metrics": {
+    "india_avg_change": 0.187,
+    "news_count": 124,
+    "govt_high_impact": 19,
+    "scanner_signals": 75,
+    "top_scanner_tickers": [
+      "FINPIPE",
+      "AIAENG",
+      "INDORAMA",
+      "JKTYRE",
+      "GRANULES"
+    ],
+    "scanner_signature": [
+      "('FINPIPE', 'ULTRA', 8.3)",
+      "('AIAENG', 'ULTRA', 4.0)",
+      "('INDORAMA', 'ULTRA', 0.4)",
+      "('JKTYRE', 'ULTRA', 5.4)",
+      "('GRANULES', 'ULTRA', 3.6)"
+    ],
+    "top_news_titles": [
+      "inr turns lower amid renewed signs of geopolitical tensions",
+      "ranveer singh 'don 3' exit: manoj bajpayee opens up on fwice ban on dhurandhar a",
+      "sebi turns to etfs, derivatives for debt market push",
+      "super el nino warning: scorching heat, weaker monsoon ahead — what it means for",
+      "suprajit engineering q4 review: attractive risk-reward at current valuations, sa",
+      "us market: fed, fdic push leaner, risk-focused bank supervision"
+    ],
+    "reddit_sentiment": "bearish",
+    "reddit_confidence": 0,
+    "novelty_avg_score": 4.53,
+    "repetition_suppressed": 62
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 124
+  },
+  "govt_counts": {
+    "high_impact_items": 19
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 20
+  }
+}

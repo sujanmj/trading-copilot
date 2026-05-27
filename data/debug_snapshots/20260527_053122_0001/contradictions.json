@@ -1,0 +1,37 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [FINPIPE, AIAENG, ATGL, JKTYRE] vs SHORT [COALINDIA, FLUOROCHEM, POLYMED, SIEMENS]",
+      "disagreement_score": 0.2,
+      "long_count": 25,
+      "short_count": 5
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 4 bullish vs 3 bearish high-impact items",
+      "disagreement_score": 0.75
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly FINPIPE ULTRA move +8.54%",
+      "disagreement_score": 0.854,
+      "ticker": "FINPIPE"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly JKTYRE ULTRA move +5.78%",
+      "disagreement_score": 0.578,
+      "ticker": "JKTYRE"
+    },
+    {
+      "type": "outlier_vs_sector",
+      "summary": "Outlier COALINDIA bearish (+3.4%) vs sector METALS_MINING consensus bullish",
+      "disagreement_score": 0.422,
+      "ticker": "COALINDIA"
+    }
+  ],
+  "overall_disagreement_score": 0.561,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.20 | Scanner split: LONG [FINPIPE, AIAENG, ATGL, JKTYRE] vs SHORT [COALINDIA, FLUOROCHEM, POLYMED, SIEMENS]\n  [institutional_policy_divergence] disagreement=0.75 | Govt policy mix: 4 bullish vs 3 bearish high-impact items\n  [scanner_anomaly] disagreement=0.85 | Anomaly FINPIPE ULTRA move +8.54%\n  [scanner_anomaly] disagreement=0.58 | Anomaly JKTYRE ULTRA move +5.78%\n  [outlier_vs_sector] disagreement=0.42 | Outlier COALINDIA bearish (+3.4%) vs sector METALS_MINING consensus bullish",
+  "count": 5
+}
