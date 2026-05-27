@@ -935,10 +935,32 @@ def cmd_unsilence():
         SILENCE_FILE.unlink()
     send_message("🔔 Alerts resumed")
 
+def cmd_review():
+    """Consolidated institutional review — cache-only, 3 grouped messages."""
+    from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
+    from backend.orchestration.telegram_outbound_guard import bind_cycle, clear_loading, new_cycle_id
+
+    skip, reason, key = begin_command('review', '', CHAT_ID)
+    if skip:
+        send_message(duplicate_command_message(reason, command='review'), command='review')
+        return
+    cycle_id = new_cycle_id('review')
+    bind_cycle('review', cycle_id)
+    try:
+        from backend.orchestration.telegram_review import push_review
+        push_review(command='review', cycle_id=cycle_id)
+    except Exception as e:
+        send_message(f'❌ Review failed: {str(e)[:200]}', command='review', cycle_id=cycle_id)
+    finally:
+        clear_loading('review')
+        finish_command(key)
+
+
 def cmd_help():
     msg = """<b>🤖 Trading Copilot Commands</b>
 
 <b>🧠 BRAIN & ML:</b>
+/review - Full institutional intelligence review (recommended)
 /elite - Show ML-Filtered High Conviction setups (NEW)
 /brain - Full 6-message brain analysis
 /summary - Executive summary + Govt impact
@@ -967,6 +989,7 @@ def cmd_help():
 /help - Show this menu
 
 <i>Examples:
+• /review — consolidated desk note (cache-only)
 • /elite — see top ML picks
 • /ask How is metals sector?
 • /brain — full analysis on demand</i>"""
@@ -1018,6 +1041,8 @@ def handle_command(text, from_user):
         cmd_brain_pusher('sectors', '🔄 Loading sectors...')
     elif cmd in ('global', 'world', 'overnight'):
         cmd_brain_pusher('global', '🌍 Loading global impact...')
+    elif cmd in ('review', 'full'):
+        cmd_review()
     # Pipelines
     elif cmd in ('refresh', 'r'):
         cmd_refresh()

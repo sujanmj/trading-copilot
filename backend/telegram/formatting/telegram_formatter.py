@@ -27,6 +27,7 @@ COMMAND_LINE_LIMITS: Dict[str, int] = {
     'global': 35,
     'stats': 20,
     'outcomes': 25,
+    'review': 55,
 }
 
 
@@ -418,6 +419,8 @@ def confirmation_phrase(kind: str = 'processing', *, command: str = '') -> str:
             return '⏳ Calibration request already processing...'
         if cmd in ('brain', 'full', 'all'):
             return '🧠 Analysis already running...'
+        if cmd in ('review',):
+            return '⏳ Review request already processing...'
         if cmd == 'action':
             return '⏳ Action plan request already processing...'
     phrases = {
