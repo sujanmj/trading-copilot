@@ -43,6 +43,19 @@ PHRASE_MAP = [
     (r'\bmomentum\s+names\b', 'participation leaders'),
     (r'\brisk\s+off\b', 'defensive positioning'),
     (r'\brisk\s+on\b', 'cyclical accumulation'),
+    (r'\bcrazy\s+volume\b', 'elevated participation'),
+    (r'\bultra\s+breakout\b', 'continuation structure'),
+    (r'\bscanner\s+hype\b', 'scanner observation'),
+    (r'\bScanner\s+High\s+Conviction\s·\s*vol\b', 'Elevated participation'),
+    (r'\bScanner\s+(\w+(?:\s+\w+)?)\s·\s*vol\b', r'\1 participation'),
+    (r'\bvol\s+([\d.]+)x\b', r'participation \1x'),
+    (r'\b([\d.]+)%\s+move\b', r'directional extension \1%'),
+    (r'\bmomentum\s+detected\b', 'participation improving'),
+    (r'\bbreakdown\b', 'breakdown continuation'),
+    (r'\bweak\s+participation\b', 'directional weakness'),
+    (r'\bconfirmation\s+pending\b', 'confirmation pending'),
+    (r'\bdefensive\s+posture\b', 'defensive posture'),
+    (r'\bcapital\s+preservation\b', 'capital preservation'),
 ]
 
 SECTOR_TONE = {
@@ -181,17 +194,61 @@ def format_executive_summary(
     confidence: str,
     after_hours: bool = False,
 ) -> str:
-    """Bloomberg-style compressed desk note."""
+    """Bloomberg-style compressed desk note (session banner rendered separately)."""
+    del after_hours  # canonical banner via session_notice / after_hours_notice_html only
     regime_line = institutional_regime_label(regime)
-    header = AFTER_HOURS_HEADER if after_hours else 'Desk note — session intelligence'
     return (
-        f"{header}\n"
         f"Regime: {regime_line}\n"
         f"Leadership: {leaders}\n"
         f"Risk focus: {risks}\n"
         f"India bias: {apply_institutional_tone(bias)}\n"
         f"Conviction: {confidence}"
     )
+
+
+def compress_risk_logic(logic: str, *, max_lines: int = 2, max_chars: int = 140) -> str:
+    """Hard-truncate risk copy — max N institutional lines per ticker."""
+    if not logic:
+        return ''
+    text = apply_institutional_tone(str(logic).strip())
+    chunks = [x.strip() for x in re.split(r'[\n;]+', text) if x.strip()]
+    lines: List[str] = []
+    for chunk in chunks[:max_lines]:
+        sentence = re.split(r'(?<=[.!?])\s+', chunk)[0].strip()
+        if len(sentence) > max_chars:
+            sentence = sentence[: max_chars - 1].rsplit(' ', 1)[0] + '…'
+        if sentence:
+            lines.append(sentence)
+    if not lines:
+        return ''
+    return lines[0] if max_lines == 1 else '\n'.join(lines[:max_lines])
+
+
+def format_scanner_participation(
+    strength_label: str,
+    *,
+    volume_ratio: Optional[float] = None,
+    change_pct: Optional[float] = None,
+) -> str:
+    """Replace retail scanner phrasing with desk-note participation language."""
+    label = apply_institutional_tone(str(strength_label or 'Observation').strip())
+    parts = [f'{label} — elevated participation']
+    if volume_ratio is not None:
+        try:
+            vr = float(volume_ratio)
+            if vr >= 1.2:
+                parts.append(f'volume {vr:.1f}x baseline')
+        except (TypeError, ValueError):
+            pass
+    if change_pct is not None:
+        try:
+            ch = float(change_pct)
+            if abs(ch) >= 0.5:
+                tone = 'extension' if ch > 0 else 'weakness'
+                parts.append(f'directional {tone} {abs(ch):.1f}%')
+        except (TypeError, ValueError):
+            pass
+    return apply_institutional_tone(' · '.join(parts))
 
 
 def format_compressed_leaders(sectors: Dict[str, Any]) -> str:
@@ -210,9 +267,7 @@ def format_compressed_risks(risks: List[Any], *, max_lines_per_ticker: int = 2) 
     for r in risks[:3]:
         if isinstance(r, dict):
             sym = str(r.get('symbol') or '').strip()
-            logic_raw = str(r.get('logic') or '')
-            logic_lines = [x.strip() for x in logic_raw.splitlines() if x.strip()][:max_lines_per_ticker]
-            logic = apply_institutional_tone(' '.join(logic_lines)[:160])
+            logic = compress_risk_logic(str(r.get('logic') or ''), max_lines=max_lines_per_ticker)
             if sym and sym != 'UNKNOWN':
                 bits.append(f'{sym} — {logic}' if logic else sym)
             elif logic:
@@ -225,4 +280,23 @@ def elite_empty_block() -> str:
 
 
 def after_hours_notice_html() -> str:
-    return f"<i>🌙 {AFTER_HOURS_HEADER}</i>\n\n"
+    """Single canonical after-hours banner — use once per message/command."""
+    return f"<i>🌙 {AFTER_HOURS_HEADER}</i>\n"
+
+
+def canonical_session_prefix(runtime_state: Optional[dict] = None) -> str:
+    """After-hours banner OR stale snapshot notice — never both."""
+    try:
+        if runtime_state is None:
+            from backend.runtime.runtime_state import get_runtime_state
+            runtime_state = get_runtime_state()
+        session = (runtime_state or {}).get('session') or {}
+        if session.get('after_hours_mode'):
+            return after_hours_notice_html()
+        fresh = (runtime_state or {}).get('snapshot_freshness') or {}
+        if fresh.get('stale'):
+            age = fresh.get('age_display') or 'freshness unavailable'
+            return f'⚠️ <i>Snapshot stale — {age}</i>\n'
+    except Exception:
+        pass
+    return ''

@@ -1333,9 +1333,14 @@
 
   function truncateRiskLogic(text, maxLines) {
     maxLines = maxLines || 2
-    const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    const raw = String(text || '').replace(/\bScanner\s+\w+\s·\s*vol\s+[\d.]+x\b/gi, 'Elevated participation')
+      .replace(/\bvol\s+([\d.]+)x\b/gi, 'participation $1x')
+      .replace(/\bULTRA\b/gi, 'High Conviction')
+      .replace(/\bmoonshot\b/gi, 'speculative extension')
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
     if (!lines.length) return ''
-    return lines.slice(0, maxLines).join(' ')
+    const joined = lines.slice(0, maxLines).join(' ')
+    return joined.length > 140 ? joined.slice(0, 137).trim() + '…' : joined
   }
 
   function formatPctSafe(value, fallback) {

@@ -563,6 +563,10 @@ def _load_scanner_ultra_candidates() -> List[dict]:
         data = json.loads(SCANNER_FILE.read_text(encoding='utf-8'))
     except Exception:
         return []
+    try:
+        from backend.intelligence.institutional_language import format_scanner_participation
+    except Exception:
+        format_scanner_participation = None  # type: ignore
     out: List[dict] = []
     for sig in data.get('top_signals') or []:
         if not isinstance(sig, dict):
@@ -573,15 +577,20 @@ def _load_scanner_ultra_candidates() -> List[dict]:
         if not ticker:
             continue
         label = normalize_strength_label(sig.get('strength'), sig.get('direction'))
+        if format_scanner_participation:
+            logic = format_scanner_participation(
+                label,
+                volume_ratio=sig.get('volume_ratio'),
+                change_pct=sig.get('change_percent'),
+            )
+        else:
+            logic = f"{label} — elevated participation"
         out.append(_normalize_opp({
             'symbol': ticker,
             'ticker': ticker,
             'action': 'WATCH',
             'confidence': 'MEDIUM',
-            'logic': (
-                f"Scanner {label} · vol {sig.get('volume_ratio', '?')}x · "
-                f"{sig.get('change_percent', 0)}% move"
-            ),
+            'logic': logic,
             'sector': sig.get('sector'),
             'signal_type': 'scanner_high_conviction',
             'display_tier': 'WATCH',
@@ -762,7 +771,7 @@ def _load_avoid_candidates(intel: dict, ctx: dict, scanner_index: Dict[str, dict
                 'symbol': sym,
                 'action': 'AVOID',
                 'confidence': 'MEDIUM',
-                'logic': f"Scanner {key.replace('_', ' ')} · distribution risk",
+                'logic': 'Directional weakness — distribution risk',
                 'sector': row.get('sector'),
                 'display_tier': 'AVOID',
             }, 'scanner_bearish'))

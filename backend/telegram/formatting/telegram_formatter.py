@@ -51,7 +51,8 @@ def format_for_command(text: str, command: str) -> str:
     cmd = str(command or 'brain').lower().strip().lstrip('/')
     max_lines = COMMAND_LINE_LIMITS.get(cmd, DEFAULT_MAX_LINES)
     out = enforce_line_limit(text, max_lines)
-    return enforce_char_limit(out)
+    out = enforce_char_limit(out)
+    return institutionalize(out)
 
 
 def _sanitize_section_line(prefix: str, body: str) -> str:
@@ -129,20 +130,28 @@ def format_risks(risks: list, *, max_lines_per_ticker: int = 2) -> str:
     if not items:
         return '<i>No risks identified in current analysis.</i>'
     try:
-        from backend.intelligence.institutional_language import apply_institutional_tone
+        from backend.intelligence.institutional_language import compress_risk_logic
     except Exception:
-        apply_institutional_tone = lambda x: x  # type: ignore
+        compress_risk_logic = None  # type: ignore
     rows = []
     for i, r in enumerate(items[:8], 1):
         r = r if isinstance(r, dict) else {}
         sym = r.get('symbol') or 'UNKNOWN'
-        logic = apply_institutional_tone(str(r.get('logic') or 'No rationale').strip())
-        logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:max_lines_per_ticker]
-        if not logic_lines:
-            logic_lines = ['No rationale']
-        logic_block = '\n   '.join(f'<i>{ln[:160]}</i>' for ln in logic_lines[:max_lines_per_ticker])
+        if compress_risk_logic:
+            logic = compress_risk_logic(str(r.get('logic') or ''), max_lines=max_lines_per_ticker)
+        else:
+            logic = institutionalize(str(r.get('logic') or 'No rationale').strip())
+            logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:max_lines_per_ticker]
+            logic = '\n   '.join(f'<i>{ln[:140]}</i>' for ln in logic_lines)
+        if compress_risk_logic:
+            logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:max_lines_per_ticker]
+            if not logic_lines:
+                logic_lines = ['No rationale']
+            logic_block = '\n   '.join(f'<i>{ln[:140]}</i>' for ln in logic_lines)
+        else:
+            logic_block = logic
         rows.append(f'{i}. 🔴 <b>{sym}</b>\n   {logic_block}')
-    return '\n\n'.join(rows)
+    return '\n'.join(rows)
 
 
 def _single_action_label(item: dict) -> str:
@@ -366,6 +375,11 @@ def confirmation_phrase(kind: str = 'processing') -> str:
 
 
 def session_notice(runtime_state: Optional[dict] = None) -> str:
+    try:
+        from backend.intelligence.institutional_language import canonical_session_prefix
+        return canonical_session_prefix(runtime_state)
+    except Exception:
+        pass
     try:
         if runtime_state is None:
             from backend.runtime.runtime_state import get_runtime_state

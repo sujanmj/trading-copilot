@@ -424,7 +424,7 @@ def format_opps(opps_list, *, tier_label=None):
             f"   📊 {status_line}{ml_html}{note_html if is_elite else ''}{inv_html}{why_html}\n"
             f"   <i>{apply_institutional_tone(_text(o.get('logic'), 'No rationale provided.'))}</i>"
         )
-    return "\n\n".join(res)
+    return "\n".join(res)
 
 
 def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
@@ -567,7 +567,7 @@ def build_compressed_summary(intel, *, include_stale: bool = True):
     ) if format_executive_summary else (
         f"Regime: {regime}\nLeadership: {leaders}\nRisks: {risks_line}\nBias: {bias}\nConfidence: {conf_line}"
     )
-    return f"{stale}📋 <b>EXECUTIVE SUMMARY</b>\n\n{apply_institutional_tone(body)}"
+    return f"{stale}📋 <b>EXECUTIVE SUMMARY</b>\n{apply_institutional_tone(body)}"
 
 
 def format_risks(risks_list):
@@ -595,9 +595,11 @@ def format_risks(risks_list):
 # MESSAGE BUILDERS
 # ============================================================
 
-def build_msg1_header(intel):
+def build_msg1_header(intel, *, include_prefix: bool = True):
     intel = normalize_intel(intel)
-    stale = _brain_stale_prefix or stale_warning(intel)
+    prefix = ''
+    if include_prefix:
+        prefix = _brain_stale_prefix or stale_warning(intel)
     ts_str = _text(intel.get('generation_time'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     mood = _dict(intel.get('market_mood'))
     confidence = _text(mood.get('confidence_level'), 'N/A')
@@ -619,7 +621,7 @@ def build_msg1_header(intel):
             total=sources_total if sources_total is not None else feed_count_total(),
         )
 
-    return f"""{stale}🧠 <b>UNIFIED MARKET INTELLIGENCE</b>
+    return f"""{prefix}🧠 <b>UNIFIED MARKET INTELLIGENCE</b>
 📅 <i>{ts_str}</i> · Confidence <b>{confidence}</b> · Sources <b>{sources_line}</b>"""
 
 
@@ -782,14 +784,13 @@ def render_brain_messages(intel: dict, *, snap=None) -> list:
     """Single render pass — 3 consolidated brain messages for Telegram queue."""
     from backend.lifecycle.unified_metrics import format_calibration_telegram
     from backend.intelligence.institutional_language import apply_institutional_tone, institutional_regime_label
+    from backend.telegram.formatting.telegram_formatter import format_action_plan, format_sectors
 
     intel = normalize_intel(intel) or {}
-    stale = _brain_stale_prefix or stale_warning(intel)
-    ts_str = _text(intel.get('generation_time'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    prefix = _brain_stale_prefix or stale_warning(intel)
     mood = _dict(intel.get('market_mood'))
+    sectors = _dict(intel.get('sector_rotation'))
 
-    # --- Message 1: executive summary + sentiment + regime ---
-    summary_body = build_compressed_summary(intel, include_stale=False)
     regime = 'VOLATILE'
     try:
         from backend.utils.config import ANALYSIS_STATE_FILE
@@ -798,16 +799,28 @@ def render_brain_messages(intel: dict, *, snap=None) -> list:
             regime = institutional_regime_label(str(state.get('last_regime') or 'volatile'))
     except Exception:
         regime = institutional_regime_label('volatile')
-    sentiment_block = (
-        "💬 <b>MARKET MOOD & SENTIMENT</b>\n\n"
-        f"🌍 <b>Global:</b> {apply_institutional_tone(_text(mood.get('global_mood'), 'Unknown'))}\n"
-        f"🇮🇳 <b>India:</b> {apply_institutional_tone(_text(mood.get('india_outlook'), 'Unknown'))}\n"
-        f"🛒 <b>Retail:</b> {apply_institutional_tone(_text(mood.get('retail_mood'), 'Unknown'))}\n"
-        f"📊 <b>Regime:</b> {regime}"
-    )
-    msg1 = f"{stale}{build_msg1_header(intel)}\n\n{summary_body}\n\n{sentiment_block}"
 
-    # --- Message 2: opportunities + risks ---
+    macro_line = apply_institutional_tone(
+        _text(mood.get('global_mood') or mood.get('overnight_narrative'), 'Macro context pending')
+    )
+
+    # Message 1: executive summary + market mood + regime + macro overview
+    summary_body = build_compressed_summary(intel, include_stale=False)
+    sentiment_block = (
+        "<b>MARKET MOOD</b>\n"
+        f"Global: {apply_institutional_tone(_text(mood.get('global_mood'), 'Unknown'))}\n"
+        f"India: {apply_institutional_tone(_text(mood.get('india_outlook'), 'Unknown'))}\n"
+        f"Retail: {apply_institutional_tone(_text(mood.get('retail_mood'), 'Unknown'))}\n"
+        f"Regime: {regime}\n"
+        f"Macro: {macro_line[:180]}"
+    )
+    msg1 = (
+        f"{prefix}{build_msg1_header(intel, include_prefix=False)}\n"
+        f"{summary_body}\n"
+        f"{sentiment_block}"
+    )
+
+    # Message 2: opportunities + risks + sector rotation
     opps = get_opportunities(intel)
     opps_text = format_opps(opps[:10]) if opps else ''
     if not opps_text:
@@ -817,30 +830,31 @@ def render_brain_messages(intel: dict, *, snap=None) -> list:
         except Exception:
             opps_text = '<i>Monitoring for ranked setups.</i>'
     risks = _list(intel.get('risks_and_avoids'))
+    sector_block = format_sectors(sectors).replace('🔄 <b>SECTOR ROTATION</b>\n', '<b>SECTOR ROTATION</b>\n')
     msg2 = (
-        f"💎 <b>OPPORTUNITIES</b>\n\n{opps_text}\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}"
+        f"<b>OPPORTUNITIES</b>\n{opps_text}\n"
+        f"<b>TOP RISKS</b>\n{format_risks(risks)}\n"
+        f"{sector_block}"
     )
 
-    # --- Message 3: sectors + calibration ---
-    sectors = _dict(intel.get('sector_rotation'))
-    bullish = _join_list(sectors.get('bullish'))
-    bearish = _join_list(sectors.get('bearish'))
+    # Message 3: calibration + lifecycle + positioning guidance
     cal_intel = _professionalize_calibration_text(intel.get('self_calibration'))
     cal_metrics = format_calibration_telegram()
+    action = ''
+    if snap is not None and getattr(snap, 'action_plan', None):
+        action = _text(snap.action_plan, '')
+    if not action.strip():
+        action = _text(intel.get('action_plan'), '')
+    posture = format_action_plan(action)
     msg3 = (
-        f"🔄 <b>SECTOR ROTATION</b>\n\n"
-        f"🟢 <b>Bullish:</b> {bullish}\n"
-        f"🔴 <b>Bearish:</b> {bearish}\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🎯 <b>CALIBRATION</b>\n\n{cal_intel}\n\n{cal_metrics}"
+        f"<b>CALIBRATION</b>\n{cal_intel}\n{cal_metrics}\n"
+        f"<b>POSITIONING</b>\n{posture}"
     )
 
     return [
         ('Executive summary', msg1),
         ('Opportunities & risks', msg2),
-        ('Sectors & calibration', msg3),
+        ('Calibration & positioning', msg3),
     ]
 
 

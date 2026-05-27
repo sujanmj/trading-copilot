@@ -557,18 +557,66 @@ def cmd_brief():
         return
 
     def _do():
+        cycle_id = ''
         try:
-            from backend.orchestration.telegram_outbound_guard import bind_cycle, new_cycle_id
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+            from backend.orchestration.telegram_outbound_guard import bind_cycle, clear_loading, new_cycle_id
+            from backend.orchestration.delayed_loading import run_with_delayed_loading
+
             cycle_id = new_cycle_id('brief')
             bind_cycle('brief', cycle_id)
-            send_message(
-                '📊 Building market brief...',
+
+            def _work():
+                sent = 0
+                try:
+                    from backend.orchestration import telegram_alert_engine as engine
+                    sent = engine.try_pre_market()
+                except Exception as exc:
+                    safe_print(f"[BRIEF] pre-market engine: {exc}")
+                if sent:
+                    return
+                from backend.orchestration import telegram_brain_pusher as tbp
+                intel = tbp.normalize_intel(tbp.load_intel())
+                if intel:
+                    tbp.push_summary(command='brief', cycle_id=cycle_id)
+                else:
+                    send_message(
+                        '📋 <i>No brief available — run /refresh or retry during pre-market.</i>',
+                        command='brief',
+                        cycle_id=cycle_id,
+                    )
+
+            def _work_with_timeout():
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(_work)
+                    try:
+                        fut.result(timeout=120)
+                    except FuturesTimeout:
+                        send_message(
+                            '⏱️ Brief timed out — use /summary for the latest desk note.',
+                            command='brief',
+                            cycle_id=cycle_id,
+                        )
+
+            run_with_delayed_loading(
+                send_fn=send_message,
+                loading_text='📊 Building market brief...',
                 command='brief',
                 cycle_id=cycle_id,
-                message_kind='loading',
+                work_fn=_work_with_timeout,
             )
-            run_module_with_arg('alert_engine', 'morning', 120)
+        except Exception as e:
+            send_message(
+                f'❌ Brief failed: {str(e)[:200]}',
+                command='brief',
+                cycle_id=cycle_id or '',
+            )
         finally:
+            try:
+                from backend.orchestration.telegram_outbound_guard import clear_loading
+                clear_loading('brief')
+            except Exception:
+                pass
             finish_command(key)
 
     run_in_background(_do)
