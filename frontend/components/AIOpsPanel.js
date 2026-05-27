@@ -531,6 +531,7 @@
         : pipelineDisplay === 'RUNNING' ? 'ai-ops-warn'
         : pipelineDisplay === 'FAILED' ? 'ai-ops-warn'
         : 'ai-ops-warn';
+      const pendingCls = lifecycle.pending_classification || {};
       lcEl.innerHTML =
         renderStatGrid([
           {
@@ -542,6 +543,19 @@
             label: 'EOD cycle',
             value: lifecycle.evaluation_cycle_complete ? 'COMPLETE' : (pipelineStatus === 'RUNNING' ? 'RUNNING' : 'PENDING'),
             cls: lifecycle.evaluation_cycle_complete ? 'ai-ops-ok' : 'ai-ops-warn',
+          },
+          {
+            label: 'Pending Active',
+            value: String(lifecycle.pending_active ?? pendingCls.pending_active ?? '—'),
+          },
+          {
+            label: 'Expired',
+            value: String(lifecycle.pending_expired ?? pendingCls.expired ?? '—'),
+            cls: (lifecycle.pending_expired ?? pendingCls.expired ?? 0) > 0 ? 'ai-ops-warn' : '',
+          },
+          {
+            label: 'Neutralized',
+            value: String(lifecycle.pending_neutralized_today ?? pendingCls.neutralized_today ?? '—'),
           },
           {
             label: 'Active',
@@ -558,7 +572,7 @@
           },
           {
             label: 'Unresolved',
-            value: String(lifecycle.unresolved_predictions ?? '—'),
+            value: String(lifecycle.unresolved_predictions ?? pendingCls.low_data_pending ?? '—'),
             cls: (lifecycle.unresolved_predictions || 0) > 0 ? 'ai-ops-warn' : '',
           },
           {

@@ -39,6 +39,18 @@ WIN_THRESHOLD_PCT = 2.0
 LOSS_THRESHOLD_PCT = -2.0
 PARTIAL_MIN_PCT = 0.5
 
+TRADE_STYLES = ('scalp', 'intraday', 'swing')
+SCALP_EXPIRE_HOURS = int(os.environ.get('SCALP_EXPIRE_HOURS', '4'))
+SWING_HOLD_SESSIONS = {
+    'next_day': 2,
+    'swing_3d': 4,
+    'swing_5d': 6,
+}
+
+PENDING_QUALITY_ACTIVE = 'ACTIVE_PENDING'
+PENDING_QUALITY_EXPIRED = 'EXPIRED_PENDING'
+PENDING_QUALITY_LOW_DATA = 'LOW_DATA_PENDING'
+
 TERMINAL_STATES = frozenset({'WIN', 'LOSS', 'PARTIAL', 'EXPIRED', 'INVALIDATED'})
 ACTIVE_STATES = frozenset({'ACTIVE', 'PENDING'})
 UNRESOLVED_STATE = 'UNRESOLVED'
@@ -124,6 +136,127 @@ def sessions_elapsed(prediction_date: str, today) -> int:
 def ready_for_evaluation(horizon: str, elapsed_sessions: int) -> bool:
     cfg = HORIZON_CONFIG.get(horizon, HORIZON_CONFIG[DEFAULT_HORIZON])
     return elapsed_sessions >= cfg['eval_after_sessions']
+
+
+def infer_trade_style(
+    prediction: dict,
+    signal_type: Optional[str] = None,
+    horizon: Optional[str] = None,
+) -> str:
+    """Classify trade style for expiry windows: scalp | intraday | swing."""
+    sig = signal_type or infer_signal_type(prediction)
+    hz = horizon or infer_prediction_horizon(prediction, sig)
+    reasoning = str(prediction.get('reasoning') or '').upper()
+    if 'SCALP' in reasoning or (sig == 'ULTRA scanner' and hz == 'intraday'):
+        return 'scalp'
+    if hz == 'intraday' or sig in ('gap-up', 'momentum breakout'):
+        return 'intraday'
+    return 'swing'
+
+
+def is_past_market_close_for_prediction(prediction_date: str, now=None) -> bool:
+    """True when IST session close (15:30) has passed for the prediction date."""
+    from datetime import datetime, time
+    import pytz
+
+    ist = pytz.timezone('Asia/Kolkata')
+    now = now or datetime.now(ist)
+    if now.tzinfo is None:
+        now = ist.localize(now)
+    try:
+        pred = datetime.strptime(str(prediction_date)[:10], '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return False
+    today = now.astimezone(ist).date()
+    if pred < today:
+        return True
+    if pred == today:
+        return now.astimezone(ist).time() >= time(15, 30)
+    return False
+
+
+def swing_hold_sessions(horizon: str) -> int:
+    return int(SWING_HOLD_SESSIONS.get(horizon, EXPIRE_AFTER_DAYS))
+
+
+def should_expire_by_style(
+    style: str,
+    elapsed_sessions: int,
+    verdict: str,
+    prediction_date: str,
+    *,
+    horizon: str = 'next_day',
+    now=None,
+) -> bool:
+    """Style-aware expiry — intraday/scalp at market close; swing after hold period."""
+    if verdict not in (None, 'PENDING', 'UNRESOLVED', 'NEUTRAL', 'PARTIAL', 'ACTIVE'):
+        return False
+    if style in ('intraday', 'scalp'):
+        return is_past_market_close_for_prediction(prediction_date, now) or elapsed_sessions >= 1
+    if style == 'swing':
+        if infer_signal_type({'prediction_horizon': horizon}) == 'regime outlook':
+            return elapsed_sessions >= EXPIRE_AFTER_DAYS
+        return elapsed_sessions >= swing_hold_sessions(horizon)
+    return should_expire('breakout', elapsed_sessions, verdict)
+
+
+def expiry_verdict_for_style(style: str, *, at_eod: bool = False) -> str:
+    """Verdict assigned when a pending trade expires without resolution."""
+    if style in ('intraday', 'scalp') and at_eod:
+        return 'NEUTRAL'
+    if style in ('intraday', 'scalp'):
+        return 'NEUTRAL'
+    return 'EXPIRED'
+
+
+def resolve_intraday_eod(
+    *,
+    category: str,
+    change_pct: Optional[float],
+    max_gain: Optional[float],
+    max_loss: Optional[float],
+    target_hit: bool,
+    stop_hit: bool,
+) -> Tuple[str, bool, bool]:
+    """EOD intraday resolution — target WIN, stop LOSS, neither NEUTRAL."""
+    if change_pct is None:
+        return UNRESOLVED_STATE, target_hit, stop_hit
+    if target_hit:
+        return 'WIN', target_hit, stop_hit
+    if stop_hit:
+        return 'LOSS', target_hit, stop_hit
+    return 'NEUTRAL', target_hit, stop_hit
+
+
+def classify_pending_quality(
+    prediction: dict,
+    *,
+    verdict: str,
+    today=None,
+    now=None,
+) -> str:
+    """Classify open pending rows for GUI/Telegram transparency."""
+    from datetime import datetime
+
+    today = today or datetime.now().date()
+    verdict = (verdict or 'PENDING').upper()
+    signal_type = infer_signal_type(prediction)
+    horizon = infer_prediction_horizon(prediction, signal_type)
+    style = infer_trade_style(prediction, signal_type, horizon)
+    elapsed = sessions_elapsed(str(prediction.get('prediction_date') or ''), today)
+
+    if verdict == 'UNRESOLVED':
+        return PENDING_QUALITY_LOW_DATA
+    if should_expire_by_style(
+        style,
+        elapsed,
+        verdict,
+        str(prediction.get('prediction_date') or ''),
+        horizon=horizon,
+        now=now,
+    ):
+        return PENDING_QUALITY_EXPIRED
+    return PENDING_QUALITY_ACTIVE
 
 
 def should_expire(signal_type: str, elapsed_sessions: int, verdict: str) -> bool:

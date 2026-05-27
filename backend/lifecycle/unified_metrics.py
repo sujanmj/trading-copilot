@@ -251,6 +251,7 @@ def get_unified_snapshot() -> Dict[str, Any]:
 def get_metrics_for_telegram() -> Dict[str, Any]:
     """Identical snapshot for /stats, /outcomes, /calibration, /summary."""
     snap = get_unified_snapshot()
+    pending_classification = _get_pending_classification_safe()
     return {
         'snapshot': snap,
         'metrics': snap['metrics_all_time'],
@@ -258,7 +259,30 @@ def get_metrics_for_telegram() -> Dict[str, Any]:
         'metrics_all_time': snap['metrics_all_time'],
         'calibration': snap['calibration'],
         'predictions': snap['predictions'],
+        'pending_classification': pending_classification,
     }
+
+
+def _get_pending_classification_safe() -> Dict[str, Any]:
+    try:
+        from backend.lifecycle.prediction_lifecycle_engine import get_pending_classification
+        return get_pending_classification()
+    except Exception:
+        return {
+            'active_pending': 0,
+            'expired_pending': 0,
+            'low_data_pending': 0,
+            'neutralized_today': 0,
+            'pending_active': 0,
+            'expired': 0,
+            'neutralized': 0,
+            'total_open': 0,
+        }
+
+
+def get_pending_classification_metrics() -> Dict[str, Any]:
+    """Public alias for pending bucket counts."""
+    return _get_pending_classification_safe()
 
 
 def _win_rate_line(m: dict, actionable: int) -> str:
@@ -282,10 +306,17 @@ def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'tod
         label = 'TODAY SESSION'
 
     actionable = (m.get('wins') or 0) + (m.get('losses') or 0) + (m.get('neutral') or 0)
+    pending_cls = _get_pending_classification_safe()
     msg = f"<b>📊 Trading Copilot Stats</b>\n<b>{label}</b>\n\n"
     msg += f"<b>Predictions:</b> {m.get('prediction_total', m.get('total_predictions', 0))}\n"
     msg += f"<b>Evaluated:</b> {m.get('evaluated', m.get('total_evaluated', 0))}\n"
-    msg += f"<b>Pending:</b> {m.get('pending', 0)}\n"
+    msg += f"<b>Pending Active:</b> {pending_cls.get('pending_active', m.get('pending', 0))}\n"
+    if pending_cls.get('expired') or pending_cls.get('low_data_pending'):
+        msg += (
+            f"<i>Expired: {pending_cls.get('expired', 0)} · "
+            f"Low-data: {pending_cls.get('low_data_pending', 0)} · "
+            f"Neutralized today: {pending_cls.get('neutralized_today', 0)}</i>\n"
+        )
     if m.get('wins') or m.get('losses') or m.get('evaluated'):
         msg += _win_rate_line(m, actionable)
         msg += f"  ✅ Wins: {m.get('wins', 0)}\n"
@@ -301,34 +332,39 @@ def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'tod
 
 def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
     snap = get_unified_snapshot()
-    m = metrics or snap['metrics_all_time']
-    evaluated = m.get('evaluated', m.get('total_evaluated', 0))
-    pending = m.get('pending', 0)
-    wins = m.get('wins', 0)
-    losses = m.get('losses', 0)
-    actionable = wins + losses + (m.get('neutral') or 0)
-    header = '<b>📊 Outcomes</b>\n<b>RESOLVED METRICS · HISTORICAL LEARNING</b>\n\n'
+    daily = snap['metrics_daily']
+    historical = metrics or snap['metrics_all_time']
+    pending_cls = _get_pending_classification_safe()
 
-    if not (wins or losses or evaluated):
-        return (
-            f"{header}"
-            f"Evaluated: {evaluated} | Pending: {pending}\n"
-            "<i>Outcomes evaluate at post-market EOD and 8 AM cycle.</i>"
-        )
+    daily_resolved = int(daily.get('evaluated', daily.get('total_evaluated', 0)) or 0)
+    hist_evaluated = historical.get('evaluated', historical.get('total_evaluated', 0))
+    wins = historical.get('wins', 0)
+    losses = historical.get('losses', 0)
+    actionable = wins + losses + (historical.get('neutral') or 0)
+
+    msg = "<b>📊 Outcomes</b>\n\n"
+    msg += "<b>LIVE SESSION</b>\n"
+    msg += f"Resolved: {daily_resolved}\n"
+    msg += f"Pending Active: {pending_cls.get('pending_active', 0)}\n"
+    msg += f"Expired: {pending_cls.get('expired', 0)}\n"
+    msg += f"Neutralized: {pending_cls.get('neutralized_today', 0)}\n\n"
+    msg += "<b>Historical Calibration</b>\n"
+
+    if not (wins or losses or hist_evaluated):
+        msg += f"Evaluated: {hist_evaluated}\n"
+        msg += "<i>Outcomes evaluate at post-market EOD and 8 AM cycle.</i>"
+        return msg
 
     if actionable < 5:
-        return (
-            f"{header}"
-            f"Evaluated: {evaluated} | Pending: {pending}\n"
-            f"✅ Wins: {wins} | ❌ Losses: {losses}\n"
+        msg += (
+            f"Evaluated: {hist_evaluated} · Wins: {wins} · Losses: {losses}\n"
             "<i>Early positive sample detected.</i>"
         )
+        return msg
 
-    return (
-        f"{header}"
-        f"Evaluated: {evaluated} | Win rate: {m.get('win_rate', 0):.1f}%\n"
-        f"✅ Wins: {wins} | ❌ Losses: {losses} | ⏳ Pending: {pending}"
-    )
+    msg += f"Win rate: {historical.get('win_rate', 0):.1f}%\n"
+    msg += f"✅ Wins: {wins} | ❌ Losses: {losses} | 📊 Evaluated: {hist_evaluated}"
+    return msg
 
 
 def format_calibration_telegram(cal: Optional[dict] = None) -> str:

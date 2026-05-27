@@ -60,15 +60,49 @@ def main() -> int:
     for field, val in [('wins', daily['wins']), ('losses', daily['losses']), ('pending', daily['pending'])]:
         if val and str(val) not in stats_msg:
             errors.append(f'/stats missing {field}={val}')
-    for field, val in [('wins', sqlite['wins']), ('losses', sqlite['losses']), ('pending', sqlite['pending'])]:
+    for field, val in [('wins', sqlite['wins']), ('losses', sqlite['losses'])]:
         if val and str(val) not in out_msg:
             errors.append(f'/outcomes missing {field}={val}')
     if str(sqlite['evaluated']) not in cal_msg:
         errors.append('/calibration missing evaluated count')
     if 'TODAY SESSION' not in stats_msg:
         errors.append('/stats missing TODAY SESSION label')
-    if 'HISTORICAL LEARNING' not in out_msg:
-        errors.append('/outcomes missing HISTORICAL LEARNING label')
+    if 'LIVE SESSION' not in out_msg:
+        errors.append('/outcomes missing LIVE SESSION label')
+    if 'Historical Calibration' not in out_msg:
+        errors.append('/outcomes missing Historical Calibration label')
+    if 'Pending Active' not in stats_msg:
+        errors.append('/stats missing Pending Active label')
+
+    from backend.lifecycle.lifecycle_rules import (
+        classify_pending_quality,
+        resolve_intraday_eod,
+    )
+    from backend.lifecycle.prediction_lifecycle_engine import (
+        generate_daily_resolution_summary,
+        get_pending_classification,
+    )
+    from backend.intelligence.canonical_rankings import build_action_plan_text
+
+    pending_cls = get_pending_classification()
+    for key in ('pending_active', 'expired', 'neutralized_today'):
+        if key not in pending_cls:
+            errors.append(f'pending_classification missing {key}')
+
+    empty_plan = build_action_plan_text([], [], {'sector_rotation': {'bullish': ['POWER', 'TELECOM'], 'bearish': ['HOTELS']}, 'risks_and_avoids': [{'symbol': 'HOTELS'}]})
+    if 'Focus sectors' not in empty_plan or 'Avoid' not in empty_plan:
+        errors.append('tactical action plan missing sector guidance')
+
+    win, _, _ = resolve_intraday_eod(category='opportunity', change_pct=1.0, max_gain=1.0, max_loss=-0.5, target_hit=False, stop_hit=False)
+    if win != 'NEUTRAL':
+        errors.append(f'intraday EOD neither-hit should be NEUTRAL, got {win}')
+
+    if classify_pending_quality({'prediction_date': '2099-01-01', 'verdict': 'UNRESOLVED'}, verdict='UNRESOLVED') != 'LOW_DATA_PENDING':
+        errors.append('pending quality UNRESOLVED misclassified')
+
+    eod_summary = generate_daily_resolution_summary()
+    if 'resolved_today' not in eod_summary:
+        errors.append('daily resolution summary incomplete')
 
     from backend.orchestration.telegram_outbound_guard import outbound_hash, should_send_outbound
     dup_msg = '🎯 Sending self-calibration...'
@@ -159,6 +193,11 @@ def main() -> int:
     print('REGIME NORMALIZATION VERIFIED')
     print('CALIBRATION PROFESSIONALIZATION VERIFIED')
     print('COMMAND HIERARCHY VERIFIED')
+    print('PREDICTION EXPIRY VERIFIED')
+    print('EOD RESOLUTION VERIFIED')
+    print('PENDING CLASSIFICATION VERIFIED')
+    print('TACTICAL ACTION PLAN VERIFIED')
+    print('OUTCOME CLARITY VERIFIED')
     return 0
 
 

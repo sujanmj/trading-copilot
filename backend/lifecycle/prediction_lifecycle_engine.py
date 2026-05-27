@@ -22,11 +22,19 @@ from backend.lifecycle.lifecycle_rules import (
     UNRESOLVED_EXPIRE_DAYS,
     TERMINAL_STATES,
     UNRESOLVED_STATE,
+    PENDING_QUALITY_ACTIVE,
+    PENDING_QUALITY_EXPIRED,
+    PENDING_QUALITY_LOW_DATA,
+    classify_pending_quality,
     confidence_decay_label,
+    expiry_verdict_for_style,
     infer_prediction_horizon,
     infer_signal_type,
+    infer_trade_style,
+    is_past_market_close_for_prediction,
     sessions_elapsed,
     should_expire,
+    should_expire_by_style,
     ttl_sessions,
 )
 from backend.lifecycle.lifecycle_evaluator import (
@@ -34,6 +42,7 @@ from backend.lifecycle.lifecycle_evaluator import (
     build_regime_performance,
     build_signal_type_performance,
     evaluate_lifecycle_predictions,
+    resolve_eod_intraday_predictions,
 )
 from backend.lifecycle.lifecycle_tracing import (
     log_error,
@@ -140,16 +149,23 @@ def _run_script_safe(script_name: str, extra_env: Optional[dict] = None) -> dict
 
 
 def expire_stale_pending() -> dict:
-    """Mark aged PENDING/UNRESOLVED outcomes as EXPIRED — never raises."""
-    stats = {'expired': 0, 'skipped': 0, 'errors': 0, 'confidence_decayed': 0}
+    """Mark aged PENDING/UNRESOLVED outcomes — style-aware (intraday→NEUTRAL at close)."""
+    stats = {
+        'expired': 0,
+        'neutralized': 0,
+        'skipped': 0,
+        'errors': 0,
+        'confidence_decayed': 0,
+    }
     try:
         init_db()
         conn = get_connection()
         try:
             today = datetime.now().date()
+            now = datetime.now(IST)
             rows = conn.execute("""
                 SELECT o.id, o.source_id, o.prediction_date, o.ticker, o.verdict,
-                       p.signal_type, p.prediction_horizon, p.confidence
+                       p.signal_type, p.prediction_horizon, p.confidence, p.reasoning
                 FROM outcomes o
                 LEFT JOIN predictions p ON o.source_type = 'prediction' AND o.source_id = p.id
                 WHERE o.verdict IN ('PENDING', 'UNRESOLVED') OR o.verdict IS NULL
@@ -160,9 +176,32 @@ def expire_stale_pending() -> dict:
                     if not pred_date_str:
                         stats['skipped'] += 1
                         continue
+                    pred = dict(row)
                     elapsed = sessions_elapsed(pred_date_str, today)
-                    signal_type = row['signal_type'] or 'breakout'
+                    signal_type = row['signal_type'] or infer_signal_type(pred)
+                    horizon = row['prediction_horizon'] or infer_prediction_horizon(pred, signal_type)
+                    style = infer_trade_style(pred, signal_type, horizon)
                     verdict = row['verdict'] or 'PENDING'
+                    at_eod = is_past_market_close_for_prediction(pred_date_str, now)
+
+                    if should_expire_by_style(
+                        style,
+                        elapsed,
+                        verdict,
+                        pred_date_str,
+                        horizon=horizon,
+                        now=now,
+                    ):
+                        new_verdict = expiry_verdict_for_style(style, at_eod=at_eod)
+                        conn.execute("""
+                            UPDATE outcomes SET verdict = ?, last_checked = ? WHERE id = ?
+                        """, (new_verdict, _now_iso(), row['id']))
+                        if new_verdict == 'NEUTRAL':
+                            stats['neutralized'] += 1
+                        else:
+                            stats['expired'] += 1
+                        continue
+
                     max_days = max(ttl_sessions(signal_type), 1)
                     cap_days = EXPIRE_AFTER_DAYS
                     expire_at = min(max_days, cap_days) if signal_type != 'regime outlook' else cap_days
@@ -195,8 +234,11 @@ def expire_stale_pending() -> dict:
             conn.commit()
         finally:
             conn.close()
-        if stats['expired']:
-            pipeline_log(f"Expired {stats['expired']} stale pending outcomes", stage='expire_stale')
+        if stats['expired'] or stats['neutralized']:
+            pipeline_log(
+                f"Expired {stats['expired']} · neutralized {stats['neutralized']} stale pending outcomes",
+                stage='expire_stale',
+            )
         if stats['confidence_decayed']:
             pipeline_log(f"Decayed confidence on {stats['confidence_decayed']} aged predictions", stage='expire_stale')
     except Exception as e:
@@ -285,6 +327,8 @@ def load_active_predictions() -> List[dict]:
             continue
         signal_type = d.get('signal_type') or infer_signal_type(d)
         horizon = d.get('prediction_horizon') or infer_prediction_horizon(d, signal_type)
+        style = infer_trade_style(d, signal_type, horizon)
+        pending_quality = classify_pending_quality(d, verdict=verdict)
         state = 'ACTIVE' if verdict in ('PENDING', 'UNRESOLVED', 'PARTIAL', 'NEUTRAL', None) else verdict
         if state == 'NEUTRAL':
             state = 'PARTIAL' if (d.get('change_1d_pct') or 0) >= 0.5 else 'PENDING'
@@ -300,6 +344,8 @@ def load_active_predictions() -> List[dict]:
             'run_type': d.get('run_type'),
             'prediction_horizon': horizon,
             'signal_type': signal_type,
+            'trade_style': style,
+            'pending_quality': pending_quality,
             'state': state if state in ACTIVE_STATES or state == 'PARTIAL' else 'ACTIVE',
             'change_1d_pct': d.get('change_1d_pct'),
             'max_gain_pct': d.get('max_gain_pct'),
@@ -365,17 +411,83 @@ def load_prediction_history(limit: int = 500) -> List[dict]:
     return history
 
 
+def get_pending_classification() -> dict:
+    """Bucket open pending predictions for Telegram/GUI transparency."""
+    active = load_active_predictions()
+    counts = {
+        PENDING_QUALITY_ACTIVE: 0,
+        PENDING_QUALITY_EXPIRED: 0,
+        PENDING_QUALITY_LOW_DATA: 0,
+    }
+    for p in active:
+        quality = p.get('pending_quality') or PENDING_QUALITY_ACTIVE
+        counts[quality] = counts.get(quality, 0) + 1
+    neutralized_today = 0
+    try:
+        init_db()
+        conn = get_connection()
+        try:
+            row = conn.execute("""
+                SELECT COUNT(*) AS n FROM outcomes o
+                INNER JOIN predictions p ON o.source_type='prediction' AND o.source_id=p.id
+                WHERE o.verdict = 'NEUTRAL'
+                  AND o.last_checked LIKE ?
+            """, (f"{_today()}%",)).fetchone()
+            neutralized_today = int(row['n'] or 0) if row else 0
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return {
+        'active_pending': counts.get(PENDING_QUALITY_ACTIVE, 0),
+        'expired_pending': counts.get(PENDING_QUALITY_EXPIRED, 0),
+        'low_data_pending': counts.get(PENDING_QUALITY_LOW_DATA, 0),
+        'neutralized_today': neutralized_today,
+        'total_open': len(active),
+        'pending_active': counts.get(PENDING_QUALITY_ACTIVE, 0),
+        'expired': counts.get(PENDING_QUALITY_EXPIRED, 0),
+        'neutralized': neutralized_today,
+    }
+
+
+def generate_daily_resolution_summary(eod_stats: Optional[dict] = None) -> dict:
+    """Post-EOD resolution rollup for review/Telegram."""
+    pending = get_pending_classification()
+    daily = get_daily_lifecycle_summary()
+    eod = eod_stats or {}
+    lifecycle = eod.get('lifecycle') or eod if isinstance(eod, dict) else {}
+    return {
+        'date': _today(),
+        'resolved_today': daily.get('resolved_today', 0),
+        'wins_today': daily.get('wins_today', 0),
+        'losses_today': daily.get('losses_today', 0),
+        'neutral_today': lifecycle.get('neutral', 0),
+        'expired_today': lifecycle.get('expired', 0),
+        'pending_active': pending.get('pending_active', 0),
+        'pending_expired': pending.get('expired', 0),
+        'pending_low_data': pending.get('low_data_pending', 0),
+        'neutralized_today': pending.get('neutralized_today', 0),
+        'summary_text': (
+            f"EOD resolved {daily.get('resolved_today', 0)} · "
+            f"W{daily.get('wins_today', 0)}/L{daily.get('losses_today', 0)} · "
+            f"pending active {pending.get('pending_active', 0)}"
+        ),
+    }
+
+
 def sync_prediction_json_files() -> dict:
     """Persist active_predictions.json and prediction_history.json."""
     from backend.lifecycle.unified_metrics import get_unified_snapshot
     active = load_active_predictions()
     history = load_prediction_history()
     metrics = get_unified_snapshot()['metrics_all_time']
+    pending_classification = get_pending_classification()
     payload_active = {
         'updated_at': _now_iso(),
         'count': len(active),
         'predictions': active,
         'unified_metrics': metrics,
+        'pending_classification': pending_classification,
     }
     payload_history = {
         'updated_at': _now_iso(),
@@ -385,7 +497,7 @@ def sync_prediction_json_files() -> dict:
     }
     atomic_write_json(ACTIVE_PREDICTIONS_FILE, payload_active)
     atomic_write_json(PREDICTION_HISTORY_FILE, payload_history)
-    return {'active': len(active), 'archived': len(history), 'metrics': metrics}
+    return {'active': len(active), 'archived': len(history), 'metrics': metrics, 'pending_classification': pending_classification}
 
 
 def refresh_brain_opportunities() -> dict:
@@ -485,8 +597,10 @@ def get_daily_lifecycle_summary() -> dict:
     wins = [h for h in today_resolved if h.get('state') == 'WIN']
     losses = [h for h in today_resolved if h.get('state') == 'LOSS']
     partials = [h for h in today_resolved if h.get('state') == 'PARTIAL']
+    neutrals = [h for h in today_resolved if h.get('state') == 'NEUTRAL']
     state = load_lifecycle_state()
     cal = _load_json(CALIBRATION_HISTORY_FILE, {}).get('latest') or {}
+    pending = get_pending_classification()
 
     return {
         'evaluation_complete': state.get('evaluation_cycle_complete'),
@@ -495,6 +609,7 @@ def get_daily_lifecycle_summary() -> dict:
         'wins_today': len(wins),
         'losses_today': len(losses),
         'partials_today': len(partials),
+        'neutral_today': len(neutrals),
         'best_prediction': wins[0] if wins else None,
         'worst_prediction': losses[0] if losses else None,
         'win_rate': cal.get('win_rate'),
@@ -502,6 +617,7 @@ def get_daily_lifecycle_summary() -> dict:
         'false_positive_rate': cal.get('false_positive_rate'),
         'active_count': state.get('active_count', 0),
         'stale_invalidated': state.get('stale_invalidated', 0),
+        'pending_classification': pending,
         'tomorrow_outlook': 'Fresh post-market intelligence generated' if state.get('brain_refresh_at') else 'Pending refresh',
     }
 
@@ -543,12 +659,16 @@ def send_telegram_daily_review(review: dict, lifecycle_summary: dict) -> dict:
     perf = review.get('performance_summary') or {}
     summary = review.get('daily_summary') or {}
     lc = lifecycle_summary or review.get('lifecycle_summary') or {}
-    highlights = review.get('highlights') or {}
+    pending = lc.get('pending_classification') or get_pending_classification()
+    eod_summary = lc.get('eod_resolution') or {}
 
     wins = lc.get('wins_today', 0)
     losses = lc.get('losses_today', 0)
     partials = lc.get('partials_today', 0)
+    neutrals = lc.get('neutral_today', 0)
     signals = perf.get('signals_generated') or lc.get('resolved_today') or 0
+
+    highlights = review.get('highlights') or {}
 
     best = highlights.get('best_bullish') or lc.get('best_prediction') or {}
     worst = highlights.get('biggest_miss') or lc.get('worst_prediction') or {}
@@ -574,9 +694,11 @@ def send_telegram_daily_review(review: dict, lifecycle_summary: dict) -> dict:
 
     msg = (
         f"<b>📘 DAILY REVIEW</b>\n\n"
-        f"Signals: {signals}\n"
-        f"Wins: {wins}\n"
-        f"Losses: {losses}\n"
+        f"<b>EOD Resolution</b>\n"
+        f"Resolved: {signals} · W{wins}/L{losses}/N{neutrals}\n"
+        f"Pending Active: {pending.get('pending_active', 0)} · "
+        f"Expired: {pending.get('expired', 0)} · "
+        f"Neutralized: {pending.get('neutralized_today', 0)}\n\n"
         f"Partial: {partials}\n\n"
         f"<b>Best:</b>\n{best_line}\n\n"
         f"<b>Worst:</b>\n{worst_line}\n\n"
@@ -603,10 +725,17 @@ def get_active_predictions_payload() -> dict:
 
 
 def _evaluate_outcomes() -> dict:
-    eval_stats = evaluate_lifecycle_predictions(verbose=True, backfill=True, use_cache_only=True)
+    eod_intraday = resolve_eod_intraday_predictions(verbose=True)
+    eval_stats = evaluate_lifecycle_predictions(
+        verbose=True,
+        backfill=True,
+        use_cache_only=True,
+        force_eod=True,
+    )
     pipeline_log(
         f"eval processed={eval_stats.get('processed', 0)} "
         f"terminal={eval_stats.get('evaluated', 0) + eval_stats.get('expired', 0)} "
+        f"neutral={eval_stats.get('neutral', 0)} "
         f"errors={eval_stats.get('errors', 0)} avg={eval_stats.get('avg_time_sec', 0)}s",
         stage='evaluate_outcomes',
     )
@@ -622,7 +751,15 @@ def _evaluate_outcomes() -> dict:
     except Exception as e:
         hr = {'evaluated': 0, 'error': str(e)}
     adaptive = {'status': 'deferred', 'message': 'Adaptive runs after calibration snapshot'}
-    return {'lifecycle': eval_stats, 'signals': sig, 'horizons': hr, 'adaptive': adaptive}
+    resolution_summary = generate_daily_resolution_summary({'lifecycle': eval_stats, 'eod_intraday': eod_intraday})
+    return {
+        'lifecycle': eval_stats,
+        'eod_intraday': eod_intraday,
+        'eod_resolution': resolution_summary,
+        'signals': sig,
+        'horizons': hr,
+        'adaptive': adaptive,
+    }
 
 
 def _run_adaptive_calibration():
@@ -729,7 +866,15 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
         review_result = next((s.get('result') for s in result['stages'] if s.get('name') == 'daily_review'), {}) or {}
         review = (review_result.get('review') or _load_json(DAILY_REVIEWS_DIR / f'review_{_today()}.json', {}))
         if review:
-            _stage('telegram_daily_review', lambda: send_telegram_daily_review(review, review.get('lifecycle_summary') or {}), critical=False)
+            lc_summary = review.get('lifecycle_summary') or get_daily_lifecycle_summary()
+            eval_stage = next((s.get('result') for s in result['stages'] if s.get('name') == 'evaluate_outcomes'), {}) or {}
+            if eval_stage.get('eod_resolution'):
+                lc_summary['eod_resolution'] = eval_stage['eod_resolution']
+            _stage(
+                'telegram_daily_review',
+                lambda: send_telegram_daily_review(review, lc_summary),
+                critical=False,
+            )
 
         if failed_critical:
             state.update({
@@ -814,6 +959,7 @@ def get_lifecycle_status() -> dict:
     active_file = _load_json(ACTIVE_PREDICTIONS_FILE, {})
     history_file = _load_json(PREDICTION_HISTORY_FILE, {})
     unresolved = sum(1 for p in (active_file.get('predictions') or []) if p.get('state') == UNRESOLVED_STATE)
+    pending_cls = active_file.get('pending_classification') or get_pending_classification()
 
     pipeline_status = state.get('pipeline_status') or 'IDLE'
     if pipeline_status == 'RUNNING':
@@ -857,6 +1003,10 @@ def get_lifecycle_status() -> dict:
         'active_predictions': state.get('active_count', active_file.get('count', 0)),
         'archived_predictions': state.get('archived_count', history_file.get('count', 0)),
         'unresolved_predictions': unresolved,
+        'pending_classification': pending_cls,
+        'pending_active': pending_cls.get('pending_active', 0),
+        'pending_expired': pending_cls.get('expired', 0),
+        'pending_neutralized_today': pending_cls.get('neutralized_today', 0),
         'stale_invalidated': state.get('stale_invalidated', 0),
         'stats_age_minutes': stats_age,
         'history_age_minutes': history_age,
@@ -917,6 +1067,7 @@ def get_lifecycle_ops_payload() -> dict:
             'path': str(PREDICTION_HISTORY_FILE.name),
         },
         'prediction_states': _count_states_from_history(),
+        'pending_classification': get_pending_classification(),
         'adaptive_ready': (cal.get('confidence_realism_curve') or {}).get('adaptive_ready', False),
     }
 

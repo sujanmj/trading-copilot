@@ -20,10 +20,14 @@ from backend.lifecycle.lifecycle_rules import (
     infer_failure_reason,
     infer_prediction_horizon,
     infer_signal_type,
+    infer_trade_style,
+    is_past_market_close_for_prediction,
     ready_for_evaluation,
     resolve_deterministic,
+    resolve_intraday_eod,
     sessions_elapsed,
     should_expire,
+    should_expire_by_style,
 )
 from backend.storage.db_manager import get_connection, init_db
 from backend.utils.config import DATA_DIR
@@ -87,6 +91,7 @@ def _evaluate_one_prediction(
     use_cache_only: bool,
     stats: dict,
     verbose: bool,
+    force_eod: bool = False,
 ) -> str:
     """
     Evaluate a single prediction. Returns: completed | skipped | expired | unresolved | error
@@ -108,17 +113,29 @@ def _evaluate_one_prediction(
     elapsed = sessions_elapsed(pred_date_str, today)
     horizon = pred.get('prediction_horizon') or 'next_day'
     signal_type = pred.get('signal_type') or 'breakout'
+    style = infer_trade_style(pred, signal_type, horizon)
     state = _prediction_state(pred)
+    at_eod = force_eod or is_past_market_close_for_prediction(pred_date_str)
 
-    if should_expire(signal_type, elapsed, pred.get('verdict') or 'PENDING'):
+    if should_expire_by_style(
+        style,
+        elapsed,
+        pred.get('verdict') or 'PENDING',
+        pred_date_str,
+        horizon=horizon,
+    ) and not force_eod:
+        expire_verdict = 'NEUTRAL' if style in ('intraday', 'scalp') and at_eod else 'EXPIRED'
         conn.execute(
-            "UPDATE outcomes SET verdict = 'EXPIRED', last_checked = ? WHERE id = ?",
-            (_now_iso(), outcome_id),
+            "UPDATE outcomes SET verdict = ?, last_checked = ? WHERE id = ?",
+            (expire_verdict, _now_iso(), outcome_id),
         )
         stats['expired'] += 1
+        if expire_verdict == 'NEUTRAL':
+            stats['neutral'] = stats.get('neutral', 0) + 1
         return 'expired'
 
-    if not ready_for_evaluation(horizon, elapsed):
+    force_intraday = force_eod and (style in ('intraday', 'scalp') or horizon == 'intraday')
+    if not ready_for_evaluation(horizon, elapsed) and not (force_intraday or (horizon == 'intraday' and at_eod)):
         stats['skipped_horizon'] += 1
         return 'skipped'
 
@@ -201,14 +218,29 @@ def _evaluate_one_prediction(
         target_hit = stop_hit = 0
         failure = 'regime_reversal'
     else:
-        verdict, target_hit, stop_hit = resolve_deterministic(
-            category=pred.get('category'),
-            change_pct=change_pct,
-            max_gain=max_gain,
-            max_loss=max_loss,
-            target_hit=bool(target_hit),
-            stop_hit=bool(stop_hit),
+        use_intraday_eod = (
+            force_eod
+            or (horizon == 'intraday' and at_eod)
+            or (style in ('intraday', 'scalp') and at_eod)
         )
+        if use_intraday_eod:
+            verdict, target_hit, stop_hit = resolve_intraday_eod(
+                category=pred.get('category'),
+                change_pct=change_pct,
+                max_gain=max_gain,
+                max_loss=max_loss,
+                target_hit=bool(target_hit),
+                stop_hit=bool(stop_hit),
+            )
+        else:
+            verdict, target_hit, stop_hit = resolve_deterministic(
+                category=pred.get('category'),
+                change_pct=change_pct,
+                max_gain=max_gain,
+                max_loss=max_loss,
+                target_hit=bool(target_hit),
+                stop_hit=bool(stop_hit),
+            )
         failure = infer_failure_reason(
             verdict=verdict,
             signal_type=signal_type,
@@ -259,6 +291,8 @@ def _evaluate_one_prediction(
         stats[key] += 1
     elif verdict == UNRESOLVED_STATE:
         stats['unresolved'] += 1
+    elif verdict == 'NEUTRAL' and 'neutral' in stats:
+        stats['neutral'] += 1
 
     if verbose:
         _log(f"{ticker} [{horizon}] state={state} → {verdict} ({change_pct:+.2f}%) src={price_src}")
@@ -270,6 +304,7 @@ def evaluate_lifecycle_predictions(
     verbose: bool = True,
     backfill: bool = True,
     use_cache_only: bool = True,
+    force_eod: bool = False,
 ) -> dict:
     """
     Horizon-aware prediction evaluation with deterministic resolution.
@@ -285,6 +320,7 @@ def evaluate_lifecycle_predictions(
         'expired': 0,
         'invalidated': 0,
         'unresolved': 0,
+        'neutral': 0,
         'skipped_horizon': 0,
         'backfilled_days': 0,
         'processed': 0,
@@ -294,6 +330,7 @@ def evaluate_lifecycle_predictions(
         'timeouts': 0,
         'avg_time_sec': 0.0,
         'cache_only': use_cache_only,
+        'force_eod': force_eod,
     }
 
     trace_times: List[float] = []
@@ -342,6 +379,7 @@ def evaluate_lifecycle_predictions(
                     use_cache_only=use_cache_only,
                     stats=stats,
                     verbose=verbose,
+                    force_eod=force_eod,
                 )
                 conn.commit()
             except Exception as e:
@@ -598,3 +636,13 @@ def build_confidence_realism_curve() -> dict:
             else 'Confidence realism tracking active.'
         ),
     }
+
+
+def resolve_eod_intraday_predictions(*, verbose: bool = True) -> dict:
+    """Force-resolve intraday/scalp predictions at market close (WIN/LOSS/NEUTRAL)."""
+    return evaluate_lifecycle_predictions(
+        verbose=verbose,
+        backfill=False,
+        use_cache_only=True,
+        force_eod=True,
+    )

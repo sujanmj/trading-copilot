@@ -305,31 +305,36 @@ def send_outcome_report(metrics, top_winners=None, top_losers=None):
     wins = metrics.get('wins', 0)
     losses = metrics.get('losses', 0)
     neutral = metrics.get('neutral', 0)
-    pending = metrics.get('pending', 0)
     avg_gain = metrics.get('avg_gain_pct', 0)
     avg_loss = metrics.get('avg_loss_pct', 0)
     profit_factor = metrics.get('profit_factor', 0)
     
-    # Skip if no evaluated outcomes
     evaluated = metrics.get('evaluated') or metrics.get('total_evaluated', 0)
     if evaluated == 0 and (wins + losses + neutral) == 0:
         return False
-    
-    # Emoji based on win rate
-    if win_rate >= 65:
-        emoji = "🏆"
-    elif win_rate >= 50:
-        emoji = "✅"
-    else:
-        emoji = "⚠️"
-    
-    text = f"""<b>{emoji} DAILY OUTCOME REPORT</b>
+
+    try:
+        from backend.lifecycle.unified_metrics import format_outcomes_telegram
+        text = format_outcomes_telegram(metrics)
+        text = text.replace('<b>📊 Outcomes</b>', '<b>📊 DAILY OUTCOME REPORT</b>', 1)
+        text += f"\n\n<b>Date:</b> {today}"
+    except Exception:
+        pending = metrics.get('pending', 0)
+        if win_rate >= 65:
+            emoji = "🏆"
+        elif win_rate >= 50:
+            emoji = "✅"
+        else:
+            emoji = "⚠️"
+        text = f"""<b>{emoji} DAILY OUTCOME REPORT</b>
 <b>Date:</b> {today}
 
-<b>📊 STATS:</b>
+<b>Historical Calibration</b>
 Win Rate: <b>{win_rate:.1f}%</b>
 ✅ Wins: {wins}  |  ❌ Losses: {losses}
-○ Neutral: {neutral}  |  ⏳ Pending: {pending}
+○ Neutral: {neutral}  |  ⏳ Pending: {pending}"""
+
+    text += f"""
 
 <b>💰 PERFORMANCE:</b>
 Avg Win: +{avg_gain:.2f}%

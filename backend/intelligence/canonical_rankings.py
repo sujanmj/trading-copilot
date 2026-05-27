@@ -109,29 +109,49 @@ def validate_action_plan_symbols(action_plan: str, allowed: Set[str]) -> List[st
     return unknown
 
 
-def build_action_plan_text(symbols: List[str], ranked: List[dict]) -> str:
-    if not symbols:
-        return (
-            'No ranked setups pass elite gates — preserve capital and wait for '
-            'scanner/lifecycle confirmation.'
-        )
-    lines: List[str] = []
-    for idx, sym in enumerate(symbols[:5], 1):
-        item = next(
-            (x for x in ranked if str(x.get('symbol') or x.get('ticker') or '').upper() == sym),
-            {},
-        )
-        conf = item.get('display_confidence') or item.get('confidence') or 'MEDIUM'
-        action = str(item.get('action') or 'WATCH').upper()
-        entry = item.get('entry_zone') or item.get('entry_price') or '—'
-        logic = str(item.get('logic') or '').strip()
-        if len(logic) > 90:
-            logic = logic[:87] + '...'
-        detail = f"{idx}. **{sym}** ({action}, {conf}) — entry ₹{entry}."
-        if logic:
-            detail += f" {logic}"
-        lines.append(detail)
-    return '\n'.join(lines)
+def build_action_plan_text(symbols: List[str], ranked: List[dict], intel: Optional[dict] = None) -> str:
+    if symbols:
+        lines: List[str] = []
+        for idx, sym in enumerate(symbols[:5], 1):
+            item = next(
+                (x for x in ranked if str(x.get('symbol') or x.get('ticker') or '').upper() == sym),
+                {},
+            )
+            conf = item.get('display_confidence') or item.get('confidence') or 'MEDIUM'
+            action = str(item.get('action') or 'WATCH').upper()
+            entry = item.get('entry_zone') or item.get('entry_price') or '—'
+            logic = str(item.get('logic') or '').strip()
+            if len(logic) > 90:
+                logic = logic[:87] + '...'
+            detail = f"{idx}. **{sym}** ({action}, {conf}) — entry ₹{entry}."
+            if logic:
+                detail += f" {logic}"
+            lines.append(detail)
+        return '\n'.join(lines)
+
+    intel = intel if isinstance(intel, dict) else {}
+    sectors = intel.get('sector_rotation') if isinstance(intel.get('sector_rotation'), dict) else {}
+    bullish = sectors.get('bullish') if isinstance(sectors.get('bullish'), list) else []
+    bearish = sectors.get('bearish') if isinstance(sectors.get('bearish'), list) else []
+    risks = intel.get('risks_and_avoids') if isinstance(intel.get('risks_and_avoids'), list) else []
+
+    focus = ', '.join(str(s).upper() for s in bullish[:3]) or 'Defensive leaders with volume confirmation'
+    avoid_items = []
+    for r in risks[:4]:
+        if isinstance(r, dict):
+            sym = str(r.get('symbol') or '').upper()
+            if sym and sym not in ('UNKNOWN', 'MACRO', 'NEWS'):
+                avoid_items.append(sym)
+    if not avoid_items and bearish:
+        avoid_items = [str(s).upper() for s in bearish[:3]]
+    avoid = ', '.join(avoid_items) or 'Extended momentum without volume confirmation'
+
+    return (
+        "No elite setups currently.\n"
+        f"Focus sectors: {focus}.\n"
+        f"Avoid: {avoid}.\n"
+        "Wait for scanner confirmation before aggressive entries."
+    )
 
 
 def _strip_internal_keys(items: List[dict]) -> List[dict]:
@@ -152,7 +172,7 @@ def align_intelligence(intel: dict, *, limit: int = DEFAULT_OPPS_LIMIT) -> dict:
     clean_ranked = _strip_internal_keys(ranked)
     out['top_opportunities'] = clean_ranked
     symbols = get_action_plan_symbols(out, limit=5)
-    out['action_plan'] = build_action_plan_text(symbols, ranked)
+    out['action_plan'] = build_action_plan_text(symbols, ranked, out)
     out['canonical_opportunity_feed'] = {
         'source': 'canonical_rankings',
         'symbols': symbols,
