@@ -176,11 +176,22 @@ def stale_warning(intel):
         from backend.utils.market_hours import get_operational_status
         op = get_operational_status()
         if op.get('expect_quiet_collectors'):
-            return f"🌙 <i>{op.get('display_message', 'Market closed')}</i>\n\n"
+            return "🌙 <i>Night mode — awaiting pre-market intelligence cycle</i>\n\n"
     except Exception:
         pass
     hours = intel_age_hours(intel)
     if hours is not None and hours > 2:
+        try:
+            from backend.utils.market_hours import get_operational_status, get_watchdog_config
+            op = get_operational_status()
+            if not op.get('market_hours'):
+                return "🌙 <i>Night mode — awaiting pre-market intelligence cycle</i>\n\n"
+            wd = get_watchdog_config()
+            threshold_h = float(wd.get('stale_threshold_seconds') or 7200) / 3600.0
+            if hours <= threshold_h:
+                return ''
+        except Exception:
+            pass
         return f"⚠️ Analysis may be stale — last updated {hours:.1f} hours ago\n\n"
     return ''
 
@@ -366,18 +377,41 @@ def build_msg6_sectors_global_action(intel):
 
 
 def check_intel_file_stale(max_age_hours=2):
-    """Return (is_stale, age_hours). Sends Telegram warning and blocks push if stale."""
+    """Return (is_stale, age_hours). Market-aware — idle overnight is NOT stale."""
     if not INTEL_FILE.exists():
         safe_print("[WARN] unified_intelligence.json missing")
+        try:
+            from backend.utils.market_hours import get_operational_status
+            if get_operational_status().get('expect_quiet_collectors'):
+                send_message(
+                    "🌙 <b>Night mode</b>\n\n"
+                    "Intelligence idle until pre-market cycle. Use /refresh during market hours if needed."
+                )
+                return True, None
+        except Exception:
+            pass
         send_message("⚠️ Market intelligence file missing. Run /refresh to generate analysis.")
         return True, None
 
     file_age_hours = (time.time() - INTEL_FILE.stat().st_mtime) / 3600
+    try:
+        from backend.utils.market_hours import get_operational_status, get_watchdog_config
+        op = get_operational_status()
+        if op.get('expect_quiet_collectors'):
+            safe_print(f"[BRAIN] Night/idle mode — intel age {file_age_hours:.1f}h accepted")
+            return False, file_age_hours
+        wd = get_watchdog_config()
+        max_age_hours = max(max_age_hours, float(wd.get('stale_threshold_seconds') or 7200) / 3600.0)
+        if not op.get('market_hours'):
+            return False, file_age_hours
+    except Exception:
+        pass
+
     if file_age_hours > max_age_hours:
         safe_print(f"[WARN] Intelligence is {file_age_hours:.1f}h old - sending stale warning")
         send_message(
             f"⚠️ Market intelligence is stale ({file_age_hours:.1f}h old). "
-            "Analyzer may have issues — run /refresh or check Railway logs."
+            "Expected cycle missed during market session — run /refresh or check Railway logs."
         )
         return True, file_age_hours
     return False, file_age_hours
@@ -489,6 +523,45 @@ def push_sectors():
         send_chunked(f"🔄 <b>SECTOR ROTATION</b>\n\n🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}")
 
 
+def push_global():
+    """Overnight global impact — mood + indices from latest intel/global feed."""
+    raw = load_intel()
+    intel = normalize_intel(raw)
+    if not intel:
+        send_message("❌ No intelligence yet. Run /refresh or wait for US Pulse cycle.")
+        return
+    mood = _dict(intel.get('market_mood'))
+    stale = stale_warning(raw)
+    global_path = DATA_DIR / 'global_markets.json'
+    indices_text = ''
+    if global_path.exists():
+        try:
+            gm = json.loads(global_path.read_text(encoding='utf-8'))
+            indices = gm.get('indices') or gm.get('markets') or []
+            if isinstance(indices, list) and indices:
+                lines = []
+                for row in indices[:6]:
+                    if isinstance(row, dict):
+                        name = _text(row.get('name') or row.get('symbol'), '?')
+                        ch = row.get('change_percent') or row.get('change_pct') or 0
+                        lines.append(f"• {name}: {ch:+.2f}%" if isinstance(ch, (int, float)) else f"• {name}")
+                if lines:
+                    indices_text = "\n".join(lines)
+        except Exception:
+            pass
+    body = (
+        f"{stale}🌍 <b>OVERNIGHT GLOBAL IMPACT</b>\n\n"
+        f"<b>Global mood:</b> {_text(mood.get('global_mood'), 'Unknown')}\n"
+        f"<b>India outlook:</b> {_text(mood.get('india_outlook'), 'Unknown')}\n"
+    )
+    if indices_text:
+        body += f"\n<b>Key indices:</b>\n{indices_text}\n"
+    summary = _text(intel.get('executive_summary'), '')[:600]
+    if summary and summary != 'N/A':
+        body += f"\n<i>{summary}</i>"
+    send_chunked(body)
+
+
 if __name__ == "__main__":
     mode = sys.argv[1].lower() if len(sys.argv) > 1 else 'full'
     safe_print(f"[telegram_brain_pusher] Mode: {mode}")
@@ -505,6 +578,9 @@ if __name__ == "__main__":
         'calibration': push_calibration,
         'cal': push_calibration,
         'sectors': push_sectors,
+        'global': push_global,
+        'world': push_global,
+        'overnight': push_global,
     }
 
     func = dispatch.get(mode)

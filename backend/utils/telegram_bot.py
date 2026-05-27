@@ -311,8 +311,8 @@ def send_outcome_report(metrics, top_winners=None, top_losers=None):
     profit_factor = metrics.get('profit_factor', 0)
     
     # Skip if no evaluated outcomes
-    evaluated = wins + losses + neutral
-    if evaluated == 0:
+    evaluated = metrics.get('total_evaluated', 0)
+    if evaluated == 0 and (wins + losses + neutral) == 0:
         return False
     
     # Emoji based on win rate

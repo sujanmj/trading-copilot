@@ -93,11 +93,15 @@ def _opps_section() -> str:
 
 
 def _calibration_section() -> str:
-    stats = _load_json(STATS_FILE)
-    metrics = stats.get('metrics_all_time') or {}
-    dash = stats.get('calibration_dashboard') or {}
-    lc = stats.get('lifecycle_calibration') or {}
-    evaluated = metrics.get('total_evaluated') or lc.get('total_evaluated') or 0
+    try:
+        from backend.storage.stats_aggregates import aggregate_outcomes, aggregate_calibration
+        metrics = aggregate_outcomes('all_time')
+        cal = aggregate_calibration()
+    except Exception:
+        stats = _load_json(STATS_FILE)
+        metrics = stats.get('metrics_all_time') or {}
+        cal = stats.get('lifecycle_calibration') or {}
+    evaluated = metrics.get('total_evaluated') or cal.get('total_resolved') or cal.get('total_evaluated') or 0
     if evaluated == 0:
         return "Calibration: insufficient evaluated sample — post-market EOD builds metrics."
     parts = [
@@ -105,9 +109,14 @@ def _calibration_section() -> str:
         f"Wins: {metrics.get('wins', 0)} | Losses: {metrics.get('losses', 0)} | Pending: {metrics.get('pending', 0)}",
         f"High-conf win rate: {metrics.get('high_conf_win_rate', 0):.1f}%",
     ]
-    health = dash.get('health_score') or dash.get('overall_health')
-    if health is not None:
-        parts.append(f"Calibration health: {health}")
+    try:
+        stats = _load_json(STATS_FILE)
+        dash = stats.get('calibration_dashboard') or {}
+        health = dash.get('health_score') or dash.get('overall_health')
+        if health is not None:
+            parts.append(f"Calibration health: {health}")
+    except Exception:
+        pass
     self_cal = _clip(_load_json(INTEL_FILE).get('self_calibration') or '', 300)
     if self_cal:
         parts.append(f"Self-calibration note: {self_cal}")

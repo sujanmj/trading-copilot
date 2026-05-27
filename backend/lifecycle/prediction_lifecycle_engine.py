@@ -440,68 +440,15 @@ def refresh_brain_opportunities() -> dict:
 
 
 def build_calibration_snapshot() -> dict:
-    """Generate calibration metrics from resolved predictions."""
-    init_db()
-    conn = get_connection()
+    """Generate calibration metrics from SQLite aggregate (single source of truth)."""
+    from backend.storage.stats_aggregates import aggregate_calibration
+    from backend.analytics.regime_analytics import build_calibration_dashboard
+
+    snapshot = aggregate_calibration()
+    snapshot['confidence_realism_curve'] = build_confidence_realism_curve()
+    snapshot['signal_type_performance'] = build_signal_type_performance()
+    snapshot['regime_performance'] = build_regime_performance()
     try:
-        row = conn.execute("""
-            SELECT
-                COUNT(*) as total,
-                SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN o.verdict='LOSS' THEN 1 ELSE 0 END) as losses,
-                SUM(CASE WHEN o.verdict IN ('PARTIAL','NEUTRAL') THEN 1 ELSE 0 END) as partials,
-                SUM(CASE WHEN o.verdict='EXPIRED' THEN 1 ELSE 0 END) as expired,
-                SUM(CASE WHEN o.verdict='INVALIDATED' THEN 1 ELSE 0 END) as invalidated,
-                SUM(CASE WHEN o.verdict='UNRESOLVED' THEN 1 ELSE 0 END) as unresolved,
-                SUM(CASE WHEN o.verdict='PENDING' OR o.verdict IS NULL THEN 1 ELSE 0 END) as pending,
-                AVG(CASE WHEN o.verdict='WIN' THEN o.max_gain_pct END) as avg_gain,
-                AVG(CASE WHEN o.verdict='LOSS' THEN ABS(o.max_loss_pct) END) as avg_loss,
-                SUM(CASE WHEN p.confidence='HIGH' AND o.verdict='WIN' THEN 1 ELSE 0 END) as high_wins,
-                SUM(CASE WHEN p.confidence='HIGH' AND o.verdict IS NOT NULL AND o.verdict != 'PENDING' THEN 1 ELSE 0 END) as high_total,
-                SUM(CASE WHEN o.verdict='LOSS' AND p.confidence IN ('HIGH','MEDIUM') THEN 1 ELSE 0 END) as false_positives
-            FROM predictions p
-            LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
-        """).fetchone()
-    finally:
-        conn.close()
-
-    d = dict(row) if row else {}
-    evaluated = (d.get('wins') or 0) + (d.get('losses') or 0) + (d.get('partials') or 0)
-    wins = d.get('wins') or 0
-    losses = d.get('losses') or 0
-    avg_gain = d.get('avg_gain') or 0
-    avg_loss = d.get('avg_loss') or 1
-    high_total = d.get('high_total') or 0
-    high_wins = d.get('high_wins') or 0
-
-    snapshot = {
-        'generated_at': _now_iso(),
-        'date': _today(),
-        'win_rate': round(wins / evaluated * 100, 2) if evaluated else 0,
-        'loss_rate': round(losses / evaluated * 100, 2) if evaluated else 0,
-        'partial_rate': round((d.get('partials') or 0) / evaluated * 100, 2) if evaluated else 0,
-        'avg_gain_pct': round(avg_gain, 2),
-        'avg_loss_pct': round(avg_loss, 2),
-        'profit_factor': round(avg_gain / avg_loss, 2) if avg_loss else 0,
-        'confidence_realism': round(high_wins / high_total * 100, 2) if high_total else None,
-        'false_positive_rate': round((d.get('false_positives') or 0) / evaluated * 100, 2) if evaluated else 0,
-        'total_evaluated': evaluated,
-        'pending': d.get('pending') or 0,
-        'expired': d.get('expired') or 0,
-        'invalidated': d.get('invalidated') or 0,
-        'unresolved': d.get('unresolved') or 0,
-        'message': (
-            'Awaiting evaluated prediction sample size.'
-            if evaluated < 30
-            else 'Calibration metrics from lifecycle evaluations.'
-        ),
-        'confidence_realism_curve': build_confidence_realism_curve(),
-        'signal_type_performance': build_signal_type_performance(),
-        'regime_performance': build_regime_performance(),
-    }
-
-    try:
-        from backend.analytics.regime_analytics import build_calibration_dashboard
         snapshot['dashboard'] = build_calibration_dashboard()
     except Exception as e:
         snapshot['dashboard'] = {'status': 'degraded', 'reason': str(e)}

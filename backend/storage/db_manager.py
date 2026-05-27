@@ -529,95 +529,14 @@ def upsert_outcome(outcome_data):
 # ============================================================
 
 def calculate_accuracy_metrics(metric_type='all_time'):
-    """Calculate aggregate accuracy stats"""
+    """Calculate aggregate accuracy stats — delegates to centralized SQLite aggregate."""
+    from backend.storage.stats_aggregates import aggregate_outcomes
+    metrics = aggregate_outcomes(metric_type)
+    if not metrics or metrics.get('total_predictions', 0) == 0:
+        return metrics
+
     conn = get_connection()
     try:
-        # Base query joining predictions with outcomes
-        if metric_type == 'daily':
-            date_filter = "AND p.prediction_date = date('now')"
-        elif metric_type == 'weekly':
-            date_filter = "AND p.prediction_date >= date('now', '-7 days')"
-        else:  # all_time
-            date_filter = ""
-        
-        query = f"""
-            SELECT 
-                COUNT(p.id) as total_predictions,
-                SUM(CASE WHEN o.verdict IN ('WIN','LOSS','PARTIAL','NEUTRAL','EXPIRED','INVALIDATED') THEN 1 ELSE 0 END) as total_evaluated,
-                SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN o.verdict='LOSS' THEN 1 ELSE 0 END) as losses,
-                SUM(CASE WHEN o.verdict IN ('NEUTRAL','PARTIAL') THEN 1 ELSE 0 END) as neutral,
-                SUM(CASE WHEN o.verdict='PARTIAL' THEN 1 ELSE 0 END) as partials,
-                SUM(CASE WHEN o.verdict='EXPIRED' THEN 1 ELSE 0 END) as expired,
-                SUM(CASE WHEN o.verdict='INVALIDATED' THEN 1 ELSE 0 END) as invalidated,
-                SUM(CASE WHEN o.verdict IN ('PENDING','UNRESOLVED') OR o.verdict IS NULL THEN 1 ELSE 0 END) as pending,
-                AVG(CASE WHEN o.verdict='WIN' THEN o.max_gain_pct END) as avg_gain,
-                AVG(CASE WHEN o.verdict='LOSS' THEN o.max_loss_pct END) as avg_loss,
-                
-                -- By category
-                SUM(CASE WHEN p.category='opportunity' AND o.verdict='WIN' THEN 1 ELSE 0 END) as opp_wins,
-                SUM(CASE WHEN p.category='opportunity' AND o.verdict IS NOT NULL THEN 1 ELSE 0 END) as opp_total,
-                SUM(CASE WHEN p.category='risk' AND o.verdict='LOSS' THEN 1 ELSE 0 END) as risk_correct,
-                SUM(CASE WHEN p.category='risk' AND o.verdict IS NOT NULL THEN 1 ELSE 0 END) as risk_total,
-                
-                -- By confidence
-                SUM(CASE WHEN p.confidence='HIGH' AND o.verdict='WIN' THEN 1 ELSE 0 END) as high_wins,
-                SUM(CASE WHEN p.confidence='HIGH' AND o.verdict IS NOT NULL THEN 1 ELSE 0 END) as high_total,
-                SUM(CASE WHEN p.confidence='MEDIUM' AND o.verdict='WIN' THEN 1 ELSE 0 END) as med_wins,
-                SUM(CASE WHEN p.confidence='MEDIUM' AND o.verdict IS NOT NULL THEN 1 ELSE 0 END) as med_total,
-                SUM(CASE WHEN p.confidence='LOW' AND o.verdict='WIN' THEN 1 ELSE 0 END) as low_wins,
-                SUM(CASE WHEN p.confidence='LOW' AND o.verdict IS NOT NULL THEN 1 ELSE 0 END) as low_total
-            FROM predictions p
-            LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
-            WHERE 1=1 {date_filter}
-        """
-        
-        row = conn.execute(query).fetchone()
-        if not row:
-            return None
-        
-        d = dict(row)
-        evaluated = d['total_evaluated'] or 0
-        wins = d['wins'] or 0
-        losses = d['losses'] or 0
-        
-        # Calculate rates — win_rate uses resolved outcomes only
-        resolved = wins + losses + (d['neutral'] or 0)
-        win_rate = (wins / resolved * 100) if resolved > 0 else 0
-        opp_rate = (d['opp_wins'] / d['opp_total'] * 100) if d['opp_total'] else 0
-        risk_rate = (d['risk_correct'] / d['risk_total'] * 100) if d['risk_total'] else 0
-        high_conf = (d['high_wins'] / d['high_total'] * 100) if d['high_total'] else 0
-        med_conf = (d['med_wins'] / d['med_total'] * 100) if d['med_total'] else 0
-        low_conf = (d['low_wins'] / d['low_total'] * 100) if d['low_total'] else 0
-        
-        avg_gain = d['avg_gain'] or 0
-        avg_loss = abs(d['avg_loss'] or 1)
-        profit_factor = avg_gain / avg_loss if avg_loss > 0 else 0
-        
-        metrics = {
-            'metric_date': datetime.now().date().isoformat(),
-            'metric_type': metric_type,
-            'total_predictions': d['total_predictions'] or 0,
-            'total_evaluated': evaluated,
-            'wins': wins,
-            'losses': losses,
-            'neutral': d['neutral'] or 0,
-            'partials': d.get('partials') or 0,
-            'expired': d.get('expired') or 0,
-            'invalidated': d.get('invalidated') or 0,
-            'pending': d['pending'] or 0,
-            'win_rate': round(win_rate, 2),
-            'avg_gain_pct': round(avg_gain, 2),
-            'avg_loss_pct': round(avg_loss, 2),
-            'profit_factor': round(profit_factor, 2),
-            'opportunity_win_rate': round(opp_rate, 2),
-            'risk_avoidance_rate': round(risk_rate, 2),
-            'high_conf_win_rate': round(high_conf, 2),
-            'medium_conf_win_rate': round(med_conf, 2),
-            'low_conf_win_rate': round(low_conf, 2),
-        }
-        
-        # Save to DB
         conn.execute("""
             INSERT OR REPLACE INTO accuracy_metrics (
                 metric_date, metric_type,
@@ -633,13 +552,12 @@ def calculate_accuracy_metrics(metric_type='all_time'):
             metrics['wins'], metrics['losses'], metrics['neutral'], metrics['pending'],
             metrics['win_rate'], metrics['avg_gain_pct'], metrics['avg_loss_pct'], metrics['profit_factor'],
             metrics['opportunity_win_rate'], metrics['risk_avoidance_rate'],
-            metrics['high_conf_win_rate'], metrics['medium_conf_win_rate'], metrics['low_conf_win_rate']
+            metrics['high_conf_win_rate'], metrics['medium_conf_win_rate'], metrics['low_conf_win_rate'],
         ))
         conn.commit()
-        
-        return metrics
     finally:
         conn.close()
+    return metrics
 
 
 # ============================================================

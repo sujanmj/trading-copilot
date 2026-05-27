@@ -884,6 +884,19 @@ def _build_runtime_snapshot() -> dict:
     stats = data.get('stats') or {}
     history = data.get('history') or {}
     intelligence = data.get('intelligence') or {}
+    try:
+        from backend.storage.stats_aggregates import aggregate_stats
+        live_agg = aggregate_stats()
+        stats = dict(stats)
+        stats['metrics_all_time'] = live_agg.get('metrics_all_time') or stats.get('metrics_all_time') or {}
+        stats['metrics_weekly'] = live_agg.get('metrics_weekly') or stats.get('metrics_weekly') or {}
+        stats['metrics_daily'] = live_agg.get('metrics_daily') or stats.get('metrics_daily') or {}
+        stats['db_stats'] = live_agg.get('db_stats') or stats.get('db_stats') or {}
+        if live_agg.get('calibration_core'):
+            stats['lifecycle_calibration'] = live_agg['calibration_core']
+        data['stats'] = stats
+    except Exception:
+        pass
     db_stats = stats.get('db_stats') or {}
     metrics = stats.get('metrics_all_time') or {}
     journal = history.get('intelligence_journal') or {}

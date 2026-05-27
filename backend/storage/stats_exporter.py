@@ -80,6 +80,22 @@ def write_stats_output(output):
     atomic_write_json(OUTPUT_FILE, output)
 
 
+def write_stats_snapshot(aggregate_payload: dict) -> dict:
+    """Merge SQLite aggregate payload into export shape and write stats_data.json."""
+    output = empty_stats_output()
+    output['db_stats'] = aggregate_payload.get('db_stats') or output['db_stats']
+    output['metrics_all_time'] = aggregate_payload.get('metrics_all_time') or output['metrics_all_time']
+    output['metrics_weekly'] = aggregate_payload.get('metrics_weekly') or output['metrics_weekly']
+    output['metrics_daily'] = aggregate_payload.get('metrics_daily') or output['metrics_daily']
+    cal_core = aggregate_payload.get('calibration_core') or {}
+    if cal_core:
+        output['lifecycle_calibration'] = cal_core
+    output['last_updated'] = datetime.now(timezone.utc).isoformat()
+    output['generation_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    write_stats_output(output)
+    return output
+
+
 def get_predictions_by_sector():
     """Group predictions by sector with win rates"""
     conn = get_connection()
@@ -262,24 +278,19 @@ def export_stats():
         except Exception as e:
             safe_print(f"[WARN] init_db failed: {e}")
 
-        try:
-            output['db_stats'] = get_db_stats()
-        except Exception as e:
-            safe_print(f"[WARN] get_db_stats failed: {e}")
+        from backend.storage.stats_aggregates import aggregate_stats
+        agg = aggregate_stats()
+        output['db_stats'] = agg.get('db_stats') or output['db_stats']
+        output['metrics_all_time'] = agg.get('metrics_all_time') or output['metrics_all_time']
+        output['metrics_weekly'] = agg.get('metrics_weekly') or output['metrics_weekly']
+        output['metrics_daily'] = agg.get('metrics_daily') or output['metrics_daily']
+        if agg.get('calibration_core'):
+            output['lifecycle_calibration'] = agg['calibration_core']
 
         db_stats = output['db_stats']
         if db_stats.get('total_predictions', 0) == 0:
             safe_print("[INFO] No predictions yet — writing valid empty stats JSON")
         else:
-            for label, fn, key in [
-                ('all_time', lambda: calculate_accuracy_metrics('all_time'), 'metrics_all_time'),
-                ('weekly', lambda: calculate_accuracy_metrics('weekly'), 'metrics_weekly'),
-                ('daily', lambda: calculate_accuracy_metrics('daily'), 'metrics_daily'),
-            ]:
-                try:
-                    output[key] = fn() or output[key]
-                except Exception as e:
-                    safe_print(f"[WARN] {label} metrics failed: {e}")
             try:
                 output['recent_predictions'] = get_recent_predictions_simple(15)
                 output['top_winners'] = get_top_winners(10)

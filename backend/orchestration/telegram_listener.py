@@ -276,6 +276,17 @@ def cmd_scan():
 
 def cmd_elite():
     """Reads the ML Meta-Labeler output and formats it for Telegram."""
+    from backend.orchestration.telegram_command_guard import begin_command, finish_command
+    skip, _, key = begin_command('elite', '', CHAT_ID)
+    if skip:
+        return
+    try:
+        _cmd_elite_body()
+    finally:
+        finish_command(key)
+
+
+def _cmd_elite_body():
     data_path = DATA_DIR / "high_conviction_alerts.json"
     
     if not data_path.exists():
@@ -318,38 +329,42 @@ def cmd_elite():
 
 
 def cmd_brief():
-    send_message("📋 Generating morning brief...")
-    run_in_background(run_module_with_arg, 'alert_engine', 'morning', 120)
-
-def cmd_outcomes():
-    """Inline outcome summary from stats export — same source as /stats."""
+    from backend.orchestration.telegram_command_guard import begin_command, finish_command
+    skip, _, key = begin_command('brief', '', CHAT_ID)
+    if skip:
+        return
 
     def _do():
         try:
-            from backend.storage.stats_exporter import export_stats
+            send_message("📋 Generating morning brief...")
+            run_module_with_arg('alert_engine', 'morning', 120)
+        finally:
+            finish_command(key)
+
+    run_in_background(_do)
+
+def cmd_outcomes():
+    """Live outcome summary from SQLite — refreshes stats export snapshot."""
+
+    def _do():
+        guard_key = None
+        try:
+            from backend.orchestration.telegram_command_guard import begin_command, finish_command
+            skip, _, guard_key = begin_command('outcomes', '', CHAT_ID)
+            if skip:
+                return
+            from backend.storage.stats_aggregates import get_live_stats_payload, format_outcomes_telegram
             from backend.utils.telegram_bot import send_outcome_report
-            output = export_stats()
-            metrics = output.get('metrics_all_time') or {}
-            if send_outcome_report(metrics, output.get('top_winners'), output.get('top_losers')):
-                return
-            wins = metrics.get('wins', 0)
-            losses = metrics.get('losses', 0)
-            evaluated = metrics.get('total_evaluated', 0)
-            pending = metrics.get('pending', 0)
-            if evaluated == 0 and wins == 0 and losses == 0:
-                send_message(
-                    "<b>📊 Outcomes</b>\n\n"
-                    f"Evaluated: 0 | Pending: {pending}\n"
-                    "<i>Outcomes evaluate at post-market EOD and 8 AM cycle.</i>"
-                )
-                return
-            send_message(
-                f"<b>📊 Outcomes</b>\n\n"
-                f"Evaluated: {evaluated} | Win rate: {metrics.get('win_rate', 0):.1f}%\n"
-                f"✅ Wins: {wins} | ❌ Losses: {losses} | ⏳ Pending: {pending}"
-            )
+            payload = get_live_stats_payload(refresh_export=True)
+            metrics = payload.get('metrics_all_time') or {}
+            if not send_outcome_report(metrics, payload.get('top_winners'), payload.get('top_losers')):
+                send_message(format_outcomes_telegram(metrics))
         except Exception as e:
             send_message(f"❌ Outcome report failed: {str(e)[:200]}")
+        finally:
+            if guard_key:
+                from backend.orchestration.telegram_command_guard import finish_command
+                finish_command(guard_key)
 
     run_in_background(_do)
 
@@ -368,10 +383,47 @@ def cmd_history():
 # ============================================================
 
 def cmd_brain_pusher(mode, status_msg=None):
-    """Trigger telegram_brain_pusher.py with given mode in background thread."""
-    if status_msg:
-        send_message(status_msg)
-    run_in_background(run_module_with_arg, 'telegram_brain_pusher', mode, 120)
+    """Run brain pusher in-process with debounce guard (no duplicate status spam)."""
+
+    def _do():
+        guard_key = None
+        try:
+            from backend.orchestration.telegram_command_guard import begin_command, finish_command
+            skip, _, guard_key = begin_command(mode, '', CHAT_ID)
+            if skip:
+                return
+            if status_msg:
+                send_message(status_msg)
+            from backend.orchestration import telegram_brain_pusher as tbp
+            dispatch = {
+                'full': tbp.push_full_brain,
+                'brain': tbp.push_full_brain,
+                'all': tbp.push_full_brain,
+                'summary': tbp.push_summary,
+                'opps': tbp.push_opps,
+                'opportunities': tbp.push_opps,
+                'risks': tbp.push_risks,
+                'action': tbp.push_action,
+                'calibration': tbp.push_calibration,
+                'cal': tbp.push_calibration,
+                'sectors': tbp.push_sectors,
+                'global': tbp.push_global,
+                'world': tbp.push_global,
+                'overnight': tbp.push_global,
+            }
+            fn = dispatch.get(mode)
+            if fn:
+                fn()
+            else:
+                send_message(f"❌ Unknown brain mode: <code>{mode}</code>")
+        except Exception as e:
+            send_message(f"❌ Brain push failed: {str(e)[:200]}")
+        finally:
+            if guard_key:
+                from backend.orchestration.telegram_command_guard import finish_command
+                finish_command(guard_key)
+
+    run_in_background(_do)
 
 def cmd_status():
     files_to_check = [
@@ -475,35 +527,21 @@ def cmd_status():
     send_message(msg)
 
 def cmd_stats():
-    stats_file = DATA_DIR / 'stats_data.json'
-    if not stats_file.exists():
-        send_message("❌ No stats yet")
+    from backend.orchestration.telegram_command_guard import begin_command, finish_command
+    skip, _, key = begin_command('stats', '', CHAT_ID)
+    if skip:
         return
-
-    with open(stats_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    metrics = data.get('metrics_all_time', {})
-    db_stats = data.get('db_stats', {})
-
-    msg = "<b>📊 Trading Copilot Stats</b>\n\n"
-    msg += f"<b>Predictions:</b> {db_stats.get('total_predictions', 0)}\n"
-    evaluated = metrics.get('total_evaluated', 0)
-    pending = metrics.get('pending', 0)
-    msg += f"<b>Evaluated:</b> {evaluated}\n"
-    msg += f"<b>Pending:</b> {pending}\n"
-
-    if evaluated > 0:
-        msg += f"<b>Win Rate:</b> {metrics.get('win_rate', 0):.1f}%\n"
-        msg += f"  Wins: {metrics.get('wins', 0)}\n"
-        msg += f"  Losses: {metrics.get('losses', 0)}\n"
-        msg += f"<b>Avg Gain:</b> +{metrics.get('avg_gain_pct', 0):.2f}%\n"
-        msg += f"<b>Avg Loss:</b> -{metrics.get('avg_loss_pct', 0):.2f}%\n"
-        msg += f"<b>Profit Factor:</b> {metrics.get('profit_factor', 0):.2f}\n"
-    else:
-        msg += "\n<i>⏳ No resolved outcomes yet — pending predictions evaluate at EOD</i>"
-
-    send_message(msg)
+    try:
+        from backend.storage.stats_aggregates import get_live_stats_payload, format_stats_telegram
+        payload = get_live_stats_payload(refresh_export=True)
+        send_message(format_stats_telegram(
+            payload.get('metrics_all_time'),
+            payload.get('db_stats'),
+        ))
+    except Exception as e:
+        send_message(f"❌ Stats failed: {str(e)[:200]}")
+    finally:
+        finish_command(key)
 
 def _do_ask(question, user_id='unknown'):
     """Direct import call to ai_router — no subprocess, no injection risk."""
