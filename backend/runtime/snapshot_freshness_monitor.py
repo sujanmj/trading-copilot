@@ -67,23 +67,53 @@ def _snapshot_sla_seconds() -> int:
         return 30 * 60
 
 
+def _snapshot_age_minutes_direct() -> Optional[int]:
+    """Age from active snapshot publish time — avoids circular snapshot_health calls."""
+    from backend.intelligence.active_snapshot import get_active_snapshot_meta, snapshot_age_minutes
+    age = snapshot_age_minutes()
+    if age is not None:
+        return age
+    meta = get_active_snapshot_meta() or {}
+    published = meta.get('published_at')
+    if not published:
+        return None
+    try:
+        from backend.runtime.freshness_engine import age_minutes as age_minutes_fn
+        return age_minutes_fn(published)
+    except Exception:
+        return None
+
+
+def _pipeline_stalled() -> bool:
+    try:
+        from backend.runtime.stall_watchdog import evaluate_stalls
+        report = evaluate_stalls() or {}
+        if report.get('degraded'):
+            return True
+        pipeline = report.get('pipeline') or {}
+        return bool(pipeline.get('any_stalled'))
+    except Exception:
+        return False
+
+
 def evaluate_snapshot_freshness() -> Dict[str, Any]:
     """Assess active snapshot + collector heartbeats against SLA."""
-    from backend.intelligence.active_snapshot import get_active_snapshot_meta, snapshot_health
+    from backend.intelligence.active_snapshot import get_active_snapshot_meta
     from backend.runtime.freshness_engine import (
-        format_freshness_display,
         merge_freshness_payload,
         freshness_health_tier,
-        is_snapshot_stale,
+        is_snapshot_degraded,
         STALE_MIN_MINUTES,
+        DEGRADED_MAX_MINUTES,
     )
 
-    snap_health = snapshot_health() or {}
     meta = get_active_snapshot_meta() or {}
-    age_minutes = snap_health.get('age_minutes')
+    age_minutes = _snapshot_age_minutes_direct()
     tier = freshness_health_tier(age_minutes)
-    stale = bool(snap_health.get('stale')) or is_snapshot_stale(age_minutes)
-    score = int(snap_health.get('score') or 100)
+    pipeline_stalled = _pipeline_stalled()
+    stale = tier == 'stale'
+    degraded = is_snapshot_degraded(age_minutes, pipeline_stalled=pipeline_stalled)
+    score = 100
 
     heartbeats = _load_heartbeats().get('sources') or {}
     now = time.time()
@@ -97,17 +127,27 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         if age > sla:
             collector_issues.append(f'{source}_heartbeat_stale:{int(age)}s')
 
-    if stale:
+    warnings: list = []
+    if age_minutes is None:
+        score -= 20
+        warnings.append('Snapshot timestamp unreadable')
+    elif stale:
         score = max(0, score - 40)
+        warnings.append(f'Snapshot older than {STALE_MIN_MINUTES} minutes')
     elif tier == 'aging':
-        score = max(0, score - 15)
+        score = max(0, score - 10)
+    if degraded and not stale:
+        score = max(0, score - 25)
+        warnings.append(f'Snapshot older than {DEGRADED_MAX_MINUTES} minutes')
+    if pipeline_stalled:
+        score = max(0, score - 30)
+        warnings.append('Pipeline stalled')
     if collector_issues:
         score = max(0, score - min(20, len(collector_issues) * 5))
 
-    degraded = stale or score < 50 or tier == 'aging'
     suppress_confidence = stale or degraded
-    block_elite = stale
-    quality_penalty = 0.35 if stale else (0.10 if tier == 'aging' else (0.15 if degraded else 0.0))
+    block_elite = stale or degraded
+    quality_penalty = 0.35 if degraded else (0.15 if stale else (0.08 if tier == 'aging' else 0.0))
 
     result = {
         'fresh': tier == 'healthy',
@@ -116,6 +156,8 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'health_tier': tier,
         'age_minutes': age_minutes,
         'stale_threshold_minutes': STALE_MIN_MINUTES,
+        'degraded_threshold_minutes': DEGRADED_MAX_MINUTES,
+        'pipeline_stalled': pipeline_stalled,
         'snapshot_version': meta.get('snapshot_version'),
         'active_snapshot_id': meta.get('active_snapshot_id'),
         'freshness_score': score,
@@ -124,7 +166,7 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'quality_score_penalty': quality_penalty,
         'collector_issues': collector_issues,
         'sla_seconds': _snapshot_sla_seconds(),
-        'warnings': list(snap_health.get('warnings') or []) + collector_issues,
+        'warnings': warnings + collector_issues,
         'collectors_active': len(collector_issues) < len(DEFAULT_SLA_SECONDS),
     }
     return merge_freshness_payload(result, timestamp=meta.get('published_at'))

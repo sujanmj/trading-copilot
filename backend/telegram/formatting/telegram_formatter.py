@@ -271,7 +271,9 @@ def format_status(runtime_state: dict) -> str:
         lines.append(f"Pipeline: last {pipeline.get('last_stage')}")
 
     lines.append(f"AI providers: {ai.get('status', 'unknown')}")
-    wr_disp = wr.get('win_rate_display') or '—'
+    wr_disp = wr.get('win_rate_display') or 'Awaiting statistical confidence'
+    if wr_disp in ('—', '—%', 'None', 'null', 'unknown'):
+        wr_disp = 'Awaiting statistical confidence'
     lines.append(
         f"Metrics: resolved {counts.get('resolved', 0)} "
         f"({counts.get('wins', 0)}W/{counts.get('losses', 0)}L/{counts.get('partials', 0)}P) · "

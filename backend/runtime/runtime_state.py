@@ -429,7 +429,7 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     except Exception:
         pass
 
-    if freshness.get('stale') or freshness.get('degraded') or stall_report.get('degraded'):
+    if freshness.get('degraded') or stall_report.get('degraded'):
         lifecycle = dict(lifecycle)
         lifecycle['lifecycle_state'] = 'DEGRADED'
         causes = stall_report.get('root_causes') or []

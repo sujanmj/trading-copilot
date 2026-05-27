@@ -272,7 +272,29 @@ def validate_market_snapshot(snapshot: MarketSnapshot) -> Tuple[bool, List[str]]
     fresh = snapshot.freshness or {}
     if fresh.get('stale') and fresh.get('fresh'):
         issues.append('freshness contradiction')
+    if fresh.get('stale') and fresh.get('health_tier') == 'healthy':
+        issues.append('stale flag contradicts healthy tier')
+    sec = rs.get('secondary_flags') or {}
+    age = fresh.get('age_minutes')
+    tier = fresh.get('health_tier')
+    if age is not None and tier:
+        from backend.runtime.freshness_engine import freshness_health_tier, is_snapshot_stale
+        expected_tier = freshness_health_tier(age)
+        if tier != expected_tier:
+            issues.append(f'freshness tier mismatch: {tier} vs {expected_tier}')
+        if sec.get('stale_snapshot') and age is not None and not is_snapshot_stale(age):
+            issues.append('stale_snapshot flag set while age is below stale threshold')
     return len(issues) == 0, issues
+
+
+def build_degraded_snapshot(warnings: List[str]) -> MarketSnapshot:
+    """Minimal valid snapshot when composition fails — never return malformed JSON."""
+    from backend.runtime.runtime_state import build_runtime_state
+    rs = build_runtime_state()
+    snap = build_market_snapshot(force_refresh=True)
+    snap.warnings = list(dict.fromkeys((snap.warnings or []) + warnings))
+    snap.blockers = list(dict.fromkeys((snap.blockers or []) + ['snapshot_validation_failed']))
+    return snap
 
 
 def commit_market_snapshot(snapshot: MarketSnapshot) -> Path:

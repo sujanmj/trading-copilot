@@ -116,7 +116,7 @@ def verify_api_endpoints() -> Dict[str, Any]:
     paths = [
         '/api/health',
         '/api/all',
-        '/api/runtime_snapshot',
+        '/api/runtime/snapshot',
         '/api/debug/lifecycle',
         '/api/debug/providers',
     ]
@@ -137,7 +137,7 @@ def verify_gui_payload(snapshot: Optional[dict] = None) -> Dict[str, Any]:
     """Validate runtime snapshot panels used by the GUI."""
     if snapshot is None:
         try:
-            snapshot = fetch_json('/api/runtime_snapshot')
+            snapshot = fetch_json('/api/runtime/snapshot')
         except Exception as e:
             return {'ok': False, 'error': str(e)}
 
@@ -198,7 +198,7 @@ def run_local_validation_loop(*, max_rounds: int = 30, interval: int = 20) -> No
             opps = verify_opportunities()
             snap = None
             try:
-                snap = fetch_json('/api/runtime_snapshot')
+                snap = fetch_json('/api/runtime/snapshot')
             except Exception:
                 pass
             gui = verify_gui_payload(snap)

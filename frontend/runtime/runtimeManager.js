@@ -1,6 +1,7 @@
 /**
  * RuntimeManager — single coordinated refresh loop + shared runtime state.
  * All intelligence tabs subscribe here instead of polling independently.
+ * Hydrates exclusively from GET /api/runtime/snapshot.
  */
 (function (global) {
   'use strict';
@@ -8,12 +9,14 @@
   const DEFAULT_POLL_MS = 30000;
   const MIN_REFRESH_GAP_MS = 4000;
   const NOTIFY_DEBOUNCE_MS = 80;
+  const SNAPSHOT_ENDPOINT = '/api/runtime/snapshot';
 
   let config = {
     getApiBase: () => '',
     getHeaders: () => ({}),
     cache: null,
     onConnectionChange: null,
+    onLoadingChange: null,
   };
 
   let state = null;
@@ -23,6 +26,9 @@
   let fetchSeq = 0;
   let lastRefreshAt = 0;
   let lastStaleForcedRefreshAt = 0;
+  let lastHydrationMs = null;
+  let lastFetchError = null;
+  let failedWidgets = [];
   const STALE_FORCE_REFRESH_MS = 30000;
   const subscribers = new Set();
   const panelHandlers = new Map();
@@ -30,6 +36,7 @@
   let lastSnapshotHash = null;
   let panelContentHashes = {};
   let notifyTimer = null;
+  let loading = false;
 
   function stableHash(value) {
     const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -42,18 +49,24 @@
   }
 
   function computePanelHashes(snapshot) {
-    const data = (snapshot && snapshot.data) || {};
+    const exports = (snapshot && (snapshot.exports || snapshot.data)) || {};
+    const ms = (snapshot && snapshot.market_snapshot) || snapshot || {};
+    const intel = exports.intelligence || ms.intelligence || {};
     return {
-      brain: stableHash({ i: data.intelligence, a: data.active_predictions }),
-      govt: stableHash(data.govt),
-      scanner: stableHash(data.scanner),
-      markets: stableHash({ m: data.markets, i: data.india }),
-      global: stableHash({ m: data.markets, o: data.overnight_impact, i: data.india_next_open }),
-      news: stableHash({ n: data.news, inshorts: data.inshorts }),
-      tv: stableHash(data.youtube),
-      reddit: stableHash(data.reddit),
-      stats: stableHash(data.stats),
-      history: stableHash(data.history),
+      brain: stableHash({
+        i: intel,
+        a: exports.active_predictions,
+        ap: ms.action_plan || intel.action_plan,
+      }),
+      govt: stableHash(exports.govt),
+      scanner: stableHash(exports.scanner),
+      markets: stableHash({ m: exports.markets, i: exports.india }),
+      global: stableHash({ m: exports.markets, o: snapshot && snapshot.overnight_impact, i: snapshot && snapshot.india_next_open }),
+      news: stableHash({ n: exports.news, inshorts: exports.inshorts }),
+      tv: stableHash(exports.youtube),
+      reddit: stableHash(exports.reddit),
+      stats: stableHash(exports.stats),
+      history: stableHash(exports.history),
     };
   }
 
@@ -63,9 +76,21 @@
       generated_at: snapshot && snapshot.generated_at,
       active_snapshot_id: snapshot && snapshot.active_snapshot_id,
       snapshot_version: snapshot && snapshot.snapshot_version,
+      snapshot_id: snapshot && snapshot.snapshot_id,
       panels: snapshot && snapshot.panels,
     };
     return stableHash({ panels, meta });
+  }
+
+  function setLoading(isLoading) {
+    loading = !!isLoading;
+    if (typeof config.onLoadingChange === 'function') {
+      try {
+        config.onLoadingChange(loading);
+      } catch (e) {
+        console.error('[RuntimeManager] onLoadingChange error', e);
+      }
+    }
   }
 
   function notify(meta) {
@@ -75,6 +100,7 @@
         fn(state, payload);
       } catch (e) {
         console.error('[RuntimeManager] subscriber error', e);
+        failedWidgets.push('subscriber');
       }
     });
     panelHandlers.forEach((fn) => {
@@ -82,6 +108,7 @@
         fn(state, payload);
       } catch (e) {
         console.error('[RuntimeManager] panel handler error', e);
+        failedWidgets.push('panel_handler');
       }
     });
   }
@@ -102,27 +129,52 @@
     return cached.data !== undefined ? cached.data : cached;
   }
 
+  function mergeIntelWithSnapshot(intelRaw, snapshot) {
+    const ms = (snapshot && snapshot.market_snapshot) || snapshot || {};
+    const intel = unwrapExportPayload(intelRaw);
+    if (!intel || typeof intel !== 'object') return intel;
+    const out = { ...intel };
+    if (ms.action_plan) out.action_plan = ms.action_plan;
+    else if (snapshot.action_plan) out.action_plan = snapshot.action_plan;
+    if (ms.sector_rotation && Object.keys(ms.sector_rotation).length) {
+      out.sector_rotation = ms.sector_rotation;
+    }
+    if (Array.isArray(ms.top_opportunities) && ms.top_opportunities.length) {
+      out.top_opportunities = ms.top_opportunities;
+    }
+    if (Array.isArray(ms.risk_list) && ms.risk_list.length) {
+      out.risks_and_avoids = ms.risk_list;
+    }
+    if (ms.executive_summary) out.executive_summary = ms.executive_summary;
+    if (ms.calibration != null) out.self_calibration = ms.calibration;
+    return out;
+  }
+
   function applyCacheFromSnapshot(snapshot) {
     const cache = config.cache;
     if (!cache || !snapshot) return;
-    const data = snapshot.data || {};
-    cache.intelligence = unwrapExportPayload(data.intelligence);
-    cache.indiaMarket = unwrapExportPayload(data.india);
-    cache.globalMarket = unwrapExportPayload(data.markets);
-    cache.news = unwrapExportPayload(data.news);
-    cache.youtube = unwrapExportPayload(data.youtube);
-    cache.govt = unwrapExportPayload(data.govt);
-    cache.inshorts = unwrapExportPayload(data.inshorts);
-    cache.reddit = unwrapExportPayload(data.reddit);
-    cache.scanner = unwrapExportPayload(data.scanner);
-    cache.stats = unwrapExportPayload(data.stats);
-    cache.history = unwrapExportPayload(data.history);
-    cache.activePredictions = unwrapExportPayload(data.active_predictions);
-    cache.predictionHistory = unwrapExportPayload(data.prediction_history);
-    cache.lifecycleState = unwrapExportPayload(data.lifecycle_state);
+    const exports = snapshot.exports || snapshot.data || {};
+    const ms = snapshot.market_snapshot || {};
+
+    cache.intelligence = mergeIntelWithSnapshot(exports.intelligence || ms.intelligence, snapshot);
+    cache.indiaMarket = unwrapExportPayload(exports.india);
+    cache.globalMarket = unwrapExportPayload(exports.markets);
+    cache.news = unwrapExportPayload(exports.news);
+    cache.youtube = unwrapExportPayload(exports.youtube);
+    cache.govt = unwrapExportPayload(exports.govt);
+    cache.inshorts = unwrapExportPayload(exports.inshorts);
+    cache.reddit = unwrapExportPayload(exports.reddit);
+    cache.scanner = unwrapExportPayload(exports.scanner);
+    cache.stats = unwrapExportPayload(exports.stats);
+    cache.history = unwrapExportPayload(exports.history);
+    cache.activePredictions = unwrapExportPayload(exports.active_predictions);
+    cache.predictionHistory = unwrapExportPayload(exports.prediction_history);
+    cache.lifecycleState = unwrapExportPayload(exports.lifecycle_state);
     cache.runtime = snapshot;
+    cache.marketSnapshot = ms;
+    cache.actionPlan = ms.action_plan || snapshot.action_plan || (cache.intelligence && cache.intelligence.action_plan) || '';
     cache.lastFetch = Date.now();
-    cache.connected = snapshot.status !== 'degraded';
+    cache.connected = snapshot.status !== 'degraded' || !!(exports.intelligence || ms.intelligence);
   }
 
   function invalidateCache(reason) {
@@ -131,7 +183,7 @@
     const keys = [
       'intelligence', 'indiaMarket', 'globalMarket', 'news', 'youtube', 'govt',
       'inshorts', 'reddit', 'scanner', 'stats', 'history', 'activePredictions',
-      'predictionHistory', 'lifecycleState', 'runtime',
+      'predictionHistory', 'lifecycleState', 'runtime', 'marketSnapshot', 'actionPlan',
     ];
     keys.forEach((k) => { cache[k] = null; });
     cache.connected = false;
@@ -145,16 +197,22 @@
     if (seq !== fetchSeq) return false;
     if (!snapshot || typeof snapshot !== 'object') return false;
 
+    global.runtimeSnapshot = snapshot;
+
+    const exports = snapshot.exports || snapshot.data || {};
+    const ms = snapshot.market_snapshot || {};
     const orch = snapshot.panels && snapshot.panels.orchestrator;
     const runtimePanel = snapshot.panels && snapshot.panels.runtime;
-    const hasData = !!(snapshot.data && (snapshot.data.intelligence || snapshot.data.scanner));
+    const hasData = !!(
+      (exports.intelligence || ms.intelligence)
+      || exports.scanner
+      || ms.action_plan
+    );
 
     if (!hasData && orch && orch.stale) {
       invalidateCache('orchestrator_stale');
     } else if (!hasData && runtimePanel && runtimePanel.stale && orch && !orch.gui_sync_validated) {
       invalidateCache('gui_sync_stale');
-    } else if (orch && orch.gui_sync_validated && runtimePanel && !runtimePanel.stale) {
-      /* scheduler healthy — keep cache even if export files lag briefly */
     }
 
     const nextHash = computeSnapshotHash(snapshot);
@@ -164,11 +222,13 @@
     state = snapshot;
     lastSnapshotHash = nextHash;
     panelContentHashes = nextPanelHashes;
+    failedWidgets = [];
 
     try {
       applyCacheFromSnapshot(snapshot);
     } catch (e) {
       console.error('[RuntimeManager] cache apply failed', e);
+      failedWidgets.push('cache_apply');
     }
     if (typeof config.onConnectionChange === 'function') {
       config.onConnectionChange(!!cacheConnected());
@@ -182,6 +242,7 @@
       unchanged: false,
       snapshotHash: nextHash,
       panelHashes: nextPanelHashes,
+      hydrationMs: lastHydrationMs,
     });
 
     if (orch && orch.stale && !hasData) {
@@ -202,16 +263,30 @@
 
   async function fetchSnapshot() {
     const base = config.getApiBase().replace(/\/$/, '');
+    const url = base + SNAPSHOT_ENDPOINT;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const started = Date.now();
     try {
-      const res = await fetch(base + '/api/runtime_snapshot', {
+      const res = await fetch(url, {
         method: 'GET',
         headers: config.getHeaders(),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`runtime_snapshot → ${res.status}`);
-      return res.json();
+      if (!res.ok) throw new Error(`${SNAPSHOT_ENDPOINT} → HTTP ${res.status}`);
+      const payload = await res.json();
+      if (!payload || typeof payload !== 'object') {
+        throw new Error(`${SNAPSHOT_ENDPOINT} → invalid JSON payload`);
+      }
+      lastHydrationMs = Date.now() - started;
+      lastFetchError = null;
+      return payload;
+    } catch (e) {
+      lastFetchError = e.name === 'AbortError'
+        ? `${SNAPSHOT_ENDPOINT} timeout (${FETCH_TIMEOUT_MS / 1000}s)`
+        : `${SNAPSHOT_ENDPOINT}: ${e.message || 'fetch failed'}`;
+      console.error('[RuntimeManager] fetchSnapshot failed:', lastFetchError);
+      throw e;
     } finally {
       clearTimeout(timer);
     }
@@ -225,28 +300,34 @@
 
     const seq = ++fetchSeq;
     inFlight = true;
+    setLoading(true);
     try {
       const snapshot = await fetchSnapshot();
       lastRefreshAt = Date.now();
       applySnapshot(snapshot, seq, opts);
       return state;
     } catch (e) {
-      const msg = e.name === 'AbortError' ? 'API timeout (20s)' : e.message;
+      const msg = e.name === 'AbortError' ? 'API timeout (20s)' : (e.message || 'refresh failed');
       console.error('[RuntimeManager] refresh failed:', msg);
       if (config.cache) config.cache.connected = false;
       if (typeof config.onConnectionChange === 'function') {
         config.onConnectionChange(false);
       }
+      scheduleNotify({ unchanged: false, error: msg, failed: true });
       return state;
     } finally {
       inFlight = false;
+      setLoading(false);
     }
   }
 
   function start(pollMs) {
     if (started) return;
     started = true;
-    refresh({ force: true }).catch((e) => console.error('[RuntimeManager] initial refresh failed', e));
+    refresh({ force: true }).catch((e) => {
+      console.error('[RuntimeManager] initial refresh failed', e);
+      scheduleNotify({ unchanged: false, error: e.message, failed: true });
+    });
     pollTimer = setInterval(() => {
       refresh().catch((e) => console.error('[RuntimeManager] poll refresh failed', e));
     }, pollMs || DEFAULT_POLL_MS);
@@ -294,6 +375,12 @@
     return config.cache;
   }
 
+  function getActionPlan() {
+    const snap = state || {};
+    const ms = snap.market_snapshot || getMarketSnapshot() || {};
+    return ms.action_plan || snap.action_plan || (config.cache && config.cache.actionPlan) || '';
+  }
+
   function getPanelState(panelId) {
     const panels = (state && state.panels) || {};
     return panels[panelId] || { status: 'waiting', message: 'Waiting for runtime snapshot…', stale: false };
@@ -305,6 +392,29 @@
 
   function getSnapshotHash() {
     return lastSnapshotHash;
+  }
+
+  function getHydrationDebug() {
+    const snap = state || {};
+    const ms = snap.market_snapshot || {};
+    const payloadText = JSON.stringify(snap);
+    const missing = [];
+    if (!snap.snapshot_id && !snap.active_snapshot_id) missing.push('snapshot_id');
+    if (!snap.generated_at) missing.push('generated_at');
+    if (!ms.action_plan && !snap.action_plan) missing.push('action_plan');
+    if (!(snap.exports || snap.data || {}).intelligence && !ms.intelligence) missing.push('intelligence');
+    return {
+      snapshot_id: snap.snapshot_id || snap.active_snapshot_id,
+      snapshot_version: snap.snapshot_version || (ms.freshness || {}).snapshot_version,
+      generated_at: snap.generated_at || ms.generated_at,
+      payload_bytes: payloadText.length,
+      hydration_ms: lastHydrationMs,
+      missing_fields: missing,
+      failed_widgets: failedWidgets.slice(),
+      last_error: lastFetchError,
+      status: snap.status || 'unknown',
+      warnings: snap.validation_warnings || [],
+    };
   }
 
   function panelChanged(panelId, previousHash) {
@@ -344,7 +454,6 @@
     }
   }
 
-  /** Current IST calendar day (YYYY-MM-DD) — trading-day anchor for Today/Yesterday. */
   function getIstTradingDayKey(referenceIso) {
     return getIstDateKey(referenceIso || new Date().toISOString());
   }
@@ -359,8 +468,9 @@
   }
 
   function getJournalDayBadge(dateStr) {
-    const rs = (state && state.runtime_state) || {};
-    const generated = rs.generated_at || (state && state.generated_at);
+    const ms = getMarketSnapshot() || {};
+    const rs = ms.runtime_state || (state && state.runtime_state) || {};
+    const generated = rs.generated_at || (state && state.generated_at) || ms.generated_at;
     const todayKey = getIstTradingDayKey(generated);
     const entryKey = getIstDateKey(dateStr);
     if (!entryKey) return '—';
@@ -403,36 +513,39 @@
 
   function getMarketSnapshot() {
     const snap = state || {};
-    return snap.market_snapshot || null;
+    return snap.market_snapshot || snap || null;
   }
 
   function getRuntimeStateFields() {
     const snap = state || {};
-    const ms = getMarketSnapshot();
-    const rs = (ms && ms.runtime_state) || snap.runtime_state || {};
+    const ms = getMarketSnapshot() || {};
+    const rs = ms.runtime_state || snap.runtime_state || {};
     const cal = snap.calibration_summary || {};
-    const metrics = (ms && ms.metrics) || {};
+    const metrics = ms.metrics || {};
     return {
-      lifecycle: (ms && ms.lifecycle) || rs.lifecycle || {},
-      regime: (ms && ms.regime) || rs.regime || {},
+      lifecycle: ms.lifecycle || rs.lifecycle || {},
+      regime: ms.regime || rs.regime || {},
       winRate: rs.win_rate || {
         win_rate: metrics.win_rate,
         win_rate_display: metrics.win_rate_display,
         statistically_confident: metrics.statistically_confident,
       },
       predictionCounts: rs.prediction_counts || metrics,
-      snapshotFreshness: (ms && ms.freshness) || rs.snapshot_freshness || {},
+      snapshotFreshness: ms.freshness || rs.snapshot_freshness || {},
       intelligenceStatus: rs.intelligence_status || {},
-      qualityScore: (ms && ms.quality_score) || rs.quality_score || {},
+      qualityScore: ms.quality_score || rs.quality_score || {},
       calibrationSummary: cal,
-      blockers: (ms && ms.blockers) || [],
-      pipelineHealth: (ms && ms.pipeline_health) || {},
-      primaryState: snap.primary_state || (ms && ms.runtime_state && ms.runtime_state.primary_state),
+      blockers: ms.blockers || snap.blockers || [],
+      pipelineHealth: ms.pipeline_health || snap.pipeline_health || {},
+      primaryState: snap.primary_state || rs.primary_state,
+      actionPlan: getActionPlan(),
     };
   }
 
   function formatTimestamp() {
-    const iso = state && state.generated_at;
+    const snap = state || {};
+    const ms = getMarketSnapshot() || {};
+    const iso = snap.generated_at || ms.generated_at;
     if (!iso) return '—';
     try {
       return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -442,12 +555,16 @@
   }
 
   function getFreshnessState() {
+    const ms = getMarketSnapshot() || {};
     const fs = (state && state.freshness_state) || {};
     const runtimePanel = getPanelState('runtime');
+    const fresh = ms.freshness || {};
     return {
-      exportStale: !!fs.export_stale,
+      exportStale: !!fs.export_stale || !!fresh.stale,
       collectorsActive: !!fs.collectors_active || !!runtimePanel.collectors_active,
       partialLag: !!fs.partial_lag || !!runtimePanel.export_lag,
+      tier: fresh.health_tier,
+      degraded: !!fresh.degraded,
     };
   }
 
@@ -468,24 +585,27 @@
 
   function timestampHtml(extra) {
     const snap = state || {};
+    const ms = getMarketSnapshot() || {};
     const ts = formatTimestamp();
     const runtimePanel = getPanelState('runtime');
     const op = snap.operational;
     const fresh = getFreshnessState();
-    const snapVer = snap.snapshot_version || runtimePanel.snapshot_version;
-    const rs = snap.runtime_state || {};
-    const freshPanel = rs.snapshot_freshness || {};
+    const snapVer = snap.snapshot_version || runtimePanel.snapshot_version || (ms.freshness || {}).snapshot_version;
+    const rs = ms.runtime_state || snap.runtime_state || {};
+    const freshPanel = ms.freshness || rs.snapshot_freshness || {};
     const snapFreshRaw = runtimePanel.snapshot_freshness_display
       || freshPanel.age_display
       || runtimePanel.snapshot_freshness_minutes;
-    const snapFresh = formatFreshnessDisplay(runtimePanel.snapshot_freshness_minutes, snapFreshRaw);
+    const snapFresh = formatFreshnessDisplay(runtimePanel.snapshot_freshness_minutes ?? freshPanel.age_minutes, snapFreshRaw);
     const tier = runtimePanel.freshness_tier || freshPanel.health_tier
-      || freshnessTierLabel(runtimePanel.snapshot_freshness_minutes);
+      || freshnessTierLabel(runtimePanel.snapshot_freshness_minutes ?? freshPanel.age_minutes);
     let statusTag = '';
     if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
       statusTag = ` · <span class="runtime-idle">${op.display_status}</span>`;
     } else if (fresh.partialLag || (fresh.collectorsActive && fresh.exportStale)) {
       statusTag = ' · <span class="runtime-live">live collectors active</span>';
+    } else if (fresh.degraded) {
+      statusTag = ' · <span class="runtime-stale">degraded</span>';
     } else if (isStale()) {
       statusTag = ' · <span class="runtime-stale">snapshot stale</span>';
     }
@@ -519,6 +639,11 @@
     return '';
   }
 
+  function unavailableBanner(reason) {
+    const msg = reason || lastFetchError || 'Data unavailable';
+    return `<div class="panel-status-banner stale">⚠ ${msg} — check API connection or run /refresh</div>`;
+  }
+
   function getPanelBanner(panelId, sourceKey) {
     const panel = getPanelState(panelId);
     const op = state && state.operational;
@@ -533,6 +658,8 @@
       message: panel.message || (isIdle && op ? op.display_message : ''),
       age: '',
       stale: showStale,
+      degraded: fresh.degraded,
+      unavailable: !!lastFetchError && !state,
       collectorsActive: fresh.collectorsActive || fresh.partialLag,
       pipelineStatus: panel.pipeline_status || null,
       displayStatus: panel.display_status || (op && op.display_status) || null,
@@ -544,6 +671,7 @@
     config.getHeaders = opts.getHeaders || config.getHeaders;
     config.cache = opts.cache || config.cache;
     config.onConnectionChange = opts.onConnectionChange || config.onConnectionChange;
+    config.onLoadingChange = opts.onLoadingChange || config.onLoadingChange;
   }
 
   global.RuntimeManager = {
@@ -558,10 +686,12 @@
     getState,
     getMarketSnapshot,
     getRuntimeStateFields,
+    getActionPlan,
     getCache,
     getPanelState,
     getPanelHashes,
     getSnapshotHash,
+    getHydrationDebug,
     getFreshnessState,
     panelChanged,
     formatTimestamp,
@@ -571,13 +701,14 @@
     formatAgeSeconds,
     getExportAge,
     getPanelBanner,
+    unavailableBanner,
     invalidateCache,
     formatMetricDisplay,
     formatFreshnessDisplay,
     getJournalDayBadge,
     sortJournalEntries,
     getIstDateKey,
-    getRuntimeStateFields,
     freshnessTierLabel,
+    isLoading: () => loading,
   };
 })(window);

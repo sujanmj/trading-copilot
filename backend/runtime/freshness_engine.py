@@ -14,10 +14,11 @@ import pytz
 IST = pytz.timezone('Asia/Kolkata')
 FRESHNESS_UNAVAILABLE = 'freshness unavailable'
 
-# Phase-3 tiers: <5m healthy, 5-15m aging, 15m+ stale
+# Phase-3 tiers: <5m healthy, 5-15m aging, 15m+ stale, 30m+ degraded
 HEALTHY_MAX_MINUTES = 5
 AGING_MAX_MINUTES = 15
 STALE_MIN_MINUTES = 15
+DEGRADED_MAX_MINUTES = 30
 
 
 def freshness_health_tier(age: Any) -> str:
@@ -40,6 +41,18 @@ def freshness_health_tier(age: Any) -> str:
 def is_snapshot_stale(age: Any) -> bool:
     tier = freshness_health_tier(age)
     return tier == 'stale'
+
+
+def is_snapshot_degraded(age: Any, *, pipeline_stalled: bool = False) -> bool:
+    """Degraded when pipeline stalled or snapshot age exceeds 30 minutes."""
+    if pipeline_stalled:
+        return True
+    if age is None:
+        return False
+    try:
+        return int(age) >= DEGRADED_MAX_MINUTES
+    except (TypeError, ValueError):
+        return False
 
 
 def normalize_timestamp(value: Any) -> Optional[datetime]:
@@ -116,13 +129,14 @@ def format_freshness_display(
         age = age_minutes(timestamp)
     available = age is not None
     tier = freshness_health_tier(age)
-    stale_flag = bool(stale) or tier == 'stale'
+    stale_flag = tier == 'stale' if age is not None else bool(stale)
     return {
         'age_minutes': age,
         'age_display': format_age_minutes(age),
         'freshness_available': available,
         'freshness_unavailable': not available,
         'health_tier': tier,
+        'fresh': tier == 'healthy',
         'stale': stale_flag,
         'status_label': (
             'stale' if stale_flag else (

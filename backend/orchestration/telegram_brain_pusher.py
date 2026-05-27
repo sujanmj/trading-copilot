@@ -650,7 +650,13 @@ def build_msg6_sectors_global_action(intel):
     sectors = _dict(intel.get('sector_rotation'))
     bullish = _join_list(sectors.get('bullish'))
     bearish = _join_list(sectors.get('bearish'))
-    action = _text(intel.get('action_plan'), 'No action plan provided.')
+    action = ''
+    try:
+        from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+        snap = get_current_market_snapshot()
+        action = _text(snap.action_plan or intel.get('action_plan'), 'No action plan provided.')
+    except Exception:
+        action = _text(intel.get('action_plan'), 'No action plan provided.')
 
     parts = [
         "🔄 <b>SECTOR ROTATION</b>",
@@ -765,6 +771,19 @@ def _push_full_brain_impl(*, command='full', cycle_id=''):
     if not intel:
         send_message("❌ No brain data yet. Run /refresh first.", command=command, cycle_id=cycle_id)
         return False
+
+    try:
+        from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+        snap = get_current_market_snapshot()
+        if snap.action_plan:
+            intel['action_plan'] = snap.action_plan
+        if snap.sector_rotation:
+            intel['sector_rotation'] = snap.sector_rotation
+        if snap.top_opportunities:
+            intel['top_opportunities'] = snap.top_opportunities
+            intel['opportunities'] = snap.top_opportunities
+    except Exception:
+        pass
 
     _brain_stale_prefix = stale_warning(raw_intel)
 
@@ -884,11 +903,10 @@ def push_action(*, command='action', cycle_id=''):
     from backend.telegram.formatting.telegram_formatter import format_action_plan, snapshot_meta_line
     from backend.runtime.market_snapshot_engine import get_current_market_snapshot
     snap = get_current_market_snapshot()
-    intel = snap.intelligence or normalize_intel(load_intel())
-    if not intel:
-        send_message('❌ No action plan. Run /refresh first.', command=command, cycle_id=cycle_id)
+    action = _text(snap.action_plan, '')
+    if not action.strip():
+        send_message('❌ No action plan in snapshot. Run /refresh first.', command=command, cycle_id=cycle_id)
         return
-    action = _text(snap.action_plan or intel.get('action_plan'), '')
     prefix = snapshot_meta_line(snap.runtime_state)
     send_chunked(f"{prefix}{format_action_plan(action)}", command=command, cycle_id=cycle_id)
 

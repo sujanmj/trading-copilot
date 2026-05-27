@@ -1456,15 +1456,59 @@ def _build_health_payload() -> dict:
 
 @app.get("/api/runtime/snapshot", dependencies=[Depends(verify_api_key)])
 def api_market_snapshot():
-    """Canonical MarketSnapshot JSON — single intelligence contract."""
-    from backend.runtime.market_snapshot_engine import get_current_market_snapshot
-    snap = get_current_market_snapshot()
-    return snap.to_dict()
+    """Canonical GUI snapshot — market state + exports + panels, validated."""
+    return _build_gui_snapshot()
 
 
 @app.get("/api/runtime_snapshot", dependencies=[Depends(verify_api_key)])
 def api_runtime_snapshot():
-    return _build_runtime_snapshot()
+    """Legacy alias — same payload as /api/runtime/snapshot."""
+    return _build_gui_snapshot()
+
+
+def _build_gui_snapshot() -> dict:
+    """Single synchronized payload for GUI/Telegram — built from MarketSnapshot."""
+    from backend.runtime.market_snapshot_engine import (
+        build_degraded_snapshot,
+        get_current_market_snapshot,
+        validate_market_snapshot,
+    )
+
+    try:
+        ms = get_current_market_snapshot()
+        ok, issues = validate_market_snapshot(ms)
+        if not ok:
+            ms = build_degraded_snapshot(issues)
+    except Exception as exc:
+        issues = [f'snapshot_build_error: {exc}']
+        try:
+            ms = build_degraded_snapshot(issues)
+        except Exception:
+            return {
+                'status': 'degraded',
+                'validation_warnings': issues,
+                'generated_at': datetime.now().isoformat(),
+                'data': {},
+                'exports': {},
+                'panels': {},
+                'market_snapshot': {},
+            }
+
+    payload = _build_runtime_snapshot()
+    ms_dict = ms.to_dict()
+    payload['market_snapshot'] = ms_dict
+    payload['snapshot_id'] = ms.snapshot_id
+    payload['primary_state'] = (ms.runtime_state or {}).get('primary_state')
+    payload['blockers'] = ms.blockers
+    payload['pipeline_health'] = ms.pipeline_health
+    payload['action_plan'] = ms.action_plan or (ms.intelligence or {}).get('action_plan') or ''
+    payload['exports'] = dict(payload.get('data') or {})
+    ok, issues = validate_market_snapshot(ms)
+    payload['status'] = 'ok' if ok and not (ms.freshness or {}).get('degraded') else 'degraded'
+    payload['validation_warnings'] = issues
+    if not payload.get('action_plan'):
+        payload.setdefault('validation_warnings', []).append('missing action_plan')
+    return payload
 
 
 @app.get("/api/intelligence", dependencies=[Depends(verify_api_key)])

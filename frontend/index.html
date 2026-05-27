@@ -906,16 +906,42 @@
     }
   }
 
+  function setGlobalLoading(active, message) {
+    const bar = document.getElementById('loadingBar')
+    if (!bar) return
+    if (active) {
+      bar.classList.add('active')
+      bar.textContent = message || '⏳ Loading snapshot…'
+    } else {
+      bar.classList.remove('active')
+    }
+  }
+
   async function fetchAllFromAPI() {
     if (window.RuntimeManager) {
-      const snap = await RuntimeManager.refresh({ force: true })
-      return !!snap
+      try {
+        const snap = await RuntimeManager.refresh({ force: true })
+        return !!snap
+      } catch (e) {
+        console.error('[GUI] snapshot refresh failed:', e.message)
+        return false
+      } finally {
+        setGlobalLoading(false)
+      }
     }
+    setGlobalLoading(true)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 20000)
     try {
-      const response = await fetch(API_BASE + '/api/runtime_snapshot', { method: 'GET', headers: apiHeaders() })
-      if (!response.ok) throw new Error(`API ${response.status}`)
+      const response = await fetch(API_BASE.replace(/\/$/, '') + '/api/runtime/snapshot', {
+        method: 'GET',
+        headers: apiHeaders(),
+        signal: controller.signal,
+      })
+      if (!response.ok) throw new Error(`/api/runtime/snapshot → ${response.status}`)
       const data = await response.json()
-      const payload = data?.data || {}
+      window.runtimeSnapshot = data
+      const payload = data.exports || data.data || {}
       apiCache.intelligence = payload.intelligence
       apiCache.indiaMarket = payload.india
       apiCache.globalMarket = payload.markets
@@ -931,16 +957,31 @@
       apiCache.predictionHistory = payload.prediction_history
       apiCache.lifecycleState = payload.lifecycle_state
       apiCache.runtime = data
+      apiCache.actionPlan = (data.market_snapshot && data.market_snapshot.action_plan) || data.action_plan || ''
       apiCache.lastFetch = Date.now()
-      apiCache.connected = true
+      apiCache.connected = data.status !== 'degraded'
       updateApiStatus(true)
       return true
     } catch (e) {
-      console.error('❌ API fetch failed:', e.message)
+      console.error('❌ API fetch failed:', e.message || e)
       apiCache.connected = false
       updateApiStatus(false)
+      renderUnavailableAllTabs(e.message || 'Data unavailable')
       return false
+    } finally {
+      clearTimeout(timer)
+      setGlobalLoading(false)
     }
+  }
+
+  function renderUnavailableAllTabs(reason) {
+    const msg = reason || 'Data unavailable'
+    const banner = `<div class="loading" style="color:#D29922;">⚠ ${escapeHtml(msg)}</div>`
+    document.querySelectorAll('.tab-content').forEach((el) => {
+      if (el.querySelector('.loading') && !el.querySelector('.brain-grid') && !el.querySelector('.glass-card')) {
+        el.innerHTML = banner
+      }
+    })
   }
 
   function runtimeTimestampHtml(extra) {
@@ -1467,8 +1508,21 @@
     if (!container) return
     const raw = loadJson(files.intelligence);
     const activeStore = loadJson(files.activePredictions);
-    const data = normalizeBrainData(raw);
+    let data = normalizeBrainData(raw);
     const brainBanner = panelStatusBannerHtml('brain', 'intelligence');
+
+    const canonicalPlan = (window.RuntimeManager && RuntimeManager.getActionPlan)
+      ? RuntimeManager.getActionPlan()
+      : (apiCache.actionPlan || '');
+    if (data && canonicalPlan) data.action_plan = canonicalPlan;
+
+    if (!data && !window.RuntimeManager?.getState?.()) {
+      const err = window.RuntimeManager && RuntimeManager.unavailableBanner
+        ? RuntimeManager.unavailableBanner()
+        : `<div class="loading" style="color:#D29922;">⚠ Data unavailable</div>`;
+      setPanelHtml(container, brainBanner, err);
+      return;
+    }
 
     if (!data) {
       setPanelHtml(container, brainBanner, `<div class="loading">⏳ ${escapeHtml(window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Waiting for intelligence cycle…') : 'Waiting for analysis...')}</div>`);
@@ -1627,7 +1681,11 @@
     const data = loadJson(files.govt)
     const container = document.getElementById('tab-govt')
     if (!data) {
-      container.innerHTML = '<div class="loading">⏳ No govt data</div>'
+      const banner = panelStatusBannerHtml('govt', 'govt')
+      const msg = (!apiCache.connected && window.RuntimeManager)
+        ? RuntimeManager.unavailableBanner()
+        : '<div class="loading">⏳ No govt data</div>'
+      container.innerHTML = banner + msg
       return
     }
     
@@ -2861,15 +2919,23 @@
   }
 
   async function refreshAll() {
-    if (USE_API && window.RuntimeManager) {
-      await RuntimeManager.refresh({ force: true })
-    } else if (USE_API) {
-      await fetchAllFromAPI()
-      renderAllTabs()
-    } else {
-      renderAllTabs()
+    setGlobalLoading(true, '⏳ Refreshing snapshot…')
+    try {
+      if (USE_API && window.RuntimeManager) {
+        await RuntimeManager.refresh({ force: true })
+      } else if (USE_API) {
+        await fetchAllFromAPI()
+        renderAllTabs()
+      } else {
+        renderAllTabs()
+      }
+      if (debugOverlayOpen) await renderDebugOverlay()
+    } catch (e) {
+      console.error('[refreshAll]', e)
+      renderUnavailableAllTabs(e.message || 'Refresh failed')
+    } finally {
+      setGlobalLoading(false)
     }
-    if (debugOverlayOpen) renderDebugOverlay()
   }
 
   let debugOverlayOpen = false
@@ -2886,27 +2952,45 @@
   async function renderDebugOverlay() {
     const box = document.getElementById('debugContent')
     if (!box) return
-    const snap = (window.RuntimeManager && RuntimeManager.getState) ? (RuntimeManager.getState() || {}) : {}
-    const rs = snap.runtime_state || {}
-    const lc = rs.lifecycle || {}
-    const fresh = rs.snapshot_freshness || snap.freshness_state || {}
+    const snap = (window.RuntimeManager && RuntimeManager.getState) ? (RuntimeManager.getState() || {}) : (window.runtimeSnapshot || {})
+    const ms = snap.market_snapshot || snap
+    const rs = ms.runtime_state || snap.runtime_state || {}
+    const lc = rs.lifecycle || ms.lifecycle || {}
+    const fresh = ms.freshness || rs.snapshot_freshness || snap.freshness_state || {}
     const sched = rs.scheduler || {}
     const alert = rs.alert_eligibility || {}
     const tier = fresh.health_tier || (RuntimeManager && RuntimeManager.freshnessTierLabel
       ? RuntimeManager.freshnessTierLabel(fresh.age_minutes) : '—')
     const tierCls = tier === 'stale' ? 'dbg-stale' : (tier === 'aging' ? 'dbg-aging' : 'dbg-healthy')
+    const hydration = (window.RuntimeManager && RuntimeManager.getHydrationDebug)
+      ? RuntimeManager.getHydrationDebug() : {}
     let supCount = alert.suppression_count
     let debugExtra = null
     if (USE_API) {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 10000)
       try {
-        const res = await fetch(API_BASE + '/api/runtime/debug', { headers: apiHeaders() })
+        const res = await fetch(API_BASE.replace(/\/$/, '') + '/api/runtime/debug', {
+          headers: apiHeaders(),
+          signal: controller.signal,
+        })
         if (res.ok) {
           debugExtra = await res.json()
           supCount = (debugExtra.suppression || {}).suppression_count ?? supCount
         }
-      } catch (e) { /* offline */ }
+      } catch (e) {
+        console.warn('[debug] /api/runtime/debug failed:', e.message)
+      } finally {
+        clearTimeout(timer)
+      }
     }
     const rows = [
+      ['Snapshot ID', hydration.snapshot_id || snap.snapshot_id || '—'],
+      ['Version', hydration.snapshot_version != null ? String(hydration.snapshot_version) : '—'],
+      ['Generated', hydration.generated_at || snap.generated_at || '—'],
+      ['Payload', hydration.payload_bytes != null ? `${hydration.payload_bytes} bytes` : '—'],
+      ['Hydration', hydration.hydration_ms != null ? `${hydration.hydration_ms}ms` : '—'],
+      ['Status', hydration.status || snap.status || '—'],
       ['Lifecycle', lc.lifecycle_state || '—'],
       ['Session', (rs.session || {}).session_display || '—'],
       ['Freshness', `${fresh.age_display || 'unavailable'} (${tier})`],
@@ -2919,8 +3003,17 @@
     box.innerHTML = rows.map(([label, val]) => {
       const cls = label === 'Freshness' ? tierCls : ''
       return `<div class="dbg-row"><span class="dbg-label">${escapeHtml(label)}:</span> <span class="${cls}">${escapeHtml(String(val))}</span></div>`
-    }).join('') + (debugExtra && debugExtra.alert_block_reasons && debugExtra.alert_block_reasons.length
-      ? `<div class="dbg-row dbg-stale">Blocks: ${escapeHtml(debugExtra.alert_block_reasons.join(', '))}</div>` : '')
+    }).join('')
+      + (hydration.missing_fields && hydration.missing_fields.length
+        ? `<div class="dbg-row dbg-stale">Missing: ${escapeHtml(hydration.missing_fields.join(', '))}</div>` : '')
+      + (hydration.failed_widgets && hydration.failed_widgets.length
+        ? `<div class="dbg-row dbg-stale">Failed widgets: ${escapeHtml(hydration.failed_widgets.join(', '))}</div>` : '')
+      + (hydration.warnings && hydration.warnings.length
+        ? `<div class="dbg-row dbg-aging">Warnings: ${escapeHtml(hydration.warnings.join('; '))}</div>` : '')
+      + (hydration.last_error
+        ? `<div class="dbg-row dbg-stale">Fetch: ${escapeHtml(hydration.last_error)}</div>` : '')
+      + (debugExtra && debugExtra.alert_block_reasons && debugExtra.alert_block_reasons.length
+        ? `<div class="dbg-row dbg-stale">Blocks: ${escapeHtml(debugExtra.alert_block_reasons.join(', '))}</div>` : '')
   }
 
 
@@ -2942,13 +3035,21 @@
           getHeaders: apiHeaders,
           cache: apiCache,
           onConnectionChange: updateApiStatus,
+          onLoadingChange: (active) => setGlobalLoading(active, '⏳ Loading snapshot…'),
         })
         RuntimeManager.subscribe((_snap, meta) => {
           if (meta && meta.unchanged) return
+          if (meta && meta.failed && !_snap) {
+            renderUnavailableAllTabs(meta.error || 'Data unavailable')
+            return
+          }
           try { renderAllTabs() } catch (e) { console.error('renderAllTabs subscriber failed:', e) }
           if (debugOverlayOpen) renderDebugOverlay()
         })
-        try { RuntimeManager.start(30000) } catch (e) { console.error('[RuntimeManager.start]', e) }
+        try { RuntimeManager.start(30000) } catch (e) {
+          console.error('[RuntimeManager.start]', e)
+          renderUnavailableAllTabs(e.message || 'RuntimeManager failed to start')
+        }
       } else {
         await refreshAll()
         setInterval(refreshAll, 30000)
