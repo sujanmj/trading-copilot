@@ -195,10 +195,10 @@ def _job_premarket_scanner():
     run_premarket_scanner()
 
 
-@ist_daily(9, 0, name='market_open_tactical')
-def _job_market_open_tactical():
-    from backend.intelligence.global_intelligence_engine import run_market_open_tactical
-    run_market_open_tactical()
+@ist_daily(9, 0, name='market_open_refresh')
+def _job_market_open_refresh():
+    from backend.intelligence.global_intelligence_engine import run_market_open_refresh
+    run_market_open_refresh()
 
 
 @ist_daily(8, 0, name='outcome_tracker')

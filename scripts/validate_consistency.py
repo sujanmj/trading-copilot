@@ -90,9 +90,11 @@ def main() -> int:
             errors.append(f'pending_classification missing {key}')
 
     empty_plan = build_action_plan_text([], [], {'sector_rotation': {'bullish': ['POWER', 'TELECOM'], 'bearish': ['HOTELS']}, 'risks_and_avoids': [{'symbol': 'HOTELS'}]})
-    for section in ('WATCH:', 'AVOID:', 'TACTICAL:', 'ELITE:'):
+    for section in ('WATCH:', 'AVOID:', 'ELITE:'):
         if section not in empty_plan:
             errors.append(f'action plan missing {section}')
+    if 'TACTICAL:' in empty_plan:
+        errors.append('action plan must not contain TACTICAL section')
 
     from backend.intelligence.active_snapshot import (
         get_active_snapshot_meta,
@@ -124,7 +126,7 @@ def main() -> int:
 
     from backend.calibration.calibration_state import get_calibration_phase, PHASE_LEARNING
     from backend.analytics.confidence_hierarchy import normalize_confidence
-    from backend.trading.tactical_trade_engine import build_tactical_plan
+    from backend.trading.elite_trade_engine import build_elite_plan
     from backend.lifecycle.lifecycle_states import to_canonical, RESOLVED_WIN
     from backend.history.replay_integrity import validate_history_export
     from backend.production.stability_monitor import run_stability_probe
@@ -134,9 +136,12 @@ def main() -> int:
     norm = normalize_confidence({'confidence': 'HIGH', 'ml_confidence': 0.8})
     if 'display_label' not in norm or 'macro_confidence' not in norm:
         errors.append('confidence hierarchy incomplete')
-    plan = build_tactical_plan({'symbol': 'TEST', 'price': 100, 'change_percent': 6, 'volume_ratio': 3.5})
+    plan = build_elite_plan({
+        'symbol': 'TEST', 'price': 100, 'change_percent': 6, 'volume_ratio': 3.5,
+        'display_tier': 'ELITE', 'elite_verified': True,
+    })
     if not plan or not plan.get('entry_range'):
-        errors.append('tactical trade plan missing entry range')
+        errors.append('elite trade plan missing entry range')
     if to_canonical('WIN') != RESOLVED_WIN:
         errors.append('lifecycle canonical WIN mapping failed')
     hist_ok, hist_issues = validate_history_export({'periods': {'today': {'stats': {'wins': 0, 'losses': 0, 'evaluated': 0}}}, 'intelligence_journal': {'status': 'ok', 'entries': []}, 'total_in_db': {'predictions': 0}})
@@ -157,8 +162,8 @@ def main() -> int:
     if not report.get('india_open_bias'):
         errors.append('india next open report missing bias')
     q = assess_signal_quality({'strength': 'ULTRA'}, ctx={'vix': 22})
-    if q.get('tier_cap') != 'TACTICAL':
-        errors.append('ULTRA without ML should cap at TACTICAL')
+    if q.get('tier_cap') != 'WATCH':
+        errors.append('ULTRA without ML should cap at WATCH')
     partition = validate_metrics_partition()
     if partition.get('total_predictions', 0) > 0 and not partition.get('balanced'):
         errors.append(f"metrics partition imbalance delta={partition.get('delta')}")
@@ -197,11 +202,16 @@ def main() -> int:
     from backend.orchestration.opportunity_filter import rank_opportunities_tiered
     from backend.orchestration.telegram_brain_pusher import format_opps_tiered, build_compressed_summary
     tiers = rank_opportunities_tiered()
-    opps_body = format_opps_tiered(tiers)
-    if (tiers.get('tactical') or tiers.get('watchlist')) and 'no ranked signals' in opps_body.lower():
-        errors.append('format_opps_tiered false empty when tactical/watchlist exist')
+    opps_body = format_opps_tiered(tiers, include_elite=True)
+    if (tiers.get('watch') or tiers.get('avoid') or tiers.get('elite')) and 'no ranked signals' in opps_body.lower():
+        errors.append('format_opps_tiered false empty when watch/avoid/elite exist')
+    for key in ('elite', 'watch', 'avoid'):
+        if key not in tiers:
+            errors.append(f'rank_opportunities_tiered missing {key} bucket')
+    if 'tactical' in tiers or 'watchlist' in tiers:
+        errors.append('rank_opportunities_tiered must not expose tactical/watchlist keys')
     summary = build_compressed_summary({})
-    section_count = sum(1 for marker in ('MARKET REGIME:', 'LEADERS:', 'RISKS:', 'TACTICAL BIAS:', 'CONFIDENCE:') if marker in summary)
+    section_count = sum(1 for marker in ('MARKET REGIME:', 'LEADERS:', 'RISKS:', 'MARKET BIAS:', 'CONFIDENCE:') if marker in summary)
     if section_count < 5:
         errors.append(f'compressed summary has {section_count}/5 sections')
 
@@ -268,7 +278,7 @@ def main() -> int:
     print('INTELLIGENCE SOURCE CONSISTENCY VERIFIED')
     print('TELEGRAM DEDUPE VERIFIED')
     print('UNIFIED STATS VERIFIED')
-    print('TACTICAL TIER VERIFIED')
+    print('ELITE/WATCH/AVOID TIER VERIFIED')
     print('SUMMARY COMPRESSION VERIFIED')
     print('REGIME NORMALIZATION VERIFIED')
     print('CALIBRATION PROFESSIONALIZATION VERIFIED')
@@ -276,7 +286,7 @@ def main() -> int:
     print('PREDICTION EXPIRY VERIFIED')
     print('EOD RESOLUTION VERIFIED')
     print('PENDING CLASSIFICATION VERIFIED')
-    print('TACTICAL ACTION PLAN VERIFIED')
+    print('SIGNAL ACTION PLAN VERIFIED')
     print('OUTCOME CLARITY VERIFIED')
     print('TELEGRAM DEDUP VERIFIED')
     print('SNAPSHOT CONSISTENCY VERIFIED')
@@ -291,7 +301,7 @@ def main() -> int:
     print('SNAPSHOT RACE FIX VERIFIED')
     print('HISTORY ENGINE RECOVERY VERIFIED')
     print('LIFECYCLE RESOLUTION VERIFIED')
-    print('TACTICAL TRADE ENGINE VERIFIED')
+    print('ELITE TRADE ENGINE VERIFIED')
     print('CONFIDENCE NORMALIZATION VERIFIED')
     print('CALIBRATION HARDENING VERIFIED')
     print('PRODUCTION HARDENING VERIFIED')

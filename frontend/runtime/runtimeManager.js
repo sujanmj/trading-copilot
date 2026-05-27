@@ -152,6 +152,8 @@
       invalidateCache('orchestrator_stale');
     } else if (!hasData && runtimePanel && runtimePanel.stale && orch && !orch.gui_sync_validated) {
       invalidateCache('gui_sync_stale');
+    } else if (orch && orch.gui_sync_validated && runtimePanel && !runtimePanel.stale) {
+      /* scheduler healthy — keep cache even if export files lag briefly */
     }
 
     const nextHash = computeSnapshotHash(snapshot);
@@ -387,7 +389,9 @@
     const fresh = getFreshnessState();
     const isIdle = panel.status === 'idle' || (op && op.expect_quiet_collectors && panel.status === 'ready' && sourceKey in { scanner: 1, news: 1, reddit: 1, youtube: 1, inshorts: 1 });
     const panelStale = isIdle ? false : !!panel.stale;
-    const showStale = panelStale && !fresh.collectorsActive && !fresh.partialLag;
+    const orchValidated = state && state.panels && state.panels.orchestrator && state.panels.orchestrator.gui_sync_validated;
+    const statsHealthy = panelId === 'stats' && orchValidated && fresh.collectorsActive;
+    const showStale = panelStale && !fresh.collectorsActive && !fresh.partialLag && !statsHealthy;
     return {
       status: panel.status || 'waiting',
       message: panel.message || (isIdle && op ? op.display_message : ''),

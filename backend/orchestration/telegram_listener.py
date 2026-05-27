@@ -372,27 +372,27 @@ def _cmd_elite_body():
         engine = data.get("engine_mode", "Initializing...")
         
         if not elite_signals:
-            tactical_note = ''
+            watch_note = ''
             try:
                 from backend.orchestration.opportunity_filter import rank_opportunities_tiered
                 tiers = rank_opportunities_tiered()
-                if tiers.get('tactical') or tiers.get('watchlist'):
+                if tiers.get('watch') or tiers.get('avoid'):
                     syms = [
                         str(o.get('symbol') or '').upper()
-                        for o in (tiers.get('tactical') or [])[:3]
+                        for o in (tiers.get('watch') or [])[:3]
                         if o.get('symbol')
                     ]
-                    tactical_note = (
-                        "\n\n⚡ Scanner momentum detected but ML confidence below elite threshold."
+                    watch_note = (
+                        "\n\n👀 Scanner momentum detected but ML confidence below elite threshold."
                     )
                     if syms:
-                        tactical_note += f"\nTactical watch: {', '.join(syms)} · use /opps"
+                        watch_note += f"\nWatch list: {', '.join(syms)} · use /opps"
             except Exception:
                 pass
             msg = (
                 "🛡️ <b>ELITE: NONE PASSED THRESHOLD</b>\n\n"
                 "No setups exceeded the &gt;72% meta-labeler probability gate."
-                f"{tactical_note}"
+                f"{watch_note}"
             )
             send_message(msg, command='elite')
             return

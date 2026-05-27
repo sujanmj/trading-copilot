@@ -327,16 +327,32 @@ def format_opps(opps_list, *, tier_label=None):
         note_html = f"\n   ⚠️ <i>{note}</i>" if note else ""
         ml = o.get('ml_confidence')
         ml_html = f" · ML {ml}" if ml and o.get('elite_verified') else ""
-        plan = o.get('tactical_plan') or {}
-        entry = _text(o.get('entry_zone') or plan.get('entry_range'))
-        tgt = _text(o.get('target') or plan.get('target_1'))
-        tgt2 = plan.get('target_2')
-        sl = _text(o.get('stop_loss') or plan.get('stop_loss'))
-        rr = plan.get('risk_reward') or o.get('risk_reward')
-        rr_html = f" · RR {rr}" if rr else ''
-        tgt2_html = f" · T2 {tgt2}" if tgt2 else ''
-        inv = plan.get('invalidation') or o.get('invalidation')
-        inv_html = f"\n   🛑 <i>{_text(inv)}</i>" if inv and inv != 'N/A' else ''
+        tier_upper = str(tier).upper()
+        is_elite = tier_upper == 'ELITE'
+        plan = o.get('elite_plan') or {}
+        if is_elite:
+            entry = _text(o.get('entry_zone') or plan.get('entry_range'))
+            tgt = _text(o.get('target') or plan.get('target_1'))
+            tgt2 = plan.get('target_2')
+            sl = _text(o.get('stop_loss') or plan.get('stop_loss'))
+            rr = plan.get('risk_reward') or o.get('risk_reward')
+            rr_html = f" · RR {rr}" if rr else ''
+            tgt2_html = f" · T2 {tgt2}" if tgt2 else ''
+            inv = plan.get('invalidation') or o.get('invalidation')
+            why = plan.get('why_elite') or o.get('why_elite')
+            inv_html = f"\n   🛑 <i>{_text(inv)}</i>" if inv and inv != 'N/A' else ''
+            why_html = f"\n   💎 <i>{_text(why)}</i>" if why else ''
+            levels_html = (
+                f"   💰 Entry: {entry} | Tgt: {tgt}{tgt2_html} | SL: {sl}{rr_html}\n"
+            )
+        else:
+            inv_html = ''
+            why_html = ''
+            watch_note = o.get('watch_note') or note
+            levels_html = (
+                f"   👀 <i>{_text(watch_note, 'Observation only — no execution targets')}</i>\n"
+                if tier_upper in ('WATCH', 'AVOID') else ''
+            )
         badge = ''
         try:
             from backend.lifecycle.lifecycle_states import lifecycle_badge
@@ -347,25 +363,25 @@ def format_opps(opps_list, *, tier_label=None):
             pass
         res.append(
             f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b>{tier_tag} [{action}]{badge}\n"
-            f"   💰 Entry: {entry} | Tgt: {tgt}{tgt2_html} | SL: {sl}{rr_html}\n"
-            f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html}{inv_html}\n"
+            f"{levels_html}"
+            f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html if is_elite else ''}{inv_html}{why_html}\n"
             f"   <i>{_text(o.get('logic'), 'No rationale provided.')}</i>"
         )
     return "\n\n".join(res)
 
 
 def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
-    """Format ELITE / TACTICAL / WATCHLIST — never false-empty when scanner ULTRA exists."""
-    tactical = _list((tiers or {}).get('tactical'))
-    watchlist = _list((tiers or {}).get('watchlist'))
+    """Format ELITE / WATCH / AVOID — never false-empty when scanner ULTRA exists."""
+    watch = _list((tiers or {}).get('watch'))
+    avoid = _list((tiers or {}).get('avoid'))
     elite = _list((tiers or {}).get('elite'))
 
-    if not tactical and not watchlist and not (include_elite and elite):
+    if not watch and not avoid and not (include_elite and elite):
         try:
             from backend.orchestration.opportunity_filter import rank_opportunities_tiered
             refill = rank_opportunities_tiered()
-            tactical = _list(refill.get('tactical'))
-            watchlist = _list(refill.get('watchlist'))
+            watch = _list(refill.get('watch'))
+            avoid = _list(refill.get('avoid'))
             elite = _list(refill.get('elite'))
         except Exception:
             pass
@@ -375,12 +391,12 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
         block = format_opps(elite, tier_label='🎯 ELITE')
         if block:
             sections.append(block)
-    if tactical:
-        block = format_opps(tactical, tier_label='⚡ TACTICAL')
+    if watch:
+        block = format_opps(watch, tier_label='👀 WATCH')
         if block:
             sections.append(block)
-    if watchlist:
-        block = format_opps(watchlist, tier_label='👀 WATCHLIST')
+    if avoid:
+        block = format_opps(avoid, tier_label='🔴 AVOID')
         if block:
             sections.append(block)
 
@@ -449,7 +465,7 @@ def build_compressed_summary(intel):
         f"<b>MARKET REGIME:</b>\n{regime}\n\n"
         f"<b>LEADERS:</b>\n{leaders}\n\n"
         f"<b>RISKS:</b>\n{risks_line}\n\n"
-        f"<b>TACTICAL BIAS:</b>\n{bias}\n\n"
+        f"<b>MARKET BIAS:</b>\n{bias}\n\n"
         f"<b>CONFIDENCE:</b>\n{conf_line}"
     )
 
@@ -676,17 +692,17 @@ def push_opps(*, command='opps', cycle_id=''):
     if intel:
         try:
             tiers = rank_opportunities_tiered(raw, limit=DEFAULT_OPPS_LIMIT)
-            tactical_n = len(tiers.get('tactical') or [])
-            watch_n = len(tiers.get('watchlist') or [])
-            safe_print(f"[BRAIN PUSH] Tactical={tactical_n} Watchlist={watch_n}")
+            watch_n = len(tiers.get('watch') or [])
+            avoid_n = len(tiers.get('avoid') or [])
+            safe_print(f"[BRAIN PUSH] Elite={len(tiers.get('elite') or [])} Watch={watch_n} Avoid={avoid_n}")
         except Exception as e:
             safe_print(f"[WARN] opportunity filter failed: {e}")
-            tiers = {'tactical': get_opportunities(intel)[:DEFAULT_OPPS_LIMIT], 'watchlist': []}
+            tiers = {'watch': get_opportunities(intel)[:DEFAULT_OPPS_LIMIT], 'avoid': [], 'elite': []}
         stale = stale_warning(raw)
-        body = format_opps_tiered(tiers, include_elite=False)
+        body = format_opps_tiered(tiers, include_elite=True)
         send_chunked(
-            f"{stale}{_snapshot_prefix()}💎 <b>TACTICAL OPPORTUNITIES</b>\n"
-            f"<i>Tactical scanner plays · /elite for ML-validated only</i>\n\n{body}",
+            f"{stale}{_snapshot_prefix()}💎 <b>SIGNAL OPPORTUNITIES</b>\n"
+            f"<i>ELITE = execution · WATCH = observe · AVOID = conflict</i>\n\n{body}",
             command=command,
             cycle_id=cycle_id,
         )
@@ -706,7 +722,7 @@ def push_risks(*, command='risks', cycle_id=''):
 def push_action(*, command='action', cycle_id=''):
     intel = normalize_intel(load_intel())
     if intel:
-        action = _text(intel.get('action_plan'), 'Maintain capital preservation — await tactical confirmation.')
+        action = _text(intel.get('action_plan'), 'Maintain capital preservation — monitor watchlist for confirmation.')
         send_chunked(
             f"{_snapshot_prefix()}🛡️ <b>ACTION</b>\n\n{action[:2400]}",
             command=command,

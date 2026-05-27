@@ -11,8 +11,9 @@ RESOLVED_WIN = 'RESOLVED_WIN'
 RESOLVED_LOSS = 'RESOLVED_LOSS'
 EXPIRED = 'EXPIRED'
 NEUTRALIZED = 'NEUTRALIZED'
+CANCELLED = 'CANCELLED'
 
-CANONICAL_TERMINAL = frozenset({RESOLVED_WIN, RESOLVED_LOSS, EXPIRED, NEUTRALIZED})
+CANONICAL_TERMINAL = frozenset({RESOLVED_WIN, RESOLVED_LOSS, EXPIRED, NEUTRALIZED, CANCELLED})
 CANONICAL_ACTIVE = frozenset({ACTIVE})
 
 _VERDICT_MAP = {
@@ -24,6 +25,7 @@ _VERDICT_MAP = {
     'NEUTRAL': NEUTRALIZED,
     'EXPIRED': EXPIRED,
     'INVALIDATED': EXPIRED,
+    'CANCELLED': CANCELLED,
     'UNRESOLVED': ACTIVE,
 }
 
@@ -49,6 +51,7 @@ def lifecycle_badge(verdict: Optional[str]) -> str:
         RESOLVED_LOSS: '❌ LOSS',
         EXPIRED: '⏱ EXPIRED',
         NEUTRALIZED: '⚪ NEUTRAL',
+        CANCELLED: '🚫 CANCELLED',
     }
     return icons.get(canon, canon)
 
@@ -62,6 +65,7 @@ def build_lifecycle_summary(metrics: dict, pending_cls: Optional[dict] = None) -
         'resolved_loss': int(metrics.get('losses') or 0),
         'expired': int(metrics.get('expired') or pending_cls.get('expired') or 0),
         'neutralized': int(metrics.get('neutral') or pending_cls.get('neutralized_today') or 0),
+        'cancelled': int(metrics.get('cancelled') or 0),
         'evaluated_for_win_rate': int(metrics.get('wins') or 0) + int(metrics.get('losses') or 0),
         'excluded_from_calibration': int(metrics.get('expired') or 0) + int(metrics.get('neutral') or 0),
     }

@@ -1096,6 +1096,7 @@ def _build_runtime_snapshot() -> dict:
 
     collectors_active = _collectors_recently_active(source_status, operational)
     orchestrator_alive = not orchestrator_panel.get('stale', False)
+    gui_sync_ok = bool(orchestrator_panel.get('gui_sync_validated'))
     export_stale = any_stale
     collectors_lag_refresh = (
         export_stale
@@ -1108,6 +1109,12 @@ def _build_runtime_snapshot() -> dict:
         and not orchestrator_alive
         and not operational.get('expect_quiet_collectors')
     )
+    if gui_sync_ok and orchestrator_alive and evaluated > 0:
+        runtime_stale = False
+        calibration_panel['stale'] = False
+        calibration_panel['status'] = 'ready'
+        calibration_panel['message'] = None
+        lifecycle_panel['stale'] = False
 
     if collectors_lag_refresh:
         runtime_message = 'Live collectors active — export refreshing'

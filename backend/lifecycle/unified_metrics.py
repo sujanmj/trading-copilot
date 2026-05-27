@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 
 from backend.storage.db_manager import get_connection, get_db_stats, init_db
 
-EVALUATED_VERDICTS = ('WIN', 'LOSS', 'EXPIRED', 'NEUTRAL')
+EVALUATED_VERDICTS = ('WIN', 'LOSS', 'EXPIRED', 'NEUTRAL', 'CANCELLED')
 PENDING_VERDICTS = ('ACTIVE', 'PENDING')
 
 
@@ -44,6 +44,7 @@ def _empty(metric_type: str = 'all_time') -> Dict[str, Any]:
         'partials': 0,
         'expired': 0,
         'invalidated': 0,
+        'cancelled': 0,
         'unresolved': 0,
         'active': 0,
         'predictions_without_outcome': 0,
@@ -73,6 +74,7 @@ def _query_row(metric_type: str = 'all_time') -> Dict[str, Any]:
                 SUM(CASE WHEN o.verdict='NEUTRAL' THEN 1 ELSE 0 END) AS neutral,
                 SUM(CASE WHEN o.verdict='PARTIAL' THEN 1 ELSE 0 END) AS partials,
                 SUM(CASE WHEN o.verdict='EXPIRED' THEN 1 ELSE 0 END) AS expired,
+                SUM(CASE WHEN o.verdict='CANCELLED' THEN 1 ELSE 0 END) AS cancelled,
                 SUM(CASE WHEN o.verdict='INVALIDATED' THEN 1 ELSE 0 END) AS invalidated,
                 SUM(CASE WHEN o.verdict='UNRESOLVED' THEN 1 ELSE 0 END) AS unresolved,
                 SUM(CASE WHEN o.verdict='ACTIVE' THEN 1 ELSE 0 END) AS active,
@@ -113,6 +115,7 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
     losses = int(row.get('losses') or 0)
     neutral = int(row.get('neutral') or 0)
     expired = int(row.get('expired') or 0)
+    cancelled = int(row.get('cancelled') or 0)
     partials = int(row.get('partials') or 0)
     invalidated = int(row.get('invalidated') or 0)
     unresolved = int(row.get('unresolved') or 0)
@@ -121,7 +124,7 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
     without_outcome = int(row.get('predictions_without_outcome') or 0)
     total_predictions = int(row.get('total_predictions') or 0)
 
-    evaluated = wins + losses + expired + neutral
+    evaluated = wins + losses + expired + neutral + cancelled
     pending = active + pending_verdict + unresolved + without_outcome
     prediction_total = evaluated + pending
 
@@ -147,6 +150,7 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
         'neutral': neutral,
         'partials': partials,
         'expired': expired,
+        'cancelled': cancelled,
         'invalidated': invalidated,
         'unresolved': unresolved,
         'active': active,
@@ -216,6 +220,7 @@ def get_calibration_metrics() -> Dict[str, Any]:
         'neutral': core['neutral'],
         'partials': core['partials'],
         'expired': core['expired'],
+        'cancelled': core.get('cancelled', 0),
         'invalidated': core['invalidated'],
         'win_rate': core['win_rate'] if phase_info.get('show_win_rate') else None,
         'loss_rate': round((core['losses'] / actionable * 100) if actionable and phase_info.get('show_win_rate') else 0.0, 2),

@@ -1375,7 +1375,8 @@
     let actionClass = 'watch';
     if (action.includes('BUY') || action.includes('ACCUMULATE')) actionClass = 'buy';
     if (action.includes('SELL') || action.includes('AVOID')) actionClass = 'sell';
-    const tier = o.display_tier || (o.elite_verified ? 'ELITE' : (o.below_elite_threshold ? 'WATCHLIST' : (opts.tactical ? 'TACTICAL' : 'TACTICAL')));
+    const tier = o.display_tier || (o.elite_verified ? 'ELITE' : (o.below_elite_threshold ? 'WATCH' : 'WATCH'));
+    const isElite = String(tier).toUpperCase() === 'ELITE';
     const metaLine = [
       o.generated_at ? `Gen ${formatTime(o.generated_at) || String(o.generated_at).slice(0, 10)}` : null,
       o.confidence ? `Conf ${o.confidence}` : null,
@@ -1384,17 +1385,22 @@
       o.signal_type ? `Signal ${o.signal_type}` : null,
       o.lifecycle_state ? o.lifecycle_state : null,
     ].filter(Boolean).join(' · ');
+    const metricsHtml = isElite
+      ? `<div class="trade-metrics">
+          <span>Entry: ₹${escapeHtml(displayText(o.entry_zone, '-'))}</span>
+          <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
+          <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
+        </div>`
+      : `<div class="trade-metrics" style="font-style:italic;color:#8B949E;">
+          ${tier === 'AVOID' ? 'Avoid — conflict or distribution risk' : 'Observation only — monitor for breakout confirmation'}
+        </div>`;
     return `
       <div class="trade-item ${actionClass}">
         <div class="trade-header">
           <h3>${escapeHtml(o.symbol || o.ticker || 'UNKNOWN')}</h3>
           <span class="trade-badge ${actionClass}">${escapeHtml(tier)}</span>
         </div>
-        <div class="trade-metrics">
-          <span>Entry: ₹${escapeHtml(displayText(o.entry_zone, '-'))}</span>
-          <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
-          <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
-        </div>
+        ${metricsHtml}
         ${metaLine ? `<div style="font-size:9px;color:#8B949E;margin:4px 0 6px;">${escapeHtml(metaLine)}</div>` : ''}
         <p class="trade-logic">${brainHtml(o.logic, opts.fallbackLogic || 'No rationale provided.')}</p>
       </div>
@@ -1460,7 +1466,7 @@
     if (opps.length === 0) {
       const ultra = getScannerUltraSignals();
       if (ultra.length > 0) {
-        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">Tactical opportunities available — scanner ULTRA signals below elite conviction threshold.</div>`;
+        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">WATCH signals available — scanner ULTRA below elite conviction threshold.</div>`;
         ultra.forEach((s) => {
           oppsHtml += renderOpportunityCard({
             symbol: s.ticker,
@@ -1468,13 +1474,13 @@
             action: 'WATCH',
             confidence: 'MEDIUM',
             logic: `Scanner ULTRA · ${s.direction || '—'} · vol ${Number(s.volume_ratio || 0).toFixed(1)}x · ${Number(s.change_percent || 0).toFixed(2)}%`,
-            display_tier: 'TACTICAL',
-          }, { tactical: true, fallbackLogic: 'Scanner anomaly — not elite-verified.' });
+            display_tier: 'WATCH',
+          }, { fallbackLogic: 'Scanner anomaly — not elite-verified.' });
         });
       } else {
         const emptyMsg = (lcPanel && lcPanel.pipeline_status === 'COMPLETE')
           ? 'No ranked setups pass elite gates — preserve capital until scanner confirms.'
-          : 'No tactical or elite opportunities in current ranked feed.';
+          : 'No elite or watch opportunities in current ranked feed.';
         oppsHtml = `<div class="calib-insufficient">${escapeHtml(emptyMsg)}</div>`;
       }
     } else {

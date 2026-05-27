@@ -392,7 +392,7 @@ def _align_display_confidence(item: dict, elite_index: Dict[str, dict]) -> dict:
 
     item['elite_verified'] = False
     if raw_conf in ('HIGH', 'ULTRA'):
-        item['display_confidence'] = 'WATCHLIST'
+        item['display_confidence'] = 'WATCH'
         item['below_elite_threshold'] = True
         item['confidence_note'] = 'Below elite threshold (>72%)'
     elif raw_conf in ('MEDIUM', 'MODERATE'):
@@ -505,7 +505,7 @@ def _load_scanner_ultra_candidates() -> List[dict]:
             ),
             'sector': sig.get('sector'),
             'signal_type': 'scanner_ultra',
-            'display_tier': 'TACTICAL',
+            'display_tier': 'WATCH',
         }, 'scanner_ultra'))
     return out
 
@@ -570,28 +570,125 @@ def rank_opportunities(
         if item.get('elite_verified'):
             item['display_tier'] = 'ELITE'
         elif item.get('below_elite_threshold'):
-            item['display_tier'] = 'WATCHLIST'
+            item['display_tier'] = 'WATCH'
         elif not item.get('display_tier'):
-            item['display_tier'] = 'TACTICAL'
+            item['display_tier'] = 'WATCH'
     return elite
 
 
-def _passes_tactical_gate(item: dict, intel: dict, ctx: dict, scanner_index: Dict[str, dict]) -> bool:
-    """Lighter gate for scanner-led tactical plays (below elite ML threshold)."""
-    if str(item.get('signal_type') or '') == 'scanner_ultra':
+def _is_avoid_candidate(item: dict, intel: dict, ctx: dict, scanner_index: Dict[str, dict]) -> bool:
+    """Bearish, macro conflict, distribution, or sector weakness."""
+    action = str(item.get('action') or item.get('category') or '').upper()
+    if action in ('SELL', 'SHORT', 'RISK', 'AVOID'):
         return True
-    if str(item.get('_source') or '') == 'scanner_ultra':
+    sym = str(item.get('symbol') or '').upper()
+    scan = scanner_index.get(sym) or {}
+    bucket = str(scan.get('_bucket') or scan.get('strength') or '').upper()
+    if 'BEAR' in bucket or 'BEARISH' in str(item.get('logic') or '').upper():
         return True
+    rotation = intel.get('sector_rotation') if isinstance(intel.get('sector_rotation'), dict) else {}
+    bearish = [str(s).upper() for s in (rotation.get('bearish') or [])]
+    sector = str(item.get('sector') or scan.get('sector') or '').upper()
+    if sector and bearish and any(s in sector or sector in s for s in bearish):
+        if action in ('BUY', 'LONG', 'OPPORTUNITY'):
+            return True
+    regime = str(ctx.get('regime') or '')
+    if regime in MACRO_CONFLICT_REGIMES and action in ('BUY', 'LONG', 'OPPORTUNITY'):
+        if _macro_conflict_penalty(item, ctx) >= 2.0:
+            return True
+    return False
+
+
+def _passes_elite_execution_gate(
+    item: dict,
+    intel: dict,
+    ctx: dict,
+    scanner_index: Dict[str, dict],
+) -> bool:
+    """Strict gate — institutional ML, scanner, macro/sector alignment, volatility OK."""
+    if not item.get('elite_verified'):
+        return False
+    ml = item.get('ml_confidence')
+    try:
+        ml_val = float(ml) if ml is not None else 0
+        if ml_val <= 1:
+            ml_val *= 100
+    except (TypeError, ValueError):
+        ml_val = 0
+    if ml_val < ELITE_PROB_THRESHOLD * 100:
+        return False
+    if not _passes_elite_gate(item, intel, ctx, scanner_index):
+        return False
+    vol_boost = _volume_anomaly_boost(item, scanner_index)
+    sector_boost = _sector_strength_boost(item, intel, scanner_index)
+    if vol_boost < 0.5 and sector_boost < 0.5:
+        return False
+    if float(ctx.get('disagreement_score') or 0) >= 0.45:
+        return False
+    if float(ctx.get('volatility_index') or 0) > 0.65:
+        return False
+    state = str(item.get('state') or item.get('lifecycle_state') or '').upper()
+    if state and state not in ACTIVE_STATES and state not in ('', 'ACTIVE', 'PENDING'):
+        return False
+    return True
+
+
+def _passes_watch_gate(item: dict, intel: dict, ctx: dict, scanner_index: Dict[str, dict]) -> bool:
+    """Observation-only setups — partial confirmation, insufficient for execution."""
+    if _is_avoid_candidate(item, intel, ctx, scanner_index):
+        return False
     sym = str(item.get('symbol') or '').upper()
     scan = scanner_index.get(sym) or {}
     if str(scan.get('strength') or '').upper() == 'ULTRA':
         return True
+    if str(item.get('signal_type') or '') == 'scanner_ultra':
+        return True
     score = _rank_score(item, intel, _parse_ts(intel.get('timestamp')), ctx, scanner_index)
-    sector_boost = _sector_strength_boost(item, intel, scanner_index)
-    vol_boost = _volume_anomaly_boost(item, scanner_index)
-    if sector_boost >= 0.8 and vol_boost >= 0.5:
-        return score >= max(4.0, MIN_RANK_SCORE * 0.55)
-    return score >= MIN_RANK_SCORE * 0.65
+    return score >= MIN_RANK_SCORE * 0.45
+
+
+def _load_avoid_candidates(intel: dict, ctx: dict, scanner_index: Dict[str, dict]) -> List[dict]:
+    """Build AVOID tier from risks, bearish scanner, and conflict setups."""
+    avoid: List[dict] = []
+    seen: set = set()
+    risks = intel.get('risks_and_avoids') if isinstance(intel.get('risks_and_avoids'), list) else []
+    for row in risks:
+        if not isinstance(row, dict):
+            continue
+        sym = str(row.get('symbol') or row.get('ticker') or '').upper()
+        if not sym or sym in ('UNKNOWN', 'MACRO', 'NEWS') or sym in seen:
+            continue
+        avoid.append(_normalize_opp({
+            'symbol': sym,
+            'action': 'AVOID',
+            'confidence': row.get('confidence') or 'MEDIUM',
+            'logic': row.get('logic') or row.get('reason') or 'Macro or sector risk',
+            'display_tier': 'AVOID',
+        }, 'risks'))
+        seen.add(sym)
+    if not SCANNER_FILE.exists():
+        return avoid
+    try:
+        data = json.loads(SCANNER_FILE.read_text(encoding='utf-8'))
+    except Exception:
+        return avoid
+    for key in ('ultra_bearish', 'strong_bearish'):
+        for row in data.get(key) or []:
+            if not isinstance(row, dict):
+                continue
+            sym = str(row.get('ticker') or row.get('symbol') or '').upper()
+            if not sym or sym in seen:
+                continue
+            avoid.append(_normalize_opp({
+                'symbol': sym,
+                'action': 'AVOID',
+                'confidence': 'MEDIUM',
+                'logic': f"Scanner {key.replace('_', ' ')} · distribution risk",
+                'sector': row.get('sector'),
+                'display_tier': 'AVOID',
+            }, 'scanner_bearish'))
+            seen.add(sym)
+    return avoid
 
 
 def rank_opportunities_tiered(
@@ -600,8 +697,8 @@ def rank_opportunities_tiered(
     limit: int = DEFAULT_OPPS_LIMIT,
 ) -> Dict[str, List[dict]]:
     """
-    Split opportunities into ELITE / TACTICAL / WATCHLIST tiers.
-    Scanner ULTRA anomalies always populate TACTICAL when elite gate excludes them.
+    Split opportunities into ELITE / WATCH / AVOID tiers.
+    Only ELITE receives execution levels; WATCH is observation-only.
     """
     intel = _load_intel(intel)
     intel_ts = _parse_ts(intel.get('timestamp') or intel.get('generation_time'))
@@ -626,9 +723,10 @@ def rank_opportunities_tiered(
     fresh = [x for x in ranked if _freshness_score(x, intel_ts) > 0]
 
     elite: List[dict] = []
-    tactical: List[dict] = []
-    watchlist: List[dict] = []
-    seen: set = set()
+    watch: List[dict] = []
+    avoid: List[dict] = _load_avoid_candidates(intel, ctx, scanner_index)
+    avoid_syms = {a['symbol'] for a in avoid}
+    seen: set = set(avoid_syms)
 
     for item in fresh:
         sym = item['symbol']
@@ -637,43 +735,34 @@ def rank_opportunities_tiered(
         _align_display_confidence(item, elite_index)
         item['_rank_score'] = round(score_fn(item), 2)
 
-        if item.get('elite_verified'):
+        if _is_avoid_candidate(item, intel, ctx, scanner_index):
+            item['display_tier'] = 'AVOID'
+            avoid.append(item)
+            seen.add(sym)
+            continue
+
+        if _passes_elite_execution_gate(item, intel, ctx, scanner_index):
             item['display_tier'] = 'ELITE'
             elite.append(item)
             seen.add(sym)
             continue
 
-        if _passes_elite_gate(item, intel, ctx, scanner_index):
-            if item.get('below_elite_threshold'):
-                item['display_tier'] = 'WATCHLIST'
-                watchlist.append(item)
-            else:
-                item['display_tier'] = 'TACTICAL'
-                tactical.append(item)
-            seen.add(sym)
-            continue
-
-        if _passes_tactical_gate(item, intel, ctx, scanner_index):
-            item['display_tier'] = 'TACTICAL'
-            tactical.append(item)
-            seen.add(sym)
-            continue
-
-        if score_fn(item) >= MIN_RANK_SCORE * 0.45:
-            item['display_tier'] = 'WATCHLIST'
-            watchlist.append(item)
+        if _passes_watch_gate(item, intel, ctx, scanner_index):
+            item['display_tier'] = 'WATCH'
+            item['watch_note'] = 'Monitor for breakout confirmation — no execution targets'
+            watch.append(item)
             seen.add(sym)
 
     cap = max(1, int(limit))
     try:
-        from backend.trading.tactical_trade_engine import attach_tactical_plans
+        from backend.trading.elite_trade_engine import attach_elite_plans
         from backend.analytics.confidence_hierarchy import normalize_confidence
         from backend.intelligence.signal_quality_engine import assess_signal_quality, apply_signal_quality
         ctx_vol = dict(ctx)
         vix_row = (scanner_index.get('VIX') or {})
         if vix_row.get('change_percent') is not None:
             ctx_vol['vix'] = abs(float(vix_row.get('change_percent') or 0)) * 4 + 12
-        for bucket in (elite, tactical, watchlist):
+        for bucket in (elite, watch, avoid):
             enriched = []
             for item in bucket:
                 sym = str(item.get('symbol') or '').upper()
@@ -683,17 +772,16 @@ def rank_opportunities_tiered(
                 item['confidence_hierarchy'] = norm
                 item['display_confidence'] = norm.get('display_label') or item.get('display_confidence')
                 if not quality.get('allow_full_levels') and item.get('display_tier') == 'ELITE':
-                    item['display_tier'] = 'TACTICAL'
+                    item['display_tier'] = 'WATCH'
+                    item['watch_note'] = 'Insufficient confirmation for execution — monitor only'
                 enriched.append(item)
             bucket[:] = enriched
-        tactical = attach_tactical_plans(tactical, scanner_index, intel)
-        watchlist = attach_tactical_plans(watchlist, scanner_index, intel)
-        elite = attach_tactical_plans(elite, scanner_index, intel)
+        elite = attach_elite_plans(elite, scanner_index, intel)
     except Exception:
         pass
     return {
         'elite': elite[:cap],
-        'tactical': tactical[:cap],
-        'watchlist': watchlist[:cap],
-        'all': (elite + tactical + watchlist)[: cap * 3],
+        'watch': watch[:cap],
+        'avoid': avoid[:cap],
+        'all': (elite + watch)[: cap * 2],
     }

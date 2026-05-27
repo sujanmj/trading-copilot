@@ -113,8 +113,8 @@ def run_premarket_scanner() -> dict:
     return {'status': 'ok'}
 
 
-def run_market_open_tactical() -> dict:
-    """9:00 AM IST — tactical refresh for open."""
+def run_market_open_refresh() -> dict:
+    """9:00 AM IST — market open signal refresh."""
     from backend.orchestration.master_scheduler import run_standalone_script
     run_standalone_script('stock_scanner.py')
     try:
@@ -122,8 +122,13 @@ def run_market_open_tactical() -> dict:
         refresh_brain_opportunities()
     except Exception:
         pass
-    _append_timeline('market_open_tactical', 'Market open tactical refresh complete')
+    _append_timeline('market_open_refresh', 'Market open signal refresh complete')
     return {'status': 'ok'}
+
+
+def run_market_open_tactical() -> dict:
+    """Deprecated alias — use run_market_open_refresh."""
+    return run_market_open_refresh()
 
 
 def get_overnight_global_impact() -> Dict[str, Any]:

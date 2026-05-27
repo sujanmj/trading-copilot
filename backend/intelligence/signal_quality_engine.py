@@ -20,7 +20,7 @@ def assess_signal_quality(item: dict, *, ctx: Optional[dict] = None, scanner_row
     """
     Rules:
     - ULTRA scanner ≠ elite trade
-    - strong momentum without ML confirmation = tactical only
+    - strong momentum without ML confirmation = watch only
     - volatility regime reduces confidence automatically
     """
     ctx = ctx or {}
@@ -43,13 +43,13 @@ def assess_signal_quality(item: dict, *, ctx: Optional[dict] = None, scanner_row
     notes = []
 
     if strength == 'ULTRA' and not elite_verified:
-        tier_cap = 'TACTICAL'
+        tier_cap = 'WATCH'
         quality_score -= 0.15
-        notes.append('ULTRA scanner momentum — tactical only until ML confirms')
+        notes.append('ULTRA scanner momentum — watch only until ML confirms')
 
     if ml_val is None or ml_val < 72:
         if tier_cap == 'ELITE':
-            tier_cap = 'TACTICAL'
+            tier_cap = 'WATCH'
         quality_score -= 0.1
         if ml_val is not None:
             notes.append(f'ML {ml_val:.0f}% below elite threshold (72%)')
@@ -58,7 +58,7 @@ def assess_signal_quality(item: dict, *, ctx: Optional[dict] = None, scanner_row
 
     if regime == 'HIGH':
         quality_score -= 0.2
-        tier_cap = 'TACTICAL' if tier_cap == 'ELITE' else tier_cap
+        tier_cap = 'WATCH' if tier_cap == 'ELITE' else tier_cap
         notes.append('High volatility regime — confidence reduced')
     elif regime == 'ELEVATED':
         quality_score -= 0.1
@@ -67,7 +67,7 @@ def assess_signal_quality(item: dict, *, ctx: Optional[dict] = None, scanner_row
     change = abs(float(scan.get('change_percent') or item.get('change_percent') or 0))
     vol_ratio = float(scan.get('volume_ratio') or item.get('volume_ratio') or 1)
     if change >= 8 and vol_ratio >= 3 and not elite_verified:
-        tier_cap = 'TACTICAL'
+        tier_cap = 'WATCH'
         notes.append('Parabolic move — hype risk, not elite conviction')
 
     quality_score = max(0.1, min(1.0, quality_score))
@@ -85,11 +85,13 @@ def apply_signal_quality(item: dict, quality: dict) -> dict:
     out = dict(item)
     out['signal_quality'] = quality
     out['quality_score'] = quality.get('quality_score')
-    if quality.get('tier_cap') == 'TACTICAL' and out.get('display_tier') == 'ELITE':
-        out['display_tier'] = 'TACTICAL'
+    if quality.get('tier_cap') == 'WATCH' and out.get('display_tier') == 'ELITE':
+        out['display_tier'] = 'WATCH'
         out['elite_verified'] = False
     if not quality.get('allow_full_levels'):
         out['suppress_elite_levels'] = True
+        for key in ('entry_zone', 'target', 'stop_loss', 'target_2', 'risk_reward'):
+            out.pop(key, None)
     if quality.get('quality_notes'):
         out['confidence_note'] = '; '.join(quality['quality_notes'][:2])
     return out

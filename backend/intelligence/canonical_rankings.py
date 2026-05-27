@@ -114,8 +114,8 @@ def build_action_plan_text(symbols: List[str], ranked: List[dict], intel: Option
     intel = intel if isinstance(intel, dict) else {}
     tiers = rank_opportunities_tiered(intel)
     elite = tiers.get('elite') or get_elite_rankings(limit=5)
-    tactical = tiers.get('tactical') or []
-    watchlist = tiers.get('watchlist') or []
+    watch = tiers.get('watch') or []
+    avoid_tier = tiers.get('avoid') or []
 
     def _syms(items: List[dict], limit: int = 4) -> str:
         out = []
@@ -125,27 +125,26 @@ def build_action_plan_text(symbols: List[str], ranked: List[dict], intel: Option
                 out.append(sym)
         return ', '.join(out) if out else 'None flagged'
 
-    watch_syms = _syms(watchlist or ranked[:4])
-    tactical_syms = _syms(tactical)
+    watch_syms = _syms(watch or ranked[:4])
     elite_syms = _syms(elite)
 
     sectors = intel.get('sector_rotation') if isinstance(intel.get('sector_rotation'), dict) else {}
     risks = intel.get('risks_and_avoids') if isinstance(intel.get('risks_and_avoids'), list) else []
-    avoid_items = []
+    avoid_items = [str(o.get('symbol') or '').upper() for o in avoid_tier[:4] if o.get('symbol')]
     for r in risks[:4]:
         if isinstance(r, dict):
             sym = str(r.get('symbol') or '').upper()
-            if sym and sym not in ('UNKNOWN', 'MACRO', 'NEWS'):
+            if sym and sym not in ('UNKNOWN', 'MACRO', 'NEWS') and sym not in avoid_items:
                 avoid_items.append(sym)
     if not avoid_items:
         bearish = sectors.get('bearish') if isinstance(sectors.get('bearish'), list) else []
         avoid_items = [str(s).upper() for s in bearish[:3]]
     avoid = ', '.join(avoid_items) or 'Extended momentum without volume confirmation'
 
-    tactical_line = (
-        f"Momentum setups: {tactical_syms}."
-        if tactical_syms != 'None flagged'
-        else 'Momentum trading only — wait for scanner confirmation.'
+    watch_line = (
+        f"Monitor for confirmation: {watch_syms}."
+        if watch_syms != 'None flagged'
+        else 'No active watchlist — await scanner confirmation.'
     )
     elite_line = (
         f"High-conviction swing setups: {elite_syms}."
@@ -165,9 +164,8 @@ def build_action_plan_text(symbols: List[str], ranked: List[dict], intel: Option
         watch_syms = ', '.join(symbols[:4]) if symbols else watch_syms
 
     return (
-        f"WATCH:\n{watch_syms}\n\n"
+        f"WATCH:\n{watch_line}\n\n"
         f"AVOID:\n{avoid}\n\n"
-        f"TACTICAL:\n{tactical_line}\n\n"
         f"ELITE:\n{elite_line}"
     )
 
