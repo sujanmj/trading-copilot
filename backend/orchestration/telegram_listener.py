@@ -675,7 +675,7 @@ def cmd_brain_pusher(mode, status_msg=None):
             skip, _, guard_key = begin_command(mode, '', CHAT_ID)
             if skip:
                 from backend.orchestration.telegram_command_guard import duplicate_command_message
-                send_message(duplicate_command_message('in_flight'), command=mode)
+                send_message(duplicate_command_message('in_flight', command=mode), command=mode)
                 return
             cycle_id = new_cycle_id(mode)
             bind_cycle(mode, cycle_id)

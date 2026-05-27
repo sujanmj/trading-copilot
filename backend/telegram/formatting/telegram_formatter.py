@@ -52,7 +52,13 @@ def format_for_command(text: str, command: str) -> str:
     max_lines = COMMAND_LINE_LIMITS.get(cmd, DEFAULT_MAX_LINES)
     out = enforce_line_limit(text, max_lines)
     out = enforce_char_limit(out)
-    return institutionalize(out)
+    out = institutionalize(out)
+    try:
+        from backend.intelligence.institutional_language import dedupe_session_banners
+        out = dedupe_session_banners(out)
+    except Exception:
+        pass
+    return out
 
 
 def _sanitize_section_line(prefix: str, body: str) -> str:
@@ -73,6 +79,49 @@ def _sanitize_section_line(prefix: str, body: str) -> str:
     return cleaned
 
 
+def _parse_action_sections(text: str) -> Dict[str, str]:
+    """Parse WATCH / AVOID / HIGH CONVICTION blocks — header may sit on its own line."""
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    header_map = {
+        'WATCH': 'WATCH',
+        'AVOID': 'AVOID',
+        'ELITE': 'HIGH CONVICTION',
+        'HIGH CONVICTION': 'HIGH CONVICTION',
+    }
+    sections: Dict[str, str] = {}
+    current: Optional[str] = None
+    body_lines: List[str] = []
+
+    def _flush() -> None:
+        nonlocal current, body_lines
+        if current is not None:
+            sections[current] = '\n'.join(body_lines).strip()
+        current = None
+        body_lines = []
+
+    for ln in lines:
+        upper = ln.upper().strip()
+        matched_header = None
+        inline_body = ''
+        for key, canonical in header_map.items():
+            if upper == key or upper == f'{key}:' or upper.startswith(f'{key}:'):
+                matched_header = canonical
+                if ':' in ln:
+                    _, _, inline_body = ln.partition(':')
+                    inline_body = inline_body.strip()
+                break
+        if matched_header:
+            _flush()
+            current = matched_header
+            if inline_body:
+                body_lines = [inline_body]
+            continue
+        if current is not None:
+            body_lines.append(ln)
+    _flush()
+    return sections
+
+
 def format_action_plan(raw: str, *, max_lines: int = 3) -> str:
     """Compress action plan to posture lines (WATCH / AVOID / posture)."""
     fallback = (
@@ -83,27 +132,23 @@ def format_action_plan(raw: str, *, max_lines: int = 3) -> str:
     text = str(raw or '').strip()
     if not text or text.lower() in ('none', 'null', 'nan', 'n/a'):
         return fallback
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    sections = _parse_action_sections(text)
+    order = ('WATCH', 'AVOID', 'HIGH CONVICTION')
     picked: List[str] = []
-    for ln in lines:
-        upper = ln.upper()
-        for tag in ('WATCH:', 'AVOID:', 'ELITE:', 'HIGH CONVICTION:'):
-            if tag in upper:
-                head, _, body = ln.partition(':')
-                sanitized = _sanitize_section_line(head, body)
-                if sanitized and sanitized != '…':
-                    picked.append(f'{head}: {sanitized}')
-                break
-        else:
-            if any(k in upper for k in ('POSTURE:', 'CAPITAL')):
-                cleaned = ln.strip()
-                if cleaned and cleaned != '…':
-                    picked.append(cleaned)
+    for key in order:
+        if key not in sections:
+            continue
+        sanitized = _sanitize_section_line(key, sections[key])
+        if sanitized and sanitized != '…':
+            picked.append(f'{key}: {sanitized}')
         if len(picked) >= max_lines:
             break
+
     if not picked:
-        cleaned = [ln for ln in lines[:max_lines] if ln and ln != '…']
-        picked = cleaned if cleaned else []
+        lines = [ln for ln in text.splitlines() if ln.strip() and ln.strip() != '…']
+        picked = lines[:max_lines]
+
     if not picked:
         return fallback
     body = '\n'.join(picked[:max_lines])
@@ -366,10 +411,19 @@ def institutionalize(text: str) -> str:
         return text
 
 
-def confirmation_phrase(kind: str = 'processing') -> str:
+def confirmation_phrase(kind: str = 'processing', *, command: str = '') -> str:
+    cmd = str(command or '').lower().strip().lstrip('/')
+    if kind == 'in_flight':
+        if cmd in ('calibration', 'cal'):
+            return '⏳ Calibration request already processing...'
+        if cmd in ('brain', 'full', 'all'):
+            return '⏳ Brain analysis already processing...'
+        if cmd == 'action':
+            return '⏳ Action plan request already processing...'
     phrases = {
         'processing': '⏳ Processing — one moment…',
         'queued': '📋 Queued — duplicate request ignored.',
+        'in_flight': '⏳ Command already processing...',
     }
     return phrases.get(kind, phrases['processing'])
 

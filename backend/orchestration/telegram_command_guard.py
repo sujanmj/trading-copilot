@@ -50,7 +50,13 @@ def finish_command(key: str) -> None:
         _inflight.pop(key, None)
 
 
-def duplicate_command_message(reason: Optional[str] = None) -> str:
+def duplicate_command_message(reason: Optional[str] = None, *, command: str = '') -> str:
+    try:
+        from backend.telegram.formatting.telegram_formatter import confirmation_phrase
+        if reason == 'in_flight':
+            return confirmation_phrase('in_flight', command=command)
+    except Exception:
+        pass
     if reason == 'debounce':
         return DUPLICATE_MESSAGE
     return DUPLICATE_MESSAGE

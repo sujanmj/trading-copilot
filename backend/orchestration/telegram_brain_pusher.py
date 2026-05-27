@@ -1,10 +1,10 @@
 """
 Telegram Brain Pusher v3 — JSON API Optimized
 Reads the structured unified_intelligence.json and pushes the full Brain 
-to Telegram in 3 consolidated messages.
+to Telegram in 2 consolidated messages.
 
 Usage:
-  python telegram_brain_pusher.py             → Full 3-msg brain
+  python telegram_brain_pusher.py             → Full 2-msg brain
   python telegram_brain_pusher.py summary     → Executive summary only
   python telegram_brain_pusher.py opps        → Top opportunities only
   python telegram_brain_pusher.py risks       → Avoid list only
@@ -353,7 +353,7 @@ def format_opps(opps_list, *, tier_label=None):
         header = f"<b>{tier_label}</b>\n"
     elif summary.get('all_below_elite'):
         header = (
-            "<i>🛡️ Scanner-ranked setups below high-conviction meta-labeler threshold.</i>\n\n"
+            "<i>🛡️ Conditional continuation structures below high-conviction threshold.</i>\n\n"
         )
     elif summary.get('has_elite_verified'):
         header = f"<i>✅ {summary.get('elite_verified_count', 0)} high-conviction verified</i>\n\n"
@@ -579,12 +579,21 @@ def format_risks(risks_list):
     risks_list = _list(risks_list)
     if not risks_list:
         return "<i>No risks found in analysis.</i>"
+    try:
+        from backend.intelligence.institutional_language import compress_risk_logic
+    except Exception:
+        compress_risk_logic = None  # type: ignore
     res = []
     for i, r in enumerate(risks_list, 1):
         r = _dict(r)
-        logic = _text(r.get('logic'), 'No risk rationale provided.')
-        logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:2]
-        logic_block = '\n   '.join(f'<i>{ln[:160]}</i>' for ln in logic_lines)
+        if compress_risk_logic:
+            logic = compress_risk_logic(_text(r.get('logic'), 'No risk rationale provided.'), max_lines=2)
+            logic_lines = [x.strip() for x in logic.splitlines() if x.strip()] or ['No rationale']
+            logic_block = '\n   '.join(f'<i>{ln[:160]}</i>' for ln in logic_lines[:2])
+        else:
+            logic = _text(r.get('logic'), 'No risk rationale provided.')
+            logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:2]
+            logic_block = '\n   '.join(f'<i>{ln[:160]}</i>' for ln in logic_lines)
         res.append(
             f"{i}. 🔴 <b>{_text(r.get('symbol'), 'UNKNOWN')}</b>\n"
             f"   {logic_block}"
@@ -780,8 +789,28 @@ def _enqueue_brain_push(work_fn):
     _brain_queue.put(work_fn)
 
 
+def _resolve_action_plan(snap, intel=None):
+    """Canonical action plan — same hydration path for /action and /brain positioning."""
+    if intel is None:
+        intel, _ = _prepare_intel_from_snapshot(snap)
+    action = _text(getattr(snap, 'action_plan', None) if snap is not None else '', '')
+    if not action.strip():
+        action = _text(intel.get('action_plan'), '')
+    if not action.strip():
+        try:
+            from backend.intelligence.canonical_rankings import build_action_plan_text, get_action_plan_symbols
+            from backend.orchestration.opportunity_filter import rank_opportunities_tiered
+            tiers = rank_opportunities_tiered(intel)
+            symbols = get_action_plan_symbols(intel)
+            ranked = tiers.get('all') or intel.get('top_opportunities') or []
+            action = build_action_plan_text(symbols, ranked, intel)
+        except Exception:
+            pass
+    return action
+
+
 def render_brain_messages(intel: dict, *, snap=None) -> list:
-    """Single render pass — 3 consolidated brain messages for Telegram queue."""
+    """Single render pass — 2 consolidated brain messages for Telegram queue."""
     from backend.lifecycle.unified_metrics import format_calibration_telegram
     from backend.intelligence.institutional_language import apply_institutional_tone, institutional_regime_label
     from backend.telegram.formatting.telegram_formatter import format_action_plan, format_sectors
@@ -791,36 +820,24 @@ def render_brain_messages(intel: dict, *, snap=None) -> list:
     mood = _dict(intel.get('market_mood'))
     sectors = _dict(intel.get('sector_rotation'))
 
-    regime = 'VOLATILE'
+    regime = institutional_regime_label('volatile')
     try:
         from backend.utils.config import ANALYSIS_STATE_FILE
         if ANALYSIS_STATE_FILE.exists():
             state = json.loads(ANALYSIS_STATE_FILE.read_text(encoding='utf-8'))
             regime = institutional_regime_label(str(state.get('last_regime') or 'volatile'))
     except Exception:
-        regime = institutional_regime_label('volatile')
+        pass
 
-    macro_line = apply_institutional_tone(
-        _text(mood.get('global_mood') or mood.get('overnight_narrative'), 'Macro context pending')
-    )
-
-    # Message 1: executive summary + market mood + regime + macro overview
     summary_body = build_compressed_summary(intel, include_stale=False)
     sentiment_block = (
         "<b>MARKET MOOD</b>\n"
         f"Global: {apply_institutional_tone(_text(mood.get('global_mood'), 'Unknown'))}\n"
         f"India: {apply_institutional_tone(_text(mood.get('india_outlook'), 'Unknown'))}\n"
         f"Retail: {apply_institutional_tone(_text(mood.get('retail_mood'), 'Unknown'))}\n"
-        f"Regime: {regime}\n"
-        f"Macro: {macro_line[:180]}"
-    )
-    msg1 = (
-        f"{prefix}{build_msg1_header(intel, include_prefix=False)}\n"
-        f"{summary_body}\n"
-        f"{sentiment_block}"
+        f"Regime: {regime}"
     )
 
-    # Message 2: opportunities + risks + sector rotation
     opps = get_opportunities(intel)
     opps_text = format_opps(opps[:10]) if opps else ''
     if not opps_text:
@@ -830,31 +847,29 @@ def render_brain_messages(intel: dict, *, snap=None) -> list:
         except Exception:
             opps_text = '<i>Monitoring for ranked setups.</i>'
     risks = _list(intel.get('risks_and_avoids'))
-    sector_block = format_sectors(sectors).replace('🔄 <b>SECTOR ROTATION</b>\n', '<b>SECTOR ROTATION</b>\n')
-    msg2 = (
+
+    msg1 = (
+        f"{prefix}{build_msg1_header(intel, include_prefix=False)}\n"
+        f"{summary_body}\n"
+        f"{sentiment_block}\n"
         f"<b>OPPORTUNITIES</b>\n{opps_text}\n"
-        f"<b>TOP RISKS</b>\n{format_risks(risks)}\n"
-        f"{sector_block}"
+        f"<b>TOP RISKS</b>\n{format_risks(risks)}"
     )
 
-    # Message 3: calibration + lifecycle + positioning guidance
     cal_intel = _professionalize_calibration_text(intel.get('self_calibration'))
     cal_metrics = format_calibration_telegram()
-    action = ''
-    if snap is not None and getattr(snap, 'action_plan', None):
-        action = _text(snap.action_plan, '')
-    if not action.strip():
-        action = _text(intel.get('action_plan'), '')
-    posture = format_action_plan(action)
-    msg3 = (
+    sector_block = format_sectors(sectors).replace('🔄 <b>SECTOR ROTATION</b>\n', '<b>SECTOR ROTATION</b>\n')
+    posture = format_action_plan(_resolve_action_plan(snap, intel))
+
+    msg2 = (
+        f"{sector_block}\n"
         f"<b>CALIBRATION</b>\n{cal_intel}\n{cal_metrics}\n"
         f"<b>POSITIONING</b>\n{posture}"
     )
 
     return [
-        ('Executive summary', msg1),
-        ('Opportunities & risks', msg2),
-        ('Calibration & positioning', msg3),
+        ('Summary & opportunities', msg1),
+        ('Sectors & positioning', msg2),
     ]
 
 
@@ -913,7 +928,7 @@ def _push_full_brain_impl(*, command='full', cycle_id=''):
     _brain_stale_prefix = stale_warning(raw_intel or intel)
 
     sections = render_brain_messages(intel, snap=snap)
-    safe_print(f"[BRAIN] Pushing {len(sections)}-message brain to Telegram (3-message consolidated)...")
+    safe_print(f"[BRAIN] Pushing {len(sections)}-message brain to Telegram (2-message consolidated)...")
     for label, text in sections:
         try:
             send_chunked(text, command=command, cycle_id=cycle_id)
@@ -1004,14 +1019,12 @@ def push_risks(*, command='risks', cycle_id=''):
 
 
 def push_action(*, command='action', cycle_id=''):
-    from backend.telegram.formatting.telegram_formatter import format_action_plan, snapshot_meta_line
+    from backend.telegram.formatting.telegram_formatter import format_action_plan, session_notice
     from backend.runtime.market_snapshot_engine import get_current_market_snapshot
     snap = get_current_market_snapshot()
-    action = _text(snap.action_plan, '')
-    intel = normalize_intel(load_intel())
-    if not action.strip() and intel:
-        action = _text(intel.get('action_plan'), '')
-    prefix = snapshot_meta_line(snap.runtime_state)
+    intel, _ = _prepare_intel_from_snapshot(snap)
+    action = _resolve_action_plan(snap, intel)
+    prefix = session_notice(snap.runtime_state)
     send_chunked(f"{prefix}{format_action_plan(action)}", command=command, cycle_id=cycle_id)
 
 
@@ -1050,6 +1063,11 @@ def push_global(*, command='global', cycle_id=''):
     raw = load_intel()
     intel = normalize_intel(raw)
     stale = stale_warning(raw)
+    try:
+        from backend.intelligence.active_snapshot import snapshot_header
+        snapshot_meta = snapshot_header()
+    except Exception:
+        snapshot_meta = ''
     mood = _dict(intel.get('market_mood')) if intel else {}
     report = {}
     gm = {}
@@ -1095,7 +1113,7 @@ def push_global(*, command='global', cycle_id=''):
     india_impact = report.get('india_impact') or {}
     gap = report.get('gap_probability') or {}
     body = (
-        f"{stale}{_snapshot_prefix()}🌍 <b>OVERNIGHT GLOBAL IMPACT</b>\n\n"
+        f"{stale}{snapshot_meta}🌍 <b>OVERNIGHT GLOBAL IMPACT</b>\n\n"
         f"<b>GLOBAL SNAPSHOT</b>\n"
     )
     for line in (gs.get('lines') or [])[:4]:

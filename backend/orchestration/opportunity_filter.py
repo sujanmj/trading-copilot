@@ -470,7 +470,7 @@ def _align_display_confidence(item: dict, elite_index: Dict[str, dict]) -> dict:
     if raw_conf in ('HIGH',) or is_high_conviction_strength(raw_conf):
         item['display_confidence'] = 'WATCH'
         item['below_elite_threshold'] = True
-        item['confidence_note'] = 'Below high-conviction threshold (>72%)'
+        item['confidence_note'] = 'Confirmation pending — below high-conviction threshold'
     elif raw_conf in ('MEDIUM', 'MODERATE'):
         item['display_confidence'] = 'MEDIUM'
         item['below_elite_threshold'] = False

@@ -24,8 +24,8 @@ PHRASE_MAP = [
     (r'\bULTRA\s+SIGNALS?\b', 'High Conviction signals'),
     (r'\bULTRA\b', 'High Conviction'),
     (r'\belite\s+threshold\b', 'high-conviction threshold'),
-    (r'\belite\s+meta[- ]labeler\b', 'high-conviction meta-labeler'),
-    (r'\belite\s+meta\b', 'high-conviction meta-labeler'),
+    (r'\belite\s+meta[- ]labeler\b', 'high-conviction confirmation'),
+    (r'\belite\s+meta\b', 'high-conviction confirmation'),
     (r'\bmajor\s+move\b', 'high-volatility continuation'),
     (r'\bmoonshot\b', 'speculative extension'),
     (r'\bwatch\s+low\b', 'Watchlist — Low confidence'),
@@ -51,7 +51,11 @@ PHRASE_MAP = [
     (r'\bvol\s+([\d.]+)x\b', r'participation \1x'),
     (r'\b([\d.]+)%\s+move\b', r'directional extension \1%'),
     (r'\bmomentum\s+detected\b', 'participation improving'),
-    (r'\bbreakdown\b', 'breakdown continuation'),
+    (r'\bbreakdown\b(?!\s+continuation\b)', 'breakdown continuation'),
+    (r'\bscanner[- ]ranked\b', 'conditional continuation structure'),
+    (r'\bmeta[- ]labeler\s+threshold\b', 'high-conviction threshold'),
+    (r'\bhigh-conviction\s+meta[- ]labeler\b', 'high-conviction confirmation'),
+    (r'\bmeta[- ]labeler\b', 'confirmation model'),
     (r'\bweak\s+participation\b', 'directional weakness'),
     (r'\bconfirmation\s+pending\b', 'confirmation pending'),
     (r'\bdefensive\s+posture\b', 'defensive posture'),
@@ -154,6 +158,48 @@ def format_signal_status_line(
     return f'Status: {status} · Confidence: {conf_label}'
 
 
+def dedupe_repeated_phrases(text: str) -> str:
+    """Collapse accidental duplicate words/phrases from repeated normalization passes."""
+    if not text:
+        return text
+    out = str(text)
+    prev = None
+    while prev != out:
+        prev = out
+        out = re.sub(r'\b(\w+)(\s+\1\b)+', r'\1', out, flags=re.IGNORECASE)
+        out = re.sub(
+            r'\b([\w-]+(?:\s+[\w-]+){0,3})(\s+\1\b)+',
+            r'\1',
+            out,
+            flags=re.IGNORECASE,
+        )
+    return out
+
+
+def dedupe_session_banners(text: str) -> str:
+    """Ensure at most one after-hours banner per rendered message."""
+    if not text or AFTER_HOURS_HEADER.lower() not in text.lower():
+        return text
+    marker = '🌙'
+    first = text.lower().find('after-hours intelligence mode active')
+    if first < 0:
+        return text
+    head = text[:first]
+    tail = text[first:]
+    rest = tail
+    while True:
+        idx = rest.lower().find('after-hours intelligence mode active', 1)
+        if idx < 0:
+            break
+        line_start = rest.rfind('\n', 0, idx) + 1
+        line_end = rest.find('\n', idx)
+        if line_end < 0:
+            rest = rest[:line_start]
+        else:
+            rest = rest[:line_start] + rest[line_end + 1:]
+    return head + rest
+
+
 def apply_institutional_tone(text: str) -> str:
     """Replace retail phrases with institutional equivalents."""
     if not text:
@@ -161,7 +207,7 @@ def apply_institutional_tone(text: str) -> str:
     out = str(text)
     for pattern, replacement in PHRASE_MAP:
         out = re.sub(pattern, replacement, out, flags=re.IGNORECASE)
-    return out
+    return dedupe_repeated_phrases(out)
 
 
 def institutional_sector_line(bullish: List[str], bearish: List[str]) -> str:
@@ -232,7 +278,10 @@ def format_scanner_participation(
 ) -> str:
     """Replace retail scanner phrasing with desk-note participation language."""
     label = apply_institutional_tone(str(strength_label or 'Observation').strip())
-    parts = [f'{label} — elevated participation']
+    if label.lower().endswith('elevated participation'):
+        parts = [label]
+    else:
+        parts = [f'{label} — elevated participation']
     if volume_ratio is not None:
         try:
             vr = float(volume_ratio)
