@@ -641,6 +641,19 @@
       margin-left: 6px;
       vertical-align: middle;
     }
+    .stale-cache-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 107, 107, 0.15);
+      color: #ff8a80;
+      border: 1px solid rgba(255, 107, 107, 0.35);
+      margin-left: 6px;
+      vertical-align: middle;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
   </style>
 </head>
 <body>
@@ -1070,12 +1083,26 @@
   }
 
   function staleBadgeHtml() {
+    if (window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache()) {
+      return RuntimeManager.staleCacheBadgeHtml
+        ? RuntimeManager.staleCacheBadgeHtml()
+        : '<span class="stale-cache-badge">STALE CACHE ACTIVE</span>'
+    }
     if (window.RuntimeManager && RuntimeManager.isStale && RuntimeManager.isStale()) {
       return '<span class="stale-badge">stale snapshot</span>'
     }
     const norm = getNormalizedSnapshot()
     if (norm && norm.meta && norm.meta.stale) return '<span class="stale-badge">stale snapshot</span>'
     return ''
+  }
+
+  function safeField(obj, fallback, ...keys) {
+    let cur = obj
+    for (let i = 0; i < keys.length; i += 1) {
+      if (cur == null) return fallback
+      cur = cur[keys[i]]
+    }
+    return cur != null && cur !== '' ? cur : fallback
   }
 
   const panelHydrationState = {}
@@ -2148,9 +2175,17 @@
     }, MARKETS_LOAD_TIMEOUT_MS)
 
     try {
-      const data = normalizeMarketPayload(loadJson(files.globalMarket))
-      const indiaData = normalizeMarketPayload(loadJson(files.indiaMarket))
-      const apiDown = USE_API && apiCache && apiCache.connected === false
+      const norm = getNormalizedSnapshot()
+      let data = normalizeMarketPayload(loadJson(files.globalMarket))
+      let indiaData = normalizeMarketPayload(loadJson(files.indiaMarket))
+      if (!data && norm && norm.exports && norm.exports.markets) {
+        data = normalizeMarketPayload(norm.exports.markets)
+        console.log('[Hydration] markets using normalized snapshot export')
+      }
+      if (!indiaData && norm && norm.exports && norm.exports.india) {
+        indiaData = normalizeMarketPayload(norm.exports.india)
+      }
+      const apiDown = USE_API && apiCache && apiCache.connected === false && !(window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache())
       const hasGlobal = !!(data && (data.sentiment || data.markets || data.flat_markets))
       const hasIndia = !!(indiaData && (indiaData.prices || indiaData.indices))
 
@@ -2220,11 +2255,11 @@
       const elapsed = Date.now() - startedAt
       const slowNote = elapsed > 3000 ? '<div class="panel-status-banner aging">Slow market load — data may be partial.</div>' : ''
       finish(`
-        ${runtimeTimestampHtml()}
+        ${runtimeTimestampHtml()}${staleBadgeHtml()}
         ${slowNote}
         <div class="brain-grid">
-          <div class="main-column">${leftHtml || '<div class="loading" style="color:#8B949E;">No regional sentiment rows.</div>'}</div>
-          <div class="action-column">${rightHtml || '<div class="loading" style="color:#8B949E;">No index groups in export.</div>'}</div>
+          <div class="main-column">${leftHtml || '<div class="empty-state-panel"><p>No regional sentiment rows</p></div>'}</div>
+          <div class="action-column">${rightHtml || '<div class="empty-state-panel"><p>No index groups in export</p></div>'}</div>
         </div>
       `)
       clearTimeout(timer)
@@ -2237,6 +2272,8 @@
   }
 
   function loadGlobal() {
+    const container = document.getElementById('tab-global')
+    if (!container) return
     const data = loadJson(files.globalMarket)
     const norm = getNormalizedSnapshot()
     const runtime = (window.RuntimeManager && RuntimeManager.getState()) || {}
@@ -2247,7 +2284,6 @@
       || (runtime.data && runtime.data.india_next_open) || impact.india_next_open || {}
     const timeline = globalNorm.overnightTimeline || runtime.overnight_timeline
       || (runtime.data && runtime.data.overnight_timeline) || {}
-    const container = document.getElementById('tab-global')
     const banner = panelStatusBannerHtml('global', 'markets')
     if (!data && !report.india_open_bias && !impact.india_open_bias) {
       container.innerHTML = banner + emptyStateHtml('Awaiting overnight global scan', 'Overnight impact populates around 4:00 AM IST.') + staleBadgeHtml()
@@ -2552,8 +2588,9 @@
   // TAB: AI CALIBRATION DASHBOARD (Stats evolution)
   // ============================================================
   function loadStats() {
-    let data = loadJson(files.stats);
     const container = document.getElementById('tab-stats');
+    if (!container) return;
+    let data = loadJson(files.stats);
     const calBanner = panelStatusBannerHtml('calibration', 'stats');
     const lifecycle = window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Post-market evaluation at 15:45 IST populates calibration metrics.') : 'Post-market evaluation at 15:45 IST populates calibration metrics.';
     const canonical = (window.RuntimeManager && RuntimeManager.getCanonicalMetrics)
@@ -2942,14 +2979,12 @@
     applyBtn.disabled = true
     applyBtn.textContent = '⏳ Loading...'
     try {
-      const response = await fetch(API_BASE + '/api/history/custom', {
+      const response = await fetchWithTimeout(API_BASE + '/api/history/custom', {
         method: 'POST', headers: apiHeaders(), body: JSON.stringify({ start_date: start, end_date: end })
       })
       const data = await response.json()
       if (data.error) {
         alert('Error: ' + data.error)
-        applyBtn.disabled = false
-        applyBtn.textContent = 'Apply'
         return
       }
       customPeriodData = data
@@ -2957,7 +2992,9 @@
       closeCustomDatePicker()
       updateHistoryTimelinePanel(loadJson(files.history))
     } catch (e) {
+      console.error('[Hydration] custom date range failed:', e.message)
       alert('Failed to fetch: ' + e.message)
+    } finally {
       applyBtn.disabled = false
       applyBtn.textContent = 'Apply'
     }
@@ -3151,9 +3188,12 @@
     `)
     container.scrollTop = container.scrollHeight
     try {
-      const response = await fetch(API_BASE + '/api/ask', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ question: question, use_case: aiModel }) })
+      const response = await fetchWithTimeout(API_BASE + '/api/ask', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ question: question, use_case: aiModel }),
+      })
       const result = await response.json()
-      askBtn.disabled = false; askBtn.innerText = 'Ask'
       const responseEl = document.getElementById(qid)
       if (!responseEl) return
       const displayText = result.success
@@ -3163,9 +3203,12 @@
       responseEl.innerHTML = `<div class="chat-msg-meta">${modelLabel}:</div><div class="chat-msg-content">${escapeHtml(displayText).replace(/\n/g, '<br>')}</div>`
       container.scrollTop = container.scrollHeight
     } catch (err) {
-      askBtn.disabled = false; askBtn.innerText = 'Ask'
+      console.error('[Hydration] ask failed:', err.message)
       const responseEl = document.getElementById(qid)
       if (responseEl) responseEl.innerHTML = `<div style="color:#FF3D00;">❌ ${escapeHtml(err.message)}</div>`
+    } finally {
+      askBtn.disabled = false
+      askBtn.innerText = 'Ask'
     }
   }
 
@@ -3184,7 +3227,11 @@
       if (debugOverlayOpen) await renderDebugOverlay()
     } catch (e) {
       console.error('[refreshAll]', e)
-      renderUnavailableAllTabs(e.message || 'Refresh failed')
+      if (window.RuntimeManager && RuntimeManager.getState && RuntimeManager.getState()) {
+        renderAllTabs({ force: true })
+      } else {
+        renderUnavailableAllTabs(e.message || 'Refresh failed')
+      }
     } finally {
       setGlobalLoading(false)
     }
@@ -3242,6 +3289,7 @@
       ['Generated', hydration.generated_at || snap.generated_at || '—'],
       ['Payload', hydration.payload_bytes != null ? `${hydration.payload_bytes} bytes` : '—'],
       ['Hydration', hydration.hydration_ms != null ? `${hydration.hydration_ms}ms` : '—'],
+      ['Stale cache', hydration.stale_cache_active ? 'ACTIVE' : 'no'],
       ['Status', hydration.status || snap.status || '—'],
       ['Lifecycle', lc.lifecycle_state || '—'],
       ['Session', (rs.session || {}).session_display || '—'],
@@ -3264,6 +3312,8 @@
         ? `<div class="dbg-row dbg-aging">Warnings: ${escapeHtml(hydration.warnings.join('; '))}</div>` : '')
       + (hydration.last_error
         ? `<div class="dbg-row dbg-stale">Fetch: ${escapeHtml(hydration.last_error)}</div>` : '')
+      + (Object.keys(panelHydrationState).length
+        ? `<div class="dbg-row">Panels: ${escapeHtml(Object.entries(panelHydrationState).map(([k, v]) => `${k}:${v.error ? 'err' : 'ok'}`).join(', '))}</div>` : '')
       + (debugExtra && debugExtra.alert_block_reasons && debugExtra.alert_block_reasons.length
         ? `<div class="dbg-row dbg-stale">Blocks: ${escapeHtml(debugExtra.alert_block_reasons.join(', '))}</div>` : '')
   }
@@ -3294,13 +3344,15 @@
             console.log('[Hydration] snapshot cycle complete', {
               failed: !!(meta && meta.failed),
               unchanged: !!(meta && meta.unchanged),
+              staleCache: !!(meta && meta.staleCache),
               ms: meta && meta.hydrationMs,
+              error: meta && meta.error,
             })
           }
-          if (meta && meta.failed && !_snap) {
+          if (meta && meta.failed && !_snap && !(meta && meta.staleCache)) {
             renderUnavailableAllTabs(meta.error || 'Data unavailable')
           }
-          try { renderAllTabs({ force: !!(meta && meta.failed) }) } catch (e) { console.error('[Hydration] renderAllTabs subscriber failed:', e) }
+          try { renderAllTabs({ force: !!(meta && (meta.failed || meta.staleCache)) }) } catch (e) { console.error('[Hydration] renderAllTabs subscriber failed:', e) }
           if (debugOverlayOpen) renderDebugOverlay()
         })
         try { RuntimeManager.start(30000) } catch (e) {

@@ -31,6 +31,8 @@
   let lastFetchError = null;
   let failedWidgets = [];
   const STALE_FORCE_REFRESH_MS = 30000;
+  const STALE_CACHE_KEY = 'trading_copilot_runtime_snapshot_v1';
+  const STALE_CACHE_META_KEY = 'trading_copilot_runtime_snapshot_meta_v1';
   const subscribers = new Set();
   const panelHandlers = new Map();
 
@@ -38,6 +40,8 @@
   let panelContentHashes = {};
   let notifyTimer = null;
   let loading = false;
+  let usingStaleCache = false;
+  let lastSuccessfulFetchAt = null;
 
   function stableHash(value) {
     const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -208,6 +212,87 @@
     cache.connected = snapshot.status !== 'degraded' || !!(exports.intelligence || ms.intelligence);
   }
 
+  function trimSnapshotForStorage(snapshot) {
+    return {
+      generated_at: snapshot.generated_at,
+      snapshot_id: snapshot.snapshot_id,
+      active_snapshot_id: snapshot.active_snapshot_id,
+      snapshot_version: snapshot.snapshot_version,
+      status: snapshot.status,
+      market_snapshot: snapshot.market_snapshot,
+      exports: snapshot.exports || snapshot.data,
+      data: snapshot.data,
+      panels: snapshot.panels,
+      calibration_summary: snapshot.calibration_summary,
+      overnight_impact: snapshot.overnight_impact,
+      india_next_open: snapshot.india_next_open,
+      overnight_timeline: snapshot.overnight_timeline,
+      runtime_state: snapshot.runtime_state,
+      primary_state: snapshot.primary_state,
+      source_status: snapshot.source_status,
+      operational: snapshot.operational,
+      freshness_state: snapshot.freshness_state,
+      action_plan: snapshot.action_plan,
+    };
+  }
+
+  function persistSnapshotCache(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    try {
+      let payload = snapshot;
+      let json = JSON.stringify(payload);
+      if (json.length > 4500000) {
+        payload = trimSnapshotForStorage(snapshot);
+        json = JSON.stringify(payload);
+        console.warn('[RuntimeManager] snapshot trimmed for localStorage', json.length);
+      }
+      localStorage.setItem(STALE_CACHE_KEY, json);
+      localStorage.setItem(STALE_CACHE_META_KEY, JSON.stringify({
+        saved_at: Date.now(),
+        generated_at: snapshot.generated_at,
+        snapshot_id: snapshot.snapshot_id || snapshot.active_snapshot_id,
+      }));
+    } catch (e) {
+      console.warn('[RuntimeManager] persistSnapshotCache failed:', e.message || e);
+    }
+  }
+
+  function loadSnapshotCache() {
+    try {
+      const raw = localStorage.getItem(STALE_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      return parsed;
+    } catch (e) {
+      console.warn('[RuntimeManager] loadSnapshotCache failed:', e.message || e);
+      return null;
+    }
+  }
+
+  function tryRestoreStaleCache(errorMsg, seq) {
+    const cached = loadSnapshotCache();
+    if (!cached) {
+      console.warn('[RuntimeManager] no stale cache available after fetch failure');
+      return false;
+    }
+    usingStaleCache = true;
+    console.warn('[RuntimeManager] applying stale cache fallback:', errorMsg);
+    const applied = applySnapshot(cached, seq, { force: true, staleCache: true });
+    if (!applied || !applied.ok) {
+      usingStaleCache = false;
+      return false;
+    }
+    scheduleNotify({
+      unchanged: false,
+      hydrationComplete: true,
+      failed: true,
+      staleCache: true,
+      error: errorMsg,
+    });
+    return true;
+  }
+
   function invalidateCache(reason) {
     const cache = config.cache;
     if (!cache) return;
@@ -268,8 +353,13 @@
       console.error('[RuntimeManager] cache apply failed', e);
       failedWidgets.push('cache_apply');
     }
+    if (!opts.staleCache) {
+      persistSnapshotCache(snapshot);
+      usingStaleCache = false;
+      lastSuccessfulFetchAt = Date.now();
+    }
     if (typeof config.onConnectionChange === 'function') {
-      config.onConnectionChange(!!cacheConnected());
+      config.onConnectionChange(!!cacheConnected() || usingStaleCache);
     }
 
     const notifyMeta = {
@@ -359,6 +449,7 @@
     inFlight = true;
     setLoading(true);
     let refreshError = null;
+    let staleCacheNotified = false;
     try {
       const snapshot = await fetchSnapshot();
       lastRefreshAt = Date.now();
@@ -371,21 +462,30 @@
           error: (applied && applied.reason) || 'apply_failed',
           failed: true,
         });
+        staleCacheNotified = true;
       }
       return state;
     } catch (e) {
       const msg = e.name === 'AbortError' ? `API timeout (${FETCH_TIMEOUT_MS / 1000}s)` : (e.message || 'refresh failed');
       refreshError = msg;
       console.error('[RuntimeManager] refresh failed:', msg);
-      if (config.cache) config.cache.connected = false;
-      if (typeof config.onConnectionChange === 'function') {
-        config.onConnectionChange(false);
+      staleCacheNotified = tryRestoreStaleCache(msg, seq);
+      if (staleCacheNotified) {
+        if (config.cache) config.cache.connected = true;
+        if (typeof config.onConnectionChange === 'function') {
+          config.onConnectionChange(true);
+        }
+      } else {
+        if (config.cache) config.cache.connected = false;
+        if (typeof config.onConnectionChange === 'function') {
+          config.onConnectionChange(false);
+        }
       }
       return state;
     } finally {
       inFlight = false;
       setLoading(false);
-      if (refreshError) {
+      if (refreshError && !staleCacheNotified) {
         scheduleNotify({
           unchanged: false,
           error: refreshError,
@@ -396,6 +496,7 @@
       console.log('[RuntimeManager] refresh cycle complete', {
         hasState: !!state,
         error: refreshError,
+        staleCache: usingStaleCache,
       });
     }
   }
@@ -403,9 +504,23 @@
   function start(pollMs) {
     if (started) return;
     started = true;
+    const bootCached = loadSnapshotCache();
+    if (bootCached) {
+      usingStaleCache = true;
+      applySnapshot(bootCached, ++fetchSeq, { force: true, staleCache: true, bootCache: true });
+      console.log('[RuntimeManager] boot hydrated from stale cache');
+      scheduleNotify({
+        unchanged: false,
+        hydrationComplete: true,
+        staleCache: true,
+        bootCache: true,
+      });
+    }
     refresh({ force: true }).catch((e) => {
       console.error('[RuntimeManager] initial refresh failed', e);
-      scheduleNotify({ unchanged: false, error: e.message, failed: true });
+      if (!state) {
+        scheduleNotify({ unchanged: false, error: e.message, failed: true, hydrationComplete: true });
+      }
     });
     pollTimer = setInterval(() => {
       refresh().catch((e) => console.error('[RuntimeManager] poll refresh failed', e));
@@ -497,7 +612,18 @@
       last_error: lastFetchError,
       status: snap.status || 'unknown',
       warnings: snap.validation_warnings || [],
+      stale_cache_active: usingStaleCache,
+      last_successful_fetch_at: lastSuccessfulFetchAt,
     };
+  }
+
+  function isUsingStaleCache() {
+    return usingStaleCache;
+  }
+
+  function staleCacheBadgeHtml() {
+    if (!usingStaleCache) return '';
+    return '<span class="stale-cache-badge">STALE CACHE ACTIVE</span>';
   }
 
   function panelChanged(panelId, previousHash) {
@@ -814,6 +940,8 @@
     panelChanged,
     formatTimestamp,
     isStale,
+    isUsingStaleCache,
+    staleCacheBadgeHtml,
     timestampHtml,
     lifecycleMessage,
     formatAgeSeconds,

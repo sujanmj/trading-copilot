@@ -88,6 +88,10 @@ ehthumbs.db
 # BACKUPS
 # ============================================================
 
+backups/
+!backups/README.md
+!backups/**/.gitkeep
+
 *_backup.py
 *_backup.html
 index_backup*.html
