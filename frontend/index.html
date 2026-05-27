@@ -598,6 +598,49 @@
       display: flex;
       justify-content: space-between;
     }
+    .empty-state-panel {
+      padding: 18px 16px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px dashed rgba(255, 255, 255, 0.08);
+      color: #8B949E;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .empty-state-panel small {
+      display: block;
+      margin-top: 6px;
+      font-size: 10px;
+      color: #666;
+    }
+    .panel-error-card {
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: rgba(255, 61, 0, 0.08);
+      border: 1px solid rgba(255, 61, 0, 0.25);
+      color: #ffb4a2;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+    .panel-error-card strong {
+      display: block;
+      color: #ff8a65;
+      margin-bottom: 4px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .stale-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 170, 0, 0.12);
+      color: #ffaa00;
+      border: 1px solid rgba(255, 170, 0, 0.25);
+      margin-left: 6px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -817,6 +860,7 @@
   </aside>
 
   <script src="runtime/uiState.js"></script>
+  <script src="runtime/snapshotAdapter.js"></script>
   <script src="runtime/runtimeManager.js"></script>
   <script src="components/DailyReviewPanel.js"></script>
   <script src="components/AIOpsPanel.js"></script>
@@ -861,13 +905,32 @@
     return headers
   }
 
+  const FETCH_TIMEOUT_MS = 8000
+
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    const ms = timeoutMs || FETCH_TIMEOUT_MS
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), ms)
+    try {
+      const res = await fetch(url, { ...(options || {}), signal: controller.signal })
+      return res
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error(`Request timeout (${ms / 1000}s): ${url}`)
+      throw e
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   async function bootstrapApiConfig() {
     try {
-      const res = await fetch(API_BASE.replace(/\/$/, '') + '/api/config', { method: 'GET' })
+      const res = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/config', { method: 'GET' })
       if (!res.ok) return
       const cfg = await res.json()
       if (cfg.local_auth_bypass) localAuthBypass = true
-    } catch (e) { /* local backend may not be up yet */ }
+    } catch (e) {
+      console.warn('[Hydration] /api/config failed:', e.message)
+    }
   }
 
   let apiCache = {
@@ -930,16 +993,18 @@
       }
     }
     setGlobalLoading(true)
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 20000)
     try {
-      const response = await fetch(API_BASE.replace(/\/$/, '') + '/api/runtime/snapshot', {
+      const response = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/runtime/snapshot', {
         method: 'GET',
         headers: apiHeaders(),
-        signal: controller.signal,
       })
       if (!response.ok) throw new Error(`/api/runtime/snapshot → ${response.status}`)
       const data = await response.json()
+      if (window.SnapshotAdapter && SnapshotAdapter.normalizeSnapshot) {
+        const norm = SnapshotAdapter.normalizeSnapshot(data)
+        window.runtimeNormalized = norm
+        apiCache.normalized = norm
+      }
       window.runtimeSnapshot = data
       const payload = data.exports || data.data || {}
       apiCache.intelligence = payload.intelligence
@@ -969,19 +1034,64 @@
       renderUnavailableAllTabs(e.message || 'Data unavailable')
       return false
     } finally {
-      clearTimeout(timer)
       setGlobalLoading(false)
     }
   }
 
   function renderUnavailableAllTabs(reason) {
     const msg = reason || 'Data unavailable'
-    const banner = `<div class="loading" style="color:#D29922;">⚠ ${escapeHtml(msg)}</div>`
+    const banner = emptyStateHtml('No intelligence available', msg)
     document.querySelectorAll('.tab-content').forEach((el) => {
-      if (el.querySelector('.loading') && !el.querySelector('.brain-grid') && !el.querySelector('.glass-card')) {
+      if (isPanelPending(el.id.replace(/^tab-/, ''))) {
         el.innerHTML = banner
       }
     })
+  }
+
+  function getNormalizedSnapshot() {
+    if (window.RuntimeManager && RuntimeManager.getNormalizedState) {
+      const norm = RuntimeManager.getNormalizedState()
+      if (norm) return norm
+    }
+    if (apiCache && apiCache.normalized) return apiCache.normalized
+    if (window.runtimeSnapshot && window.SnapshotAdapter) {
+      return SnapshotAdapter.normalizeSnapshot(window.runtimeSnapshot)
+    }
+    return null
+  }
+
+  function emptyStateHtml(title, subtitle) {
+    return `<div class="empty-state-panel"><p>${escapeHtml(title || 'No data available')}</p>${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ''}</div>`
+  }
+
+  function panelErrorCard(panelId, err) {
+    const msg = (err && err.message) ? err.message : String(err || 'render error')
+    return `<div class="panel-error-card"><strong>${escapeHtml(panelId)} panel</strong><p>${escapeHtml(msg)}</p></div>`
+  }
+
+  function staleBadgeHtml() {
+    if (window.RuntimeManager && RuntimeManager.isStale && RuntimeManager.isStale()) {
+      return '<span class="stale-badge">stale snapshot</span>'
+    }
+    const norm = getNormalizedSnapshot()
+    if (norm && norm.meta && norm.meta.stale) return '<span class="stale-badge">stale snapshot</span>'
+    return ''
+  }
+
+  const panelHydrationState = {}
+  const PANEL_TAB_MAP = {
+    brain: 'tab-brain', govt: 'tab-govt', scanner: 'tab-scanner', markets: 'tab-markets',
+    global: 'tab-global', news: 'tab-news', tv: 'tab-tv', reddit: 'tab-reddit',
+    stats: 'tab-stats', history: 'tab-history',
+  }
+
+  function isPanelPending(panelId) {
+    const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+    if (!el) return true
+    const hasContent = el.querySelector('.brain-grid, .glass-card, .empty-state-panel, .panel-error-card, .empty-stats, .journal-card')
+    if (hasContent) return false
+    const onlyLoading = el.querySelector('.loading')
+    return !!onlyLoading || el.textContent.trim() === '' || el.textContent.indexOf('Loading') >= 0
   }
 
   function runtimeTimestampHtml(extra) {
@@ -1028,11 +1138,33 @@
 
     if (window.UiState) UiState.saveUiState(document)
 
-    const maybeLoad = (panelId, fn) => {
-      if (panelHashes && !opts.force && lastRenderedPanelHashes[panelId] === panelHashes[panelId]) {
-        return
+    const hydratePanel = (panelId, fn) => {
+      const started = Date.now()
+      try {
+        fn()
+        panelHydrationState[panelId] = { hydrated: true, error: null, at: Date.now() }
+        console.log('[Hydration]', panelId, 'complete', `${Date.now() - started}ms`)
+      } catch (e) {
+        console.error('[Hydration]', panelId, 'render exception:', e)
+        panelHydrationState[panelId] = { hydrated: true, error: e.message || String(e), at: Date.now() }
+        const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+        if (el) {
+          const banner = panelStatusBannerHtml(panelId)
+          el.innerHTML = banner + panelErrorCard(panelId, e) + emptyStateHtml('Panel degraded', 'Other tabs continue normally.')
+        }
       }
-      safePanelLoad(panelId, fn)
+    }
+
+    const maybeLoad = (panelId, fn) => {
+      const pending = isPanelPending(panelId)
+      const prevErr = panelHydrationState[panelId] && panelHydrationState[panelId].error
+      const hashUnchanged = panelHashes
+        && !opts.force
+        && !pending
+        && !prevErr
+        && lastRenderedPanelHashes[panelId] === panelHashes[panelId]
+      if (hashUnchanged) return
+      hydratePanel(panelId, fn)
     }
 
     maybeLoad('brain', loadBrain)
@@ -1058,7 +1190,7 @@
         const activeTab = document.querySelector('.tab.active')
         if (activeTab) renderChatHistory(document.getElementById('tab-' + activeTab.dataset.tab))
       } catch (e) {
-        console.error('renderChatHistory failed:', e)
+        console.error('[Hydration] renderChatHistory failed:', e)
       }
     }, 150)
   }
@@ -1098,15 +1230,15 @@
   }
 
   function safePanelLoad(name, fn) {
-    try { fn() } catch (e) {
-      console.error(`[GUI] ${name} render failed:`, e)
-      const map = {
-        brain: 'tab-brain', govt: 'tab-govt', scanner: 'tab-scanner', markets: 'tab-markets',
-        news: 'tab-news', tv: 'tab-tv', reddit: 'tab-reddit', stats: 'tab-stats', history: 'tab-history',
-      }
-      const el = document.getElementById(map[name] || '')
+    try {
+      fn()
+      panelHydrationState[name] = { hydrated: true, error: null, at: Date.now() }
+    } catch (e) {
+      console.error(`[Hydration] ${name} render failed:`, e)
+      panelHydrationState[name] = { hydrated: true, error: e.message || String(e), at: Date.now() }
+      const el = document.getElementById(PANEL_TAB_MAP[name] || ('tab-' + name))
       if (el) {
-        el.innerHTML = `<div class="loading" style="color:#D29922;">⚠ ${escapeHtml(name)} panel unavailable — ${escapeHtml(e.message || 'render error')}</div>`
+        el.innerHTML = panelErrorCard(name, e) + emptyStateHtml('Panel unavailable', 'Other tabs continue normally.')
       }
     }
   }
@@ -1553,26 +1685,46 @@
   function loadBrain() {
     const container = document.getElementById('tab-brain')
     if (!container) return
+    const norm = getNormalizedSnapshot()
     const raw = loadJson(files.intelligence);
     const activeStore = loadJson(files.activePredictions);
     let data = normalizeBrainData(raw);
     const brainBanner = panelStatusBannerHtml('brain', 'intelligence');
+    const staleTag = staleBadgeHtml();
 
     const canonicalPlan = (window.RuntimeManager && RuntimeManager.getActionPlan)
       ? RuntimeManager.getActionPlan()
-      : (apiCache.actionPlan || '');
+      : ((norm && norm.brain && norm.brain.actionPlan) || apiCache.actionPlan || '');
     if (data && canonicalPlan) data.action_plan = canonicalPlan;
+    if (!data && norm && norm.brain) {
+      data = {
+        executive_summary: norm.brain.summary,
+        action_plan: norm.brain.actionPlan,
+        self_calibration: norm.brain.selfCalibration,
+        market_mood: norm.brain.marketMood,
+        sector_rotation: norm.brain.sectorRotation,
+        top_opportunities: norm.brain.topOpportunities,
+        risks_and_avoids: norm.brain.risks,
+        government_impact: norm.brain.governmentImpact,
+        sources_total: norm.brain.sourcesTotal,
+        sources_used: norm.brain.sourcesUsed,
+      };
+    }
 
-    if (!data && !window.RuntimeManager?.getState?.()) {
+    const hasRuntime = !!(window.RuntimeManager && RuntimeManager.getState && RuntimeManager.getState());
+    if (!data && !hasRuntime) {
       const err = window.RuntimeManager && RuntimeManager.unavailableBanner
         ? RuntimeManager.unavailableBanner()
-        : `<div class="loading" style="color:#D29922;">⚠ Data unavailable</div>`;
+        : emptyStateHtml('No intelligence available', 'Check API connection or run refresh.');
       setPanelHtml(container, brainBanner, err);
       return;
     }
 
     if (!data) {
-      setPanelHtml(container, brainBanner, `<div class="loading">⏳ ${escapeHtml(window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Waiting for intelligence cycle…') : 'Waiting for analysis...')}</div>`);
+      const lcMsg = window.RuntimeManager
+        ? RuntimeManager.lifecycleMessage('brain', 'Awaiting next intelligence cycle.')
+        : 'Awaiting next cycle';
+      setPanelHtml(container, brainBanner, emptyStateHtml('No intelligence available', lcMsg));
       return;
     }
 
@@ -1595,8 +1747,10 @@
       displayText(moodEarly.india_outlook, '');
 
     if (!hasContent) {
-      const lcMsg = window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Intelligence export empty — awaiting next analysis cycle.') : 'Waiting for analysis...';
-      setPanelHtml(container, brainBanner, `<div class="loading">⏳ ${escapeHtml(lcMsg)}</div>`);
+      const lcMsg = window.RuntimeManager
+        ? RuntimeManager.lifecycleMessage('brain', 'Intelligence export empty — awaiting next analysis cycle.')
+        : 'Awaiting next cycle';
+      setPanelHtml(container, brainBanner, emptyStateHtml('No intelligence available', lcMsg));
       return;
     }
 
@@ -1664,7 +1818,7 @@
 
     let html = `
       ${brainBanner}
-      ${runtimeTimestampHtml(globalExportAgeHtml('intelligence') || activeMeta || formatSourcesDisplay(data, runtimeSnap))}
+      ${runtimeTimestampHtml((globalExportAgeHtml('intelligence') || activeMeta || formatSourcesDisplay(data, runtimeSnap)) + staleTag)}
       
       <div class="brain-grid">
         <div class="main-column">
@@ -1729,12 +1883,12 @@
   function loadGovt() {
     const data = loadJson(files.govt)
     const container = document.getElementById('tab-govt')
+    const banner = panelStatusBannerHtml('govt', 'govt')
     if (!data) {
-      const banner = panelStatusBannerHtml('govt', 'govt')
       const msg = (!apiCache.connected && window.RuntimeManager)
         ? RuntimeManager.unavailableBanner()
-        : '<div class="loading">⏳ No govt data</div>'
-      container.innerHTML = banner + msg
+        : emptyStateHtml('No government intelligence', 'Awaiting next collector cycle.')
+      container.innerHTML = banner + msg + staleBadgeHtml()
       return
     }
     
@@ -1790,7 +1944,7 @@
     }
 
     let html = `
-      ${runtimeTimestampHtml()}
+      ${runtimeTimestampHtml()}${staleBadgeHtml()}
       <div class="brain-grid">
         <div class="main-column">
           <div class="glass-card">
@@ -1819,7 +1973,11 @@
   function loadScanner() {
     const data = loadJson(files.scanner)
     const container = document.getElementById('tab-scanner')
-    if (!data) { container.innerHTML = `<div class="loading">⏳ No scanner data</div>`; return; }
+    const banner = panelStatusBannerHtml('scanner', 'scanner')
+    if (!data) {
+      container.innerHTML = banner + emptyStateHtml('No scanner data', 'Awaiting next scan cycle.') + staleBadgeHtml()
+      return
+    }
     
     const summary = data.summary || {}
     const topSignals = data.top_signals || []
@@ -1961,7 +2119,7 @@
     `
   }
 
-  const MARKETS_LOAD_TIMEOUT_MS = 12000
+  const MARKETS_LOAD_TIMEOUT_MS = 8000
 
   function normalizeMarketPayload(raw) {
     if (!raw || typeof raw !== 'object' || raw.error) return null
@@ -1985,7 +2143,7 @@
     const timer = setTimeout(() => {
       finish(
         `${banner}<div class="panel-status-banner stale">Markets load timed out — showing last known state or empty view.</div>` +
-        '<div class="loading" style="color:#8B949E;">No market data available. Check API connection or run /refresh.</div>'
+        emptyStateHtml('No market data available', 'Check API connection or run refresh.')
       )
     }, MARKETS_LOAD_TIMEOUT_MS)
 
@@ -2000,7 +2158,7 @@
         const errBanner = apiDown
           ? '<div class="panel-status-banner stale">API offline — market feeds unavailable.</div>'
           : (banner || '<div class="panel-status-banner idle">Market data not yet collected.</div>')
-        finish(`${errBanner}<div class="loading" style="color:#8B949E;">No market data — awaiting next collector cycle.</div>`)
+        finish(`${errBanner}${emptyStateHtml('No market data', 'Awaiting next collector cycle.')}`)
         clearTimeout(timer)
         return
       }
@@ -2053,8 +2211,7 @@
 
       if (!leftHtml && !rightHtml) {
         finish(
-          `${banner}<div class="panel-status-banner idle">Market files present but empty — check collector exports.</div>` +
-          '<div class="loading" style="color:#8B949E;">No quotable market rows in current export.</div>'
+          `${banner}${emptyStateHtml('No quotable market rows', 'Market files present but empty — check collector exports.')}`
         )
         clearTimeout(timer)
         return
@@ -2074,21 +2231,26 @@
     } catch (e) {
       clearTimeout(timer)
       finish(
-        `${banner}<div class="panel-status-banner stale">Markets panel error — ${escapeHtml(e.message || 'render failed')}</div>` +
-        '<div class="loading" style="color:#8B949E;">Unable to render market data.</div>'
+        `${banner}${panelErrorCard('markets', e)}${emptyStateHtml('Unable to render market data', 'Panel degraded — other tabs continue.')}`
       )
     }
   }
 
   function loadGlobal() {
     const data = loadJson(files.globalMarket)
+    const norm = getNormalizedSnapshot()
     const runtime = (window.RuntimeManager && RuntimeManager.getState()) || {}
-    const impact = (runtime.data && runtime.data.overnight_impact) || {}
-    const report = (runtime.data && runtime.data.india_next_open) || impact.india_next_open || {}
-    const timeline = (runtime.data && runtime.data.overnight_timeline) || {}
+    const globalNorm = (norm && norm.global) || {}
+    const impact = globalNorm.overnightImpact || runtime.overnight_impact
+      || (runtime.data && runtime.data.overnight_impact) || {}
+    const report = globalNorm.indiaNextOpen || runtime.india_next_open
+      || (runtime.data && runtime.data.india_next_open) || impact.india_next_open || {}
+    const timeline = globalNorm.overnightTimeline || runtime.overnight_timeline
+      || (runtime.data && runtime.data.overnight_timeline) || {}
     const container = document.getElementById('tab-global')
-    if (!data && !report.india_open_bias) {
-      container.innerHTML = '<div class="loading">⏳ Awaiting overnight global scan (4:00 AM IST)</div>'
+    const banner = panelStatusBannerHtml('global', 'markets')
+    if (!data && !report.india_open_bias && !impact.india_open_bias) {
+      container.innerHTML = banner + emptyStateHtml('Awaiting overnight global scan', 'Overnight impact populates around 4:00 AM IST.') + staleBadgeHtml()
       return
     }
 
@@ -2098,7 +2260,7 @@
       ['Oil', moves.oil_pct], ['DXY', moves.dxy_pct], ['Nikkei', moves.nikkei_pct],
     ].filter(([, v]) => v != null)
 
-    let html = `${runtimeTimestampHtml()}<div class="glass-card"><h2>🌙 OVERNIGHT GLOBAL IMPACT</h2>`
+    let html = `${banner}${runtimeTimestampHtml()}${staleBadgeHtml()}<div class="glass-card"><h2>🌙 OVERNIGHT GLOBAL IMPACT</h2>`
     html += `<div style="margin-bottom:12px;"><span class="badge badge-green">${escapeHtml(report.india_open_bias || 'PENDING')}</span> `
     html += `<span class="badge">${escapeHtml(report.india_outlook || '—')}</span>`
     if (report.risk_score) html += ` <span class="badge badge-red">Risk ${escapeHtml(report.risk_score)}</span>`
@@ -2171,7 +2333,11 @@
     const newsData = loadJson(files.news)
     const inshortsData = loadJson(files.inshorts)
     const container = document.getElementById('tab-news')
-    if (!newsData && !inshortsData) { container.innerHTML = '<div class="loading">⏳ No news data</div>'; return; }
+    const banner = panelStatusBannerHtml('news', 'news')
+    if (!newsData && !inshortsData) {
+      container.innerHTML = banner + emptyStateHtml('No news data', 'Awaiting next news collector cycle.') + staleBadgeHtml()
+      return
+    }
     
     let leftHtml = '';
     if (inshortsData?.stories && inshortsData.stories.length > 0) {
@@ -2232,7 +2398,11 @@
   function loadTV() {
     const data = loadJson(files.youtube)
     const container = document.getElementById('tab-tv')
-    if (!data) { container.innerHTML = '<div class="loading">⏳ No TV data</div>'; return; }
+    const banner = panelStatusBannerHtml('tv', 'youtube')
+    if (!data) {
+      container.innerHTML = banner + emptyStateHtml('No TV intelligence', 'Awaiting YouTube collector cycle.') + staleBadgeHtml()
+      return
+    }
     
     let leftHtml = '<div class="glass-card"><h2>🔴 Live & Recent TV</h2>';
     if (data.live_now && data.live_now.length > 0) {
@@ -2286,7 +2456,11 @@
   function loadReddit() {
     const data = loadJson(files.reddit)
     const container = document.getElementById('tab-reddit')
-    if (!data) { container.innerHTML = `<div class="loading">⏳ No reddit data</div>`; return; }
+    const banner = panelStatusBannerHtml('reddit', 'reddit')
+    if (!data) {
+      container.innerHTML = banner + emptyStateHtml('No Reddit data', 'Awaiting retail sentiment collector.') + staleBadgeHtml()
+      return
+    }
 
     const mood = data.market_mood || {}
     const moodSent = (mood.sentiment || 'neutral').toLowerCase()
@@ -2410,13 +2584,13 @@
     }
 
     const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
-    const dbStats = data.db_stats || { total_predictions: 0 };
-    const metrics = data.metrics_all_time || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
-    const sections = canonical.sections || canonical.live_session ? canonical : (canonical && canonical.live_session ? canonical : null);
-    const live = (sections && sections.live_session) || canonical.live_session || {};
-    const hist = (sections && sections.historical_calibration) || canonical.historical_calibration || {};
-    const archived = (sections && sections.archived) || canonical.archived || {};
-    const lcCal = data.lifecycle_calibration || (data.calibration_dashboard || {}).lifecycle_calibration || {};
+    const dbStats = (data && data.db_stats) || { total_predictions: 0 };
+    const metrics = (data && data.metrics_all_time) || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
+    const sections = canonical && (canonical.sections || canonical.live_session) ? canonical : null;
+    const live = (sections && sections.live_session) || (canonical && canonical.live_session) || {};
+    const hist = (sections && sections.historical_calibration) || (canonical && canonical.historical_calibration) || {};
+    const archived = (sections && sections.archived) || (canonical && canonical.archived) || {};
+    const lcCal = (data && data.lifecycle_calibration) || ((data && data.calibration_dashboard) || {}).lifecycle_calibration || {};
     const lcStatus = data.lifecycle_status || {};
     const winRateLabel = formatWinRateDisplay(runtimeSnap, metrics, lcCal);
     const winRateNumeric = hist.win_rate != null ? hist.win_rate
@@ -3000,11 +3174,12 @@
     try {
       if (USE_API && window.RuntimeManager) {
         await RuntimeManager.refresh({ force: true })
+        renderAllTabs({ force: true })
       } else if (USE_API) {
         await fetchAllFromAPI()
-        renderAllTabs()
+        renderAllTabs({ force: true })
       } else {
-        renderAllTabs()
+        renderAllTabs({ force: true })
       }
       if (debugOverlayOpen) await renderDebugOverlay()
     } catch (e) {
@@ -3045,7 +3220,7 @@
     let debugExtra = null
     if (USE_API) {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 10000)
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
       try {
         const res = await fetch(API_BASE.replace(/\/$/, '') + '/api/runtime/debug', {
           headers: apiHeaders(),
@@ -3115,18 +3290,31 @@
           onLoadingChange: (active) => setGlobalLoading(active, '⏳ Loading snapshot…'),
         })
         RuntimeManager.subscribe((_snap, meta) => {
-          if (meta && meta.unchanged) return
+          if (meta && meta.hydrationComplete) {
+            console.log('[Hydration] snapshot cycle complete', {
+              failed: !!(meta && meta.failed),
+              unchanged: !!(meta && meta.unchanged),
+              ms: meta && meta.hydrationMs,
+            })
+          }
           if (meta && meta.failed && !_snap) {
             renderUnavailableAllTabs(meta.error || 'Data unavailable')
-            return
           }
-          try { renderAllTabs() } catch (e) { console.error('renderAllTabs subscriber failed:', e) }
+          try { renderAllTabs({ force: !!(meta && meta.failed) }) } catch (e) { console.error('[Hydration] renderAllTabs subscriber failed:', e) }
           if (debugOverlayOpen) renderDebugOverlay()
         })
         try { RuntimeManager.start(30000) } catch (e) {
           console.error('[RuntimeManager.start]', e)
           renderUnavailableAllTabs(e.message || 'RuntimeManager failed to start')
+          renderAllTabs({ force: true })
         }
+        setTimeout(() => {
+          const pending = Object.keys(PANEL_TAB_MAP).some((id) => isPanelPending(id))
+          if (pending) {
+            console.warn('[Hydration] boot safety render — panels still pending after timeout')
+            renderAllTabs({ force: true })
+          }
+        }, FETCH_TIMEOUT_MS + 2000)
       } else {
         await refreshAll()
         setInterval(refreshAll, 30000)

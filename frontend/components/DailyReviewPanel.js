@@ -40,7 +40,7 @@
     const base = config.getApiBase().replace(/\/$/, '');
     const q = rebuild ? '?rebuild=1' : '';
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), 8000);
     try {
       const res = await fetch(base + '/api/daily-review' + q, {
         method: 'GET',

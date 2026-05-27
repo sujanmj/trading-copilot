@@ -20,6 +20,7 @@
   };
 
   let state = null;
+  let normalizedState = null;
   let pollTimer = null;
   let started = false;
   let inFlight = false;
@@ -150,22 +151,32 @@
     return out;
   }
 
-  function applyCacheFromSnapshot(snapshot) {
+  function normalizeRawSnapshot(snapshot) {
+    if (global.SnapshotAdapter && typeof global.SnapshotAdapter.normalizeSnapshot === 'function') {
+      return global.SnapshotAdapter.normalizeSnapshot(snapshot);
+    }
+    return null;
+  }
+
+  function applyCacheFromSnapshot(snapshot, normalized) {
     const cache = config.cache;
     if (!cache || !snapshot) return;
-    const exports = snapshot.exports || snapshot.data || {};
-    const ms = snapshot.market_snapshot || {};
+    const norm = normalized || normalizeRawSnapshot(snapshot);
+    const exports = norm && norm.exports
+      ? norm.exports
+      : (snapshot.exports || snapshot.data || {});
+    const ms = (norm && norm.marketSnapshot) || snapshot.market_snapshot || {};
 
     cache.intelligence = mergeIntelWithSnapshot(exports.intelligence || ms.intelligence, snapshot);
-    cache.indiaMarket = unwrapExportPayload(exports.india);
-    cache.globalMarket = unwrapExportPayload(exports.markets);
-    cache.news = unwrapExportPayload(exports.news);
-    cache.youtube = unwrapExportPayload(exports.youtube);
-    cache.govt = unwrapExportPayload(exports.govt);
-    cache.inshorts = unwrapExportPayload(exports.inshorts);
-    cache.reddit = unwrapExportPayload(exports.reddit);
-    cache.scanner = unwrapExportPayload(exports.scanner);
-    cache.stats = unwrapExportPayload(exports.stats);
+    cache.indiaMarket = exports.india != null ? exports.india : unwrapExportPayload((snapshot.exports || snapshot.data || {}).india);
+    cache.globalMarket = exports.markets != null ? exports.markets : unwrapExportPayload((snapshot.exports || snapshot.data || {}).markets);
+    cache.news = exports.news != null ? exports.news : unwrapExportPayload((snapshot.exports || snapshot.data || {}).news);
+    cache.youtube = exports.youtube != null ? exports.youtube : unwrapExportPayload((snapshot.exports || snapshot.data || {}).youtube);
+    cache.govt = exports.govt != null ? exports.govt : unwrapExportPayload((snapshot.exports || snapshot.data || {}).govt);
+    cache.inshorts = exports.inshorts != null ? exports.inshorts : unwrapExportPayload((snapshot.exports || snapshot.data || {}).inshorts);
+    cache.reddit = exports.reddit != null ? exports.reddit : unwrapExportPayload((snapshot.exports || snapshot.data || {}).reddit);
+    cache.scanner = exports.scanner != null ? exports.scanner : unwrapExportPayload((snapshot.exports || snapshot.data || {}).scanner);
+    cache.stats = exports.stats != null ? exports.stats : unwrapExportPayload((snapshot.exports || snapshot.data || {}).stats);
     const msMetrics = ms.metrics || {};
     if (msMetrics.evaluated != null || msMetrics.wins != null) {
       cache.stats = {
@@ -178,13 +189,21 @@
         lifecycle_calibration: ms.calibration || (cache.stats && cache.stats.lifecycle_calibration),
       };
     }
-    cache.history = unwrapExportPayload(exports.history);
-    cache.activePredictions = unwrapExportPayload(exports.active_predictions);
-    cache.predictionHistory = unwrapExportPayload(exports.prediction_history);
-    cache.lifecycleState = unwrapExportPayload(exports.lifecycle_state);
+    cache.history = exports.history != null ? exports.history : unwrapExportPayload((snapshot.exports || snapshot.data || {}).history);
+    cache.activePredictions = exports.activePredictions != null
+      ? exports.activePredictions
+      : unwrapExportPayload((snapshot.exports || snapshot.data || {}).active_predictions);
+    cache.predictionHistory = exports.predictionHistory != null
+      ? exports.predictionHistory
+      : unwrapExportPayload((snapshot.exports || snapshot.data || {}).prediction_history);
+    cache.lifecycleState = exports.lifecycleState != null
+      ? exports.lifecycleState
+      : unwrapExportPayload((snapshot.exports || snapshot.data || {}).lifecycle_state);
     cache.runtime = snapshot;
     cache.marketSnapshot = ms;
-    cache.actionPlan = ms.action_plan || snapshot.action_plan || (cache.intelligence && cache.intelligence.action_plan) || '';
+    cache.normalized = norm;
+    cache.actionPlan = (norm && norm.actionPlan)
+      || ms.action_plan || snapshot.action_plan || (cache.intelligence && cache.intelligence.action_plan) || '';
     cache.lastFetch = Date.now();
     cache.connected = snapshot.status !== 'degraded' || !!(exports.intelligence || ms.intelligence);
   }
@@ -206,13 +225,20 @@
 
   function applySnapshot(snapshot, seq, opts) {
     opts = opts || {};
-    if (seq !== fetchSeq) return false;
-    if (!snapshot || typeof snapshot !== 'object') return false;
+    if (seq !== fetchSeq) return { ok: false, reason: 'stale_seq' };
+    if (!snapshot || typeof snapshot !== 'object') {
+      console.error('[RuntimeManager] applySnapshot rejected — invalid payload');
+      return { ok: false, reason: 'invalid_payload' };
+    }
 
     global.runtimeSnapshot = snapshot;
+    normalizedState = normalizeRawSnapshot(snapshot);
+    if (normalizedState && normalizedState.meta && normalizedState.meta.missingFields.length) {
+      console.warn('[RuntimeManager] normalized snapshot missing:', normalizedState.meta.missingFields.join(', '));
+    }
 
     const exports = snapshot.exports || snapshot.data || {};
-    const ms = snapshot.market_snapshot || {};
+    const ms = (normalizedState && normalizedState.marketSnapshot) || snapshot.market_snapshot || {};
     const orch = snapshot.panels && snapshot.panels.orchestrator;
     const runtimePanel = snapshot.panels && snapshot.panels.runtime;
     const hasData = !!(
@@ -237,7 +263,7 @@
     failedWidgets = [];
 
     try {
-      applyCacheFromSnapshot(snapshot);
+      applyCacheFromSnapshot(snapshot, normalizedState);
     } catch (e) {
       console.error('[RuntimeManager] cache apply failed', e);
       failedWidgets.push('cache_apply');
@@ -246,15 +272,23 @@
       config.onConnectionChange(!!cacheConnected());
     }
 
-    if (unchanged) {
-      return true;
-    }
-
-    scheduleNotify({
-      unchanged: false,
+    const notifyMeta = {
+      unchanged,
       snapshotHash: nextHash,
       panelHashes: nextPanelHashes,
       hydrationMs: lastHydrationMs,
+      hydrationComplete: true,
+      normalized: !!normalizedState,
+    };
+
+    if (unchanged && !opts.force) {
+      scheduleNotify(notifyMeta);
+      return { ok: true, unchanged: true };
+    }
+
+    scheduleNotify({
+      ...notifyMeta,
+      unchanged: false,
     });
 
     if (orch && orch.stale && !hasData) {
@@ -264,14 +298,20 @@
         setTimeout(() => refresh({ force: true }), 2000);
       }
     }
-    return true;
+    console.log('[RuntimeManager] snapshot applied', {
+      id: normalizedState && normalizedState.meta && normalizedState.meta.snapshotId,
+      status: normalizedState && normalizedState.meta && normalizedState.meta.status,
+      stale: normalizedState && normalizedState.meta && normalizedState.meta.stale,
+      ms: lastHydrationMs,
+    });
+    return { ok: true, unchanged: false };
   }
 
   function cacheConnected() {
     return !!(config.cache && config.cache.connected);
   }
 
-  const FETCH_TIMEOUT_MS = 20000;
+  const FETCH_TIMEOUT_MS = 8000;
 
   async function fetchSnapshot() {
     const base = config.getApiBase().replace(/\/$/, '');
@@ -292,6 +332,11 @@
       }
       lastHydrationMs = Date.now() - started;
       lastFetchError = null;
+      console.log('[RuntimeManager] fetchSnapshot success', {
+        endpoint: SNAPSHOT_ENDPOINT,
+        ms: lastHydrationMs,
+        bytes: JSON.stringify(payload).length,
+      });
       return payload;
     } catch (e) {
       lastFetchError = e.name === 'AbortError'
@@ -313,23 +358,45 @@
     const seq = ++fetchSeq;
     inFlight = true;
     setLoading(true);
+    let refreshError = null;
     try {
       const snapshot = await fetchSnapshot();
       lastRefreshAt = Date.now();
-      applySnapshot(snapshot, seq, opts);
+      const applied = applySnapshot(snapshot, seq, opts);
+      if (!applied || !applied.ok) {
+        console.warn('[RuntimeManager] applySnapshot incomplete:', applied && applied.reason);
+        scheduleNotify({
+          unchanged: false,
+          hydrationComplete: true,
+          error: (applied && applied.reason) || 'apply_failed',
+          failed: true,
+        });
+      }
       return state;
     } catch (e) {
-      const msg = e.name === 'AbortError' ? 'API timeout (20s)' : (e.message || 'refresh failed');
+      const msg = e.name === 'AbortError' ? `API timeout (${FETCH_TIMEOUT_MS / 1000}s)` : (e.message || 'refresh failed');
+      refreshError = msg;
       console.error('[RuntimeManager] refresh failed:', msg);
       if (config.cache) config.cache.connected = false;
       if (typeof config.onConnectionChange === 'function') {
         config.onConnectionChange(false);
       }
-      scheduleNotify({ unchanged: false, error: msg, failed: true });
       return state;
     } finally {
       inFlight = false;
       setLoading(false);
+      if (refreshError) {
+        scheduleNotify({
+          unchanged: false,
+          error: refreshError,
+          failed: true,
+          hydrationComplete: true,
+        });
+      }
+      console.log('[RuntimeManager] refresh cycle complete', {
+        hasState: !!state,
+        error: refreshError,
+      });
     }
   }
 
@@ -381,6 +448,10 @@
 
   function getState() {
     return state;
+  }
+
+  function getNormalizedState() {
+    return normalizedState;
   }
 
   function getCache() {
@@ -729,6 +800,7 @@
     subscribe,
     registerPanel,
     getState,
+    getNormalizedState,
     getMarketSnapshot,
     getCanonicalMetrics,
     getRuntimeStateFields,
