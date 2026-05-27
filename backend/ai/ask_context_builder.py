@@ -94,14 +94,14 @@ def _opps_section() -> str:
 
 def _calibration_section() -> str:
     try:
-        from backend.storage.stats_aggregates import aggregate_outcomes, aggregate_calibration
-        metrics = aggregate_outcomes('all_time')
-        cal = aggregate_calibration()
+        from backend.lifecycle.unified_metrics import get_calibration_metrics, get_outcome_metrics
+        metrics = get_outcome_metrics('all_time')
+        cal = get_calibration_metrics()
     except Exception:
         stats = _load_json(STATS_FILE)
         metrics = stats.get('metrics_all_time') or {}
         cal = stats.get('lifecycle_calibration') or {}
-    evaluated = metrics.get('total_evaluated') or cal.get('total_resolved') or cal.get('total_evaluated') or 0
+    evaluated = metrics.get('evaluated') or metrics.get('total_evaluated') or cal.get('evaluated') or cal.get('total_evaluated') or 0
     if evaluated == 0:
         return "Calibration: insufficient evaluated sample — post-market EOD builds metrics."
     parts = [

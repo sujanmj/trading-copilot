@@ -111,6 +111,8 @@ def load_lifecycle_state() -> dict:
 
 
 def save_lifecycle_state(state: dict):
+    from backend.lifecycle.unified_metrics import embed_metrics_in_lifecycle_state
+    state = embed_metrics_in_lifecycle_state(state)
     state['updated_at'] = _now_iso()
     atomic_write_json(LIFECYCLE_STATE_FILE, state)
 
@@ -365,21 +367,25 @@ def load_prediction_history(limit: int = 500) -> List[dict]:
 
 def sync_prediction_json_files() -> dict:
     """Persist active_predictions.json and prediction_history.json."""
+    from backend.lifecycle.unified_metrics import get_unified_snapshot
     active = load_active_predictions()
     history = load_prediction_history()
+    metrics = get_unified_snapshot()['metrics_all_time']
     payload_active = {
         'updated_at': _now_iso(),
         'count': len(active),
         'predictions': active,
+        'unified_metrics': metrics,
     }
     payload_history = {
         'updated_at': _now_iso(),
         'count': len(history),
         'predictions': history,
+        'unified_metrics': metrics,
     }
     atomic_write_json(ACTIVE_PREDICTIONS_FILE, payload_active)
     atomic_write_json(PREDICTION_HISTORY_FILE, payload_history)
-    return {'active': len(active), 'archived': len(history)}
+    return {'active': len(active), 'archived': len(history), 'metrics': metrics}
 
 
 def refresh_brain_opportunities() -> dict:
@@ -441,10 +447,10 @@ def refresh_brain_opportunities() -> dict:
 
 def build_calibration_snapshot() -> dict:
     """Generate calibration metrics from SQLite aggregate (single source of truth)."""
-    from backend.storage.stats_aggregates import aggregate_calibration
+    from backend.lifecycle.unified_metrics import get_calibration_metrics
     from backend.analytics.regime_analytics import build_calibration_dashboard
 
-    snapshot = aggregate_calibration()
+    snapshot = get_calibration_metrics()
     snapshot['confidence_realism_curve'] = build_confidence_realism_curve()
     snapshot['signal_type_performance'] = build_signal_type_performance()
     snapshot['regime_performance'] = build_regime_performance()

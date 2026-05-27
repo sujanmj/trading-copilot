@@ -470,7 +470,10 @@ def push_full_brain():
 def push_summary():
     intel = normalize_intel(load_intel())
     if intel:
-        send_chunked(build_msg2_summary_govt(intel))
+        from backend.lifecycle.unified_metrics import format_stats_telegram
+        send_chunked(
+            f"{build_msg2_summary_govt(intel)}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{format_stats_telegram()}"
+        )
 
 
 def push_opps():
@@ -511,7 +514,11 @@ def push_action():
 def push_calibration():
     intel = normalize_intel(load_intel())
     if intel:
-        send_chunked(f"🎯 <b>SELF-CALIBRATION</b>\n\n{_text(intel.get('self_calibration'), 'No calibration data available.')}")
+        from backend.lifecycle.unified_metrics import format_calibration_telegram
+        cal_text = _text(intel.get('self_calibration'), 'No calibration data available.')
+        send_chunked(
+            f"🎯 <b>SELF-CALIBRATION</b>\n\n{cal_text}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{format_calibration_telegram()}"
+        )
 
 
 def push_sectors():

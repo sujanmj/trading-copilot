@@ -353,11 +353,13 @@ def cmd_outcomes():
             skip, _, guard_key = begin_command('outcomes', '', CHAT_ID)
             if skip:
                 return
-            from backend.storage.stats_aggregates import get_live_stats_payload, format_outcomes_telegram
+            from backend.lifecycle.unified_metrics import get_metrics_for_telegram, format_outcomes_telegram
+            from backend.storage.stats_exporter import export_stats
             from backend.utils.telegram_bot import send_outcome_report
-            payload = get_live_stats_payload(refresh_export=True)
-            metrics = payload.get('metrics_all_time') or {}
-            if not send_outcome_report(metrics, payload.get('top_winners'), payload.get('top_losers')):
+            bundle = get_metrics_for_telegram()
+            metrics = bundle['metrics']
+            output = export_stats()
+            if not send_outcome_report(metrics, output.get('top_winners'), output.get('top_losers')):
                 send_message(format_outcomes_telegram(metrics))
         except Exception as e:
             send_message(f"❌ Outcome report failed: {str(e)[:200]}")
@@ -532,12 +534,10 @@ def cmd_stats():
     if skip:
         return
     try:
-        from backend.storage.stats_aggregates import get_live_stats_payload, format_stats_telegram
-        payload = get_live_stats_payload(refresh_export=True)
-        send_message(format_stats_telegram(
-            payload.get('metrics_all_time'),
-            payload.get('db_stats'),
-        ))
+        from backend.lifecycle.unified_metrics import get_metrics_for_telegram, format_stats_telegram
+        from backend.storage.stats_exporter import export_stats
+        export_stats()
+        send_message(format_stats_telegram(get_metrics_for_telegram()['metrics']))
     except Exception as e:
         send_message(f"❌ Stats failed: {str(e)[:200]}")
     finally:

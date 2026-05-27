@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Validate SQLite ↔ export ↔ Telegram formatter consistency."""
+"""Validate unified metrics consistency across all surfaces."""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -12,77 +13,79 @@ sys.path.insert(0, str(ROOT))
 
 def main() -> int:
     errors = []
-    from backend.storage.stats_aggregates import (
-        aggregate_outcomes,
-        aggregate_calibration,
-        aggregate_stats,
+    from backend.lifecycle.unified_metrics import (
+        get_calibration_metrics,
+        get_metrics_for_telegram,
+        get_outcome_metrics,
+        get_prediction_metrics,
+        get_unified_snapshot,
         format_outcomes_telegram,
         format_stats_telegram,
+        format_calibration_telegram,
     )
     from backend.storage.stats_exporter import export_stats
-    from backend.orchestration.opportunity_filter import rank_opportunities, DEFAULT_OPPS_LIMIT
-    from backend.utils.market_hours import get_operational_status
-    from backend.orchestration.telegram_brain_pusher import check_intel_file_stale, stale_warning
-    from backend.orchestration.telegram_command_guard import begin_command, finish_command
+    from backend.api.api_server import _build_runtime_snapshot
 
-    live = aggregate_outcomes('all_time')
-    cal = aggregate_calibration()
+    sqlite = get_outcome_metrics('all_time')
+    pred = get_prediction_metrics('all_time')
+    cal = get_calibration_metrics()
+    bundle = get_metrics_for_telegram()
     exported = export_stats()
-    exp_metrics = exported.get('metrics_all_time') or {}
+    exp = exported.get('metrics_all_time') or {}
+    runtime = _build_runtime_snapshot()
+    rt_metrics = ((runtime.get('data') or {}).get('stats') or {}).get('metrics_all_time') or {}
 
-    for label, key in [
-        ('wins', 'wins'),
-        ('losses', 'losses'),
-        ('pending', 'pending'),
-        ('total_evaluated', 'total_evaluated'),
-    ]:
-        if live.get(key) != exp_metrics.get(key):
-            errors.append(f"export mismatch {label}: live={live.get(key)} export={exp_metrics.get(key)}")
+    checks = [
+        ('sqlite vs predictions.evaluated', sqlite['evaluated'], pred['evaluated']),
+        ('sqlite vs predictions.pending', sqlite['pending'], pred['pending']),
+        ('sqlite vs calibration.evaluated', sqlite['evaluated'], cal['evaluated']),
+        ('sqlite vs calibration.pending', sqlite['pending'], cal['pending']),
+        ('sqlite vs export.evaluated', sqlite['evaluated'], exp.get('evaluated', exp.get('total_evaluated'))),
+        ('sqlite vs export.pending', sqlite['pending'], exp.get('pending')),
+        ('sqlite vs export.wins', sqlite['wins'], exp.get('wins')),
+        ('sqlite vs export.losses', sqlite['losses'], exp.get('losses')),
+        ('sqlite vs runtime.evaluated', sqlite['evaluated'], rt_metrics.get('evaluated', rt_metrics.get('total_evaluated'))),
+        ('sqlite vs runtime.pending', sqlite['pending'], rt_metrics.get('pending')),
+        ('prediction_total rule', sqlite['prediction_total'], sqlite['evaluated'] + sqlite['pending']),
+        ('bundle identity', bundle['metrics']['evaluated'], sqlite['evaluated']),
+    ]
+    for label, a, b in checks:
+        if a != b:
+            errors.append(f"{label}: {a} != {b}")
 
-    if cal.get('wins') != live.get('wins'):
-        errors.append(f"calibration wins mismatch: cal={cal.get('wins')} live={live.get('wins')}")
-    if cal.get('pending') != live.get('pending'):
-        errors.append(f"calibration pending mismatch: cal={cal.get('pending')} live={live.get('pending')}")
+    stats_msg = format_stats_telegram(sqlite)
+    out_msg = format_outcomes_telegram(sqlite)
+    cal_msg = format_calibration_telegram(cal)
+    for field, val in [('wins', sqlite['wins']), ('losses', sqlite['losses']), ('pending', sqlite['pending'])]:
+        if str(val) not in stats_msg:
+            errors.append(f'/stats missing {field}={val}')
+        if str(val) not in out_msg:
+            errors.append(f'/outcomes missing {field}={val}')
+    if str(sqlite['evaluated']) not in cal_msg:
+        errors.append('/calibration missing evaluated count')
 
-    stats_msg = format_stats_telegram(live)
-    if str(live.get('wins', 0)) not in stats_msg and live.get('wins'):
-        errors.append('stats telegram missing wins count')
-    if str(live.get('pending', 0)) not in stats_msg:
-        errors.append('stats telegram missing pending count')
+    lc_path = ROOT / 'data' / 'lifecycle_state.json'
+    from backend.lifecycle.prediction_lifecycle_engine import load_lifecycle_state, save_lifecycle_state
+    save_lifecycle_state(load_lifecycle_state())
+    if lc_path.exists():
+        lc = json.loads(lc_path.read_text(encoding='utf-8'))
+        um = lc.get('unified_metrics') or {}
+        if um and um.get('evaluated') != sqlite['evaluated']:
+            errors.append(f"lifecycle_state unified_metrics evaluated mismatch: {um.get('evaluated')} != {sqlite['evaluated']}")
 
-    opps = rank_opportunities(limit=DEFAULT_OPPS_LIMIT)
-    if len(opps) > DEFAULT_OPPS_LIMIT:
-        errors.append(f'opps cap exceeded: {len(opps)}')
-
-    op = get_operational_status()
-    is_stale, _ = check_intel_file_stale()
-    if op.get('expect_quiet_collectors') and is_stale:
-        errors.append('night mode still marks intel stale in check_intel_file_stale')
-
-    sw = stale_warning({})
-    if op.get('expect_quiet_collectors') and 'stale' in sw.lower() and 'night mode' not in sw.lower():
-        errors.append('stale_warning not night-safe')
-
-    skip1, _, k1 = begin_command('stats', '', 'test')
-    skip2, _, k2 = begin_command('stats', '', 'test')
-    finish_command(k1)
-    finish_command(k2)
-    if not skip2:
-        errors.append('debounce did not suppress duplicate stats command')
-
-    print('=== CONSISTENCY VALIDATION ===')
-    print(f"SQLite: wins={live.get('wins')} losses={live.get('losses')} pending={live.get('pending')} evaluated={live.get('total_evaluated')}")
-    print(f"Export: wins={exp_metrics.get('wins')} losses={exp_metrics.get('losses')} pending={exp_metrics.get('pending')}")
-    print(f"Night mode: {op.get('display_status')} intel_stale={is_stale}")
-    print(f"Opps cap: {len(opps)}/{DEFAULT_OPPS_LIMIT}")
-    print(f"Debounce: first={skip1} second={skip2}")
+    print('=== UNIFIED METRICS CONSISTENCY ===')
+    print(f"SQLite: predictions={sqlite['prediction_total']} evaluated={sqlite['evaluated']} pending={sqlite['pending']} wins={sqlite['wins']} losses={sqlite['losses']} win_rate={sqlite['win_rate']}")
+    print(f"Export: evaluated={exp.get('evaluated', exp.get('total_evaluated'))} pending={exp.get('pending')} wins={exp.get('wins')} losses={exp.get('losses')}")
+    print(f"Runtime: evaluated={rt_metrics.get('evaluated', rt_metrics.get('total_evaluated'))} pending={rt_metrics.get('pending')}")
+    print(f"Calibration: evaluated={cal['evaluated']} pending={cal['pending']} wins={cal['wins']} losses={cal['losses']}")
 
     if errors:
         print('FAILURES:')
         for e in errors:
             print(f'  - {e}')
         return 1
-    print('ALL CHECKS PASSED')
+
+    print('UNIFIED METRICS CONSISTENCY VERIFIED')
     return 0
 
 

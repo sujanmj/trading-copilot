@@ -278,14 +278,15 @@ def export_stats():
         except Exception as e:
             safe_print(f"[WARN] init_db failed: {e}")
 
-        from backend.storage.stats_aggregates import aggregate_stats
-        agg = aggregate_stats()
+        from backend.lifecycle.unified_metrics import get_unified_snapshot
+        agg = get_unified_snapshot()
         output['db_stats'] = agg.get('db_stats') or output['db_stats']
         output['metrics_all_time'] = agg.get('metrics_all_time') or output['metrics_all_time']
         output['metrics_weekly'] = agg.get('metrics_weekly') or output['metrics_weekly']
         output['metrics_daily'] = agg.get('metrics_daily') or output['metrics_daily']
-        if agg.get('calibration_core'):
-            output['lifecycle_calibration'] = agg['calibration_core']
+        output['predictions'] = agg.get('predictions') or output.get('predictions') or {}
+        if agg.get('calibration'):
+            output['lifecycle_calibration'] = agg['calibration']
 
         db_stats = output['db_stats']
         if db_stats.get('total_predictions', 0) == 0:

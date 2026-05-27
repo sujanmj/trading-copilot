@@ -529,9 +529,9 @@ def upsert_outcome(outcome_data):
 # ============================================================
 
 def calculate_accuracy_metrics(metric_type='all_time'):
-    """Calculate aggregate accuracy stats — delegates to centralized SQLite aggregate."""
-    from backend.storage.stats_aggregates import aggregate_outcomes
-    metrics = aggregate_outcomes(metric_type)
+    """Calculate aggregate accuracy stats — delegates to unified_metrics."""
+    from backend.lifecycle.unified_metrics import get_outcome_metrics
+    metrics = get_outcome_metrics(metric_type)
     if not metrics or metrics.get('total_predictions', 0) == 0:
         return metrics
 

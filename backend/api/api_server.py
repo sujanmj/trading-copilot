@@ -885,15 +885,16 @@ def _build_runtime_snapshot() -> dict:
     history = data.get('history') or {}
     intelligence = data.get('intelligence') or {}
     try:
-        from backend.storage.stats_aggregates import aggregate_stats
-        live_agg = aggregate_stats()
+        from backend.lifecycle.unified_metrics import get_unified_snapshot
+        live_agg = get_unified_snapshot()
         stats = dict(stats)
         stats['metrics_all_time'] = live_agg.get('metrics_all_time') or stats.get('metrics_all_time') or {}
         stats['metrics_weekly'] = live_agg.get('metrics_weekly') or stats.get('metrics_weekly') or {}
         stats['metrics_daily'] = live_agg.get('metrics_daily') or stats.get('metrics_daily') or {}
         stats['db_stats'] = live_agg.get('db_stats') or stats.get('db_stats') or {}
-        if live_agg.get('calibration_core'):
-            stats['lifecycle_calibration'] = live_agg['calibration_core']
+        stats['predictions'] = live_agg.get('predictions') or stats.get('predictions') or {}
+        if live_agg.get('calibration'):
+            stats['lifecycle_calibration'] = live_agg['calibration']
         data['stats'] = stats
     except Exception:
         pass
@@ -910,7 +911,7 @@ def _build_runtime_snapshot() -> dict:
         or (source_status.get('india') or {}).get('status') not in (None, 'missing')
     )
 
-    evaluated = int(metrics.get('total_evaluated') or 0)
+    evaluated = int(metrics.get('evaluated') or metrics.get('total_evaluated') or 0)
 
     lifecycle_panel = {
         'status': 'waiting',
@@ -1089,8 +1090,11 @@ def _build_runtime_snapshot() -> dict:
         },
         'explanations': _load_explanations_light(),
         'calibration_summary': {
-            'predictions': db_stats.get('total_predictions', 0),
+            'predictions': metrics.get('prediction_total', db_stats.get('total_predictions', 0)),
             'evaluated': evaluated,
+            'pending': metrics.get('pending', 0),
+            'wins': metrics.get('wins', 0),
+            'losses': metrics.get('losses', 0),
             'win_rate': metrics.get('win_rate'),
             'ai_runtime': ai_runtime,
             'dashboard_status': (stats.get('calibration_dashboard') or {}).get('status'),
