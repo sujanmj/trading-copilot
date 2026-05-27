@@ -22,6 +22,21 @@ _cached_state: Optional[dict] = None
 _cached_at: float = 0.0
 _CACHE_TTL_SECONDS = 3.0
 
+PRIMARY_RUNTIME_STATES = frozenset({'LIVE', 'AFTER_HOURS', 'DEGRADED', 'RECOVERING'})
+
+_SOURCE_FILES = {
+    'intelligence': 'unified_intelligence.json',
+    'scanner': 'scanner_data.json',
+    'govt': 'govt_intelligence.json',
+    'news': 'news_feed.json',
+    'reddit': 'reddit_data.json',
+    'markets': 'global_markets.json',
+    'india': 'latest_market_data.json',
+    'global': 'global_markets.json',
+    'stats': 'stats_data.json',
+    'history': 'history_data.json',
+}
+
 
 def _now_iso() -> str:
     return datetime.now(IST).isoformat()
@@ -252,6 +267,108 @@ def _load_overnight_posture() -> Dict[str, Any]:
         return {}
 
 
+def _map_primary_runtime_state(
+    lifecycle: dict,
+    operational: dict,
+    stall_report: dict,
+) -> str:
+    """Canonical GUI/Telegram primary state — four values only."""
+    orch = str(operational.get('orchestrator_mode') or '').upper()
+    if orch == 'RECOVERING':
+        return 'RECOVERING'
+    if lifecycle.get('lifecycle_state') == 'DEGRADED' or stall_report.get('degraded'):
+        return 'DEGRADED'
+    if lifecycle.get('after_hours_mode') or lifecycle.get('lifecycle_state') in (
+        'AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY',
+    ):
+        return 'AFTER_HOURS'
+    return 'LIVE'
+
+
+def _load_secondary_flags(
+    freshness: dict,
+    scanner_health: dict,
+    stall_report: dict,
+) -> Dict[str, bool]:
+    issues = stall_report.get('issues') or []
+    return {
+        'stale_snapshot': bool(freshness.get('stale')),
+        'scanner_stalled': bool(scanner_health.get('stalled')),
+        'cache_only': any('export:' in str(i) for i in issues),
+    }
+
+
+def _file_age_seconds(filename: str) -> Optional[float]:
+    try:
+        from backend.utils.config import DATA_DIR
+        path = DATA_DIR / filename
+        if not path.exists():
+            return None
+        return max(0.0, time.time() - path.stat().st_mtime)
+    except Exception:
+        return None
+
+
+def _load_source_freshness(operational: dict) -> Dict[str, Any]:
+    """Per-feed export ages for /status (mirrors API health source_status)."""
+    from backend.utils.market_hours import classify_source_freshness, get_watchdog_config
+
+    period = str(operational.get('period') or 'market')
+    threshold = int(operational.get('stale_threshold_seconds') or 7200)
+    try:
+        threshold = int((get_watchdog_config() or {}).get('stale_threshold_seconds') or threshold)
+    except Exception:
+        pass
+
+    rows = {}
+    for key, filename in _SOURCE_FILES.items():
+        age = _file_age_seconds(filename)
+        if age is None:
+            rows[key] = {'status': 'missing', 'age_seconds': None, 'age_display': 'missing', 'stale': True}
+            continue
+        status_name, _unhealthy = classify_source_freshness(age, threshold, period)
+        stale = status_name in ('stale', 'missing') or (age > threshold and status_name not in ('idle', 'ok'))
+        if age < 60:
+            age_display = f'{int(age)}s'
+        elif age < 3600:
+            age_display = f'{int(age // 60)}m'
+        else:
+            age_display = f'{int(age // 3600)}h'
+        rows[key] = {
+            'status': status_name,
+            'age_seconds': int(age),
+            'age_display': age_display,
+            'stale': stale,
+            'file': filename,
+        }
+    return rows
+
+
+def _load_brain_age_display() -> Dict[str, Any]:
+    try:
+        from backend.intelligence.active_snapshot import get_active_snapshot_meta
+        meta = get_active_snapshot_meta() or {}
+        age_m = meta.get('age_minutes')
+        return {
+            'age_minutes': age_m,
+            'age_display': meta.get('age_display') or (f'{age_m}m' if age_m is not None else '—'),
+            'stale': bool(meta.get('stale')),
+        }
+    except Exception:
+        return {'age_display': '—', 'stale': False}
+
+
+def _load_db_size_display() -> str:
+    try:
+        from backend.utils.config import DB_PATH
+        if DB_PATH.exists():
+            mb = DB_PATH.stat().st_size / (1024 * 1024)
+            return f'{mb:.1f} MB'
+    except Exception:
+        pass
+    return '—'
+
+
 def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_status: dict) -> Dict[str, Any]:
     lc_state = lifecycle.get('lifecycle_state')
     after_hours = bool(lifecycle.get('after_hours_mode'))
@@ -274,6 +391,12 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
         sup = suppression_summary(limit=100)
     except Exception:
         sup = {'suppression_count': 0, 'by_reason': {}}
+    if sup.get('suppression_count', 0) > 0:
+        top = sorted((sup.get('by_reason') or {}).items(), key=lambda x: -x[1])[:2]
+        for reason, _count in top:
+            tag = f'suppressed:{reason}'
+            if tag not in reasons:
+                reasons.append(tag)
     return {
         'eligible': eligible,
         'execution_eligible': execution_eligible,
@@ -333,19 +456,34 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     scheduler = _load_scheduler_phase(lifecycle, operational)
     ai_state = _load_ai_state(provider_health)
     alert_eligibility = _load_alert_eligibility(lifecycle, freshness, intelligence_status)
+    primary_state = _map_primary_runtime_state(lifecycle, operational, stall_report)
+    secondary_flags = _load_secondary_flags(freshness, scanner_health, stall_report)
+    source_freshness = _load_source_freshness(operational)
+    brain_age = _load_brain_age_display()
 
-    # Metric source trace for duplicate detection
+    # Metric source trace for duplicate detection (read export file — no full re-export)
     metric_sources = {'sqlite_evaluated': counts['evaluated']}
     try:
-        from backend.storage.stats_exporter import export_stats
-        exp = (export_stats() or {}).get('metrics_all_time') or {}
-        metric_sources['export_evaluated'] = int(exp.get('evaluated') or exp.get('total_evaluated') or 0)
+        import json
+        from backend.utils.config import DATA_DIR
+        stats_path = DATA_DIR / 'stats_data.json'
+        if stats_path.exists():
+            exp = json.loads(stats_path.read_text(encoding='utf-8'))
+            exp_m = (exp.get('metrics_all_time') or {}) if isinstance(exp, dict) else {}
+            metric_sources['export_evaluated'] = int(
+                exp_m.get('evaluated') or exp_m.get('total_evaluated') or 0
+            )
     except Exception:
         pass
 
     state: Dict[str, Any] = {
         'generated_at': _now_iso(),
         'authority': 'runtime_state',
+        'primary_state': primary_state,
+        'secondary_flags': secondary_flags,
+        'source_freshness': source_freshness,
+        'brain_age': brain_age,
+        'db_size_display': _load_db_size_display(),
         'lifecycle': lifecycle,
         'session': session,
         'pipeline': pipeline_status,
@@ -415,6 +553,8 @@ def apply_to_snapshot_payload(snapshot: dict) -> dict:
     runtime_panel['alert_suppression_count'] = (state.get('alert_eligibility') or {}).get('suppression_count', 0)
     runtime_panel['scanner_display'] = (state.get('scanner_health') or {}).get('display')
     runtime_panel['pipeline_stalled'] = (state.get('pipeline') or {}).get('any_stalled')
+    runtime_panel['primary_state'] = state.get('primary_state')
+    runtime_panel['secondary_flags'] = state.get('secondary_flags')
     panels['runtime'] = runtime_panel
     out['panels'] = panels
 

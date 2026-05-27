@@ -32,10 +32,14 @@ def main() -> int:
     for key in (
         'lifecycle', 'regime', 'quality_score', 'win_rate', 'prediction_counts',
         'snapshot_freshness', 'provider_health', 'telegram_metrics', 'intelligence_status',
-        'pipeline', 'scanner_health',
+        'pipeline', 'scanner_health', 'primary_state', 'secondary_flags', 'source_freshness',
     ):
         if key not in state:
             errors.append(f'runtime_state missing {key}')
+
+    from backend.runtime.runtime_state import PRIMARY_RUNTIME_STATES
+    if state.get('primary_state') not in PRIMARY_RUNTIME_STATES:
+        errors.append(f'invalid primary_state: {state.get("primary_state")}')
 
     scanner = state.get('scanner_health') or {}
     if 'display' not in scanner:

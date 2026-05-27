@@ -47,6 +47,7 @@
       brain: stableHash({ i: data.intelligence, a: data.active_predictions }),
       govt: stableHash(data.govt),
       scanner: stableHash(data.scanner),
+      markets: stableHash({ m: data.markets, i: data.india }),
       global: stableHash({ m: data.markets, o: data.overnight_impact, i: data.india_next_open }),
       news: stableHash({ n: data.news, inshorts: data.inshorts }),
       tv: stableHash(data.youtube),
@@ -343,17 +344,28 @@
     }
   }
 
+  /** Current IST calendar day (YYYY-MM-DD) — trading-day anchor for Today/Yesterday. */
+  function getIstTradingDayKey(referenceIso) {
+    return getIstDateKey(referenceIso || new Date().toISOString());
+  }
+
+  function getIstYesterdayKey(referenceIso) {
+    const todayKey = getIstTradingDayKey(referenceIso);
+    if (!todayKey) return '';
+    const parts = todayKey.split('-').map(Number);
+    const utcNoon = Date.UTC(parts[0], parts[1] - 1, parts[2], 6, 30, 0);
+    const prior = new Date(utcNoon - 86400000);
+    return getIstDateKey(prior.toISOString());
+  }
+
   function getJournalDayBadge(dateStr) {
     const rs = (state && state.runtime_state) || {};
     const generated = rs.generated_at || (state && state.generated_at);
-    const todayKey = getIstDateKey(generated || new Date().toISOString());
+    const todayKey = getIstTradingDayKey(generated);
     const entryKey = getIstDateKey(dateStr);
     if (!entryKey) return '—';
     if (entryKey === todayKey) return 'Today';
-    const yesterday = new Date(todayKey);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayKey = getIstDateKey(yesterday.toISOString());
-    if (entryKey === yesterdayKey) return 'Yesterday';
+    if (entryKey === getIstYesterdayKey(generated)) return 'Yesterday';
     return entryKey;
   }
 
@@ -515,6 +527,8 @@
   }
 
   global.RuntimeManager = {
+    getIstTradingDayKey,
+    getIstYesterdayKey,
     init,
     start,
     stop,

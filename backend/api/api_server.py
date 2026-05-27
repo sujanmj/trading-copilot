@@ -935,9 +935,13 @@ def _build_runtime_snapshot() -> dict:
         from backend.lifecycle.unified_metrics import get_unified_snapshot
         live_agg = get_unified_snapshot()
         stats = dict(stats)
-        stats['metrics_all_time'] = live_agg.get('metrics_all_time') or stats.get('metrics_all_time') or {}
-        stats['metrics_weekly'] = live_agg.get('metrics_weekly') or stats.get('metrics_weekly') or {}
-        stats['metrics_daily'] = live_agg.get('metrics_daily') or stats.get('metrics_daily') or {}
+        from backend.metrics.canonical_metrics import build_canonical_metrics
+        for bucket in ('metrics_all_time', 'metrics_weekly', 'metrics_daily'):
+            raw_m = live_agg.get(bucket) or stats.get(bucket) or {}
+            stats[bucket] = build_canonical_metrics(raw_m)
+        stats['metrics_all_time'] = stats.get('metrics_all_time') or {}
+        stats['metrics_weekly'] = stats.get('metrics_weekly') or {}
+        stats['metrics_daily'] = stats.get('metrics_daily') or {}
         stats['db_stats'] = live_agg.get('db_stats') or stats.get('db_stats') or {}
         stats['predictions'] = live_agg.get('predictions') or stats.get('predictions') or {}
         if live_agg.get('calibration'):

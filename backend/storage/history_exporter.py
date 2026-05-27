@@ -10,7 +10,11 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from collections import defaultdict
 
+import pytz
+
 from backend.storage.json_io import atomic_write_json
+
+IST = pytz.timezone('Asia/Kolkata')
 
 try:
     sys.stdout.reconfigure(encoding='utf-8')
@@ -22,6 +26,10 @@ from backend.utils.config import DATA_DIR
 OUTPUT_FILE = DATA_DIR / 'history_data.json'
 
 
+def _ist_today() -> date:
+    return datetime.now(IST).date()
+
+
 def get_db_path():
     from backend.storage.db_finder import resolve_db_path
     return Path(resolve_db_path())
@@ -31,8 +39,8 @@ def empty_history_output():
     empty_period = {
         'name': 'today',
         'label': 'Today',
-        'start_date': date.today().isoformat(),
-        'end_date': date.today().isoformat(),
+        'start_date': _ist_today().isoformat(),
+        'end_date': _ist_today().isoformat(),
         'days_count': 1,
         'stats': {'total': 0, 'wins': 0, 'losses': 0, 'neutral': 0, 'pending': 0, 'evaluated': 0, 'win_rate': 0},
         'top_winners': [],
@@ -45,8 +53,8 @@ def empty_history_output():
     return {
         'last_updated': datetime.now().isoformat(),
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'today_date': date.today().isoformat(),
-        'today_weekday': date.today().strftime('%A'),
+        'today_date': _ist_today().isoformat(),
+        'today_weekday': _ist_today().strftime('%A'),
         'periods': {
             'today': empty_period,
             'yesterday': {**empty_period, 'name': 'yesterday', 'label': 'Yesterday'},
@@ -63,17 +71,17 @@ def empty_history_output():
 
 
 def get_today_range():
-    today = date.today()
+    today = _ist_today()
     return today, today
 
 
 def get_yesterday_range():
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = _ist_today() - timedelta(days=1)
     return yesterday, yesterday
 
 
 def get_this_week_range():
-    today = date.today()
+    today = _ist_today()
     weekday = today.weekday()
     if weekday == 6:
         return today, today
@@ -83,7 +91,7 @@ def get_this_week_range():
 
 
 def get_last_week_range():
-    today = date.today()
+    today = _ist_today()
     weekday = today.weekday()
     if weekday == 6:
         this_sunday = today
@@ -95,7 +103,7 @@ def get_last_week_range():
 
 
 def get_days_back_range(days):
-    today = date.today()
+    today = _ist_today()
     start = today - timedelta(days=days)
     return start, today
 
@@ -266,7 +274,7 @@ def build_export():
         db_path = resolve_db_path()
         print(f"[DB] Using: {db_path}")
 
-        today = date.today()
+        today = _ist_today()
         weekday_name = today.strftime('%A')
         print(f"\nToday is: {today.isoformat()} ({weekday_name})")
 

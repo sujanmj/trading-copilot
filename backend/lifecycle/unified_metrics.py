@@ -14,23 +14,36 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+import pytz
+
 from backend.storage.db_manager import get_connection, get_db_stats, init_db
+
+IST = pytz.timezone('Asia/Kolkata')
 
 EVALUATED_VERDICTS = ('WIN', 'LOSS', 'EXPIRED', 'NEUTRAL', 'CANCELLED')
 PENDING_VERDICTS = ('ACTIVE', 'PENDING')
 
 
+def _ist_today_iso() -> str:
+    return datetime.now(IST).date().isoformat()
+
+
 def _date_filter(metric_type: str, prefix: str = 'p') -> str:
     if metric_type == 'daily':
-        return f"AND {prefix}.prediction_date = date('now')"
+        today = _ist_today_iso()
+        return f"AND {prefix}.prediction_date = '{today}'"
     if metric_type == 'weekly':
-        return f"AND {prefix}.prediction_date >= date('now', '-7 days')"
+        today = _ist_today_iso()
+        return (
+            f"AND {prefix}.prediction_date >= date('{today}', '-7 days') "
+            f"AND {prefix}.prediction_date <= '{today}'"
+        )
     return ''
 
 
 def _empty(metric_type: str = 'all_time') -> Dict[str, Any]:
     return {
-        'metric_date': datetime.now().date().isoformat(),
+        'metric_date': _ist_today_iso(),
         'metric_type': metric_type,
         'source': 'sqlite_unified_metrics',
         'total_predictions': 0,
@@ -139,10 +152,12 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
     avg_loss = abs(float(row.get('avg_loss') or 0))
     profit_factor = avg_gain / avg_loss if avg_loss > 0 else 0.0
 
-    from backend.lifecycle.win_rate_engine import apply_win_rate, win_rate_denominator, MIN_WIN_RATE_SAMPLE
+    from backend.metrics.canonical_metrics import build_canonical_metrics
 
-    metrics = _empty(metric_type)
-    metrics.update({
+    raw_metrics = {
+        'metric_date': _ist_today_iso(),
+        'metric_type': metric_type,
+        'source': 'sqlite_unified_metrics',
         'total_predictions': total_predictions,
         'prediction_total': prediction_total,
         'evaluated': evaluated,
@@ -171,12 +186,8 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
             if row.get('med_total') else 0.0,
         'low_conf_win_rate': round((row.get('low_wins') or 0) / (row.get('low_total') or 1) * 100, 2)
             if row.get('low_total') else 0.0,
-    })
-    metrics = apply_win_rate(metrics)
-    metrics['resolved'] = win_rate_denominator(wins, losses)
-    if win_rate_denominator(wins, losses) < MIN_WIN_RATE_SAMPLE:
-        metrics['win_rate'] = None
-    return metrics
+    }
+    return build_canonical_metrics(raw_metrics)
 
 
 def get_outcome_metrics(metric_type: str = 'all_time') -> Dict[str, Any]:
@@ -214,7 +225,7 @@ def get_calibration_metrics() -> Dict[str, Any]:
     phase_info = build_calibration_display(core)
     return {
         'generated_at': datetime.now().isoformat(),
-        'date': datetime.now().date().isoformat(),
+        'date': _ist_today_iso(),
         'source': 'sqlite_unified_metrics',
         'prediction_total': core['prediction_total'],
         'total_predictions': core['total_predictions'],

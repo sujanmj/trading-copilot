@@ -1112,8 +1112,10 @@
   const MAX_CHAT_MESSAGES = 50
 
   function getTodayKey() {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    if (window.RuntimeManager && RuntimeManager.getIstTradingDayKey) {
+      return RuntimeManager.getIstTradingDayKey()
+    }
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
   }
   function loadChatHistory() {
     try {
@@ -1852,54 +1854,123 @@
     `
   }
 
+  const MARKETS_LOAD_TIMEOUT_MS = 12000
+
+  function normalizeMarketPayload(raw) {
+    if (!raw || typeof raw !== 'object' || raw.error) return null
+    if (raw.data !== undefined) return raw.data
+    return raw
+  }
+
   function loadMarkets() {
-    const data = loadJson(files.globalMarket)
-    const indiaData = loadJson(files.indiaMarket)
     const container = document.getElementById('tab-markets')
-    if (!data && !indiaData) { container.innerHTML = '<div class="loading">⏳ No market data</div>'; return; }
-    
-    let leftHtml = '';
-    if (data?.sentiment) {
-      leftHtml += '<div class="glass-card"><h2>🌍 Regional Sentiment</h2><div class="market-grid">'
-      for (const [region, info] of Object.entries(data.sentiment)) {
-        const moodColor = info.mood === 'BULLISH' || info.mood === 'POSITIVE' ? 'green' : info.mood === 'BEARISH' || info.mood === 'NEGATIVE' ? 'red' : 'yellow'
-        const avg = info.average_change || info.expected_open || 0
-        leftHtml += `<div class="market-card"><div class="market-card-name">${region.toUpperCase()}</div><div class="market-card-value ${moodColor}">${info.mood}</div><div class="market-card-change ${moodColor}">${avg >= 0?'+':''}${avg.toFixed(2)}%</div></div>`
-      }
-      leftHtml += '</div></div>'
-    }
-    
-    if (indiaData?.prices) {
-      leftHtml += '<div class="glass-card"><h2>🇮🇳 India Watchlist</h2><div class="market-grid">'
-      for (const [name, p] of Object.entries(indiaData.prices)) {
-        const isGreen = p.change_percent >= 0
-        leftHtml += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">₹${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
-      }
-      leftHtml += '</div></div>'
+    if (!container) return
+    const banner = panelStatusBannerHtml('markets', 'markets')
+    const startedAt = Date.now()
+    let settled = false
+
+    const finish = (innerHtml) => {
+      if (settled) return
+      settled = true
+      setPanelHtml(container, banner, innerHtml)
     }
 
-    let rightHtml = '';
-    if (data?.markets) {
-      const showGroups = ['USA_INDICES', 'USA_RATES', 'ASIA_INDICES', 'GLOBAL_MACRO', 'EUROPE_INDICES']
-      for (const group of showGroups) {
-        if (!data.markets[group]) continue
-        rightHtml += `<div class="glass-card"><h2>${group.replace('_', ' ')}</h2><div class="market-grid">`
-        for (const [name, p] of Object.entries(data.markets[group])) {
-          const isGreen = p.change_percent >= 0
-          rightHtml += `<div class="market-card"><div class="market-card-name">${name}</div><div class="market-card-value ${isGreen?'green':'red'}">${Number(p.price).toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen?'green':'red'}">${isGreen?'▲':'▼'} ${Math.abs(p.change_percent).toFixed(2)}%</div></div>`
+    const timer = setTimeout(() => {
+      finish(
+        `${banner}<div class="panel-status-banner stale">Markets load timed out — showing last known state or empty view.</div>` +
+        '<div class="loading" style="color:#8B949E;">No market data available. Check API connection or run /refresh.</div>'
+      )
+    }, MARKETS_LOAD_TIMEOUT_MS)
+
+    try {
+      const data = normalizeMarketPayload(loadJson(files.globalMarket))
+      const indiaData = normalizeMarketPayload(loadJson(files.indiaMarket))
+      const apiDown = USE_API && apiCache && apiCache.connected === false
+      const hasGlobal = !!(data && (data.sentiment || data.markets || data.flat_markets))
+      const hasIndia = !!(indiaData && (indiaData.prices || indiaData.indices))
+
+      if (!hasGlobal && !hasIndia) {
+        const errBanner = apiDown
+          ? '<div class="panel-status-banner stale">API offline — market feeds unavailable.</div>'
+          : (banner || '<div class="panel-status-banner idle">Market data not yet collected.</div>')
+        finish(`${errBanner}<div class="loading" style="color:#8B949E;">No market data — awaiting next collector cycle.</div>`)
+        clearTimeout(timer)
+        return
+      }
+
+      let leftHtml = ''
+      const sentiment = data && data.sentiment && typeof data.sentiment === 'object' ? data.sentiment : null
+      if (sentiment && Object.keys(sentiment).length) {
+        leftHtml += '<div class="glass-card"><h2>🌍 Regional Sentiment</h2><div class="market-grid">'
+        for (const [region, info] of Object.entries(sentiment)) {
+          const row = info && typeof info === 'object' ? info : {}
+          const mood = String(row.mood || 'NEUTRAL')
+          const moodColor = mood === 'BULLISH' || mood === 'POSITIVE' ? 'green' : mood === 'BEARISH' || mood === 'NEGATIVE' ? 'red' : 'yellow'
+          const avg = Number(row.average_change ?? row.expected_open ?? 0) || 0
+          leftHtml += `<div class="market-card"><div class="market-card-name">${escapeHtml(String(region).toUpperCase())}</div><div class="market-card-value ${moodColor}">${escapeHtml(mood)}</div><div class="market-card-change ${moodColor}">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}%</div></div>`
         }
-        rightHtml += '</div></div>'
+        leftHtml += '</div></div>'
       }
-    }
 
-    let html = `
-      ${runtimeTimestampHtml()}
-      <div class="brain-grid">
-        <div class="main-column">${leftHtml}</div>
-        <div class="action-column">${rightHtml}</div>
-      </div>
-    `;
-    container.innerHTML = html;
+      const indiaPrices = indiaData && indiaData.prices && typeof indiaData.prices === 'object' ? indiaData.prices : null
+      if (indiaPrices && Object.keys(indiaPrices).length) {
+        leftHtml += '<div class="glass-card"><h2>🇮🇳 India Watchlist</h2><div class="market-grid">'
+        for (const [name, p] of Object.entries(indiaPrices)) {
+          const row = p && typeof p === 'object' ? p : {}
+          const ch = Number(row.change_percent ?? 0) || 0
+          const price = Number(row.price ?? 0) || 0
+          const isGreen = ch >= 0
+          leftHtml += `<div class="market-card"><div class="market-card-name">${escapeHtml(name)}</div><div class="market-card-value ${isGreen ? 'green' : 'red'}">₹${price.toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen ? 'green' : 'red'}">${isGreen ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%</div></div>`
+        }
+        leftHtml += '</div></div>'
+      }
+
+      let rightHtml = ''
+      const marketGroups = data && data.markets && typeof data.markets === 'object' ? data.markets : null
+      if (marketGroups) {
+        const showGroups = ['USA_INDICES', 'USA_RATES', 'ASIA_INDICES', 'GLOBAL_MACRO', 'EUROPE_INDICES']
+        for (const group of showGroups) {
+          const grp = marketGroups[group]
+          if (!grp || typeof grp !== 'object') continue
+          rightHtml += `<div class="glass-card"><h2>${escapeHtml(group.replace(/_/g, ' '))}</h2><div class="market-grid">`
+          for (const [name, p] of Object.entries(grp)) {
+            const row = p && typeof p === 'object' ? p : {}
+            const ch = Number(row.change_percent ?? 0) || 0
+            const price = Number(row.price ?? 0) || 0
+            const isGreen = ch >= 0
+            rightHtml += `<div class="market-card"><div class="market-card-name">${escapeHtml(name)}</div><div class="market-card-value ${isGreen ? 'green' : 'red'}">${price.toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen ? 'green' : 'red'}">${isGreen ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%</div></div>`
+          }
+          rightHtml += '</div></div>`
+        }
+      }
+
+      if (!leftHtml && !rightHtml) {
+        finish(
+          `${banner}<div class="panel-status-banner idle">Market files present but empty — check collector exports.</div>` +
+          '<div class="loading" style="color:#8B949E;">No quotable market rows in current export.</div>'
+        )
+        clearTimeout(timer)
+        return
+      }
+
+      const elapsed = Date.now() - startedAt
+      const slowNote = elapsed > 3000 ? '<div class="panel-status-banner aging">Slow market load — data may be partial.</div>' : ''
+      finish(`
+        ${runtimeTimestampHtml()}
+        ${slowNote}
+        <div class="brain-grid">
+          <div class="main-column">${leftHtml || '<div class="loading" style="color:#8B949E;">No regional sentiment rows.</div>'}</div>
+          <div class="action-column">${rightHtml || '<div class="loading" style="color:#8B949E;">No index groups in export.</div>'}</div>
+        </div>
+      `)
+      clearTimeout(timer)
+    } catch (e) {
+      clearTimeout(timer)
+      finish(
+        `${banner}<div class="panel-status-banner stale">Markets panel error — ${escapeHtml(e.message || 'render failed')}</div>` +
+        '<div class="loading" style="color:#8B949E;">Unable to render market data.</div>'
+      )
+    }
   }
 
   function loadGlobal() {

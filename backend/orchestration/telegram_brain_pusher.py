@@ -19,6 +19,8 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 import sys
 import json
 import time
+import threading
+import queue
 import requests
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +44,12 @@ API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / 'data'
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
+
+_brain_queue: queue.Queue = queue.Queue()
+_brain_worker_lock = threading.Lock()
+_brain_worker_started = False
+_brain_run_lock = threading.Lock()
+_brain_stale_prefix = ''
 
 
 def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_kind='final'):
@@ -472,7 +480,7 @@ def _professionalize_calibration_text(raw: str) -> str:
     return text[:1200]
 
 
-def build_compressed_summary(intel):
+def build_compressed_summary(intel, *, include_stale: bool = True):
     """Max 5 short sections — readable in under 5 seconds."""
     intel = normalize_intel(intel)
     try:
@@ -490,7 +498,7 @@ def build_compressed_summary(intel):
         institutional_regime_label = lambda x: x  # type: ignore
         format_executive_summary = None  # type: ignore
 
-    stale = stale_warning(intel)
+    stale = stale_warning(intel) if include_stale else (_brain_stale_prefix or '')
     try:
         from backend.runtime.runtime_state import get_runtime_state
         after_hours = bool((get_runtime_state().get('session') or {}).get('after_hours_mode'))
@@ -579,7 +587,7 @@ def format_risks(risks_list):
 
 def build_msg1_header(intel):
     intel = normalize_intel(intel)
-    stale = stale_warning(intel)
+    stale = _brain_stale_prefix or stale_warning(intel)
     ts_str = _text(intel.get('generation_time'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     mood = _dict(intel.get('market_mood'))
     confidence = _text(mood.get('confidence_level'), 'N/A')
@@ -591,7 +599,7 @@ def build_msg1_header(intel):
 
 
 def build_msg2_summary_govt(intel):
-    return build_compressed_summary(intel)
+    return build_compressed_summary(intel, include_stale=False)
 
 
 def build_msg3_scanner_sentiment(intel):
@@ -654,8 +662,40 @@ def build_msg6_sectors_global_action(intel):
     return "\n\n".join(parts)
 
 
-def check_intel_file_stale(max_age_hours=2):
-    """Return (is_stale, age_hours). Market-aware — idle overnight is NOT stale."""
+def probe_intel_file_stale(max_age_hours=2):
+    """Return (is_stale, age_hours) without sending Telegram notices."""
+    if not INTEL_FILE.exists():
+        try:
+            from backend.utils.market_hours import get_operational_status
+            if get_operational_status().get('expect_quiet_collectors'):
+                return False, None
+        except Exception:
+            pass
+        return True, None
+
+    file_age_hours = (time.time() - INTEL_FILE.stat().st_mtime) / 3600
+    try:
+        from backend.utils.market_hours import get_operational_status, get_watchdog_config
+        op = get_operational_status()
+        if op.get('expect_quiet_collectors'):
+            return False, file_age_hours
+        wd = get_watchdog_config()
+        max_age_hours = max(max_age_hours, float(wd.get('stale_threshold_seconds') or 7200) / 3600.0)
+        if not op.get('market_hours'):
+            return False, file_age_hours
+    except Exception:
+        pass
+
+    if file_age_hours > max_age_hours:
+        return True, file_age_hours
+    return False, file_age_hours
+
+
+def check_intel_file_stale(max_age_hours=2, *, notify: bool = True):
+    """Return (is_stale, age_hours). Optionally notify user (legacy callers)."""
+    is_stale, age = probe_intel_file_stale(max_age_hours=max_age_hours)
+    if not notify or not is_stale:
+        return is_stale, age
     if not INTEL_FILE.exists():
         safe_print("[WARN] unified_intelligence.json missing")
         try:
@@ -670,47 +710,50 @@ def check_intel_file_stale(max_age_hours=2):
             pass
         send_message("⚠️ Market intelligence file missing. Run /refresh to generate analysis.")
         return True, None
-
-    file_age_hours = (time.time() - INTEL_FILE.stat().st_mtime) / 3600
-    try:
-        from backend.utils.market_hours import get_operational_status, get_watchdog_config
-        op = get_operational_status()
-        if op.get('expect_quiet_collectors'):
-            safe_print(f"[BRAIN] Night/idle mode — intel age {file_age_hours:.1f}h accepted")
-            return False, file_age_hours
-        wd = get_watchdog_config()
-        max_age_hours = max(max_age_hours, float(wd.get('stale_threshold_seconds') or 7200) / 3600.0)
-        if not op.get('market_hours'):
-            return False, file_age_hours
-    except Exception:
-        pass
-
-    if file_age_hours > max_age_hours:
-        safe_print(f"[WARN] Intelligence is {file_age_hours:.1f}h old - sending stale warning")
+    if age is not None:
+        safe_print(f"[WARN] Intelligence is {age:.1f}h old - sending stale warning")
         send_message(
-            f"⚠️ Market intelligence is stale ({file_age_hours:.1f}h old). "
+            f"⚠️ Market intelligence is stale ({age:.1f}h old). "
             "Expected cycle missed during market session — run /refresh or check Railway logs."
         )
-        return True, file_age_hours
-    return False, file_age_hours
+    return True, age
 
 
-def _bind_snapshot_cycle(cycle_id: str = '') -> str:
-    try:
-        from backend.intelligence.active_snapshot import get_active_snapshot_meta
-        meta = get_active_snapshot_meta()
-        ver = int(meta.get('snapshot_version') or 0)
-        cid = meta.get('cycle_id') or cycle_id or 'snap'
-        return f"{cid}:v{ver}"
-    except Exception:
-        return cycle_id or 'snap'
+def _brain_worker_loop():
+    while True:
+        job = _brain_queue.get()
+        if job is None:
+            break
+        try:
+            job()
+        except Exception as e:
+            safe_print(f"[BRAIN] queued job failed: {e}")
+        finally:
+            _brain_queue.task_done()
 
 
-def push_full_brain(*, command='full', cycle_id=''):
+def _ensure_brain_worker():
+    global _brain_worker_started
+    with _brain_worker_lock:
+        if _brain_worker_started:
+            return
+        t = threading.Thread(target=_brain_worker_loop, name='telegram-brain-queue', daemon=True)
+        t.start()
+        _brain_worker_started = True
+
+
+def _enqueue_brain_push(work_fn):
+    _ensure_brain_worker()
+    _brain_queue.put(work_fn)
+
+
+def _push_full_brain_impl(*, command='full', cycle_id=''):
+    global _brain_stale_prefix
     cycle_id = _bind_snapshot_cycle(cycle_id)
-    is_stale, age = check_intel_file_stale()
-    if is_stale:
+    is_stale, age = probe_intel_file_stale()
+    if is_stale and not INTEL_FILE.exists():
         safe_print(f"[BRAIN] Blocked push — intel file stale or missing (age={age})")
+        check_intel_file_stale(notify=True)
         return False
 
     raw_intel = load_intel()
@@ -719,6 +762,10 @@ def push_full_brain(*, command='full', cycle_id=''):
     if not intel:
         send_message("❌ No brain data yet. Run /refresh first.", command=command, cycle_id=cycle_id)
         return False
+
+    _brain_stale_prefix = stale_warning(raw_intel)
+    if is_stale and age is not None and not _brain_stale_prefix:
+        _brain_stale_prefix = f"⚠️ <i>Analysis age {age:.1f}h — verify before acting</i>\n"
 
     try:
         from backend.orchestration.opportunity_filter import rank_opportunities_tiered, DEFAULT_OPPS_LIMIT
@@ -732,7 +779,7 @@ def push_full_brain(*, command='full', cycle_id=''):
     opps = get_opportunities(intel)
     if not opps:
         safe_print("[BRAIN] No opportunities in intel — pushing analysis with scanner notice")
-    
+
     builders = [
         ('1/6 Header',                 build_msg1_header),
         ('2/6 Summary + Govt',         build_msg2_summary_govt),
@@ -756,6 +803,31 @@ def push_full_brain(*, command='full', cycle_id=''):
                 cycle_id=cycle_id,
             )
     safe_print("[BRAIN] Done.")
+    _brain_stale_prefix = ''
+    return True
+
+
+def _bind_snapshot_cycle(cycle_id: str = '') -> str:
+    try:
+        from backend.intelligence.active_snapshot import get_active_snapshot_meta
+        meta = get_active_snapshot_meta()
+        ver = int(meta.get('snapshot_version') or 0)
+        cid = meta.get('cycle_id') or cycle_id or 'snap'
+        return f"{cid}:v{ver}"
+    except Exception:
+        return cycle_id or 'snap'
+
+
+def push_full_brain(*, command='full', cycle_id='', sync: bool = False):
+    """Single orchestrator queue — ordered brain pushes, one stale notice per run."""
+
+    def _job():
+        with _brain_run_lock:
+            return _push_full_brain_impl(command=command, cycle_id=cycle_id)
+
+    if sync or threading.current_thread().name == 'telegram-brain-queue':
+        return _job()
+    _enqueue_brain_push(_job)
     return True
 
 # ============================================================
@@ -948,7 +1020,10 @@ if __name__ == "__main__":
 
     func = dispatch.get(mode)
     if func:
-        func()
+        if func is push_full_brain:
+            push_full_brain(command=mode, sync=True)
+        else:
+            func()
     else:
         safe_print(f"[ERROR] Unknown mode: {mode}")
         safe_print(f"Valid: {', '.join(dispatch.keys())}")

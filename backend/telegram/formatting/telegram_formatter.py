@@ -22,7 +22,7 @@ COMMAND_LINE_LIMITS: Dict[str, int] = {
     'risks': 20,
     'action': 3,
     'sectors': 12,
-    'status': 30,
+    'status': 48,
     'calibration': 25,
     'global': 35,
     'stats': 20,
@@ -186,6 +186,17 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = True) -> str:
         return '<i>No ranked setups — capital preservation mode.</i>'
 
 
+def _status_stale_suffix(stale: bool) -> str:
+    return ' ⚠️' if stale else ''
+
+
+def _status_feed_line(label: str, row: Optional[dict]) -> str:
+    row = row if isinstance(row, dict) else {}
+    age = row.get('age_display') or row.get('status') or '—'
+    stale = bool(row.get('stale')) or row.get('status') in ('stale', 'missing')
+    return f"{label}: {age}{_status_stale_suffix(stale)}"
+
+
 def format_status(runtime_state: dict) -> str:
     rs = runtime_state if isinstance(runtime_state, dict) else {}
     lc = rs.get('lifecycle') or {}
@@ -199,37 +210,83 @@ def format_status(runtime_state: dict) -> str:
     counts = rs.get('prediction_counts') or {}
     wr = rs.get('win_rate') or {}
     alert = rs.get('alert_eligibility') or {}
+    sources = rs.get('source_freshness') or {}
+    brain = rs.get('brain_age') or {}
+    primary = rs.get('primary_state') or '—'
+    secondary = rs.get('secondary_flags') or {}
+    flags = [k for k, v in secondary.items() if v]
+    flag_text = ', '.join(flags) if flags else 'none'
 
     lines = [
         '<b>📡 System Status</b>',
-        f"Lifecycle: <code>{lc.get('lifecycle_state') or '—'}</code>",
+        '<b>Header</b>',
+        f"State: <code>{primary}</code> · Lifecycle: <code>{lc.get('lifecycle_state') or '—'}</code>",
         f"Session: {session.get('session_display') or '—'}",
     ]
     age = fresh.get('age_display') or 'freshness unavailable'
     tier = fresh.get('health_tier') or ('stale' if fresh.get('stale') else 'healthy')
-    lines.append(f"Snapshot: {age} ({tier})")
+    lines.append(f"Snapshot: {age} ({tier}){_status_stale_suffix(bool(fresh.get('stale')))}")
     lines.append(scanner.get('display') or 'Scanner: —')
-    stalled = pipeline.get('stalled_stages') or []
-    if stalled:
-        lines.append(f"Pipeline stalled: {', '.join(stalled[:4])}")
-    elif pipeline.get('last_stage'):
-        lines.append(f"Pipeline: last {pipeline.get('last_stage')}")
+    alert_line = 'eligible' if alert.get('eligible') else 'blocked'
+    if alert.get('execution_eligible') is False and alert.get('eligible'):
+        alert_line = 'intel-only'
+    lines.append(
+        f"Alerts: {alert_line} · sent {tg.get('alerts_sent_today', 0)} · "
+        f"suppressed {tg.get('suppressed_today', 0)}"
+    )
+
+    lines.append('<b>Feeds</b>')
+    lines.append(
+        f"AI Brain: {brain.get('age_display') or '—'}"
+        f"{_status_stale_suffix(bool(brain.get('stale')))}"
+    )
+    for key, label in (
+        ('scanner', 'Scanner'),
+        ('reddit', 'Reddit'),
+        ('govt', 'Govt'),
+        ('news', 'News'),
+        ('global', 'Global'),
+        ('india', 'India'),
+        ('stats', 'Stats export'),
+        ('history', 'History export'),
+    ):
+        lines.append(_status_feed_line(label, sources.get(key)))
+
+    lines.append('<b>Runtime</b>')
     if sched.get('phase'):
         lines.append(f"Scheduler: {sched.get('phase')}")
-    lines.append(f"AI: {ai.get('status', 'unknown')}")
+    lines.append(f"DB: {rs.get('db_size_display') or '—'}")
+    lines.append(f"Flags: {flag_text}")
+
+    stalled = pipeline.get('stalled_stages') or []
+    stage_rows = pipeline.get('stages') or {}
+    if stalled:
+        parts = []
+        for name in stalled[:4]:
+            row = stage_rows.get(name) or {}
+            age_m = row.get('age_minutes')
+            parts.append(f"{name} {age_m}m" if age_m is not None else name)
+        lines.append(f"Pipeline stalled: {', '.join(parts)}")
+    elif pipeline.get('last_stage'):
+        lines.append(f"Pipeline: last {pipeline.get('last_stage')}")
+
+    lines.append(f"AI providers: {ai.get('status', 'unknown')}")
     wr_disp = wr.get('win_rate_display') or '—'
     lines.append(
         f"Metrics: resolved {counts.get('resolved', 0)} "
-        f"({counts.get('wins', 0)}W/{counts.get('losses', 0)}L) · WR {wr_disp}"
+        f"({counts.get('wins', 0)}W/{counts.get('losses', 0)}L/{counts.get('partials', 0)}P) · "
+        f"pending {counts.get('pending', 0)} · WR {wr_disp}"
     )
-    lines.append(
-        f"Alerts today: sent {tg.get('alerts_sent_today', 0)} · "
-        f"suppressed {tg.get('suppressed_today', 0)}"
-    )
+
+    blockers = list(alert.get('block_reasons') or [])
+    if secondary.get('stale_snapshot') and 'stale_snapshot' not in blockers:
+        blockers.append('stale_snapshot')
+    if secondary.get('scanner_stalled') and 'scanner_stalled' not in blockers:
+        blockers.append('scanner_stalled')
+    if blockers:
+        lines.append(f"<b>Blockers</b>: {', '.join(blockers[:6])}")
     if session.get('after_hours_mode'):
-        lines.append('<i>After-hours: refresh active · execution alerts suppressed</i>')
-    if alert.get('block_reasons'):
-        lines.append(f"Alert blocks: {', '.join(alert.get('block_reasons')[:3])}")
+        lines.append('<i>After-hours: execution alerts suppressed</i>')
     return '\n'.join(lines)
 
 

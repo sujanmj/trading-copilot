@@ -72,14 +72,18 @@ def pipeline_stage_log(
     if stage not in STAGES:
         stage = stage or 'unknown'
 
+    now_unix = time.time()
     entry = {
         'at': _now_iso(),
-        'at_unix': time.time(),
+        'at_unix': now_unix,
         'stage': stage,
         'status': status,
         'detail': str(detail or '')[:200],
         'duration_ms': duration_ms,
     }
+    if str(status).lower() in ('ok', 'success', 'complete'):
+        entry['last_success_at'] = entry['at']
+        entry['last_success_unix'] = now_unix
     if extra:
         entry['extra'] = {k: v for k, v in list(extra.items())[:8]}
 
@@ -104,7 +108,11 @@ def pipeline_stage_log(
     try:
         state = _load_state()
         stages = state.setdefault('stages', {})
-        stages[stage] = entry
+        prev = stages.get(stage) or {}
+        if entry.get('last_success_at'):
+            stages[stage] = {**prev, **entry}
+        else:
+            stages[stage] = {**entry, **{k: v for k, v in prev.items() if k.startswith('last_success')}}
         state['updated_at'] = entry['at']
         state['last_stage'] = stage
         atomic_write_json(_STATE_FILE, state)
@@ -131,10 +139,15 @@ def get_pipeline_stage_summary() -> Dict[str, Any]:
 
     for name in STAGES:
         rec = stages.get(name) or {}
-        ts = rec.get('at_unix')
+        ts = rec.get('last_success_unix') or rec.get('at_unix')
         sla = STAGE_SLA_SECONDS.get(name, 3600)
         if ts is None:
-            rows[name] = {'status': 'never', 'age_minutes': None, 'stalled': False}
+            rows[name] = {
+                'status': 'never',
+                'age_minutes': None,
+                'stalled': False,
+                'last_success_at': None,
+            }
             continue
         age_sec = max(0, now - float(ts))
         age_min = int(age_sec / 60)
@@ -142,6 +155,7 @@ def get_pipeline_stage_summary() -> Dict[str, Any]:
         rows[name] = {
             'status': rec.get('status', 'ok'),
             'at': rec.get('at'),
+            'last_success_at': rec.get('last_success_at') or rec.get('at'),
             'age_minutes': age_min,
             'stalled': is_stalled,
             'detail': rec.get('detail', ''),
