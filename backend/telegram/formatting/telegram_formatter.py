@@ -128,11 +128,15 @@ def format_risks(risks: list, *, max_lines_per_ticker: int = 2) -> str:
     items = risks if isinstance(risks, list) else []
     if not items:
         return '<i>No risks identified in current analysis.</i>'
+    try:
+        from backend.intelligence.institutional_language import apply_institutional_tone
+    except Exception:
+        apply_institutional_tone = lambda x: x  # type: ignore
     rows = []
     for i, r in enumerate(items[:8], 1):
         r = r if isinstance(r, dict) else {}
         sym = r.get('symbol') or 'UNKNOWN'
-        logic = str(r.get('logic') or 'No rationale').strip()
+        logic = apply_institutional_tone(str(r.get('logic') or 'No rationale').strip())
         logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:max_lines_per_ticker]
         if not logic_lines:
             logic_lines = ['No rationale']
@@ -161,10 +165,15 @@ def _single_action_label(item: dict) -> str:
 def format_opportunity(item: dict) -> str:
     o = item if isinstance(item, dict) else {}
     sym = o.get('symbol') or '?'
-    conf = o.get('display_confidence') or o.get('confidence') or 'MEDIUM'
-    logic = str(o.get('logic') or '')[:180]
+    logic = institutionalize(str(o.get('logic') or '')[:180])
     label = _single_action_label(o)
-    return f'• <b>{sym}</b> {label} · {conf}\n  <i>{logic}</i>'
+    try:
+        from backend.intelligence.institutional_language import format_signal_status_line
+        status_line = format_signal_status_line(o)
+    except Exception:
+        conf = o.get('display_confidence') or o.get('confidence') or 'MEDIUM'
+        status_line = f'{label} · {conf}'
+    return f'• <b>{sym}</b> {label}\n  {status_line}\n  <i>{logic}</i>'
 
 
 def format_opps_tiered(tiers: dict, *, include_elite: bool = True) -> str:
@@ -174,7 +183,7 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = True) -> str:
         elite = tiers.get('elite') or []
         if elite:
             blocks = [format_opportunity(o) for o in elite[:5]]
-            sections.append('🎯 <b>ELITE</b>\n' + '\n\n'.join(blocks))
+            sections.append('🎯 <b>HIGH CONVICTION</b>\n' + '\n\n'.join(blocks))
     watch = tiers.get('watch') or []
     if watch:
         compressed = tiers.get('watch_compressed')
@@ -276,11 +285,31 @@ def format_status(runtime_state: dict) -> str:
     wr_disp = wr.get('win_rate_display') or 'Awaiting statistical confidence'
     if wr_disp in ('—', '—%', 'None', 'null', 'unknown'):
         wr_disp = 'Awaiting statistical confidence'
-    lines.append(
-        f"Metrics: resolved {counts.get('resolved', 0)} "
-        f"({counts.get('wins', 0)}W/{counts.get('losses', 0)}L/{counts.get('partials', 0)}P) · "
-        f"pending {counts.get('pending', 0)} · WR {wr_disp}"
-    )
+    sections = (rs.get('metrics') or {}).get('sections') or {}
+    live = sections.get('live_session') or {}
+    hist = sections.get('historical_calibration') or {}
+    archived = sections.get('archived') or {}
+    if sections:
+        lines.append('<b>Metrics</b>')
+        lines.append(
+            f"LIVE: active {live.get('active_predictions', counts.get('pending', 0))} · "
+            f"resolved today {live.get('resolved_today', 0)}"
+        )
+        lines.append(
+            f"CALIBRATION: sample {hist.get('evaluated_sample', counts.get('evaluated', 0))} · "
+            f"{hist.get('wins', counts.get('wins', 0))}W/{hist.get('losses', counts.get('losses', 0))}L · "
+            f"WR {hist.get('win_rate_display') or wr_disp}"
+        )
+        lines.append(
+            f"ARCHIVED: expired {archived.get('expired', counts.get('expired', 0))} · "
+            f"neutralized {archived.get('neutralized', counts.get('neutralized', 0))}"
+        )
+    else:
+        lines.append(
+            f"Metrics: resolved {counts.get('resolved', 0)} "
+            f"({counts.get('wins', 0)}W/{counts.get('losses', 0)}L/{counts.get('partials', 0)}P) · "
+            f"pending {counts.get('pending', 0)} · WR {wr_disp}"
+        )
 
     blockers = list(alert.get('block_reasons') or [])
     if secondary.get('stale_snapshot') and 'stale_snapshot' not in blockers:

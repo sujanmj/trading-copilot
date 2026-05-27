@@ -102,7 +102,7 @@ def normalize_confidence(context: dict) -> Dict[str, Any]:
     tier = str(ctx.get('display_tier') or '').upper()
 
     if ml is not None and ml >= 72 and ctx.get('elite_verified') and tier == 'ELITE':
-        display = f'ELITE {ml:.0f}%'
+        display = f'High Conviction {ml:.0f}%'
         source = 'ml_elite'
     elif ml is not None and ml >= 55:
         display = f'ML {ml:.0f}%'
@@ -114,7 +114,7 @@ def normalize_confidence(context: dict) -> Dict[str, Any]:
         display = 'AVOID'
         source = 'avoid'
     else:
-        display = f'WATCH {watch_conv}'
+        display = format_signal_status_line({'display_tier': tier, 'display_confidence': watch_conv})
         source = 'watch'
 
     return {

@@ -1,10 +1,10 @@
 """
 Telegram Brain Pusher v3 — JSON API Optimized
 Reads the structured unified_intelligence.json and pushes the full Brain 
-to Telegram in 6 logical messages.
+to Telegram in 3 consolidated messages.
 
 Usage:
-  python telegram_brain_pusher.py             → Full 6-msg brain
+  python telegram_brain_pusher.py             → Full 3-msg brain
   python telegram_brain_pusher.py summary     → Executive summary only
   python telegram_brain_pusher.py opps        → Top opportunities only
   python telegram_brain_pusher.py risks       → Avoid list only
@@ -353,15 +353,18 @@ def format_opps(opps_list, *, tier_label=None):
         header = f"<b>{tier_label}</b>\n"
     elif summary.get('all_below_elite'):
         header = (
-            "<i>🛡️ Scanner-ranked setups below elite meta-labeler threshold.</i>\n\n"
+            "<i>🛡️ Scanner-ranked setups below high-conviction meta-labeler threshold.</i>\n\n"
         )
     elif summary.get('has_elite_verified'):
-        header = f"<i>✅ {summary.get('elite_verified_count', 0)} elite-verified</i>\n\n"
+        header = f"<i>✅ {summary.get('elite_verified_count', 0)} high-conviction verified</i>\n\n"
     res = [header] if header else []
     try:
         from backend.telegram.formatting.telegram_formatter import _single_action_label
+        from backend.intelligence.institutional_language import format_signal_status_line, apply_institutional_tone
     except Exception:
         _single_action_label = None  # type: ignore
+        format_signal_status_line = None  # type: ignore
+        apply_institutional_tone = lambda x: x  # type: ignore
 
     for i, o in enumerate(opps_list, 1):
         o = _dict(o)
@@ -372,9 +375,13 @@ def format_opps(opps_list, *, tier_label=None):
             tier_tag = f" {_single_action_label(o)}"
         else:
             tier_tag = f" [{tier}]" if tier and str(tier).upper() != action else f" [{action}]"
-        conf = _text(o.get('display_confidence') or o.get('confidence'), 'MEDIUM').upper()
+        if format_signal_status_line:
+            status_line = format_signal_status_line(o)
+        else:
+            conf = _text(o.get('display_confidence') or o.get('confidence'), 'MEDIUM').upper()
+            status_line = f'Status: Watchlist · Confidence: {conf}'
         note = o.get('confidence_note') or ''
-        note_html = f"\n   ⚠️ <i>{note}</i>" if note else ""
+        note_html = f"\n   ⚠️ <i>{apply_institutional_tone(note)}</i>" if note else ""
         ml = o.get('ml_confidence')
         ml_html = f" · ML {ml}" if ml and o.get('elite_verified') else ""
         tier_upper = str(tier).upper()
@@ -414,8 +421,8 @@ def format_opps(opps_list, *, tier_label=None):
         res.append(
             f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b>{tier_tag}{badge}\n"
             f"{levels_html}"
-            f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html if is_elite else ''}{inv_html}{why_html}\n"
-            f"   <i>{_text(o.get('logic'), 'No rationale provided.')}</i>"
+            f"   📊 {status_line}{ml_html}{note_html if is_elite else ''}{inv_html}{why_html}\n"
+            f"   <i>{apply_institutional_tone(_text(o.get('logic'), 'No rationale provided.'))}</i>"
         )
     return "\n\n".join(res)
 
@@ -440,7 +447,7 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
 
     sections = []
     if include_elite:
-        block = format_opps(elite, tier_label='🎯 ELITE')
+        block = format_opps(elite, tier_label='🎯 HIGH CONVICTION')
         if block:
             sections.append(block)
     if watch:
@@ -681,7 +688,7 @@ def build_msg6_sectors_global_action(intel):
         "🚀 <b>ACTION PLAN</b>",
         action,
         "━━━━━━━━━━━━━━━━━━━━",
-        "📌 <b>QUICK COMMANDS</b>\n\n/brain — Full brain\n/elite — ML Filtered Setups\n/opps — Opportunities\n/risks — Avoid list\n/action — Action plan\n/sectors — Sector rotation\n\n<i>Brain auto-pushes after each strategic run.</i>",
+        "📌 <b>QUICK COMMANDS</b>\n\n/brain — Full brain\n/elite — High-conviction setups\n/opps — Opportunities\n/risks — Avoid list\n/action — Action plan\n/sectors — Sector rotation\n\n<i>Brain auto-pushes after each strategic run.</i>",
     ]
     return "\n\n".join(parts)
 
@@ -772,54 +779,69 @@ def _enqueue_brain_push(work_fn):
 
 
 def render_brain_messages(intel: dict, *, snap=None) -> list:
-    """Single render pass — ordered brain sections for Telegram queue."""
+    """Single render pass — 3 consolidated brain messages for Telegram queue."""
     from backend.lifecycle.unified_metrics import format_calibration_telegram
+    from backend.intelligence.institutional_language import apply_institutional_tone, institutional_regime_label
 
     intel = normalize_intel(intel) or {}
-    sections = []
+    stale = _brain_stale_prefix or stale_warning(intel)
+    ts_str = _text(intel.get('generation_time'), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    mood = _dict(intel.get('market_mood'))
 
-    sections.append(('Header', build_msg1_header(intel)))
-    sections.append(('Summary', build_msg2_summary_govt(intel)))
-    sections.append(('Market mood', build_msg3_scanner_sentiment(intel)))
+    # --- Message 1: executive summary + sentiment + regime ---
+    summary_body = build_compressed_summary(intel, include_stale=False)
+    regime = 'VOLATILE'
+    try:
+        from backend.utils.config import ANALYSIS_STATE_FILE
+        if ANALYSIS_STATE_FILE.exists():
+            state = json.loads(ANALYSIS_STATE_FILE.read_text(encoding='utf-8'))
+            regime = institutional_regime_label(str(state.get('last_regime') or 'volatile'))
+    except Exception:
+        regime = institutional_regime_label('volatile')
+    sentiment_block = (
+        "💬 <b>MARKET MOOD & SENTIMENT</b>\n\n"
+        f"🌍 <b>Global:</b> {apply_institutional_tone(_text(mood.get('global_mood'), 'Unknown'))}\n"
+        f"🇮🇳 <b>India:</b> {apply_institutional_tone(_text(mood.get('india_outlook'), 'Unknown'))}\n"
+        f"🛒 <b>Retail:</b> {apply_institutional_tone(_text(mood.get('retail_mood'), 'Unknown'))}\n"
+        f"📊 <b>Regime:</b> {regime}"
+    )
+    msg1 = f"{stale}{build_msg1_header(intel)}\n\n{summary_body}\n\n{sentiment_block}"
 
+    # --- Message 2: opportunities + risks ---
     opps = get_opportunities(intel)
-    opps_primary = format_opps(opps[:5]) if opps else ''
-    if not opps_primary:
+    opps_text = format_opps(opps[:10]) if opps else ''
+    if not opps_text:
         try:
             from backend.orchestration.opportunity_filter import rank_opportunities_tiered
-            opps_primary = format_opps_tiered(rank_opportunities_tiered(intel), include_elite=True)
+            opps_text = format_opps_tiered(rank_opportunities_tiered(intel), include_elite=True)
         except Exception:
-            opps_primary = '<i>Monitoring for ranked setups.</i>'
-    sections.append(('Top opportunities', f"💎 <b>TOP OPPORTUNITIES</b>\n\n{opps_primary}"))
-
-    if len(opps) > 5:
-        opps_extra = format_opps(opps[5:10])
-        if opps_extra:
-            sections.append(('More opportunities', f"💎 <b>TOP OPPORTUNITIES (6-10)</b>\n\n{opps_extra}"))
-
+            opps_text = '<i>Monitoring for ranked setups.</i>'
     risks = _list(intel.get('risks_and_avoids'))
-    sections.append(('Risks', f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}"))
+    msg2 = (
+        f"💎 <b>OPPORTUNITIES</b>\n\n{opps_text}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}"
+    )
 
+    # --- Message 3: sectors + calibration ---
     sectors = _dict(intel.get('sector_rotation'))
     bullish = _join_list(sectors.get('bullish'))
     bearish = _join_list(sectors.get('bearish'))
-    sections.append((
-        'Sectors',
-        f"🔄 <b>SECTOR ROTATION</b>\n\n🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}",
-    ))
-
-    action = _text(intel.get('action_plan'), '')
-    if snap is not None:
-        action = _text(getattr(snap, 'action_plan', None) or action, action or 'No action plan provided.')
-    sections.append(('Action plan', f"🚀 <b>ACTION PLAN</b>\n\n{action or 'No action plan provided.'}"))
-
     cal_intel = _professionalize_calibration_text(intel.get('self_calibration'))
     cal_metrics = format_calibration_telegram()
-    sections.append((
-        'Calibration',
-        f"🎯 <b>CALIBRATION</b>\n\n{cal_intel}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{cal_metrics}",
-    ))
-    return sections
+    msg3 = (
+        f"🔄 <b>SECTOR ROTATION</b>\n\n"
+        f"🟢 <b>Bullish:</b> {bullish}\n"
+        f"🔴 <b>Bearish:</b> {bearish}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🎯 <b>CALIBRATION</b>\n\n{cal_intel}\n\n{cal_metrics}"
+    )
+
+    return [
+        ('Executive summary', msg1),
+        ('Opportunities & risks', msg2),
+        ('Sectors & calibration', msg3),
+    ]
 
 
 def _prepare_intel_from_snapshot(snap):
@@ -877,7 +899,7 @@ def _push_full_brain_impl(*, command='full', cycle_id=''):
     _brain_stale_prefix = stale_warning(raw_intel or intel)
 
     sections = render_brain_messages(intel, snap=snap)
-    safe_print(f"[BRAIN] Pushing {len(sections)}-message brain to Telegram (single render pass)...")
+    safe_print(f"[BRAIN] Pushing {len(sections)}-message brain to Telegram (3-message consolidated)...")
     for label, text in sections:
         try:
             send_chunked(text, command=command, cycle_id=cycle_id)

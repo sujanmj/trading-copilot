@@ -523,15 +523,15 @@ def _cmd_elite_body():
                     'Capital preservation mode active.'
                 )
             msg = (
-                "🛡️ <b>ELITE</b>\n\n"
+                "🛡️ <b>HIGH CONVICTION</b>\n\n"
                 f"{empty_msg}"
                 f"{watch_note}"
             )
             send_message(msg, command='elite')
             return
             
-        msg = f"🎯 <b>ELITE SETUPS ({len(elite_signals)})</b> · HIGH conviction\n"
-        msg += f"🧠 Engine: <code>{engine}</code>\n\n"
+        msg = f"🎯 <b>HIGH-CONVICTION SETUPS ({len(elite_signals)})</b>\n"
+        msg += f"🧠 Meta-labeler: <code>{engine}</code>\n\n"
         
         for stock in elite_signals:
             symbol = stock.get("symbol", stock.get("Stock", "UNKNOWN"))

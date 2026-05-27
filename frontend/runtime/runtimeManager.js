@@ -174,6 +174,7 @@
           ...((cache.stats && cache.stats.metrics_all_time) || {}),
           ...msMetrics,
         },
+        metric_sections: msMetrics.sections || (cache.stats && cache.stats.metric_sections),
         lifecycle_calibration: ms.calibration || (cache.stats && cache.stats.lifecycle_calibration),
       };
     }
@@ -532,19 +533,29 @@
     const metrics = ms.metrics || {};
     const rs = ms.runtime_state || (state && state.runtime_state) || {};
     const cal = (state && state.calibration_summary) || {};
+    const sections = metrics.sections || cal.metric_sections || {};
+    const live = sections.live_session || cal.live_session || {};
+    const hist = sections.historical_calibration || cal.historical_calibration || {};
+    const archived = sections.archived || cal.archived || {};
     const counts = rs.prediction_counts || {};
     return {
-      wins: metrics.wins ?? counts.wins ?? cal.wins ?? 0,
-      losses: metrics.losses ?? counts.losses ?? cal.losses ?? 0,
+      wins: metrics.wins ?? counts.wins ?? hist.wins ?? cal.wins ?? 0,
+      losses: metrics.losses ?? counts.losses ?? hist.losses ?? cal.losses ?? 0,
       partials: metrics.partials ?? counts.partials ?? cal.partials ?? 0,
       resolved: metrics.resolved ?? counts.resolved ?? cal.resolved ?? 0,
-      pending: metrics.pending ?? counts.pending ?? cal.pending ?? 0,
-      evaluated: metrics.evaluated ?? counts.evaluated ?? cal.evaluated ?? 0,
-      expired: metrics.expired ?? counts.expired ?? cal.expired ?? 0,
-      neutralized: metrics.neutralized ?? counts.neutralized ?? counts.neutral ?? cal.neutralized ?? 0,
-      win_rate: metrics.win_rate ?? cal.win_rate ?? null,
-      win_rate_display: metrics.win_rate_display ?? cal.win_rate_display ?? null,
-      statistically_confident: metrics.statistically_confident ?? cal.statistically_confident ?? false,
+      pending: live.pending ?? metrics.pending ?? counts.pending ?? cal.pending ?? 0,
+      evaluated: hist.evaluated_sample ?? metrics.evaluated ?? counts.evaluated ?? cal.evaluated ?? 0,
+      expired: archived.expired ?? metrics.expired ?? counts.expired ?? cal.expired ?? 0,
+      neutralized: archived.neutralized ?? metrics.neutralized ?? counts.neutralized ?? cal.neutralized ?? 0,
+      active_predictions: live.active_predictions ?? live.pending ?? counts.pending ?? 0,
+      resolved_today: live.resolved_today ?? 0,
+      win_rate: hist.win_rate ?? metrics.win_rate ?? cal.win_rate ?? null,
+      win_rate_display: hist.win_rate_display ?? metrics.win_rate_display ?? cal.win_rate_display ?? null,
+      statistically_confident: hist.statistically_confident ?? metrics.statistically_confident ?? cal.statistically_confident ?? false,
+      sections,
+      live_session: live,
+      historical_calibration: hist,
+      archived,
       source: metrics.source || cal.source || 'snapshot',
     };
   }

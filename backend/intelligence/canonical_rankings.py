@@ -173,7 +173,7 @@ def build_action_plan_text(symbols: List[str], ranked: List[dict], intel: Option
     return (
         f"WATCH:\n{watch_line}\n\n"
         f"AVOID:\n{avoid}\n\n"
-        f"ELITE:\n{elite_line}"
+        f"HIGH CONVICTION:\n{elite_line}"
     )
 
 

@@ -19,6 +19,7 @@ __all__ = [
     'AWAITING_CONFIDENCE_MSG',
     'MIN_WIN_RATE_SAMPLE',
     'build_canonical_metrics',
+    'build_metric_sections',
     'format_win_rate_display',
     'resolved_outcomes',
     'validate_win_rate',
@@ -79,6 +80,72 @@ def validate_win_rate(metrics: Optional[Dict[str, Any]]) -> tuple[bool, list[str
     return len(issues) == 0, issues
 
 
+def build_metric_sections(
+    *,
+    all_time: Optional[Dict[str, Any]] = None,
+    daily: Optional[Dict[str, Any]] = None,
+    pending_classification: Optional[Dict[str, Any]] = None,
+    calibration: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Separate LIVE SESSION / HISTORICAL CALIBRATION / ARCHIVED — never mix counters."""
+    all_time = dict(all_time or {})
+    daily = dict(daily or {})
+    pending_cls = dict(pending_classification or {})
+    cal = dict(calibration or {})
+
+    hist = build_canonical_metrics(all_time)
+    daily_norm = build_canonical_metrics(daily) if daily else {}
+
+    pending_active = int(
+        pending_cls.get('pending_active')
+        or pending_cls.get('active_pending')
+        or daily_norm.get('pending')
+        or 0
+    )
+    resolved_today = int(
+        daily_norm.get('evaluated')
+        or daily_norm.get('total_evaluated')
+        or 0
+    )
+
+    live_session = {
+        'active_predictions': pending_active,
+        'pending': pending_active,
+        'resolved_today': resolved_today,
+        'wins_today': int(daily_norm.get('wins') or 0),
+        'losses_today': int(daily_norm.get('losses') or 0),
+    }
+
+    historical_calibration = {
+        'evaluated_sample': int(hist.get('evaluated') or hist.get('total_evaluated') or 0),
+        'wins': int(hist.get('wins') or 0),
+        'losses': int(hist.get('losses') or 0),
+        'resolved': int(hist.get('resolved') or resolved_outcomes(hist.get('wins', 0), hist.get('losses', 0))),
+        'win_rate': hist.get('win_rate'),
+        'win_rate_display': hist.get('win_rate_display'),
+        'statistically_confident': hist.get('statistically_confident'),
+        'calibration_phase': cal.get('calibration_phase'),
+        'calibration_confidence': cal.get('message') or hist.get('win_rate_display'),
+    }
+
+    archived = {
+        'expired': int(pending_cls.get('expired') or hist.get('expired') or 0),
+        'neutralized': int(
+            pending_cls.get('neutralized')
+            or pending_cls.get('neutralized_today')
+            or hist.get('neutralized')
+            or hist.get('neutral')
+            or 0
+        ),
+    }
+
+    return {
+        'live_session': live_session,
+        'historical_calibration': historical_calibration,
+        'archived': archived,
+    }
+
+
 def build_canonical_metrics(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Normalize a metrics dict with canonical win_rate fields."""
     raw = dict(raw or {})
@@ -110,4 +177,7 @@ def build_canonical_metrics(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
     if not wr.get('statistically_confident'):
         out['win_rate'] = None
+    sections = raw.get('sections')
+    if isinstance(sections, dict):
+        out['sections'] = sections
     return out

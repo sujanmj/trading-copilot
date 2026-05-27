@@ -264,15 +264,31 @@ def _calibration_status_message(actionable: int) -> str:
 def get_unified_snapshot() -> Dict[str, Any]:
     """Full metrics bundle for exports, API runtime, and Telegram."""
     init_db()
+    all_time = get_outcome_metrics('all_time')
+    daily = get_outcome_metrics('daily')
+    calibration = get_calibration_metrics()
+    pending_cls = _get_pending_classification_safe()
+    from backend.metrics.canonical_metrics import build_metric_sections
+
+    sections = build_metric_sections(
+        all_time=all_time,
+        daily=daily,
+        pending_classification=pending_cls,
+        calibration=calibration,
+    )
+    all_time = {**all_time, 'sections': sections}
+    daily = {**daily, 'sections': sections}
     return {
         'generated_at': datetime.now().isoformat(),
         'source': 'sqlite_unified_metrics',
         'db_stats': get_db_stats(),
         'predictions': get_prediction_metrics('all_time'),
-        'metrics_all_time': get_outcome_metrics('all_time'),
+        'metrics_all_time': all_time,
         'metrics_weekly': get_outcome_metrics('weekly'),
-        'metrics_daily': get_outcome_metrics('daily'),
-        'calibration': get_calibration_metrics(),
+        'metrics_daily': daily,
+        'calibration': calibration,
+        'metric_sections': sections,
+        'pending_classification': pending_cls,
         'partition_validation': __import__(
             'backend.lifecycle.eod_reconciliation_engine', fromlist=['validate_metrics_partition']
         ).validate_metrics_partition(),
@@ -323,93 +339,105 @@ def _win_rate_line(m: dict, actionable: int) -> str:
 
 def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'today') -> str:
     snap = get_unified_snapshot()
-    if metrics is not None:
-        m = metrics
-        label = 'TODAY SESSION' if session == 'today' else 'HISTORICAL LEARNING'
-    elif session == 'historical':
-        m = snap['metrics_all_time']
-        label = 'HISTORICAL LEARNING'
-    else:
-        m = snap['metrics_daily']
-        label = 'TODAY SESSION'
-
-    from backend.lifecycle.win_rate_engine import win_rate_denominator
-    actionable = win_rate_denominator(m.get('wins', 0), m.get('losses', 0))
-    pending_cls = _get_pending_classification_safe()
-    msg = f"<b>📊 Trading Copilot Stats</b>\n<b>{label}</b>\n\n"
-    msg += f"<b>Predictions:</b> {m.get('prediction_total', m.get('total_predictions', 0))}\n"
-    msg += f"<b>Evaluated:</b> {m.get('evaluated', m.get('total_evaluated', 0))}\n"
-    msg += f"<b>Pending Active:</b> {pending_cls.get('pending_active', m.get('pending', 0))}\n"
-    if pending_cls.get('expired') or pending_cls.get('low_data_pending'):
-        msg += (
-            f"<i>Expired: {pending_cls.get('expired', 0)} · "
-            f"Low-data: {pending_cls.get('low_data_pending', 0)} · "
-            f"Neutralized today: {pending_cls.get('neutralized_today', 0)}</i>\n"
+    sections = snap.get('metric_sections') or {}
+    if metrics is not None and not sections:
+        from backend.metrics.canonical_metrics import build_metric_sections
+        sections = build_metric_sections(
+            all_time=metrics if session == 'historical' else snap['metrics_all_time'],
+            daily=snap['metrics_daily'],
+            pending_classification=snap.get('pending_classification'),
+            calibration=snap.get('calibration'),
         )
-    if m.get('wins') or m.get('losses') or m.get('evaluated'):
-        msg += _win_rate_line(m, actionable)
-        msg += f"  ✅ Wins: {m.get('wins', 0)}\n"
-        msg += f"  ❌ Losses: {m.get('losses', 0)}\n"
-        if actionable >= 5:
-            from backend.metrics.format_helpers import safe_pct, safe_num
-            msg += f"<b>Avg Gain:</b> +{safe_pct(m.get('avg_gain_pct'), fallback='—')}\n"
-            msg += f"<b>Avg Loss:</b> -{safe_pct(m.get('avg_loss_pct'), fallback='—')}\n"
-            msg += f"<b>Profit Factor:</b> {safe_num(m.get('profit_factor'), fmt='.2f')}\n"
-    else:
-        msg += "\n<i>⏳ No resolved outcomes yet — pending predictions evaluate at EOD</i>"
+    live = sections.get('live_session') or {}
+    hist = sections.get('historical_calibration') or {}
+    archived = sections.get('archived') or {}
+
+    msg = '<b>📊 Trading Copilot Stats</b>\n\n'
+    msg += '<b>LIVE SESSION</b>\n'
+    msg += f"Active predictions: {live.get('active_predictions', live.get('pending', 0))}\n"
+    msg += f"Pending: {live.get('pending', 0)}\n"
+    msg += f"Resolved today: {live.get('resolved_today', 0)}"
+    if live.get('wins_today') or live.get('losses_today'):
+        msg += f" · {live.get('wins_today', 0)}W/{live.get('losses_today', 0)}L"
+    msg += '\n\n'
+
+    msg += '<b>HISTORICAL CALIBRATION</b>\n'
+    msg += f"Evaluated sample: {hist.get('evaluated_sample', 0)}\n"
+    msg += f"Wins: {hist.get('wins', 0)} · Losses: {hist.get('losses', 0)}\n"
+    wr_disp = hist.get('win_rate_display') or 'Awaiting statistical confidence'
+    msg += f"Win rate: {wr_disp}\n"
+    if hist.get('calibration_confidence'):
+        msg += f"<i>{hist.get('calibration_confidence')}</i>\n"
+
+    msg += '\n<b>ARCHIVED</b>\n'
+    msg += f"Expired: {archived.get('expired', 0)} · Neutralized: {archived.get('neutralized', 0)}"
     return msg
 
 
 def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
     snap = get_unified_snapshot()
-    daily = snap['metrics_daily']
-    historical = metrics or snap['metrics_all_time']
-    pending_cls = _get_pending_classification_safe()
-
-    daily_resolved = int(daily.get('evaluated', daily.get('total_evaluated', 0)) or 0)
-    hist_evaluated = historical.get('evaluated', historical.get('total_evaluated', 0))
-    wins = historical.get('wins', 0)
-    losses = historical.get('losses', 0)
-    from backend.lifecycle.win_rate_engine import win_rate_denominator
-    actionable = win_rate_denominator(wins, losses)
-
-    msg = "<b>📊 Outcomes</b>\n\n"
-    msg += "<b>LIVE SESSION</b>\n"
-    msg += f"Resolved: {daily_resolved}\n"
-    msg += f"Pending Active: {pending_cls.get('pending_active', 0)}\n"
-    msg += f"Expired: {pending_cls.get('expired', 0)}\n"
-    msg += f"Neutralized: {pending_cls.get('neutralized_today', 0)}\n\n"
-    msg += "<b>Historical Calibration</b>\n"
-
-    if not (wins or losses or hist_evaluated):
-        msg += f"Evaluated: {hist_evaluated}\n"
-        msg += "<i>Outcomes evaluate at post-market EOD and 8 AM cycle.</i>"
-        return msg
-
-    if actionable < 5:
-        msg += (
-            f"Evaluated: {hist_evaluated} · Wins: {wins} · Losses: {losses}\n"
-            "<i>Early positive sample detected.</i>"
+    sections = snap.get('metric_sections') or {}
+    if metrics is not None and not sections:
+        from backend.metrics.canonical_metrics import build_metric_sections
+        sections = build_metric_sections(
+            all_time=metrics or snap['metrics_all_time'],
+            daily=snap['metrics_daily'],
+            pending_classification=snap.get('pending_classification'),
+            calibration=snap.get('calibration'),
         )
-        return msg
+    live = sections.get('live_session') or {}
+    hist = sections.get('historical_calibration') or {}
+    archived = sections.get('archived') or {}
 
-    from backend.metrics.format_helpers import safe_pct
-    msg += f"Win rate: {safe_pct(historical.get('win_rate'))}\n"
-    msg += f"✅ Wins: {wins} | ❌ Losses: {losses} | 📊 Evaluated: {hist_evaluated}"
+    msg = '<b>📊 Outcomes</b>\n\n'
+    msg += '<b>LIVE SESSION</b>\n'
+    msg += f"Active predictions: {live.get('active_predictions', live.get('pending', 0))}\n"
+    msg += f"Pending: {live.get('pending', 0)}\n"
+    msg += f"Resolved today: {live.get('resolved_today', 0)}\n\n"
+
+    msg += '<b>HISTORICAL CALIBRATION</b>\n'
+    evaluated = hist.get('evaluated_sample', 0)
+    wins = hist.get('wins', 0)
+    losses = hist.get('losses', 0)
+    if not (wins or losses or evaluated):
+        msg += f"Evaluated sample: {evaluated}\n"
+        msg += '<i>Outcomes evaluate at post-market EOD and 8 AM cycle.</i>\n\n'
+    else:
+        from backend.lifecycle.win_rate_engine import win_rate_denominator
+        actionable = win_rate_denominator(wins, losses)
+        if actionable < 5:
+            msg += (
+                f"Evaluated sample: {evaluated} · Wins: {wins} · Losses: {losses}\n"
+                '<i>Early positive sample detected.</i>\n\n'
+            )
+        else:
+            from backend.metrics.format_helpers import safe_pct
+            msg += f"Evaluated sample: {evaluated}\n"
+            msg += f"Win rate: {safe_pct(hist.get('win_rate'))}\n"
+            msg += f"✅ Wins: {wins} | ❌ Losses: {losses}\n\n"
+
+    msg += '<b>ARCHIVED</b>\n'
+    msg += f"Expired: {archived.get('expired', 0)} · Neutralized: {archived.get('neutralized', 0)}"
     return msg
 
 
 def format_calibration_telegram(cal: Optional[dict] = None) -> str:
     from backend.metrics.format_helpers import safe_pct
+    snap = get_unified_snapshot()
+    sections = snap.get('metric_sections') or {}
+    hist = sections.get('historical_calibration') or {}
+    archived = sections.get('archived') or {}
     c = cal or get_calibration_metrics()
-    phase = c.get('calibration_phase') or 'LEARNING'
+    phase = c.get('calibration_phase') or hist.get('calibration_phase') or 'LEARNING'
     msg = f"<b>🎯 Calibration</b> · <b>{phase}</b>\n\n"
-    msg += f"Predictions: {c.get('prediction_total', 0)} · Evaluated: {c.get('evaluated', c.get('total_evaluated', 0))}\n"
-    msg += f"Pending: {c.get('pending', 0)} · Resolved sample: {c.get('resolved_sample', 0)}\n"
-    if c.get('show_win_rate') or (c.get('resolved_sample') or 0) >= 20:
-        wr = safe_pct(c.get('win_rate'))
-        msg += f"Win rate: {wr} · Wins: {c.get('wins', 0)} · Losses: {c.get('losses', 0)}\n"
-    msg += f"<i>{c.get('message', '')}</i>"
+    msg += '<b>HISTORICAL CALIBRATION</b>\n'
+    msg += f"Evaluated sample: {hist.get('evaluated_sample', c.get('evaluated', 0))}\n"
+    msg += f"Wins: {hist.get('wins', c.get('wins', 0))} · Losses: {hist.get('losses', c.get('losses', 0))}\n"
+    if c.get('show_win_rate') or (c.get('resolved_sample') or 0) >= 20 or hist.get('statistically_confident'):
+        wr = safe_pct(hist.get('win_rate') if hist.get('win_rate') is not None else c.get('win_rate'))
+        msg += f"Win rate: {wr}\n"
+    msg += f"<i>{c.get('message') or hist.get('calibration_confidence') or ''}</i>\n"
+    msg += f"\n<b>ARCHIVED</b>\nExpired: {archived.get('expired', 0)} · Neutralized: {archived.get('neutralized', 0)}"
     return msg
 
 

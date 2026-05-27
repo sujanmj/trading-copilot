@@ -1,72 +1,71 @@
 {
-  "snapshot_id": "snap_10147f853277",
-  "generated_at": "2026-05-28T01:34:58.226601+05:30",
-  "market_session": "DEGRADED",
+  "snapshot_id": "snap_43dbb1aca56a",
+  "generated_at": "2026-05-28T01:46:49.367397+05:30",
+  "market_session": "PRE_MARKET",
   "lifecycle": {
-    "lifecycle_state": "DEGRADED",
+    "lifecycle_state": "PRE_MARKET",
     "lifecycle_base": "AFTER_HOURS",
-    "lifecycle_display": "Degraded — snapshot_age=54m; Scanner stalled: 9h",
+    "lifecycle_display": "Degraded — Stale or Conflicting State",
     "transition_valid": true,
     "transition_reason": "ok",
     "market_period": "night",
     "pipeline_status": "STALE",
     "after_hours_mode": false,
-    "suppress_trading_language": true,
+    "suppress_trading_language": false,
     "session_message": null,
     "collectors_may_run": true,
     "market_session_open": false
   },
   "runtime_state": {
-    "generated_at": "2026-05-28T01:34:58.202178+05:30",
+    "generated_at": "2026-05-28T01:46:49.366350+05:30",
     "authority": "runtime_state",
-    "primary_state": "DEGRADED",
+    "primary_state": "LIVE",
     "secondary_flags": {
-      "stale_snapshot": true,
+      "stale_snapshot": false,
       "scanner_stalled": true,
-      "cache_only": true,
-      "runtime_degraded": true,
-      "missing_confirmation": true,
-      "cache_mode": true
+      "cache_only": false,
+      "missing_confirmation": false,
+      "cache_mode": false
     },
     "source_freshness": {
       "scanner": {
         "status": "idle",
-        "age_seconds": 35112,
+        "age_seconds": 35823,
         "age_display": "9h",
         "stale": false,
         "file": "scanner_data.json"
       },
       "reddit": {
         "status": "idle",
-        "age_seconds": 33268,
+        "age_seconds": 33980,
         "age_display": "9h",
         "stale": false,
         "file": "reddit_data.json"
       },
       "govt": {
         "status": "idle",
-        "age_seconds": 33284,
+        "age_seconds": 33995,
         "age_display": "9h",
         "stale": false,
         "file": "govt_intelligence.json"
       },
       "news": {
         "status": "idle",
-        "age_seconds": 33282,
+        "age_seconds": 33993,
         "age_display": "9h",
         "stale": false,
         "file": "news_feed.json"
       },
       "global": {
         "status": "idle",
-        "age_seconds": 33284,
+        "age_seconds": 33995,
         "age_display": "9h",
         "stale": false,
         "file": "global_markets.json"
       },
       "india": {
         "status": "idle",
-        "age_seconds": 33294,
+        "age_seconds": 34005,
         "age_display": "9h",
         "stale": false,
         "file": "latest_market_data.json"
@@ -80,7 +79,7 @@
       },
       "history": {
         "status": "idle",
-        "age_seconds": 88976,
+        "age_seconds": 89687,
         "age_display": "24h",
         "stale": false,
         "file": "history_data.json"
@@ -93,25 +92,25 @@
     },
     "db_size_display": "1.0 MB",
     "lifecycle": {
-      "lifecycle_state": "DEGRADED",
+      "lifecycle_state": "PRE_MARKET",
       "lifecycle_base": "AFTER_HOURS",
-      "lifecycle_display": "Degraded — snapshot_age=54m; Scanner stalled: 9h",
+      "lifecycle_display": "Degraded — Stale or Conflicting State",
       "transition_valid": true,
       "transition_reason": "ok",
       "market_period": "night",
       "pipeline_status": "STALE",
       "after_hours_mode": false,
-      "suppress_trading_language": true,
+      "suppress_trading_language": false,
       "session_message": null,
       "collectors_may_run": true,
       "market_session_open": false
     },
     "session": {
-      "session_status": "DEGRADED",
-      "session_display": "Degraded — snapshot_age=54m; Scanner stalled: 9h",
+      "session_status": "PRE_MARKET",
+      "session_display": "Degraded — Stale or Conflicting State",
       "market_session_open": false,
       "after_hours_mode": false,
-      "suppress_trading_language": true,
+      "suppress_trading_language": false,
       "session_message": "After-hours intelligence mode active",
       "operational_mode": "night_intel"
     },
@@ -119,38 +118,40 @@
       "stages": {
         "scanner": {
           "status": "test",
-          "at": "2026-05-28T01:34:57.709764+05:30",
-          "last_success_at": "2026-05-28T01:34:57.709764+05:30",
+          "at": "2026-05-28T01:46:48.811601+05:30",
+          "last_success_at": "2026-05-28T01:46:48.811601+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "validate_probe"
         },
         "aggregation": {
           "status": "start",
-          "at": "2026-05-28T01:34:57.905047+05:30",
-          "last_success_at": "2026-05-28T01:34:57.905047+05:30",
-          "age_minutes": 0,
+          "at": "2026-05-28T01:46:49.045928+05:30",
+          "last_success_at": "2026-05-28T01:35:05.368651+05:30",
+          "age_minutes": 11,
           "stalled": false,
           "detail": "validate"
         },
         "synthesis": {
-          "status": "never",
-          "age_minutes": null,
+          "status": "ok",
+          "at": "2026-05-28T01:35:05.394312+05:30",
+          "last_success_at": "2026-05-28T01:35:05.394312+05:30",
+          "age_minutes": 11,
           "stalled": false,
-          "last_success_at": null
+          "detail": "test_snap"
         },
         "snapshot_export": {
           "status": "ok",
-          "at": "2026-05-28T00:40:51.032235+05:30",
-          "last_success_at": "2026-05-28T00:40:51.032235+05:30",
-          "age_minutes": 54,
-          "stalled": true,
-          "detail": "snap_fecf3a29413c"
+          "at": "2026-05-28T01:35:05.398306+05:30",
+          "last_success_at": "2026-05-28T01:35:05.398306+05:30",
+          "age_minutes": 11,
+          "stalled": false,
+          "detail": "test_snap"
         },
         "cache": {
           "status": "ok",
-          "at": "2026-05-28T01:34:57.966206+05:30",
-          "last_success_at": "2026-05-28T01:34:57.966206+05:30",
+          "at": "2026-05-28T01:46:49.144483+05:30",
+          "last_success_at": "2026-05-28T01:46:49.144483+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "stats_data.json"
@@ -162,37 +163,33 @@
           "last_success_at": null
         }
       },
-      "stalled_stages": [
-        "synthesis",
-        "snapshot_export"
-      ],
-      "historical_stalled_stages": [
-        "synthesis",
-        "snapshot_export"
-      ],
+      "stalled_stages": [],
+      "historical_stalled_stages": [],
       "healthy_stages": [
         "scanner",
         "aggregation",
+        "synthesis",
+        "snapshot_export",
         "cache"
       ],
-      "any_stalled": true,
-      "any_historical_stalled": true,
+      "any_stalled": false,
+      "any_historical_stalled": false,
       "last_stage": "cache",
-      "updated_at": "2026-05-28T01:34:57.966206+05:30"
+      "updated_at": "2026-05-28T01:46:49.144483+05:30"
     },
     "scanner_health": {
       "healthy": false,
       "stalled": true,
       "display": "Scanner stalled: 9h",
-      "age_minutes": 585,
-      "file_age_minutes": 585,
+      "age_minutes": 597,
+      "file_age_minutes": 597,
       "heartbeat_age_minutes": null,
       "stall_minutes": 45,
       "expect_quiet": false,
       "market_hours": false,
       "lock_hint": "",
       "scanner_file_exists": true,
-      "checked_at": "2026-05-28T01:34:58.114651+05:30"
+      "checked_at": "2026-05-28T01:46:49.275622+05:30"
     },
     "overnight_posture": {
       "india_open_bias": "FLAT_TO_MIXED",
@@ -206,76 +203,68 @@
     "stall_watchdog": {
       "degraded": true,
       "issues": [
-        "snapshot_stale",
-        "scanner_stalled",
-        "export:history_data.json stale 1482m",
-        "export:active_snapshot.json stale 54m",
-        "stage:synthesis",
-        "stage:snapshot_export"
+        "scanner_stalled"
       ],
       "root_causes": [
-        "snapshot_age=54m",
-        "Scanner stalled: 9h",
-        "history_data.json stale 1482m",
-        "active_snapshot.json stale 54m",
-        "synthesis:never_run",
-        "snapshot_export:sla_exceeded"
+        "Scanner stalled: 9h"
       ],
       "threshold_minutes": 30,
       "scanner": {
         "healthy": false,
         "stalled": true,
         "display": "Scanner stalled: 9h",
-        "age_minutes": 585,
-        "file_age_minutes": 585,
+        "age_minutes": 597,
+        "file_age_minutes": 597,
         "heartbeat_age_minutes": null,
         "stall_minutes": 30,
         "expect_quiet": false,
         "market_hours": false,
         "lock_hint": "",
         "scanner_file_exists": true,
-        "checked_at": "2026-05-28T01:34:58.108124+05:30"
+        "checked_at": "2026-05-28T01:46:49.271616+05:30"
       },
       "snapshot_freshness": {
-        "stale": true,
-        "age_minutes": 54
+        "stale": false,
+        "age_minutes": 11
       },
       "pipeline": {
         "stages": {
           "scanner": {
             "status": "test",
-            "at": "2026-05-28T01:34:57.709764+05:30",
-            "last_success_at": "2026-05-28T01:34:57.709764+05:30",
+            "at": "2026-05-28T01:46:48.811601+05:30",
+            "last_success_at": "2026-05-28T01:46:48.811601+05:30",
             "age_minutes": 0,
             "stalled": false,
             "detail": "validate_probe"
           },
           "aggregation": {
             "status": "start",
-            "at": "2026-05-28T01:34:57.905047+05:30",
-            "last_success_at": "2026-05-28T01:34:57.905047+05:30",
-            "age_minutes": 0,
+            "at": "2026-05-28T01:46:49.045928+05:30",
+            "last_success_at": "2026-05-28T01:35:05.368651+05:30",
+            "age_minutes": 11,
             "stalled": false,
             "detail": "validate"
           },
           "synthesis": {
-            "status": "never",
-            "age_minutes": null,
+            "status": "ok",
+            "at": "2026-05-28T01:35:05.394312+05:30",
+            "last_success_at": "2026-05-28T01:35:05.394312+05:30",
+            "age_minutes": 11,
             "stalled": false,
-            "last_success_at": null
+            "detail": "test_snap"
           },
           "snapshot_export": {
             "status": "ok",
-            "at": "2026-05-28T00:40:51.032235+05:30",
-            "last_success_at": "2026-05-28T00:40:51.032235+05:30",
-            "age_minutes": 54,
-            "stalled": true,
-            "detail": "snap_fecf3a29413c"
+            "at": "2026-05-28T01:35:05.398306+05:30",
+            "last_success_at": "2026-05-28T01:35:05.398306+05:30",
+            "age_minutes": 11,
+            "stalled": false,
+            "detail": "test_snap"
           },
           "cache": {
             "status": "ok",
-            "at": "2026-05-28T01:34:57.966206+05:30",
-            "last_success_at": "2026-05-28T01:34:57.966206+05:30",
+            "at": "2026-05-28T01:46:49.144483+05:30",
+            "last_success_at": "2026-05-28T01:46:49.144483+05:30",
             "age_minutes": 0,
             "stalled": false,
             "detail": "stats_data.json"
@@ -287,58 +276,32 @@
             "last_success_at": null
           }
         },
-        "stalled_stages": [
-          "synthesis",
-          "snapshot_export"
-        ],
-        "historical_stalled_stages": [
-          "synthesis",
-          "snapshot_export"
-        ],
+        "stalled_stages": [],
+        "historical_stalled_stages": [],
         "healthy_stages": [
           "scanner",
           "aggregation",
+          "synthesis",
+          "snapshot_export",
           "cache"
         ],
-        "any_stalled": true,
-        "any_historical_stalled": true,
+        "any_stalled": false,
+        "any_historical_stalled": false,
         "last_stage": "cache",
-        "updated_at": "2026-05-28T01:34:57.966206+05:30"
+        "updated_at": "2026-05-28T01:46:49.144483+05:30"
       },
       "pipeline_stages": {
-        "overdue": [
-          {
-            "stage": "synthesis",
-            "reason": "never_run"
-          },
-          {
-            "stage": "snapshot_export",
-            "age_minutes": 54,
-            "reason": "sla_exceeded"
-          }
-        ],
-        "critical_overdue": [
-          {
-            "stage": "synthesis",
-            "reason": "never_run"
-          },
-          {
-            "stage": "snapshot_export",
-            "age_minutes": 54,
-            "reason": "sla_exceeded"
-          }
-        ],
+        "overdue": [],
+        "critical_overdue": [],
         "threshold_minutes": 30
       },
-      "checked_at": "2026-05-28T01:34:58.110996+05:30"
+      "checked_at": "2026-05-28T01:46:49.272420+05:30"
     },
     "collector_activity": {
       "collectors_active": true,
       "collector_count": 1,
       "collector_ok_count": 0,
-      "collector_issues": [
-        "intelligence_heartbeat_stale:3265s"
-      ]
+      "collector_issues": []
     },
     "market_phase": "night",
     "operational": {
@@ -363,9 +326,9 @@
       "regime_display": "Panic Volatile"
     },
     "quality_score": {
-      "quality_score": 0.342,
-      "quality_display": "34%",
-      "suppressed": true
+      "quality_score": 0.612,
+      "quality_display": "61%",
+      "suppressed": false
     },
     "win_rate": {
       "win_rate": 60.0,
@@ -419,37 +382,55 @@
       "win_rate": 60.0,
       "win_rate_display": "60.0%",
       "win_rate_denominator": 10,
-      "statistically_confident": true
+      "statistically_confident": true,
+      "sections": {
+        "live_session": {
+          "active_predictions": 25,
+          "pending": 25,
+          "resolved_today": 0,
+          "wins_today": 0,
+          "losses_today": 0
+        },
+        "historical_calibration": {
+          "evaluated_sample": 58,
+          "wins": 6,
+          "losses": 4,
+          "resolved": 10,
+          "win_rate": 60.0,
+          "win_rate_display": "60.0%",
+          "statistically_confident": true,
+          "calibration_phase": "EARLY CONFIDENCE",
+          "calibration_confidence": "Early confidence — metrics directional only, not statistically stable."
+        },
+        "archived": {
+          "expired": 108,
+          "neutralized": 0
+        }
+      }
     },
     "snapshot_freshness": {
       "fresh": false,
-      "stale": true,
-      "degraded": true,
-      "health_tier": "stale",
-      "age_minutes": 54,
+      "stale": false,
+      "degraded": false,
+      "health_tier": "aging",
+      "age_minutes": 11,
       "stale_threshold_minutes": 15,
       "degraded_threshold_minutes": 15,
-      "pipeline_stalled": true,
-      "snapshot_version": 50,
-      "active_snapshot_id": "snap_20260528_004032",
-      "freshness_score": 25,
-      "suppress_confidence": true,
-      "block_elite_outputs": true,
-      "quality_score_penalty": 0.35,
-      "collector_issues": [
-        "intelligence_heartbeat_stale:3265s"
-      ],
+      "pipeline_stalled": false,
+      "snapshot_version": 52,
+      "active_snapshot_id": "snap_20260528_013459",
+      "freshness_score": 90,
+      "suppress_confidence": false,
+      "block_elite_outputs": false,
+      "quality_score_penalty": 0.08,
+      "collector_issues": [],
       "sla_seconds": 900,
-      "warnings": [
-        "Snapshot older than 15 minutes",
-        "Pipeline stalled",
-        "intelligence_heartbeat_stale:3265s"
-      ],
+      "warnings": [],
       "collectors_active": true,
-      "age_display": "54m",
+      "age_display": "11m",
       "freshness_available": true,
       "freshness_unavailable": false,
-      "status_label": "stale"
+      "status_label": "aging"
     },
     "provider_health": {
       "status": "ok",
@@ -507,11 +488,11 @@
       "low_confidence_skips": 0
     },
     "intelligence_status": {
-      "status": "degraded",
-      "message": "Snapshot stale — intelligence confidence suppressed",
-      "degraded": true,
-      "elite_blocked": true,
-      "health_tier": "stale"
+      "status": "aging",
+      "message": "Snapshot aging — awaiting fresh cycle",
+      "degraded": false,
+      "elite_blocked": false,
+      "health_tier": "aging"
     },
     "scheduler": {
       "phase": "STALE",
@@ -569,17 +550,14 @@
       }
     },
     "alert_eligibility": {
-      "eligible": false,
-      "execution_eligible": false,
+      "eligible": true,
+      "execution_eligible": true,
       "block_reasons": [
-        "stale_snapshot",
-        "lifecycle_mismatch",
-        "missing_ai_confirmation",
         "suppressed:dedupe"
       ],
-      "suppression_count": 19,
+      "suppression_count": 21,
       "suppression_by_reason": {
-        "dedupe": 19
+        "dedupe": 21
       }
     },
     "metric_sources": {
@@ -591,36 +569,30 @@
       "issues": []
     }
   },
-  "snapshot_age_sec": 3240.0,
+  "snapshot_age_sec": 660.0,
   "freshness": {
     "fresh": false,
-    "stale": true,
-    "degraded": true,
-    "health_tier": "stale",
-    "age_minutes": 54,
+    "stale": false,
+    "degraded": false,
+    "health_tier": "aging",
+    "age_minutes": 11,
     "stale_threshold_minutes": 15,
     "degraded_threshold_minutes": 15,
-    "pipeline_stalled": true,
-    "snapshot_version": 50,
-    "active_snapshot_id": "snap_20260528_004032",
-    "freshness_score": 25,
-    "suppress_confidence": true,
-    "block_elite_outputs": true,
-    "quality_score_penalty": 0.35,
-    "collector_issues": [
-      "intelligence_heartbeat_stale:3265s"
-    ],
+    "pipeline_stalled": false,
+    "snapshot_version": 52,
+    "active_snapshot_id": "snap_20260528_013459",
+    "freshness_score": 90,
+    "suppress_confidence": false,
+    "block_elite_outputs": false,
+    "quality_score_penalty": 0.08,
+    "collector_issues": [],
     "sla_seconds": 900,
-    "warnings": [
-      "Snapshot older than 15 minutes",
-      "Pipeline stalled",
-      "intelligence_heartbeat_stale:3265s"
-    ],
+    "warnings": [],
     "collectors_active": true,
-    "age_display": "54m",
+    "age_display": "11m",
     "freshness_available": true,
     "freshness_unavailable": false,
-    "status_label": "stale"
+    "status_label": "aging"
   },
   "regime": {
     "regime": "panic_volatile",
@@ -629,9 +601,9 @@
   },
   "confidence": "5.2/10",
   "quality_score": {
-    "quality_score": 0.342,
-    "quality_display": "34%",
-    "suppressed": true
+    "quality_score": 0.612,
+    "quality_display": "61%",
+    "suppressed": false
   },
   "market_mood": {
     "global_mood": "NEUTRAL",
@@ -830,7 +802,31 @@
     "win_rate": 60.0,
     "win_rate_display": "60.0%",
     "win_rate_denominator": 10,
-    "statistically_confident": true
+    "statistically_confident": true,
+    "sections": {
+      "live_session": {
+        "active_predictions": 25,
+        "pending": 25,
+        "resolved_today": 0,
+        "wins_today": 0,
+        "losses_today": 0
+      },
+      "historical_calibration": {
+        "evaluated_sample": 58,
+        "wins": 6,
+        "losses": 4,
+        "resolved": 10,
+        "win_rate": 60.0,
+        "win_rate_display": "60.0%",
+        "statistically_confident": true,
+        "calibration_phase": "EARLY CONFIDENCE",
+        "calibration_confidence": "Early confidence — metrics directional only, not statistically stable."
+      },
+      "archived": {
+        "expired": 108,
+        "neutralized": 0
+      }
+    }
   },
   "providers": {
     "groq": {
@@ -879,37 +875,37 @@
   "feeds": {
     "scanner": {
       "status": "idle",
-      "age_seconds": 35112,
+      "age_seconds": 35823,
       "age_display": "9h",
       "stale": false
     },
     "reddit": {
       "status": "idle",
-      "age_seconds": 33268,
+      "age_seconds": 33980,
       "age_display": "9h",
       "stale": false
     },
     "govt": {
       "status": "idle",
-      "age_seconds": 33284,
+      "age_seconds": 33995,
       "age_display": "9h",
       "stale": false
     },
     "news": {
       "status": "idle",
-      "age_seconds": 33282,
+      "age_seconds": 33993,
       "age_display": "9h",
       "stale": false
     },
     "global": {
       "status": "idle",
-      "age_seconds": 33284,
+      "age_seconds": 33995,
       "age_display": "9h",
       "stale": false
     },
     "india": {
       "status": "idle",
-      "age_seconds": 33294,
+      "age_seconds": 34005,
       "age_display": "9h",
       "stale": false
     },
@@ -921,62 +917,56 @@
     },
     "history": {
       "status": "idle",
-      "age_seconds": 88976,
+      "age_seconds": 89687,
       "age_display": "24h",
       "stale": false
     }
   },
   "blockers": [
-    "stale_snapshot",
-    "lifecycle_mismatch",
-    "missing_ai_confirmation",
     "suppressed:dedupe",
-    "scanner_stalled",
-    "missing_confirmation"
+    "scanner_stalled"
   ],
   "warnings": [
-    "Snapshot stale — intelligence confidence suppressed",
-    "snapshot_stale",
-    "scanner_stalled",
-    "export:history_data.json stale 1482m",
-    "export:active_snapshot.json stale 54m"
+    "scanner_stalled"
   ],
   "pipeline_health": {
     "stages": {
       "scanner": {
         "status": "test",
-        "at": "2026-05-28T01:34:57.709764+05:30",
-        "last_success_at": "2026-05-28T01:34:57.709764+05:30",
+        "at": "2026-05-28T01:46:48.811601+05:30",
+        "last_success_at": "2026-05-28T01:46:48.811601+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "validate_probe"
       },
       "aggregation": {
         "status": "start",
-        "at": "2026-05-28T01:34:57.905047+05:30",
-        "last_success_at": "2026-05-28T01:34:57.905047+05:30",
-        "age_minutes": 0,
+        "at": "2026-05-28T01:46:49.045928+05:30",
+        "last_success_at": "2026-05-28T01:35:05.368651+05:30",
+        "age_minutes": 11,
         "stalled": false,
         "detail": "validate"
       },
       "synthesis": {
-        "status": "never",
-        "age_minutes": null,
+        "status": "ok",
+        "at": "2026-05-28T01:35:05.394312+05:30",
+        "last_success_at": "2026-05-28T01:35:05.394312+05:30",
+        "age_minutes": 11,
         "stalled": false,
-        "last_success_at": null
+        "detail": "test_snap"
       },
       "snapshot_export": {
         "status": "ok",
-        "at": "2026-05-28T00:40:51.032235+05:30",
-        "last_success_at": "2026-05-28T00:40:51.032235+05:30",
-        "age_minutes": 54,
-        "stalled": true,
-        "detail": "snap_fecf3a29413c"
+        "at": "2026-05-28T01:35:05.398306+05:30",
+        "last_success_at": "2026-05-28T01:35:05.398306+05:30",
+        "age_minutes": 11,
+        "stalled": false,
+        "detail": "test_snap"
       },
       "cache": {
         "status": "ok",
-        "at": "2026-05-28T01:34:57.966206+05:30",
-        "last_success_at": "2026-05-28T01:34:57.966206+05:30",
+        "at": "2026-05-28T01:46:49.144483+05:30",
+        "last_success_at": "2026-05-28T01:46:49.144483+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "stats_data.json"
@@ -988,14 +978,11 @@
         "last_success_at": null
       }
     },
-    "stalled_stages": [
-      "synthesis",
-      "snapshot_export"
-    ],
-    "any_stalled": true,
+    "stalled_stages": [],
+    "any_stalled": false,
     "last_stage": "cache",
-    "freshness_tier": "stale",
-    "snapshot_stale": true,
+    "freshness_tier": "aging",
+    "snapshot_stale": false,
     "collectors_active": true
   },
   "intelligence": {
@@ -1167,7 +1154,7 @@
   "calibration": "Past 30-day performance shows 60% win rate with exceptional success in TELECOM (100%). Recent losses in HIGH confidence calls (GREENLAM -4.4%, GNFC -3.6%) indicate need for caution in current panic volatile regime. Sector rotation signals align with past TELECOM success pattern. Avoiding repetition of 10 pending tickers from today. Current regime shows 60% alert precision in panic_volatile conditions, supporting selective aggressive positioning in ultra-scanner breakouts.",
   "executive_summary": "Indian markets trade in panic volatile regime with contradictory signals. Excise duty cut on fuel creates revenue concerns (-₹1 lakh crore) while strong sectoral rotation emerges in Power, Adani Group, and Media with exceptional volume spikes. Global headwinds from inflation risks and AI-driven layoffs persist, but falling crude oil (Iran deal hopes) provides relief. Scanner anomalies show extreme divergence with 7 ultra-bullish vs 2 ultra-bearish signals.",
   "collector_at": null,
-  "snapshot_built_at": "2026-05-28T01:34:58.226641+05:30",
-  "published_at": "2026-05-28T01:34:58.226689+05:30",
-  "_committed_at": "2026-05-28T01:34:58.226689+05:30"
+  "snapshot_built_at": "2026-05-28T01:46:49.367426+05:30",
+  "published_at": "2026-05-28T01:46:49.367461+05:30",
+  "_committed_at": "2026-05-28T01:46:49.367461+05:30"
 }

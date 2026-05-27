@@ -62,7 +62,11 @@ def _load_metrics() -> Dict[str, Any]:
         from backend.lifecycle.unified_metrics import get_unified_snapshot
         from backend.metrics.canonical_metrics import build_canonical_metrics
         snap = get_unified_snapshot() or {}
-        return build_canonical_metrics(snap.get('metrics_all_time') or {})
+        sections = snap.get('metric_sections') or {}
+        base = build_canonical_metrics(snap.get('metrics_all_time') or {})
+        if sections:
+            base['sections'] = sections
+        return base
     except Exception:
         return {}
 
@@ -612,14 +616,21 @@ def apply_to_snapshot_payload(snapshot: dict) -> dict:
     wr = state.get('win_rate') or {}
     counts = state.get('prediction_counts') or {}
     cal_summary = dict(out.get('calibration_summary') or {})
+    sections = (state.get('metrics') or {}).get('sections') or {}
     cal_summary.update({
         'evaluated': counts.get('evaluated'),
         'pending': counts.get('pending'),
         'wins': counts.get('wins'),
         'losses': counts.get('losses'),
+        'expired': counts.get('expired'),
+        'neutralized': counts.get('neutralized'),
         'win_rate': wr.get('win_rate'),
         'win_rate_display': wr.get('win_rate_display'),
         'statistically_confident': wr.get('statistically_confident'),
+        'metric_sections': sections,
+        'live_session': sections.get('live_session') or {},
+        'historical_calibration': sections.get('historical_calibration') or {},
+        'archived': sections.get('archived') or {},
     })
     out['calibration_summary'] = cal_summary
 

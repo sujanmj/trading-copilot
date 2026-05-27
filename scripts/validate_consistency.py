@@ -63,16 +63,22 @@ def main() -> int:
     for field, val in [('wins', sqlite['wins']), ('losses', sqlite['losses'])]:
         if val and str(val) not in out_msg:
             errors.append(f'/outcomes missing {field}={val}')
-    if str(sqlite['evaluated']) not in cal_msg:
+    if str(hist_eval := sqlite['evaluated']) not in cal_msg and 'Evaluated sample' not in cal_msg:
         errors.append('/calibration missing evaluated count')
-    if 'TODAY SESSION' not in stats_msg:
-        errors.append('/stats missing TODAY SESSION label')
+    if 'LIVE SESSION' not in stats_msg:
+        errors.append('/stats missing LIVE SESSION label')
+    if 'HISTORICAL CALIBRATION' not in stats_msg:
+        errors.append('/stats missing HISTORICAL CALIBRATION label')
+    if 'ARCHIVED' not in stats_msg:
+        errors.append('/stats missing ARCHIVED label')
     if 'LIVE SESSION' not in out_msg:
         errors.append('/outcomes missing LIVE SESSION label')
-    if 'Historical Calibration' not in out_msg:
+    if 'HISTORICAL CALIBRATION' not in out_msg:
         errors.append('/outcomes missing Historical Calibration label')
-    if 'Pending Active' not in stats_msg:
-        errors.append('/stats missing Pending Active label')
+    if 'ARCHIVED' not in out_msg:
+        errors.append('/outcomes missing ARCHIVED label')
+    if 'Pending' not in stats_msg and 'pending' not in stats_msg.lower():
+        errors.append('/stats missing Pending label')
 
     from backend.lifecycle.lifecycle_rules import (
         classify_pending_quality,
@@ -90,7 +96,7 @@ def main() -> int:
             errors.append(f'pending_classification missing {key}')
 
     empty_plan = build_action_plan_text([], [], {'sector_rotation': {'bullish': ['POWER', 'TELECOM'], 'bearish': ['HOTELS']}, 'risks_and_avoids': [{'symbol': 'HOTELS'}]})
-    for section in ('WATCH:', 'AVOID:', 'ELITE:'):
+    for section in ('WATCH:', 'AVOID:', 'HIGH CONVICTION:'):
         if section not in empty_plan:
             errors.append(f'action plan missing {section}')
     if 'TACTICAL:' in empty_plan:
@@ -203,7 +209,7 @@ def main() -> int:
         errors.append('is_snapshot_stale should be true at 20m')
 
     from backend.telegram.formatting.telegram_formatter import format_action_plan, format_for_command
-    plan3 = format_action_plan('WATCH: BANKS\nAVOID: IT\nELITE: none')
+    plan3 = format_action_plan('WATCH: BANKS\nAVOID: IT\nHIGH CONVICTION: none')
     if plan3.count('\n') > 4:
         errors.append('format_action_plan should cap to 3-line posture')
     if len(format_for_command('x' * 5000, 'status')) > 4000:

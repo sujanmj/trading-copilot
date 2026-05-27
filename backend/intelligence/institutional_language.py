@@ -13,6 +13,8 @@ HIGH_CONVICTION_INTERNAL = frozenset({'ULTRA', 'HIGH_CONVICTION', 'HIGH CONVICTI
 
 # Retail phrase → institutional replacement (case-insensitive word boundaries where possible)
 PHRASE_MAP = [
+    (r'\bULTRA\s+bearish\b', 'elevated downside participation'),
+    (r'\bULTRA\s+bullish\b', 'directional strength extension'),
     (r'\bULTRA\s+today\b', 'High Conviction leadership today'),
     (r'\bVERY\s+STRONG\b', 'Strong'),
     (r'\bELITE\b', 'High Conviction'),
@@ -21,8 +23,13 @@ PHRASE_MAP = [
     (r'\bscanner\s+ULTRA\b', 'High Conviction scanner signal'),
     (r'\bULTRA\s+SIGNALS?\b', 'High Conviction signals'),
     (r'\bULTRA\b', 'High Conviction'),
-    (r'\belite threshold\b', 'ML confirmation threshold'),
-    (r'\bwatch low\b', 'Watchlist — low conviction'),
+    (r'\belite\s+threshold\b', 'high-conviction threshold'),
+    (r'\belite\s+meta[- ]labeler\b', 'high-conviction meta-labeler'),
+    (r'\belite\s+meta\b', 'high-conviction meta-labeler'),
+    (r'\bmajor\s+move\b', 'high-volatility continuation'),
+    (r'\bmoonshot\b', 'speculative extension'),
+    (r'\bwatch\s+low\b', 'Watchlist — Low confidence'),
+    (r'\bConf:\s*WATCH\b', 'Status: Watchlist · Confidence: Low'),
     (r'\bWEAK\b', 'Weak'),
     (r'\btop\s+opportunities\b', 'priority setups'),
     (r'\bbull\s+run\b', 'risk-on extension'),
@@ -89,7 +96,49 @@ def normalize_strength_label(strength: Optional[str], direction: Optional[str] =
 
 def tier_display_label(tier: Optional[str]) -> str:
     key = str(tier or '').upper().strip()
+    if key == 'WATCH':
+        return 'Watchlist'
     return DISPLAY_TIER_LABELS.get(key, tier or 'Watchlist')
+
+
+def confidence_display_label(confidence: Optional[str]) -> str:
+    """Map raw confidence bands to institutional labels."""
+    key = str(confidence or '').upper().strip()
+    mapping = {
+        'HIGH': 'High',
+        'MEDIUM': 'Medium',
+        'MODERATE': 'Medium',
+        'LOW': 'Low',
+        'WATCH': 'Low',
+        'SPECULATIVE': 'Low',
+    }
+    return mapping.get(key, key.title() if key else 'Medium')
+
+
+def format_signal_status_line(
+    item: Optional[dict] = None,
+    *,
+    tier: Optional[str] = None,
+    confidence: Optional[str] = None,
+) -> str:
+    """Separate status tier from confidence — never 'Conf: WATCH LOW'."""
+    o = item if isinstance(item, dict) else {}
+    tier_key = str(tier or o.get('display_tier') or o.get('action') or 'WATCH').upper()
+    conf_raw = confidence or o.get('display_confidence') or o.get('confidence') or 'MEDIUM'
+    conf_key = str(conf_raw).upper().strip()
+    if conf_key == 'WATCH' or (tier_key == 'WATCH' and conf_key in ('HIGH', 'WATCH')):
+        status = 'Watchlist'
+        conf_label = 'Low' if conf_key in ('WATCH', 'LOW', 'SPECULATIVE') else confidence_display_label(conf_key)
+    elif tier_key == 'ELITE':
+        status = 'High Conviction'
+        conf_label = confidence_display_label(conf_key if conf_key != 'WATCH' else 'HIGH')
+    elif tier_key == 'AVOID':
+        status = 'Elevated Risk'
+        conf_label = confidence_display_label(conf_key)
+    else:
+        status = tier_display_label(tier_key)
+        conf_label = confidence_display_label(conf_key)
+    return f'Status: {status} · Confidence: {conf_label}'
 
 
 def apply_institutional_tone(text: str) -> str:
@@ -163,9 +212,12 @@ def format_compressed_risks(risks: List[Any], *, max_lines_per_ticker: int = 2) 
             sym = str(r.get('symbol') or '').strip()
             logic_raw = str(r.get('logic') or '')
             logic_lines = [x.strip() for x in logic_raw.splitlines() if x.strip()][:max_lines_per_ticker]
-            logic = apply_institutional_tone(' '.join(logic_lines)[:120])
-            bits.append(sym if sym and sym != 'UNKNOWN' else logic)
-    return ', '.join(bits) if bits else 'Macro transmission risk'
+            logic = apply_institutional_tone(' '.join(logic_lines)[:160])
+            if sym and sym != 'UNKNOWN':
+                bits.append(f'{sym} — {logic}' if logic else sym)
+            elif logic:
+                bits.append(logic)
+    return '\n'.join(bits) if bits else 'Macro transmission risk'
 
 
 def elite_empty_block() -> str:

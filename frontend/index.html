@@ -1501,11 +1501,20 @@
     let actionClass = 'watch';
     if (action.includes('BUY') || action.includes('ACCUMULATE')) actionClass = 'buy';
     if (action.includes('SELL') || action.includes('AVOID')) actionClass = 'sell';
-    const tier = o.display_tier || (o.elite_verified ? 'ELITE' : (o.below_elite_threshold ? 'WATCH' : 'WATCH'));
-    const isElite = String(tier).toUpperCase() === 'ELITE';
+    const tier = o.display_tier || (o.elite_verified ? 'HIGH CONVICTION' : (o.below_elite_threshold ? 'WATCH' : 'WATCH'));
+    const tierLabel = String(tier).toUpperCase() === 'ELITE' ? 'High Conviction'
+      : String(tier).toUpperCase() === 'WATCH' ? 'Watchlist'
+      : String(tier).toUpperCase() === 'AVOID' ? 'Elevated Risk'
+      : tier;
+    const isElite = String(tier).toUpperCase() === 'ELITE' || String(tier).toUpperCase() === 'HIGH CONVICTION';
+    const confRaw = o.display_confidence || o.confidence || 'MEDIUM';
+    const confLabel = String(confRaw).toUpperCase() === 'WATCH' ? 'Low'
+      : String(confRaw).toUpperCase() === 'SPECULATIVE' ? 'Low'
+      : confRaw;
     const metaLine = [
       o.generated_at ? `Gen ${formatTime(o.generated_at) || String(o.generated_at).slice(0, 10)}` : null,
-      o.confidence ? `Conf ${o.confidence}` : null,
+      `Status ${tierLabel}`,
+      confLabel ? `Confidence ${confLabel}` : null,
       o.regime ? `Regime ${o.regime}` : null,
       o.direction ? o.direction : null,
       o.signal_type ? `Signal ${o.signal_type}` : null,
@@ -1524,7 +1533,7 @@
       <div class="trade-item ${actionClass}">
         <div class="trade-header">
           <h3>${escapeHtml(o.symbol || o.ticker || 'UNKNOWN')}</h3>
-          <span class="trade-badge ${actionClass}">${escapeHtml(tier)}</span>
+          <span class="trade-badge ${actionClass}">${escapeHtml(tierLabel)}</span>
         </div>
         ${metricsHtml}
         ${metaLine ? `<div style="font-size:9px;color:#8B949E;margin:4px 0 6px;">${escapeHtml(metaLine)}</div>` : ''}
@@ -2398,15 +2407,21 @@
     const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
     const dbStats = data.db_stats || { total_predictions: 0 };
     const metrics = data.metrics_all_time || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
+    const sections = canonical.sections || canonical.live_session ? canonical : (canonical && canonical.live_session ? canonical : null);
+    const live = (sections && sections.live_session) || canonical.live_session || {};
+    const hist = (sections && sections.historical_calibration) || canonical.historical_calibration || {};
+    const archived = (sections && sections.archived) || canonical.archived || {};
     const lcCal = data.lifecycle_calibration || (data.calibration_dashboard || {}).lifecycle_calibration || {};
     const lcStatus = data.lifecycle_status || {};
     const winRateLabel = formatWinRateDisplay(runtimeSnap, metrics, lcCal);
-    const winRateNumeric = (runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.win_rate != null)
+    const winRateNumeric = hist.win_rate != null ? hist.win_rate
+      : ((runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.win_rate != null)
       ? runtimeSnap.calibration_summary.win_rate
-      : (lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate != null ? metrics.win_rate : null));
-    const winRateConfident = !!(runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.statistically_confident);
+      : (lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate != null ? metrics.win_rate : null)));
+    const winRateConfident = hist.statistically_confident != null ? hist.statistically_confident
+      : !!(runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.statistically_confident);
     const lossRate = lcCal.loss_rate != null ? lcCal.loss_rate : (metrics.total_evaluated ? ((metrics.losses || 0) / metrics.total_evaluated * 100) : null);
-    const evaluated = lcCal.total_evaluated != null ? lcCal.total_evaluated : (metrics.total_evaluated || 0);
+    const evaluated = hist.evaluated_sample != null ? hist.evaluated_sample : (lcCal.total_evaluated != null ? lcCal.total_evaluated : (metrics.total_evaluated || metrics.evaluated || 0));
     const profitFactor = lcCal.profit_factor != null ? lcCal.profit_factor : (metrics.profit_factor || 0);
     const cal = data.calibration_dashboard || {};
     const schemaWarn = cal.status === 'degraded' ? (cal.reason || 'Calibration schema degraded — partial metrics only.') : '';
@@ -2420,24 +2435,24 @@
         <h2 style="margin-bottom: 16px; font-size: 14px;">🎯 AI Calibration Dashboard</h2>
         <div class="stats-grid-4">
           <div class="stat-big-card">
-            <div class="stat-big-label">Predictions</div>
-            <div class="stat-big-value" style="color:#88ccff;">${dbStats.total_predictions || 0}</div>
-            <div class="stat-big-sub">${evaluated} evaluated</div>
+            <div class="stat-big-label">Live Session</div>
+            <div class="stat-big-value" style="color:#88ccff;">${live.active_predictions || live.pending || metrics.pending || 0}</div>
+            <div class="stat-big-sub">active · ${live.resolved_today || 0} resolved today</div>
           </div>
           <div class="stat-big-card">
-            <div class="stat-big-label">Win Rate</div>
+            <div class="stat-big-label">Historical Win Rate</div>
             <div class="stat-big-value ${winRateConfident && winRateNumeric != null ? (winRateNumeric >= 60 ? 'green' : winRateNumeric >= 40 ? 'yellow' : 'red') : 'muted'}">${escapeHtml(winRateLabel)}</div>
-            <div class="stat-big-sub">${metrics.wins || 0}W / ${metrics.losses || 0}L</div>
+            <div class="stat-big-sub">${hist.wins || metrics.wins || 0}W / ${hist.losses || metrics.losses || 0}L · n=${evaluated}</div>
           </div>
           <div class="stat-big-card">
             <div class="stat-big-label">Loss Rate</div>
             <div class="stat-big-value ${lossRate != null && lossRate <= 35 ? 'green' : lossRate != null && lossRate <= 55 ? 'yellow' : lossRate != null ? 'red' : 'muted'}">${escapeHtml(formatPctSafe(lossRate, 'Awaiting statistical confidence'))}</div>
-            <div class="stat-big-sub">resolved losses</div>
+            <div class="stat-big-sub">historical calibration</div>
           </div>
           <div class="stat-big-card">
-            <div class="stat-big-label">Profit Factor</div>
-            <div class="stat-big-value ${profitFactor >= 2 ? 'green' : profitFactor >= 1 ? 'yellow' : 'red'}">${Number(profitFactor).toFixed(2)}</div>
-            <div class="stat-big-sub">gain ÷ loss</div>
+            <div class="stat-big-label">Archived</div>
+            <div class="stat-big-value muted">${archived.expired || metrics.expired || 0}</div>
+            <div class="stat-big-sub">expired · ${archived.neutralized || metrics.neutralized || 0} neutralized</div>
           </div>
         </div>
         ${evaluated === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(lcCal.message || lcStatus.calibration_message || (window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Calibration in progress — AI collecting outcome samples before adaptive tuning activates.') : 'Calibration in progress — AI collecting outcome samples before adaptive tuning activates.'))}</div>` : ''}
@@ -2450,7 +2465,7 @@
       html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Lifecycle Calibration Snapshot</div>`;
       html += calibRow('Confidence realism', lcCal.confidence_realism != null ? `${lcCal.confidence_realism}%` : '—', pctClass(lcCal.confidence_realism));
       html += calibRow('False positive rate', lcCal.false_positive_rate != null ? `${lcCal.false_positive_rate}%` : '—', pctClass(lcCal.false_positive_rate, true));
-      html += calibRow('Pending / expired', `${lcCal.pending || 0} pending · ${lcCal.expired || 0} expired`, 'muted');
+      html += calibRow('Pending / expired', `${live.pending || metrics.pending || 0} pending · ${archived.expired || 0} expired · ${archived.neutralized || 0} neutralized`, 'muted');
       html += `</div>`;
     }
 

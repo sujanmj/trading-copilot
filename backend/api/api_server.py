@@ -944,6 +944,7 @@ def _build_runtime_snapshot() -> dict:
         stats['metrics_daily'] = stats.get('metrics_daily') or {}
         stats['db_stats'] = live_agg.get('db_stats') or stats.get('db_stats') or {}
         stats['predictions'] = live_agg.get('predictions') or stats.get('predictions') or {}
+        stats['metric_sections'] = live_agg.get('metric_sections') or {}
         if live_agg.get('calibration'):
             stats['lifecycle_calibration'] = live_agg['calibration']
         data['stats'] = stats
@@ -1212,9 +1213,15 @@ def _build_runtime_snapshot() -> dict:
             'wins': metrics.get('wins', 0),
             'losses': metrics.get('losses', 0),
             'win_rate': metrics.get('win_rate'),
+            'win_rate_display': metrics.get('win_rate_display'),
+            'statistically_confident': metrics.get('statistically_confident'),
             'calibration_phase': cal_phase,
             'ai_runtime': ai_runtime,
             'dashboard_status': (stats.get('calibration_dashboard') or {}).get('status'),
+            'metric_sections': (metrics.get('sections') or stats.get('metric_sections') or {}),
+            'live_session': ((metrics.get('sections') or {}).get('live_session') or {}),
+            'historical_calibration': ((metrics.get('sections') or {}).get('historical_calibration') or {}),
+            'archived': ((metrics.get('sections') or {}).get('archived') or {}),
         },
         'journal_summary': {
             'entry_count': len(journal_entries),
@@ -1509,6 +1516,7 @@ def _build_gui_snapshot() -> dict:
     payload['action_plan'] = ms.action_plan or (ms.intelligence or {}).get('action_plan') or ''
     payload['exports'] = dict(payload.get('data') or {})
     ms_metrics = ms.metrics or {}
+    sections = ms_metrics.get('sections') or {}
     payload['calibration_summary'] = {
         'evaluated': ms_metrics.get('evaluated'),
         'pending': ms_metrics.get('pending'),
@@ -1522,6 +1530,10 @@ def _build_gui_snapshot() -> dict:
         'win_rate_display': ms_metrics.get('win_rate_display'),
         'statistically_confident': ms_metrics.get('statistically_confident'),
         'source': ms_metrics.get('source'),
+        'metric_sections': sections,
+        'live_session': sections.get('live_session') or {},
+        'historical_calibration': sections.get('historical_calibration') or {},
+        'archived': sections.get('archived') or {},
     }
     ok, issues = validate_market_snapshot(ms)
     payload['status'] = 'ok' if ok and not (ms.freshness or {}).get('degraded') else 'degraded'
