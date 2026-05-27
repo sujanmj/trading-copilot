@@ -143,9 +143,11 @@ def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_ki
         return False
 
 def _snapshot_prefix():
+    """Deprecated — use snapshot_stale_notice / session_notice only."""
     try:
-        from backend.intelligence.active_snapshot import snapshot_header, snapshot_stale_warning
-        return snapshot_stale_warning() + snapshot_header()
+        from backend.intelligence.active_snapshot import snapshot_header
+        from backend.runtime.market_snapshot_engine import snapshot_stale_notice
+        return snapshot_stale_notice() + snapshot_header()
     except Exception:
         return ''
 
@@ -179,6 +181,15 @@ def send_chunked(text, *, command='', cycle_id='', message_kind='final'):
         time.sleep(0.5)
 
 def load_intel():
+    """Read-only — canonical intelligence view from market snapshot engine."""
+    try:
+        from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+        snap = get_current_market_snapshot()
+        view = snap.intelligence or {}
+        if view:
+            return view
+    except Exception:
+        pass
     try:
         from backend.intelligence.active_snapshot import get_canonical_intelligence
         return get_canonical_intelligence()
@@ -265,24 +276,16 @@ def intel_age_hours(intel):
         return None
 
 
-def stale_warning(intel):
-    """Single stale/session notice — suppressed when canonical runtime says idle."""
+def stale_warning(intel=None):
+    """Single stale/session notice from committed market snapshot (no duplicate paths)."""
     try:
-        from backend.runtime.runtime_state import get_runtime_state
-        rs = get_runtime_state()
-        session = rs.get('session') or {}
-        if session.get('after_hours_mode'):
-            msg = session.get('session_message') or 'After-hours intelligence mode active'
-            return f"🌙 <i>{msg}</i>\n"
-        fresh = rs.get('snapshot_freshness') or {}
-        if fresh.get('stale'):
-            age = fresh.get('age_display') or 'freshness unavailable'
-            return f"⚠️ <i>Snapshot stale — {age}</i>\n"
-        if session.get('session_status') in ('WEEKEND', 'HOLIDAY'):
-            return f"🌙 <i>{session.get('session_display') or 'Market closed'}</i>\n"
+        from backend.runtime.market_snapshot_engine import snapshot_stale_notice
+        notice = snapshot_stale_notice()
+        if notice:
+            return notice
     except Exception:
         pass
-    hours = intel_age_hours(intel)
+    hours = intel_age_hours(intel) if intel else intel_age_hours(load_intel())
     if hours is not None and hours > 3:
         return f"⚠️ <i>Analysis age {hours:.1f}h — verify before acting</i>\n"
     return ''
@@ -764,8 +767,6 @@ def _push_full_brain_impl(*, command='full', cycle_id=''):
         return False
 
     _brain_stale_prefix = stale_warning(raw_intel)
-    if is_stale and age is not None and not _brain_stale_prefix:
-        _brain_stale_prefix = f"⚠️ <i>Analysis age {age:.1f}h — verify before acting</i>\n"
 
     try:
         from backend.orchestration.opportunity_filter import rank_opportunities_tiered, DEFAULT_OPPS_LIMIT
@@ -843,7 +844,9 @@ def push_summary(*, command='summary', cycle_id=''):
 def push_opps(*, command='opps', cycle_id=''):
     from backend.orchestration.opportunity_filter import rank_opportunities_tiered, DEFAULT_OPPS_LIMIT
     from backend.telegram.formatting.telegram_formatter import format_opps_tiered as fmt_opps, session_notice
-    raw = load_intel()
+    from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+    snap = get_current_market_snapshot()
+    raw = snap.intelligence or load_intel()
     debug_intel_fields(raw)
     intel = normalize_intel(raw)
     if not intel:
@@ -854,7 +857,7 @@ def push_opps(*, command='opps', cycle_id=''):
     except Exception as e:
         safe_print(f"[WARN] opportunity filter failed: {e}")
         tiers = {'watch': get_opportunities(intel)[:DEFAULT_OPPS_LIMIT], 'avoid': [], 'elite': []}
-    notice = session_notice()
+    notice = session_notice(snap.runtime_state)
     body = fmt_opps(tiers, include_elite=True)
     send_chunked(
         f"{notice}💎 <b>SIGNAL OPPORTUNITIES</b>\n\n{body}",
@@ -879,12 +882,14 @@ def push_risks(*, command='risks', cycle_id=''):
 
 def push_action(*, command='action', cycle_id=''):
     from backend.telegram.formatting.telegram_formatter import format_action_plan, snapshot_meta_line
-    intel = normalize_intel(load_intel())
+    from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+    snap = get_current_market_snapshot()
+    intel = snap.intelligence or normalize_intel(load_intel())
     if not intel:
         send_message('❌ No action plan. Run /refresh first.', command=command, cycle_id=cycle_id)
         return
-    action = _text(intel.get('action_plan'), '')
-    prefix = snapshot_meta_line()
+    action = _text(snap.action_plan or intel.get('action_plan'), '')
+    prefix = snapshot_meta_line(snap.runtime_state)
     send_chunked(f"{prefix}{format_action_plan(action)}", command=command, cycle_id=cycle_id)
 
 
@@ -904,12 +909,18 @@ def push_calibration(*, command='calibration', cycle_id=''):
 
 def push_sectors(*, command='sectors', cycle_id=''):
     from backend.telegram.formatting.telegram_formatter import format_sectors, snapshot_meta_line
-    intel = normalize_intel(load_intel())
-    if not intel:
+    from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+    snap = get_current_market_snapshot()
+    intel = snap.intelligence or normalize_intel(load_intel())
+    if not intel and not snap.sector_rotation:
         send_message('❌ No sector data. Run /refresh first.', command=command, cycle_id=cycle_id)
         return
-    sectors = _dict(intel.get('sector_rotation'))
-    send_chunked(f"{snapshot_meta_line()}{format_sectors(sectors)}", command=command, cycle_id=cycle_id)
+    sectors = _dict(snap.sector_rotation or intel.get('sector_rotation'))
+    send_chunked(
+        f"{snapshot_meta_line(snap.runtime_state)}{format_sectors(sectors)}",
+        command=command,
+        cycle_id=cycle_id,
+    )
 
 
 def push_global(*, command='global', cycle_id=''):

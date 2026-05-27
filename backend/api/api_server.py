@@ -1236,9 +1236,20 @@ def _build_runtime_snapshot() -> dict:
     })
     try:
         from backend.runtime.runtime_state import apply_to_snapshot_payload
-        return apply_to_snapshot_payload(payload)
+        payload = apply_to_snapshot_payload(payload)
     except Exception:
-        return payload
+        pass
+    try:
+        from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+        ms = get_current_market_snapshot()
+        payload['market_snapshot'] = ms.to_dict()
+        payload['snapshot_id'] = ms.snapshot_id
+        payload['primary_state'] = (ms.runtime_state or {}).get('primary_state')
+        payload['blockers'] = ms.blockers
+        payload['pipeline_health'] = ms.pipeline_health
+    except Exception:
+        pass
+    return payload
 
 
 @app.get("/api/runtime/audit", dependencies=[Depends(verify_api_key)])
@@ -1441,6 +1452,14 @@ def _build_health_payload() -> dict:
         "provider_ops": provider_ops,
         "provider_analytics": provider_analytics,
     }
+
+
+@app.get("/api/runtime/snapshot", dependencies=[Depends(verify_api_key)])
+def api_market_snapshot():
+    """Canonical MarketSnapshot JSON — single intelligence contract."""
+    from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+    snap = get_current_market_snapshot()
+    return snap.to_dict()
 
 
 @app.get("/api/runtime_snapshot", dependencies=[Depends(verify_api_key)])

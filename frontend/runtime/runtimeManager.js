@@ -401,18 +401,33 @@
     return String(value);
   }
 
+  function getMarketSnapshot() {
+    const snap = state || {};
+    return snap.market_snapshot || null;
+  }
+
   function getRuntimeStateFields() {
     const snap = state || {};
-    const rs = snap.runtime_state || {};
+    const ms = getMarketSnapshot();
+    const rs = (ms && ms.runtime_state) || snap.runtime_state || {};
+    const cal = snap.calibration_summary || {};
+    const metrics = (ms && ms.metrics) || {};
     return {
-      lifecycle: rs.lifecycle || {},
-      regime: rs.regime || {},
-      winRate: rs.win_rate || {},
-      predictionCounts: rs.prediction_counts || {},
-      snapshotFreshness: rs.snapshot_freshness || {},
+      lifecycle: (ms && ms.lifecycle) || rs.lifecycle || {},
+      regime: (ms && ms.regime) || rs.regime || {},
+      winRate: rs.win_rate || {
+        win_rate: metrics.win_rate,
+        win_rate_display: metrics.win_rate_display,
+        statistically_confident: metrics.statistically_confident,
+      },
+      predictionCounts: rs.prediction_counts || metrics,
+      snapshotFreshness: (ms && ms.freshness) || rs.snapshot_freshness || {},
       intelligenceStatus: rs.intelligence_status || {},
-      qualityScore: rs.quality_score || {},
-      calibrationSummary: snap.calibration_summary || {},
+      qualityScore: (ms && ms.quality_score) || rs.quality_score || {},
+      calibrationSummary: cal,
+      blockers: (ms && ms.blockers) || [],
+      pipelineHealth: (ms && ms.pipeline_health) || {},
+      primaryState: snap.primary_state || (ms && ms.runtime_state && ms.runtime_state.primary_state),
     };
   }
 
@@ -437,6 +452,11 @@
   }
 
   function isStale() {
+    const ms = getMarketSnapshot();
+    if (ms && ms.freshness && ms.freshness.stale) return true;
+    const rs = (ms && ms.runtime_state) || (state && state.runtime_state) || {};
+    const flags = rs.secondary_flags || {};
+    if (flags.stale_snapshot) return true;
     const runtimePanel = getPanelState('runtime');
     if (runtimePanel && runtimePanel.status === 'idle') return false;
     const op = state && state.operational;
@@ -536,6 +556,8 @@
     subscribe,
     registerPanel,
     getState,
+    getMarketSnapshot,
+    getRuntimeStateFields,
     getCache,
     getPanelState,
     getPanelHashes,

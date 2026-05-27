@@ -129,6 +129,12 @@ def _run_eod_lifecycle_impl(force: bool = False, trigger: str = 'scheduled'):
                 print(f"  [!] {err}", flush=True)
         if status in ('ok', 'skipped'):
             set_job_status('eod_lifecycle', 'completed')
+            try:
+                from backend.runtime.snapshot_orchestrator import run_snapshot_cycle
+                snap_result = run_snapshot_cycle(trigger=f'eod:{trigger}')
+                print(f"[SNAPSHOT] committed ok={snap_result.get('ok')} id={snap_result.get('snapshot_id')}", flush=True)
+            except Exception as snap_exc:
+                print(f"[!] Snapshot orchestrator after EOD: {snap_exc}", flush=True)
         else:
             set_job_status('eod_lifecycle', f'failed:{status}')
     except Exception as e:

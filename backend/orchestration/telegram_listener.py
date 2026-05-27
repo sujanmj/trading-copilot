@@ -349,6 +349,13 @@ def _do_refresh():
     if not _timed_out():
         _rebuild_canonical_snapshot()
 
+    if not _timed_out():
+        try:
+            from backend.runtime.snapshot_orchestrator import run_snapshot_cycle
+            run_snapshot_cycle(trigger='telegram_refresh')
+        except Exception as e:
+            safe_print(f"[REFRESH] snapshot orchestrator: {e}")
+
     for module, status in (
         ('prediction_logger', None),
         ('history_exporter', None),
@@ -466,16 +473,26 @@ def cmd_elite():
 
 
 def _cmd_elite_body():
-    data_path = DATA_DIR / "high_conviction_alerts.json"
-    
-    if not data_path.exists():
-        send_message("⚠️ <b>ML ENGINE OFFLINE</b>\nMeta-Labeler data not found. Run /refresh first.")
-        return
-        
+    data = {}
     try:
-        with open(data_path, "r", encoding='utf-8') as f:
-            data = json.load(f)
-            
+        from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+        snap = get_current_market_snapshot()
+        data = snap.elite_summary if isinstance(snap.elite_summary, dict) else {}
+    except Exception:
+        pass
+    if not data:
+        data_path = DATA_DIR / "high_conviction_alerts.json"
+        if not data_path.exists():
+            send_message("⚠️ <b>ML ENGINE OFFLINE</b>\nMeta-Labeler data not found. Run /refresh first.")
+            return
+        try:
+            with open(data_path, "r", encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception as e:
+            send_message(f"❌ Error reading elite signals: {str(e)[:200]}")
+            return
+
+    try:
         elite_signals = data.get("elite_signals", [])
         engine = data.get("engine_mode", "Initializing...")
         
@@ -728,8 +745,11 @@ def cmd_stats():
     try:
         from backend.lifecycle.unified_metrics import format_stats_telegram
         from backend.storage.stats_exporter import export_stats
+        from backend.runtime.market_snapshot_engine import get_current_market_snapshot
         export_stats()
-        send_message(format_stats_telegram(session='today'), command='stats')
+        snap = get_current_market_snapshot(force_refresh=True)
+        metrics = snap.metrics or {}
+        send_message(format_stats_telegram(metrics, session='today'), command='stats')
     except Exception as e:
         send_message(f"❌ Stats failed: {str(e)[:200]}", command='stats')
     finally:

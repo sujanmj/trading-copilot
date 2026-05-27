@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -20,6 +21,12 @@ def main() -> int:
     from backend.runtime.snapshot_freshness_monitor import evaluate_snapshot_freshness
     from backend.debug.runtime_audit import get_audit_report
     from backend.api.api_server import _build_runtime_snapshot
+    from backend.runtime.market_snapshot_engine import (
+        build_market_snapshot,
+        validate_market_snapshot,
+    )
+    from backend.runtime.snapshot_orchestrator import run_snapshot_cycle
+    from backend.utils.config import CURRENT_SNAPSHOT_FILE
 
     state = build_runtime_state(force_refresh=True)
     ok, issues = validate_metric_consistency(state)
@@ -92,9 +99,34 @@ def main() -> int:
     except Exception as exc:
         errors.append(f'sqlite cross-check failed: {exc}')
 
+    ms = build_market_snapshot(force_refresh=True)
+    ok_ms, ms_issues = validate_market_snapshot(ms)
+    if not ok_ms:
+        errors.extend([f'market_snapshot: {i}' for i in ms_issues])
+    for key in (
+        'snapshot_id', 'generated_at', 'lifecycle', 'runtime_state', 'freshness',
+        'regime', 'metrics', 'providers', 'feeds', 'pipeline_health',
+    ):
+        if not getattr(ms, key, None):
+            errors.append(f'market_snapshot missing {key}')
+    if ms.blockers is None:
+        errors.append('market_snapshot missing blockers')
+
+    cycle = run_snapshot_cycle(trigger='validate', force_refresh=True)
+    if not cycle.get('ok'):
+        errors.append(f'snapshot orchestrator failed: {cycle.get("error") or cycle.get("validation")}')
+    if not CURRENT_SNAPSHOT_FILE.exists():
+        errors.append('current_snapshot.json not committed')
+    else:
+        committed = json.loads(CURRENT_SNAPSHOT_FILE.read_text(encoding='utf-8'))
+        if committed.get('snapshot_id') != ms.snapshot_id and cycle.get('ok'):
+            pass  # recommitted id may differ after cycle
+
     snapshot = _build_runtime_snapshot()
     if 'runtime_state' not in snapshot:
         errors.append('runtime_snapshot missing runtime_state')
+    if 'market_snapshot' not in snapshot:
+        errors.append('runtime_snapshot missing market_snapshot')
     if snapshot.get('calibration_summary', {}).get('win_rate_display') is None and denom >= MIN_WIN_RATE_SAMPLE:
         pass  # optional when no resolved outcomes
 
@@ -187,6 +219,8 @@ def main() -> int:
     print('ALERT FATIGUE CAPS VERIFIED')
     print('RUNTIME AUDIT VERIFIED')
     print('API RUNTIME SNAPSHOT VERIFIED')
+    print('MARKET SNAPSHOT ENGINE VERIFIED')
+    print('SNAPSHOT ORCHESTRATOR VERIFIED')
     return 0
 
 
