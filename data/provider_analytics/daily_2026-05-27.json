@@ -1,10 +1,10 @@
 {
   "date": "2026-05-27",
-  "generated_at": "2026-05-27T16:14:13.429943",
+  "generated_at": "2026-05-27T20:26:00.439728",
   "providers": {
     "gemini": {
       "provider": "gemini",
-      "requests_today": 26,
+      "requests_today": 27,
       "requests_per_hour": {
         "5": 3,
         "6": 4,
@@ -12,14 +12,14 @@
         "8": 4,
         "9": 4,
         "10": 4,
-        "11": 2
+        "11": 3
       },
-      "avg_latency_ms": 3905.5,
-      "failovers": 75,
+      "avg_latency_ms": 3885.8,
+      "failovers": 78,
       "cooldown_activations": 0,
-      "quota_failures": 25,
+      "quota_failures": 26,
       "success_rate_pct": 0.0,
-      "degraded_count": 26,
+      "degraded_count": 27,
       "fallback_count": 0,
       "cache_hits": 0,
       "uptime_score": 0.0
@@ -72,6 +72,6 @@
     "No degraded-mode activations recorded.",
     "Claude used for 1 strategic synthesis run(s) only."
   ],
-  "ai_uptime_pct": 35.0,
-  "total_requests": 40
+  "ai_uptime_pct": 34.1,
+  "total_requests": 41
 }
