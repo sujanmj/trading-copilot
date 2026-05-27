@@ -566,17 +566,16 @@ def cmd_status():
 
 
 def _cmd_status_body():
-    files_to_check = [
-        ('unified_intelligence.json', 'AI Brain'),
-        ('scanner_data.json', 'Scanner'),
-        ('reddit_data.json', 'Reddit'),
-        ('govt_intelligence.json', 'Govt'),
-        ('news_feed.json', 'News'),
-        ('global_markets.json', 'Global'),
-        ('latest_market_data.json', 'India'),
-        ('stats_data.json', 'Stats'),
-        ('history_data.json', 'History'),
-    ]
+    """Health-only status from canonical runtime_state."""
+    try:
+        from backend.runtime.runtime_state import get_runtime_state
+        from backend.telegram.formatting.telegram_formatter import format_status, format_for_command
+        rs = get_runtime_state(force_refresh=True)
+        msg = format_for_command(format_status(rs), 'status')
+        send_message(msg, command='status')
+        return
+    except Exception:
+        pass
 
     msg = f"<b>📡 System Status</b>\n<i>{datetime.now().strftime('%H:%M:%S')}</i>\n\n"
     now = datetime.now()
@@ -603,81 +602,7 @@ def _cmd_status_body():
     except Exception:
         pass
 
-    try:
-        from backend.lifecycle.prediction_lifecycle_engine import get_ml_core_status
-        ml = get_ml_core_status()
-        msg += f"{ml.get('display', '❌ ML Core: unknown')}\n"
-    except Exception:
-        hc_path = DATA_DIR / 'high_conviction_alerts.json'
-        if hc_path.exists():
-            mtime = datetime.fromtimestamp(hc_path.stat().st_mtime)
-            age_min = int((now - mtime).total_seconds() / 60)
-            emoji = "✅" if age_min < 60 else ("⚠️" if age_min < 360 else "❌")
-            msg += f"{emoji} ML Core: {age_min}m ago\n"
-        else:
-            msg += "❌ ML Core: MISSING\n"
-
-    for filename, label in files_to_check:
-        path = DATA_DIR / filename
-        if path.exists():
-            mtime = datetime.fromtimestamp(path.stat().st_mtime)
-            age_min = int((now - mtime).total_seconds() / 60)
-
-            if age_min < 60:
-                emoji = "✅"
-                age_str = f"{age_min}m ago"
-            elif quiet_mode and age_min < 720:
-                emoji = "🌙"
-                age_str = f"idle · {age_min // 60}h ago" if age_min >= 60 else f"idle · {age_min}m ago"
-            elif age_min < 360:
-                emoji = "⚠️"
-                age_str = f"{age_min // 60}h ago"
-            else:
-                emoji = "❌" if not quiet_mode else "🌙"
-                age_str = f"{age_min // 60}h ago"
-
-            msg += f"{emoji} {label}: {age_str}\n"
-        else:
-            msg += f"❌ {label}: MISSING\n"
-
-    db_file = DATA_DIR / 'trading_history.db'
-    if db_file.exists():
-        size_kb = db_file.stat().st_size / 1024
-        msg += f"\n💾 Database: {size_kb:.1f} KB"
-
-    try:
-        from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
-        lc = get_lifecycle_status()
-        lc_status = lc.get('pipeline_status', 'STALE')
-        if lc_status == 'IDLE':
-            lc_emoji = "🌙"
-        elif lc_status == 'COMPLETE':
-            lc_emoji = "✅"
-        elif lc_status in ('RUNNING', 'RECOVERING'):
-            lc_emoji = "🔄"
-        elif lc_status == 'FAILED':
-            lc_emoji = "❌"
-        else:
-            lc_emoji = "⏳"
-        msg += f"\n{lc_emoji} Lifecycle: {lc_status} — {lc.get('message', 'unknown')}"
-        if lc.get('last_successful_eod'):
-            msg += f"\n   Last EOD: {str(lc['last_successful_eod'])[:19]}"
-        if lc.get('last_stats_export'):
-            msg += f"\n   Stats export: {str(lc['last_stats_export'])[:19]}"
-        if lc.get('active_predictions'):
-            msg += f" ({lc['active_predictions']} active)"
-    except Exception:
-        pass
-
-    if is_silenced():
-        try:
-            with open(SILENCE_FILE, 'r') as f:
-                until = datetime.fromisoformat(json.load(f).get('until', ''))
-            msg += f"\n🔕 Alerts muted until {until.strftime('%H:%M')}"
-        except Exception:
-            pass
-
-    send_message(msg, command='status')
+    send_message(msg + '\n<i>Runtime state unavailable — partial fallback.</i>', command='status')
 
 def cmd_stats():
     from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command

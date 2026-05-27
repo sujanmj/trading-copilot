@@ -188,6 +188,11 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
     )
     get_observability().record_sent(category, detail, {'confidence': round(confidence, 2)})
     try:
+        from backend.logs.alert_suppression import log_alert_sent
+        log_alert_sent(category=category, ticker=ticker, detail=detail, confidence=confidence)
+    except Exception:
+        pass
+    try:
         from backend.metrics.execution_metrics import record_reliability_event
         record_reliability_event('telegram_sent')
     except Exception:

@@ -113,9 +113,23 @@ def main() -> int:
     from backend.runtime.freshness_engine import format_age_minutes, FRESHNESS_UNAVAILABLE, validate_timestamp_order
     if format_age_minutes(None) != FRESHNESS_UNAVAILABLE:
         errors.append('freshness None must not format as Nonem/nullm')
+    from backend.runtime.freshness_engine import freshness_health_tier
+    if freshness_health_tier(4) != 'healthy' or freshness_health_tier(12) != 'aging':
+        errors.append('freshness tier boundaries incorrect')
     ok_ts, ts_issue = validate_timestamp_order('2099-01-01T00:00:00+05:30', '2020-01-01T00:00:00+05:30')
     if ok_ts:
         errors.append('future timestamp should fail validation')
+
+    from backend.api.api_server import api_runtime_debug
+    dbg = api_runtime_debug()
+    for key in ('lifecycle_state', 'freshness', 'scheduler_phase', 'suppression'):
+        if key not in dbg:
+            errors.append(f'runtime debug missing {key}')
+
+    import inspect
+    src = inspect.getsource(api_runtime_debug)
+    if 'build_runtime_state' not in src:
+        errors.append('runtime debug must use build_runtime_state')
 
     from backend.intelligence.institutional_language import apply_institutional_tone
     if 'ULTRA' in apply_institutional_tone('scanner ULTRA signal').upper():

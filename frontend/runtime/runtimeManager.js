@@ -312,7 +312,8 @@
 
   function formatFreshnessDisplay(minutes, displayFromState) {
     if (displayFromState && displayFromState !== 'freshness unavailable') {
-      return displayFromState;
+      const bad = /^(none|null|undefined)m$/i.test(String(displayFromState).trim());
+      if (!bad) return displayFromState;
     }
     if (minutes == null || minutes === '' || Number.isNaN(Number(minutes))) {
       return 'freshness unavailable';
@@ -321,6 +322,15 @@
     if (!Number.isFinite(n) || n < 0) return 'freshness unavailable';
     if (n < 60) return `${n}m`;
     return `${Math.floor(n / 60)}h ${n % 60}m`;
+  }
+
+  function freshnessTierLabel(minutes, tierFromState) {
+    if (tierFromState) return tierFromState;
+    if (minutes == null || !Number.isFinite(Number(minutes))) return 'unavailable';
+    const n = Number(minutes);
+    if (n < 5) return 'healthy';
+    if (n < 15) return 'aging';
+    return 'stale';
   }
 
   function getIstDateKey(dateLike) {
@@ -425,17 +435,20 @@
   }
 
   function timestampHtml(extra) {
+    const snap = state || {};
     const ts = formatTimestamp();
     const runtimePanel = getPanelState('runtime');
-    const op = state && state.operational;
+    const op = snap.operational;
     const fresh = getFreshnessState();
-    const snapVer = (state && state.snapshot_version) || runtimePanel.snapshot_version;
+    const snapVer = snap.snapshot_version || runtimePanel.snapshot_version;
     const rs = snap.runtime_state || {};
     const freshPanel = rs.snapshot_freshness || {};
     const snapFreshRaw = runtimePanel.snapshot_freshness_display
       || freshPanel.age_display
       || runtimePanel.snapshot_freshness_minutes;
     const snapFresh = formatFreshnessDisplay(runtimePanel.snapshot_freshness_minutes, snapFreshRaw);
+    const tier = runtimePanel.freshness_tier || freshPanel.health_tier
+      || freshnessTierLabel(runtimePanel.snapshot_freshness_minutes);
     let statusTag = '';
     if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
       statusTag = ` · <span class="runtime-idle">${op.display_status}</span>`;
@@ -445,7 +458,9 @@
       statusTag = ' · <span class="runtime-stale">snapshot stale</span>';
     }
     const snapTag = snapVer != null ? ` · snap v${snapVer}` : '';
-    const freshTag = snapFresh && snapFresh !== 'freshness unavailable' ? ` · ${snapFresh} old` : (snapFresh === 'freshness unavailable' ? ' · freshness unavailable' : '');
+    const freshTag = snapFresh && snapFresh !== 'freshness unavailable'
+      ? ` · ${snapFresh} (${tier})`
+      : (snapFresh === 'freshness unavailable' ? ' · freshness unavailable' : '');
     const suffix = extra ? ` · ${extra}` : '';
     return `<div class="timestamp runtime-ts">Updated: ${ts}${snapTag}${freshTag}${suffix}${statusTag}</div>`;
   }
@@ -527,5 +542,6 @@
     sortJournalEntries,
     getIstDateKey,
     getRuntimeStateFields,
+    freshnessTierLabel,
   };
 })(window);

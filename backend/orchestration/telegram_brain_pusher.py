@@ -161,6 +161,11 @@ def chunk_message(text, max_len=3900):
     return chunks
 
 def send_chunked(text, *, command='', cycle_id='', message_kind='final'):
+    try:
+        from backend.telegram.formatting.telegram_formatter import format_for_command
+        text = format_for_command(text, command or 'brain')
+    except Exception:
+        pass
     for chunk in chunk_message(text):
         send_message(chunk, command=command, cycle_id=cycle_id, message_kind=message_kind)
         time.sleep(0.5)
@@ -749,48 +754,50 @@ def push_summary(*, command='summary', cycle_id=''):
 
 def push_opps(*, command='opps', cycle_id=''):
     from backend.orchestration.opportunity_filter import rank_opportunities_tiered, DEFAULT_OPPS_LIMIT
+    from backend.telegram.formatting.telegram_formatter import format_opps_tiered as fmt_opps, session_notice
     raw = load_intel()
     debug_intel_fields(raw)
     intel = normalize_intel(raw)
-    if intel:
-        try:
-            tiers = rank_opportunities_tiered(raw, limit=DEFAULT_OPPS_LIMIT)
-            watch_n = len(tiers.get('watch') or [])
-            avoid_n = len(tiers.get('avoid') or [])
-            safe_print(f"[BRAIN PUSH] Elite={len(tiers.get('elite') or [])} Watch={watch_n} Avoid={avoid_n}")
-        except Exception as e:
-            safe_print(f"[WARN] opportunity filter failed: {e}")
-            tiers = {'watch': get_opportunities(intel)[:DEFAULT_OPPS_LIMIT], 'avoid': [], 'elite': []}
-        stale = stale_warning(raw)
-        body = format_opps_tiered(tiers, include_elite=True)
-        send_chunked(
-            f"{stale}{_snapshot_prefix()}💎 <b>SIGNAL OPPORTUNITIES</b>\n"
-            f"<i>ELITE = execution · WATCH = observe · AVOID = conflict</i>\n\n{body}",
-            command=command,
-            cycle_id=cycle_id,
-        )
+    if not intel:
+        send_message('❌ No opportunities data. Run /refresh first.', command=command, cycle_id=cycle_id)
+        return
+    try:
+        tiers = rank_opportunities_tiered(raw, limit=DEFAULT_OPPS_LIMIT)
+    except Exception as e:
+        safe_print(f"[WARN] opportunity filter failed: {e}")
+        tiers = {'watch': get_opportunities(intel)[:DEFAULT_OPPS_LIMIT], 'avoid': [], 'elite': []}
+    notice = session_notice()
+    body = fmt_opps(tiers, include_elite=True)
+    send_chunked(
+        f"{notice}💎 <b>SIGNAL OPPORTUNITIES</b>\n\n{body}",
+        command=command,
+        cycle_id=cycle_id,
+    )
 
 
 def push_risks(*, command='risks', cycle_id=''):
+    from backend.telegram.formatting.telegram_formatter import format_risks as fmt_risks
     intel = normalize_intel(load_intel())
-    if intel:
-        risks = _list(intel.get('risks_and_avoids'))
-        send_chunked(
-            f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}",
-            command=command,
-            cycle_id=cycle_id,
-        )
+    if not intel:
+        send_message('❌ No risk data. Run /refresh first.', command=command, cycle_id=cycle_id)
+        return
+    risks = _list(intel.get('risks_and_avoids'))
+    send_chunked(
+        f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{fmt_risks(risks)}",
+        command=command,
+        cycle_id=cycle_id,
+    )
 
 
 def push_action(*, command='action', cycle_id=''):
+    from backend.telegram.formatting.telegram_formatter import format_action_plan, snapshot_meta_line
     intel = normalize_intel(load_intel())
-    if intel:
-        action = _text(intel.get('action_plan'), 'Maintain capital preservation — monitor watchlist for confirmation.')
-        send_chunked(
-            f"{_snapshot_prefix()}🛡️ <b>ACTION</b>\n\n{action[:2400]}",
-            command=command,
-            cycle_id=cycle_id,
-        )
+    if not intel:
+        send_message('❌ No action plan. Run /refresh first.', command=command, cycle_id=cycle_id)
+        return
+    action = _text(intel.get('action_plan'), '')
+    prefix = snapshot_meta_line()
+    send_chunked(f"{prefix}{format_action_plan(action)}", command=command, cycle_id=cycle_id)
 
 
 def push_calibration(*, command='calibration', cycle_id=''):
@@ -808,18 +815,13 @@ def push_calibration(*, command='calibration', cycle_id=''):
 
 
 def push_sectors(*, command='sectors', cycle_id=''):
+    from backend.telegram.formatting.telegram_formatter import format_sectors, snapshot_meta_line
     intel = normalize_intel(load_intel())
-    if intel:
-        sectors = _dict(intel.get('sector_rotation'))
-        bullish = _join_list(sectors.get('bullish'))
-        bearish = _join_list(sectors.get('bearish'))
-        send_chunked(
-            f"{_snapshot_prefix()}🔄 <b>SECTOR ROTATION</b>\n"
-            f"<i>Strength: {sectors.get('rotation_strength', '—')}</i>\n\n"
-            f"🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}",
-            command=command,
-            cycle_id=cycle_id,
-        )
+    if not intel:
+        send_message('❌ No sector data. Run /refresh first.', command=command, cycle_id=cycle_id)
+        return
+    sectors = _dict(intel.get('sector_rotation'))
+    send_chunked(f"{snapshot_meta_line()}{format_sectors(sectors)}", command=command, cycle_id=cycle_id)
 
 
 def push_global(*, command='global', cycle_id=''):

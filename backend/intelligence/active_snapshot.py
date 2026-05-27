@@ -22,7 +22,7 @@ from backend.utils.config import DATA_DIR
 IST = pytz.timezone('Asia/Kolkata')
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
 ACTIVE_SNAPSHOT_FILE = DATA_DIR / 'active_snapshot.json'
-STALE_SNAPSHOT_MINUTES = int(__import__('os').environ.get('SNAPSHOT_STALE_MINUTES', '30'))
+STALE_SNAPSHOT_MINUTES = int(__import__('os').environ.get('SNAPSHOT_STALE_MINUTES', '15'))
 
 _log = logging.getLogger(__name__)
 _publish_lock = threading.Lock()

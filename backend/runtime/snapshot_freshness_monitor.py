@@ -70,12 +70,19 @@ def _snapshot_sla_seconds() -> int:
 def evaluate_snapshot_freshness() -> Dict[str, Any]:
     """Assess active snapshot + collector heartbeats against SLA."""
     from backend.intelligence.active_snapshot import get_active_snapshot_meta, snapshot_health
-    from backend.runtime.freshness_engine import format_freshness_display, merge_freshness_payload
+    from backend.runtime.freshness_engine import (
+        format_freshness_display,
+        merge_freshness_payload,
+        freshness_health_tier,
+        is_snapshot_stale,
+        STALE_MIN_MINUTES,
+    )
 
     snap_health = snapshot_health() or {}
     meta = get_active_snapshot_meta() or {}
     age_minutes = snap_health.get('age_minutes')
-    stale = bool(snap_health.get('stale'))
+    tier = freshness_health_tier(age_minutes)
+    stale = bool(snap_health.get('stale')) or is_snapshot_stale(age_minutes)
     score = int(snap_health.get('score') or 100)
 
     heartbeats = _load_heartbeats().get('sources') or {}
@@ -92,19 +99,23 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
 
     if stale:
         score = max(0, score - 40)
+    elif tier == 'aging':
+        score = max(0, score - 15)
     if collector_issues:
         score = max(0, score - min(20, len(collector_issues) * 5))
 
-    degraded = stale or score < 50
+    degraded = stale or score < 50 or tier == 'aging'
     suppress_confidence = stale or degraded
     block_elite = stale
-    quality_penalty = 0.35 if stale else (0.15 if degraded else 0.0)
+    quality_penalty = 0.35 if stale else (0.10 if tier == 'aging' else (0.15 if degraded else 0.0))
 
     result = {
-        'fresh': not stale,
+        'fresh': tier == 'healthy',
         'stale': stale,
         'degraded': degraded,
+        'health_tier': tier,
         'age_minutes': age_minutes,
+        'stale_threshold_minutes': STALE_MIN_MINUTES,
         'snapshot_version': meta.get('snapshot_version'),
         'active_snapshot_id': meta.get('active_snapshot_id'),
         'freshness_score': score,

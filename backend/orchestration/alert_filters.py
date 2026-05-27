@@ -133,6 +133,16 @@ class AlertObservability:
         self._data['cooldown_blocks'] = self._data['cooldown_blocks'][-60:]
         self._data['low_confidence_skips'] = self._data['low_confidence_skips'][-60:]
         self.persist()
+        try:
+            from backend.logs.alert_suppression import log_suppression
+            log_suppression(
+                reason=reason,
+                category=category,
+                detail=detail,
+                stage='alert_filter',
+            )
+        except Exception:
+            pass
 
     def record_emergency(self, detail: str):
         entry = {'time': datetime.now().isoformat(), 'detail': detail[:200]}
@@ -265,6 +275,28 @@ def should_send_alert(
     sentiment: str = 'NEUTRAL',
     force_priority: bool = False,
 ) -> Tuple[bool, str]:
+    try:
+        from backend.runtime.runtime_state import get_runtime_state
+        rs = get_runtime_state()
+        fresh = rs.get('snapshot_freshness') or {}
+        if fresh.get('stale'):
+            _obs.record_suppressed(category, 'stale_snapshot', f'age={fresh.get("age_display")}')
+            return False, 'stale_snapshot'
+        session = rs.get('session') or {}
+        if session.get('after_hours_mode') and category in (INTRADAY_OPPORTUNITY, INTRADAY_EVENT):
+            _obs.record_suppressed(category, 'after_hours_block', category)
+            return False, 'after_hours_block'
+        lc = rs.get('lifecycle') or {}
+        if lc.get('lifecycle_state') == 'DEGRADED' and not force_priority:
+            _obs.record_suppressed(category, 'lifecycle_mismatch', lc.get('lifecycle_state', ''))
+            return False, 'lifecycle_mismatch'
+        intel = rs.get('intelligence_status') or {}
+        if intel.get('elite_blocked') and category == INTRADAY_OPPORTUNITY and confidence < 0.85:
+            _obs.record_suppressed(category, 'missing_ai_confirmation', f'conf={confidence:.2f}')
+            return False, 'missing_ai_confirmation'
+    except Exception:
+        pass
+
     try:
         from backend.orchestration.alert_priority import evaluate_priority_gate
         allow_pri, pri_reason, _priority = evaluate_priority_gate(

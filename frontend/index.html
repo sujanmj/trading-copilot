@@ -132,6 +132,19 @@
     .runtime-stale { color: #D29922; }
     .runtime-live { color: #00E676; font-weight: 600; }
     .runtime-idle { color: #8B949E; }
+    .debug-overlay {
+      display: none; position: fixed; bottom: 12px; right: 12px; width: 360px; max-height: 50vh;
+      overflow: auto; background: rgba(13,17,23,0.96); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; padding: 12px; font-size: 11px; color: #C9D1D9; z-index: 9999;
+      font-family: ui-monospace, monospace; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .debug-overlay.open { display: block; }
+    .debug-overlay h4 { margin: 0 0 8px; color: #58A6FF; font-size: 12px; }
+    .debug-overlay .dbg-row { margin: 3px 0; }
+    .debug-overlay .dbg-label { color: #8B949E; }
+    .debug-overlay .dbg-stale { color: #D29922; }
+    .debug-overlay .dbg-healthy { color: #00E676; }
+    .debug-overlay .dbg-aging { color: #ffaa00; }
     .panel-status-banner { font-size: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); line-height: 1.45; }
     .panel-status-banner.ready { background: rgba(0,230,118,0.08); color: #00E676; border-color: rgba(0,230,118,0.2); }
     .panel-status-banner.waiting, .panel-status-banner.collecting { background: rgba(255,170,0,0.08); color: #ffaa00; border-color: rgba(255,170,0,0.2); }
@@ -669,6 +682,10 @@
   </div>
 
   <div class="pred-detail-overlay" id="customDateOverlay"></div>
+  <div class="debug-overlay" id="debugOverlay" aria-hidden="true">
+    <h4>🔧 Runtime Debug</h4>
+    <div id="debugContent"><div class="dbg-row">Loading…</div></div>
+  </div>
   <div class="pred-detail-modal" id="customDateModal" style="max-width:400px;">
     <button class="pred-detail-close" id="customDateClose">✕</button>
     <div class="pred-detail-title">📅 Custom Date Range</div>
@@ -2781,11 +2798,72 @@
     } else {
       renderAllTabs()
     }
+    if (debugOverlayOpen) renderDebugOverlay()
   }
+
+  let debugOverlayOpen = false
+
+  function toggleDebugOverlay(force) {
+    const el = document.getElementById('debugOverlay')
+    if (!el) return
+    debugOverlayOpen = typeof force === 'boolean' ? force : !debugOverlayOpen
+    el.classList.toggle('open', debugOverlayOpen)
+    el.setAttribute('aria-hidden', debugOverlayOpen ? 'false' : 'true')
+    if (debugOverlayOpen) renderDebugOverlay()
+  }
+
+  async function renderDebugOverlay() {
+    const box = document.getElementById('debugContent')
+    if (!box) return
+    const snap = (window.RuntimeManager && RuntimeManager.getState) ? (RuntimeManager.getState() || {}) : {}
+    const rs = snap.runtime_state || {}
+    const lc = rs.lifecycle || {}
+    const fresh = rs.snapshot_freshness || snap.freshness_state || {}
+    const sched = rs.scheduler || {}
+    const alert = rs.alert_eligibility || {}
+    const tier = fresh.health_tier || (RuntimeManager && RuntimeManager.freshnessTierLabel
+      ? RuntimeManager.freshnessTierLabel(fresh.age_minutes) : '—')
+    const tierCls = tier === 'stale' ? 'dbg-stale' : (tier === 'aging' ? 'dbg-aging' : 'dbg-healthy')
+    let supCount = alert.suppression_count
+    let debugExtra = null
+    if (USE_API) {
+      try {
+        const res = await fetch(API_BASE + '/api/runtime/debug', { headers: apiHeaders() })
+        if (res.ok) {
+          debugExtra = await res.json()
+          supCount = (debugExtra.suppression || {}).suppression_count ?? supCount
+        }
+      } catch (e) { /* offline */ }
+    }
+    const rows = [
+      ['Lifecycle', lc.lifecycle_state || '—'],
+      ['Session', (rs.session || {}).session_display || '—'],
+      ['Freshness', `${fresh.age_display || 'unavailable'} (${tier})`],
+      ['Scheduler', sched.phase || snap.panels?.orchestrator?.mode || '—'],
+      ['AI status', (rs.ai_state || {}).status || '—'],
+      ['Intel status', (rs.intelligence_status || {}).status || '—'],
+      ['Alert eligible', alert.eligible != null ? String(alert.eligible) : '—'],
+      ['Suppressions', supCount != null ? String(supCount) : '—'],
+    ]
+    box.innerHTML = rows.map(([label, val]) => {
+      const cls = label === 'Freshness' ? tierCls : ''
+      return `<div class="dbg-row"><span class="dbg-label">${escapeHtml(label)}:</span> <span class="${cls}">${escapeHtml(String(val))}</span></div>`
+    }).join('') + (debugExtra && debugExtra.alert_block_reasons && debugExtra.alert_block_reasons.length
+      ? `<div class="dbg-row dbg-stale">Blocks: ${escapeHtml(debugExtra.alert_block_reasons.join(', '))}</div>` : '')
+  }
+
 
   async function bootFrontend() {
     wireCoreUi()
     try {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('debug') === '1') toggleDebugOverlay(true)
+      document.addEventListener('keydown', (ev) => {
+        if (ev.ctrlKey && ev.shiftKey && ev.key === 'D') {
+          ev.preventDefault()
+          toggleDebugOverlay()
+        }
+      })
       await bootstrapApiConfig()
       if (window.RuntimeManager) {
         RuntimeManager.init({
@@ -2797,6 +2875,7 @@
         RuntimeManager.subscribe((_snap, meta) => {
           if (meta && meta.unchanged) return
           try { renderAllTabs() } catch (e) { console.error('renderAllTabs subscriber failed:', e) }
+          if (debugOverlayOpen) renderDebugOverlay()
         })
         try { RuntimeManager.start(30000) } catch (e) { console.error('[RuntimeManager.start]', e) }
       } else {

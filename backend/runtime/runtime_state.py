@@ -167,25 +167,78 @@ def _load_session_status(lifecycle: dict, operational: dict) -> Dict[str, Any]:
 def _load_intelligence_status(freshness: dict) -> Dict[str, Any]:
     stale = bool(freshness.get('stale'))
     degraded = bool(freshness.get('degraded'))
-    if stale:
+    tier = freshness.get('health_tier') or ('stale' if stale else 'healthy')
+    if stale or tier == 'stale':
         return {
             'status': 'degraded',
             'message': 'Snapshot stale — intelligence confidence suppressed',
             'degraded': True,
             'elite_blocked': True,
+            'health_tier': tier,
         }
-    if degraded:
+    if degraded or tier == 'aging':
         return {
-            'status': 'degraded',
-            'message': 'Partial degradation — awaiting fresh cycle',
-            'degraded': True,
+            'status': 'degraded' if degraded else 'aging',
+            'message': 'Snapshot aging — awaiting fresh cycle' if tier == 'aging' else 'Partial degradation — awaiting fresh cycle',
+            'degraded': degraded,
             'elite_blocked': bool(freshness.get('block_elite_outputs')),
+            'health_tier': tier,
         }
     return {
         'status': 'ready',
         'message': None,
         'degraded': False,
         'elite_blocked': False,
+        'health_tier': tier,
+    }
+
+
+def _load_scheduler_phase(lifecycle: dict, operational: dict) -> Dict[str, Any]:
+    pipeline = lifecycle.get('pipeline_status')
+    orch_mode = operational.get('orchestrator_mode')
+    phase = pipeline or operational.get('operational_mode') or 'unknown'
+    return {
+        'phase': phase,
+        'pipeline_status': pipeline,
+        'orchestrator_mode': orch_mode,
+        'market_period': operational.get('period'),
+    }
+
+
+def _load_ai_state(provider_health: dict) -> Dict[str, Any]:
+    return {
+        'status': provider_health.get('status', 'unknown'),
+        'degraded_mode': provider_health.get('degraded_mode'),
+        'ai_uptime_pct': provider_health.get('ai_uptime_pct'),
+        'providers': provider_health.get('providers') or {},
+    }
+
+
+def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_status: dict) -> Dict[str, Any]:
+    lc_state = lifecycle.get('lifecycle_state')
+    after_hours = bool(lifecycle.get('after_hours_mode'))
+    stale = bool(freshness.get('stale'))
+    ai_blocked = intelligence_status.get('elite_blocked')
+    eligible = not stale and lc_state not in ('DEGRADED',) and not after_hours
+    reasons = []
+    if stale:
+        reasons.append('stale_snapshot')
+    if after_hours:
+        reasons.append('after_hours_block')
+    if lc_state == 'DEGRADED':
+        reasons.append('lifecycle_mismatch')
+    if ai_blocked and intelligence_status.get('status') == 'degraded':
+        reasons.append('missing_ai_confirmation')
+    try:
+        from backend.logs.alert_suppression import suppression_summary
+        sup = suppression_summary(limit=100)
+    except Exception:
+        sup = {'suppression_count': 0, 'by_reason': {}}
+    return {
+        'eligible': eligible,
+        'block_reasons': reasons,
+        'suppression_count': sup.get('suppression_count', 0),
+        'suppression_by_reason': sup.get('by_reason') or {},
     }
 
 
@@ -222,6 +275,9 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     telegram_metrics = _load_telegram_metrics()
     quality = _load_quality_score(freshness)
     intelligence_status = _load_intelligence_status(freshness)
+    scheduler = _load_scheduler_phase(lifecycle, operational)
+    ai_state = _load_ai_state(provider_health)
+    alert_eligibility = _load_alert_eligibility(lifecycle, freshness, intelligence_status)
 
     # Metric source trace for duplicate detection
     metric_sources = {'sqlite_evaluated': counts['evaluated']}
@@ -249,6 +305,9 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         'provider_health': provider_health,
         'telegram_metrics': telegram_metrics,
         'intelligence_status': intelligence_status,
+        'scheduler': scheduler,
+        'ai_state': ai_state,
+        'alert_eligibility': alert_eligibility,
         'metric_sources': metric_sources,
         'consistency': {'valid': True, 'issues': []},
     }
@@ -292,6 +351,9 @@ def apply_to_snapshot_payload(snapshot: dict) -> dict:
     runtime_panel['session_status'] = (state.get('session') or {}).get('session_status')
     runtime_panel['collectors_active'] = (state.get('collector_activity') or {}).get('collectors_active')
     runtime_panel['quality_score'] = (state.get('quality_score') or {}).get('quality_score')
+    runtime_panel['scheduler_phase'] = (state.get('scheduler') or {}).get('phase')
+    runtime_panel['freshness_tier'] = fresh.get('health_tier')
+    runtime_panel['alert_suppression_count'] = (state.get('alert_eligibility') or {}).get('suppression_count', 0)
     panels['runtime'] = runtime_panel
     out['panels'] = panels
 

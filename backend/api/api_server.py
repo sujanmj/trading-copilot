@@ -1243,6 +1243,45 @@ def api_runtime_audit(limit: int = Query(50, ge=1, le=200)):
     return get_audit_report(limit=limit)
 
 
+@app.get("/api/runtime/debug", dependencies=[Depends(verify_api_key)])
+def api_runtime_debug():
+    """Lightweight debug payload for GUI debug overlay."""
+    from backend.runtime.runtime_state import build_runtime_state
+    from backend.logs.alert_suppression import suppression_summary
+    from backend.orchestration.alert_deduplication import get_dedup_summary
+    from backend.orchestration.alert_filters import get_telegram_alert_obs_summary
+
+    state = build_runtime_state(force_refresh=True)
+    fresh = state.get('snapshot_freshness') or {}
+    lc = state.get('lifecycle') or {}
+    sched = state.get('scheduler') or {}
+    intel = state.get('intelligence_status') or {}
+    alert = state.get('alert_eligibility') or {}
+
+    return {
+        'generated_at': state.get('generated_at'),
+        'lifecycle_state': lc.get('lifecycle_state'),
+        'lifecycle_display': lc.get('lifecycle_display'),
+        'after_hours_mode': (state.get('session') or {}).get('after_hours_mode'),
+        'freshness': {
+            'age_minutes': fresh.get('age_minutes'),
+            'age_display': fresh.get('age_display'),
+            'health_tier': fresh.get('health_tier'),
+            'stale': fresh.get('stale'),
+        },
+        'scheduler_phase': sched.get('phase'),
+        'pipeline_status': sched.get('pipeline_status'),
+        'ai_status': (state.get('ai_state') or {}).get('status'),
+        'intelligence_status': intel.get('status'),
+        'alert_eligible': alert.get('eligible'),
+        'alert_block_reasons': alert.get('block_reasons') or [],
+        'suppression': suppression_summary(limit=30),
+        'dedupe': get_dedup_summary(),
+        'telegram_obs': get_telegram_alert_obs_summary(),
+        'consistency': state.get('consistency'),
+    }
+
+
 def _build_health_payload() -> dict:
     from backend.utils.market_hours import (
         classify_source_freshness,

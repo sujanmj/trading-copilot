@@ -180,6 +180,27 @@ def main() -> int:
     from backend.runtime.freshness_engine import format_age_minutes, FRESHNESS_UNAVAILABLE
     if format_age_minutes(None) != FRESHNESS_UNAVAILABLE:
         errors.append('freshness engine should not format None as Nonem')
+    from backend.runtime.freshness_engine import freshness_health_tier, is_snapshot_stale
+    if freshness_health_tier(3) != 'healthy':
+        errors.append('freshness tier: 3m should be healthy')
+    if freshness_health_tier(10) != 'aging':
+        errors.append('freshness tier: 10m should be aging')
+    if freshness_health_tier(20) != 'stale':
+        errors.append('freshness tier: 20m should be stale')
+    if not is_snapshot_stale(20):
+        errors.append('is_snapshot_stale should be true at 20m')
+
+    from backend.telegram.formatting.telegram_formatter import format_action_plan, format_for_command
+    plan3 = format_action_plan('WATCH: BANKS\nAVOID: IT\nELITE: none')
+    if plan3.count('\n') > 4:
+        errors.append('format_action_plan should cap to 3-line posture')
+    if len(format_for_command('x' * 5000, 'status')) > 4000:
+        errors.append('telegram formatter should enforce char limit')
+
+    from backend.logs.alert_suppression import log_suppression, suppression_summary
+    log_suppression(reason='dedupe', category='test', detail='validate probe')
+    if 'suppression_count' not in suppression_summary():
+        errors.append('alert_suppression summary missing suppression_count')
 
     from backend.intelligence.institutional_language import EMPTY_ELITE_MESSAGE, apply_institutional_tone
     toned = apply_institutional_tone('ULTRA today top movers')
@@ -200,11 +221,12 @@ def main() -> int:
     if not ok1:
         errors.append('alert dedupe should allow first send')
     record_sent(dedupe_ticker, dedupe_headline, 'BULLISH', confidence=0.7, category='test')
-    ok2, reason2, existing = check_duplicate(dedupe_ticker, dedupe_headline, 'BULLISH', confidence=0.85)
+    ok2, reason2, existing = check_duplicate(dedupe_ticker, dedupe_headline, 'BULLISH', confidence=0.7)
     if ok2 or reason2 != 'duplicate_cooldown':
-        errors.append('alert dedupe should block duplicate within cooldown')
-    if existing and float(existing.get('confidence') or 0) < 0.85:
-        errors.append('alert dedupe should bump confidence on duplicate')
+        errors.append('alert dedupe should block exact duplicate within cooldown')
+    ok3, reason3, _ = check_duplicate(dedupe_ticker, dedupe_headline, 'BULLISH', confidence=0.78)
+    if not ok3 or reason3 not in ('material_change', 'ok'):
+        errors.append(f'alert dedupe should allow confidence delta resend, got {reason3}')
 
     from backend.intelligence.cross_market_correlation import evaluate_cross_market_correlations
     corr = evaluate_cross_market_correlations({
