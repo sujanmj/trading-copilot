@@ -946,11 +946,24 @@ def cmd_review():
         return
     cycle_id = new_cycle_id('review')
     bind_cycle('review', cycle_id)
+    send_message(
+        '📋 Building institutional review (cache-only)…',
+        command='review',
+        cycle_id=cycle_id,
+        message_kind='loading',
+    )
     try:
         from backend.orchestration.telegram_review import push_review
-        push_review(command='review', cycle_id=cycle_id)
+        ok = push_review(command='review', cycle_id=cycle_id)
+        if not ok:
+            safe_print('[REVIEW] push_review returned false — failsafe should have been sent')
     except Exception as e:
-        send_message(f'❌ Review failed: {str(e)[:200]}', command='review', cycle_id=cycle_id)
+        safe_print(f'[REVIEW] handler exception: {e}')
+        send_message(
+            '⚠ <b>Review temporarily unavailable</b>\nUsing degraded cache state.',
+            command='review',
+            cycle_id=cycle_id,
+        )
     finally:
         clear_loading('review')
         finish_command(key)

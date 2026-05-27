@@ -223,9 +223,17 @@ def _format_system_calibration(snap: MarketSnapshot) -> str:
 
 
 def render_review_messages(snap: MarketSnapshot) -> List[Tuple[str, str]]:
-    """Return exactly 3 grouped review messages."""
-    return [
-        ('Market intelligence', _format_market_intelligence(snap)),
-        ('Opportunities & risks', _format_opportunities_risks(snap)),
-        ('System & calibration', _format_system_calibration(snap)),
-    ]
+    """Return exactly 3 grouped review messages (safe — never raises)."""
+    builders = (
+        ('Market intelligence', _format_market_intelligence),
+        ('Opportunities & risks', _format_opportunities_risks),
+        ('System & calibration', _format_system_calibration),
+    )
+    out: List[Tuple[str, str]] = []
+    for label, fn in builders:
+        try:
+            text = fn(snap)
+            out.append((label, text or f'<i>{label} unavailable in cache.</i>'))
+        except Exception as exc:
+            out.append((label, f'⚠ {label} unavailable ({str(exc)[:80]})'))
+    return out[:3]

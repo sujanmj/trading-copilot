@@ -1101,6 +1101,10 @@
   }
 
   function staleIntelligenceFallbackHtml(panelId) {
+    const phase = window.RuntimeManager && RuntimeManager.getHydrationPhase ? RuntimeManager.getHydrationPhase() : ''
+    if (window.RuntimeManager && (phase === RuntimeManager.HYDRATION_WARMING_UP || phase === RuntimeManager.HYDRATION_INITIALIZING)) {
+      return emptyStateHtml('Initializing intelligence runtime…', 'Snapshot warming up — tabs remain interactive.')
+    }
     const usingStale = window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache()
     const meta = window.RuntimeManager && RuntimeManager.getStaleCacheMeta ? RuntimeManager.getStaleCacheMeta() : null
     const ageText = meta && meta.ageMinutes != null ? `${meta.ageMinutes} min ago` : 'unknown'
@@ -1109,8 +1113,8 @@
       && RuntimeManager.getHydrationPhase() === RuntimeManager.HYDRATION_DEGRADED
     if (usingStale || lastErr || degraded) {
       return emptyStateHtml(
-        '⚠ Runtime degraded',
-        `Using stale intelligence cache${ageText !== 'unknown' ? ' · last export ' + ageText : ''}${lastErr ? ' · ' + lastErr : ''}`
+        '⚠ Runtime delayed',
+        `Using degraded intelligence cache${ageText !== 'unknown' ? ' · last export ' + ageText : ''}${lastErr ? ' · ' + lastErr : ''}`
       )
     }
     const lcMsg = window.RuntimeManager
@@ -3395,24 +3399,29 @@
         }
       })
       await bootstrapApiConfig()
+      console.log('[Hydration] hydration start — rendering shell')
+      renderAllTabs({ force: true })
+      updateRuntimeDegradedBanner()
       if (window.RuntimeManager) {
         RuntimeManager.init({
           getApiBase: () => API_BASE,
           getHeaders: apiHeaders,
           cache: apiCache,
           onConnectionChange: updateApiStatus,
-          onLoadingChange: (active) => setGlobalLoading(active, '⏳ Loading snapshot…'),
+          onLoadingChange: (active, message) => setGlobalLoading(active, message || 'Initializing intelligence runtime…'),
         })
         RuntimeManager.subscribe((_snap, meta) => {
           try {
             if (meta && meta.hydrationComplete) {
-              console.log('[Hydration] snapshot cycle complete', {
+              console.log('[Hydration] hydration success', {
                 failed: !!(meta && meta.failed),
                 unchanged: !!(meta && meta.unchanged),
                 staleCache: !!(meta && meta.staleCache),
                 ms: meta && meta.hydrationMs,
                 error: meta && meta.error,
               })
+            } else if (meta && meta.warmingBoot) {
+              console.log('[Hydration] warming shell active')
             }
             if (meta && meta.failed && !_snap && !(meta && meta.staleCache)) {
               renderUnavailableAllTabs(meta.error || 'Data unavailable')
@@ -3432,23 +3441,22 @@
           }
         })
         try { RuntimeManager.start(30000) } catch (e) {
-          console.error('[RuntimeManager.start]', e)
+          console.error('[Hydration] hydration fail — RuntimeManager.start', e)
           renderUnavailableAllTabs(e.message || 'RuntimeManager failed to start')
           renderAllTabs({ force: true })
         }
-        renderAllTabs({ force: true })
         setTimeout(() => {
           const pending = Object.keys(PANEL_TAB_MAP).some((id) => isPanelPending(id))
           if (pending || !(window.RuntimeManager && RuntimeManager.isHydrationFinished && RuntimeManager.isHydrationFinished())) {
-            console.warn('[Hydration] boot safety render — panels still pending or hydration incomplete')
+            console.warn('[Hydration] timeout — boot safety render')
             if (window.RuntimeManager && RuntimeManager.forceFinishHydration) {
-              RuntimeManager.forceFinishHydration('Boot safety timeout')
+              RuntimeManager.forceFinishHydration('Runtime delayed — using degraded intelligence cache')
             }
             renderAllTabs({ force: true })
           }
           updateRuntimeDegradedBanner()
           setGlobalLoading(false)
-        }, FETCH_TIMEOUT_MS + 2000)
+        }, 15000 + 500)
       } else {
         await refreshAll()
         setInterval(refreshAll, 30000)

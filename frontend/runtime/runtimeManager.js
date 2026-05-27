@@ -33,8 +33,12 @@
   const STALE_FORCE_REFRESH_MS = 30000;
   const STALE_CACHE_KEY = 'trading_copilot_runtime_snapshot_v1';
   const STALE_CACHE_META_KEY = 'trading_copilot_runtime_snapshot_meta_v1';
-  const HYDRATION_WATCHDOG_MS = 20000;
+  const HYDRATION_WATCHDOG_MS = 15000;
+  const SNAPSHOT_RETRY_MS = 3000;
+  const MAX_SNAPSHOT_RETRIES = 5;
   const HYDRATION_BOOTING = 'BOOTING';
+  const HYDRATION_INITIALIZING = 'INITIALIZING';
+  const HYDRATION_WARMING_UP = 'WARMING_UP';
   const HYDRATION_HYDRATING = 'HYDRATING';
   const HYDRATION_READY = 'READY';
   const HYDRATION_DEGRADED = 'DEGRADED';
@@ -108,6 +112,28 @@
     }
   }
 
+  function createWarmingSnapshot() {
+    return {
+      status: 'warming_up',
+      runtime_state: 'warming_up',
+      generated_at: null,
+      snapshot_id: null,
+      market_snapshot: {
+        executive_summary: null,
+        sector_rotation: { bullish: [], bearish: [] },
+        top_opportunities: [],
+        risk_list: [],
+        runtime_state: 'warming_up',
+      },
+      exports: {},
+      panels: {},
+      operational: {
+        display_status: 'Initializing',
+        display_message: 'Initializing intelligence runtime...',
+      },
+    };
+  }
+
   function createEmptyDegradedSnapshot(errorMsg) {
     return {
       status: 'degraded',
@@ -139,18 +165,18 @@
   }
 
   function forceFinishHydration(reason) {
-    console.warn('[RuntimeManager] forceFinishHydration:', reason || 'watchdog');
+    console.warn('[Hydration] timeout — forceFinishHydration:', reason || 'watchdog');
     setLoading(false);
     if (!state) {
-      applyEmptyDegradedFallback(++fetchSeq, reason || 'Hydration timeout — using degraded fallback');
+      applyEmptyDegradedFallback(++fetchSeq, reason || 'Runtime delayed — using degraded intelligence cache');
     } else {
-      markHydrationFinished(usingStaleCache || !!lastFetchError || state.status === 'degraded');
+      markHydrationFinished(true);
       scheduleNotify({
         unchanged: false,
         hydrationComplete: true,
         forced: true,
-        failed: !!(lastFetchError || usingStaleCache),
-        error: reason || lastFetchError,
+        failed: true,
+        error: reason || lastFetchError || 'Runtime delayed — using degraded intelligence cache',
       });
     }
   }
@@ -162,11 +188,27 @@
     }, HYDRATION_WATCHDOG_MS);
   }
 
-  function setLoading(isLoading) {
+  function isSnapshotMissing(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return true;
+    if (snapshot.runtime_state === 'warming_up' || snapshot.status === 'warming_up') return true;
+    if (snapshot.status === 'missing') return true;
+    const ms = snapshot.market_snapshot || {};
+    const hasId = !!(snapshot.snapshot_id || snapshot.active_snapshot_id || ms.snapshot_id);
+    const hasTime = !!(snapshot.generated_at || ms.generated_at);
+    const exports = snapshot.exports || snapshot.data || {};
+    const hasIntel = !!(exports.intelligence || ms.intelligence || ms.action_plan || exports.scanner);
+    return !hasId && !hasTime && !hasIntel;
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => { setTimeout(resolve, ms); });
+  }
+
+  function setLoading(isLoading, message) {
     loading = !!isLoading;
     if (typeof config.onLoadingChange === 'function') {
       try {
-        config.onLoadingChange(loading);
+        config.onLoadingChange(loading, message);
       } catch (e) {
         console.error('[RuntimeManager] onLoadingChange error', e);
       }
@@ -448,7 +490,9 @@
     };
 
     const degraded = opts.degradedFallback || opts.staleCache || snapshot.status === 'degraded';
-    if (!hydrationFinished) {
+    if (opts.warmingBoot && !hydrationFinished) {
+      setHydrationPhase(HYDRATION_WARMING_UP);
+    } else if (!hydrationFinished && !opts.warmingBoot) {
       markHydrationFinished(degraded || !!lastFetchError);
     }
 
@@ -536,6 +580,35 @@
     }
   }
 
+  async function fetchSnapshotWithRetry() {
+    let lastError = null;
+    console.log('[Hydration] snapshot fetch start');
+    for (let attempt = 0; attempt <= MAX_SNAPSHOT_RETRIES; attempt += 1) {
+      if (attempt > 0) {
+        console.warn('[Hydration] snapshot missing — retry', attempt, 'of', MAX_SNAPSHOT_RETRIES);
+        setHydrationPhase(HYDRATION_WARMING_UP);
+        setLoading(true, 'Initializing intelligence runtime...');
+        await delay(SNAPSHOT_RETRY_MS);
+      }
+      try {
+        const snapshot = await fetchSnapshot();
+        if (!isSnapshotMissing(snapshot)) {
+          if (attempt > 0) {
+            console.log('[Hydration] snapshot fetch success after retry', attempt);
+          }
+          return snapshot;
+        }
+        lastError = new Error('snapshot missing in API response');
+        console.warn('[Hydration] snapshot missing in payload');
+      } catch (e) {
+        lastError = e;
+        console.error('[Hydration] snapshot fetch fail attempt', attempt, e.message || e);
+        if (attempt >= MAX_SNAPSHOT_RETRIES) break;
+      }
+    }
+    throw lastError || new Error('snapshot missing after retries');
+  }
+
   async function refresh(opts) {
     opts = opts || {};
     const now = Date.now();
@@ -554,11 +627,13 @@
 
     const seq = ++fetchSeq;
     inFlight = true;
-    setLoading(true);
+    if (!opts.silent) {
+      setLoading(true, opts.loadingMessage || '⏳ Loading snapshot…');
+    }
     let refreshError = null;
     let staleCacheNotified = false;
     try {
-      const snapshot = await fetchSnapshot();
+      const snapshot = await fetchSnapshotWithRetry();
       lastRefreshAt = Date.now();
       const applied = applySnapshot(snapshot, seq, opts);
       if (!applied || !applied.ok) {
@@ -595,7 +670,7 @@
     } finally {
       inFlight = false;
       setLoading(false);
-      if (!hydrationFinished) {
+      if (!hydrationFinished && !opts.warmingBoot) {
         markHydrationFinished(!!refreshError || usingStaleCache);
       }
       if (refreshError && !staleCacheNotified) {
@@ -617,8 +692,19 @@
   function start(pollMs) {
     if (started) return;
     started = true;
-    setHydrationPhase(HYDRATION_HYDRATING);
+    console.log('[Hydration] hydration start');
+    setHydrationPhase(HYDRATION_INITIALIZING);
     armHydrationWatchdog();
+
+    const warming = createWarmingSnapshot();
+    applySnapshot(warming, ++fetchSeq, { force: true, warmingBoot: true });
+    scheduleNotify({
+      unchanged: false,
+      hydrationComplete: false,
+      warmingBoot: true,
+    });
+    console.log('[Hydration] warming shell applied');
+
     const bootCached = loadSnapshotCache();
     if (bootCached) {
       usingStaleCache = true;
@@ -631,8 +717,9 @@
         bootCache: true,
       });
     }
+    setHydrationPhase(HYDRATION_WARMING_UP);
     refresh({ force: true }).catch((e) => {
-      console.error('[RuntimeManager] initial refresh failed', e);
+      console.error('[Hydration] hydration fail — initial refresh', e);
       if (!state) {
         applyEmptyDegradedFallback(++fetchSeq, e.message || 'Initial refresh failed');
       } else if (!hydrationFinished) {
@@ -1050,10 +1137,13 @@
 
   function runtimeDegradedBannerHtml() {
     if (hydrationPhase === HYDRATION_READY && !usingStaleCache && !lastFetchError) return '';
-    const parts = ['⚠ Runtime degraded'];
-    if (usingStaleCache) parts.push('Using stale intelligence cache');
+    if (hydrationPhase === HYDRATION_WARMING_UP || hydrationPhase === HYDRATION_INITIALIZING) {
+      return '<div class="runtime-degraded-banner">Initializing intelligence runtime…</div>';
+    }
+    const parts = ['⚠ Runtime delayed'];
+    if (usingStaleCache) parts.push('Using degraded intelligence cache');
     else if (lastFetchError) parts.push(lastFetchError);
-    else if (hydrationPhase === HYDRATION_DEGRADED) parts.push('Using stale intelligence cache');
+    else parts.push('Using degraded intelligence cache');
     return `<div class="runtime-degraded-banner">${parts.join(' · ')}</div>`;
   }
 
@@ -1105,8 +1195,12 @@
     isHydrationFinished,
     forceFinishHydration,
     runtimeDegradedBannerHtml,
+    HYDRATION_BOOTING,
+    HYDRATION_INITIALIZING,
+    HYDRATION_WARMING_UP,
     HYDRATION_READY,
     HYDRATION_DEGRADED,
+    isSnapshotMissing,
     fetchWithTimeout,
     FETCH_TIMEOUT_MS,
     timestampHtml,

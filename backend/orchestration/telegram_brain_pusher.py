@@ -72,7 +72,7 @@ def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_ki
         )
         if prep.get('action') == 'skip':
             return False
-        if message_kind == 'final' and command not in ('', 'status'):
+        if message_kind == 'final' and command not in ('', 'status', 'review'):
             try:
                 from backend.orchestration.alert_deduplication import should_send_telegram_alert
                 ok, _reason = should_send_telegram_alert(
