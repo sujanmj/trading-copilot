@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "49fc383a5752f3396be6",
+    "india_markets": "e7ccea863522a731159b",
+    "news": "a0bbc6f6d050d6348979",
+    "youtube": "c64273098434dc2a2a51",
+    "govt": "e547a0f2d293cc59b080",
+    "inshorts": "81f313eb33d99f1f8573",
+    "reddit": "f037b6424751e4f914b1",
+    "telegram": "empty",
+    "scanner": "bbdb8cda450aadb759f6",
+    "twitter": "920f05add1b09c1c96b4",
+    "nse_filings": "687b506f91146880fad1",
+    "composite": "76275785d6acd95bf6ec"
+  },
+  "metrics": {
+    "india_avg_change": 0.113,
+    "news_count": 125,
+    "govt_high_impact": 18,
+    "scanner_signals": 78,
+    "top_scanner_tickers": [
+      "FINPIPE",
+      "AIAENG",
+      "INDORAMA",
+      "JKTYRE",
+      "EASEMYTRIP"
+    ],
+    "scanner_signature": [
+      "('FINPIPE', 'ULTRA', 7.9)",
+      "('AIAENG', 'ULTRA', 5.0)",
+      "('INDORAMA', 'ULTRA', 0.7)",
+      "('JKTYRE', 'ULTRA', 4.9)",
+      "('EASEMYTRIP', 'ULTRA', -7.5)"
+    ],
+    "top_news_titles": [
+      "inr turns lower amid renewed signs of geopolitical tensions",
+      "ranveer singh 'don 3' exit: manoj bajpayee opens up on fwice ban on dhurandhar a",
+      "sebi turns to etfs, derivatives for debt market push",
+      "super el nino warning: scorching heat, weaker monsoon ahead — what it means for",
+      "suprajit engineering q4 review: attractive risk-reward at current valuations, sa",
+      "us market: fed, fdic push leaner, risk-focused bank supervision"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.53,
+    "repetition_suppressed": 62
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 125
+  },
+  "govt_counts": {
+    "high_impact_items": 18
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 20
+  }
+}

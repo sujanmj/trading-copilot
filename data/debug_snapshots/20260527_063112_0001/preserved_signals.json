@@ -1,0 +1,694 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nSCANNER ANOMALY | [ULTRA|BULLISH] NDTV Rs.86.7 +9.97% vol=4.1x | VOLUME_SPIKE + BREAKOUT + MAJOR_MOVE\nSCANNER ANOMALY | [ULTRA|BULLISH] ATGL Rs.774.6 +8.62% vol=4.7x | VOLUME_SPIKE + BREAKOUT + MAJOR_MOVE\nGOVT ALERT | [7.0/10 BULLISH] Gold edges higher on weaker dollar; focus on US-Iran talks, Fed outlook | affects: ONGC, GOLDBEES, OIL INDIA, TITAN, RELIANCE\nGOVT ALERT | [6.0/10 BEARISH] Global Market: BOJ’s Ueda warns oil shocks can trigger lasting inflation if wages and expectations rise | affects: MACRO\nHEADLINE | [neutral] Super El Nino Warning: Scorching Heat, Weaker Monsoon Ahead — What It Means For India | source=NDTV Profit\nHEADLINE | [neutral] INR turns lower amid renewed signs of geopolitical tensions | source=Business Standard Markets\n  [evidence_meta] novelty_avg=4.404 repetition_suppressed=40 diversity_suppressed=18",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "scanner",
+        "ticker": "FINPIPE",
+        "label": "[ULTRA|BULLISH] FINPIPE +7.90%",
+        "confidence": 0.94,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.87,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "AIAENG",
+        "label": "[ULTRA|BULLISH] AIAENG +4.95%",
+        "confidence": 0.916,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.99,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "INDORAMA",
+        "label": "[ULTRA|BULLISH] INDORAMA +0.70%",
+        "confidence": 0.88,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.71,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JKTYRE",
+        "label": "[ULTRA|BULLISH] JKTYRE +4.92%",
+        "confidence": 0.915,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.98,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "EASEMYTRIP",
+        "label": "[ULTRA|BEARISH] EASEMYTRIP -7.50%",
+        "confidence": 0.937,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.75,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "GRANULES",
+        "label": "[ULTRA|BULLISH] GRANULES +3.15%",
+        "confidence": 0.901,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.45,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ATGL",
+        "label": "[ULTRA|BULLISH] ATGL +8.62%",
+        "confidence": 0.939,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.82,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NDTV",
+        "label": "[ULTRA|BULLISH] NDTV +9.97%",
+        "confidence": 0.934,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.63,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JPPOWER",
+        "label": "[ULTRA|BULLISH] JPPOWER +15.47%",
+        "confidence": 0.927,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.41,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "COALINDIA",
+        "label": "[ULTRA|BEARISH] COALINDIA -2.34%",
+        "confidence": 0.888,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.99,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 7.0] Gold edges higher on weaker dollar; focus on US-Iran talks, Fed outlook",
+        "confidence": 1.0,
+        "source_count": 6,
+        "agreement_score": 0.7,
+        "impact_score": 7.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 7.5] Global Market: BOJ’s Ueda warns oil shocks can trigger lasting inflation if wages and expe",
+        "confidence": 0.825,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 6.0] FM Nirmala Sitharaman reveals petrol &amp; diesel excise duty cut will hit govt revenues b",
+        "confidence": 1.0,
+        "source_count": 5,
+        "agreement_score": 0.7,
+        "impact_score": 6.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 7.5] Silver rate steady as investors await cues from US Federal Reserve amid US-Iran war: What ",
+        "confidence": 1.0,
+        "source_count": 5,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] US Market: Fed, FDIC push leaner, risk-focused bank supervision",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 5.5] Silver gains Rs 2,000/kg, gold at Rs 1.58 lakh/10 gms on weak dollar, Iran war peace deal ",
+        "confidence": 1.0,
+        "source_count": 8,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Super El Nino Warning: Scorching Heat, Weaker Monsoon Ahead — What It Means For India",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] INR turns lower amid renewed signs of geopolitical tensions",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Sebi turns to ETFs, derivatives for debt market push",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Market: Fed, FDIC push leaner, risk-focused bank supervision",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Suprajit Engineering Q4 Review: Attractive Risk-Reward at Current Valuations, Says Nirmal ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Ranveer Singh 'Don 3' Exit: Manoj Bajpayee Opens Up On FWICE Ban On Dhurandhar Actor",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [ULTRA|BULLISH] FINPIPE +7.90% | conf=0.94 sources=1 agree=1.00 impact=7.9 [BYPASS]\n  [ULTRA|BULLISH] ATGL +8.62% | conf=0.94 sources=1 agree=1.00 impact=7.8 [BYPASS]\n  [ULTRA|BEARISH] EASEMYTRIP -7.50% | conf=0.94 sources=1 agree=1.00 impact=7.8 [BYPASS]\n  [ULTRA|BULLISH] NDTV +9.97% | conf=0.93 sources=1 agree=1.00 impact=7.6 [BYPASS]\n  [GOVT 7.5] Global Market: BOJ’s Ueda warns oil shocks can trigger lasting inflation if wages and expe | conf=0.82 sources=1 agree=0.70 impact=7.5 [BYPASS]\n  [GOVT 7.5] Silver rate steady as investors await cues from US Federal Reserve amid US-Iran war: What  | conf=1.00 sources=5 agree=0.70 impact=7.5 [BYPASS]\n  [ULTRA|BULLISH] JPPOWER +15.47% | conf=0.93 sources=1 agree=1.00 impact=7.4 [BYPASS]\n  [GOVT 7.0] Gold edges higher on weaker dollar; focus on US-Iran talks, Fed outlook | conf=1.00 sources=6 agree=0.70 impact=7.0 [BYPASS]\n  [ULTRA|BULLISH] AIAENG +4.95% | conf=0.92 sources=1 agree=1.00 impact=7.0 [BYPASS]\n  [ULTRA|BULLISH] JKTYRE +4.92% | conf=0.92 sources=1 agree=1.00 impact=7.0 [BYPASS]\n  [ULTRA|BULLISH] GRANULES +3.15% | conf=0.90 sources=1 agree=1.00 impact=6.5 [BYPASS]\n  [GOVT 6.0] FM Nirmala Sitharaman reveals petrol &amp; diesel excise duty cut will hit govt revenues b | conf=1.00 sources=5 agree=0.70 impact=6.0\n  [ULTRA|BEARISH] COALINDIA -2.34% | conf=0.89 sources=1 agree=1.00 impact=6.0 [BYPASS]\n  [ULTRA|BULLISH] INDORAMA +0.70% | conf=0.88 sources=1 agree=1.00 impact=5.7 [BYPASS]\n  [GOVT 5.5] US Market: Fed, FDIC push leaner, risk-focused bank supervision | conf=0.77 sources=1 agree=0.70 impact=5.5 [BYPASS]\n  [GOVT 5.5] Silver gains Rs 2,000/kg, gold at Rs 1.58 lakh/10 gms on weak dollar, Iran war peace deal  | conf=1.00 sources=8 agree=0.70 impact=5.5 [BYPASS]\n  [neutral] Super El Nino Warning: Scorching Heat, Weaker Monsoon Ahead — What It Means For India | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] INR turns lower amid renewed signs of geopoli\n...[truncated for debug safety]...",
+    "bypass_items": [
+      {
+        "kind": "scanner",
+        "ticker": "FINPIPE",
+        "label": "[ULTRA|BULLISH] FINPIPE +7.90%",
+        "confidence": 0.94,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.87,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "AIAENG",
+        "label": "[ULTRA|BULLISH] AIAENG +4.95%",
+        "confidence": 0.916,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.99,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "INDORAMA",
+        "label": "[ULTRA|BULLISH] INDORAMA +0.70%",
+        "confidence": 0.88,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.71,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JKTYRE",
+        "label": "[ULTRA|BULLISH] JKTYRE +4.92%",
+        "confidence": 0.915,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.98,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "EASEMYTRIP",
+        "label": "[ULTRA|BEARISH] EASEMYTRIP -7.50%",
+        "confidence": 0.937,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.75,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "GRANULES",
+        "label": "[ULTRA|BULLISH] GRANULES +3.15%",
+        "confidence": 0.901,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.45,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ATGL",
+        "label": "[ULTRA|BULLISH] ATGL +8.62%",
+        "confidence": 0.939,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.82,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NDTV",
+        "label": "[ULTRA|BULLISH] NDTV +9.97%",
+        "confidence": 0.934,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.63,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JPPOWER",
+        "label": "[ULTRA|BULLISH] JPPOWER +15.47%",
+        "confidence": 0.927,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.41,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "COALINDIA",
+        "label": "[ULTRA|BEARISH] COALINDIA -2.34%",
+        "confidence": 0.888,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.99,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 7.0] Gold edges higher on weaker dollar; focus on US-Iran talks, Fed outlook",
+        "confidence": 1.0,
+        "source_count": 6,
+        "agreement_score": 0.7,
+        "impact_score": 7.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 7.5] Global Market: BOJ’s Ueda warns oil shocks can trigger lasting inflation if wages and expe",
+        "confidence": 0.825,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 7.5] Silver rate steady as investors await cues from US Federal Reserve amid US-Iran war: What ",
+        "confidence": 1.0,
+        "source_count": 5,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] US Market: Fed, FDIC push leaner, risk-focused bank supervision",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 5.5] Silver gains Rs 2,000/kg, gold at Rs 1.58 lakh/10 gms on weak dollar, Iran war peace deal ",
+        "confidence": 1.0,
+        "source_count": 8,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Super El Nino Warning: Scorching Heat, Weaker Monsoon Ahead — What It Means For India",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] INR turns lower amid renewed signs of geopolitical tensions",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Sebi turns to ETFs, derivatives for debt market push",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Market: Fed, FDIC push leaner, risk-focused bank supervision",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Suprajit Engineering Q4 Review: Attractive Risk-Reward at Current Valuations, Says Nirmal ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Ranveer Singh 'Don 3' Exit: Manoj Bajpayee Opens Up On FWICE Ban On Dhurandhar Actor",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "scanner",
+      "ticker": "FINPIPE",
+      "label": "[ULTRA|BULLISH] FINPIPE +7.90%",
+      "confidence": 0.94,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.87,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "AIAENG",
+      "label": "[ULTRA|BULLISH] AIAENG +4.95%",
+      "confidence": 0.916,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.99,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "INDORAMA",
+      "label": "[ULTRA|BULLISH] INDORAMA +0.70%",
+      "confidence": 0.88,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.71,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "JKTYRE",
+      "label": "[ULTRA|BULLISH] JKTYRE +4.92%",
+      "confidence": 0.915,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.98,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "EASEMYTRIP",
+      "label": "[ULTRA|BEARISH] EASEMYTRIP -7.50%",
+      "confidence": 0.937,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.75,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "GRANULES",
+      "label": "[ULTRA|BULLISH] GRANULES +3.15%",
+      "confidence": 0.901,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.45,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "ATGL",
+      "label": "[ULTRA|BULLISH] ATGL +8.62%",
+      "confidence": 0.939,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.82,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "NDTV",
+      "label": "[ULTRA|BULLISH] NDTV +9.97%",
+      "confidence": 0.934,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.63,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "JPPOWER",
+      "label": "[ULTRA|BULLISH] JPPOWER +15.47%",
+      "confidence": 0.927,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.41,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "COALINDIA",
+      "label": "[ULTRA|BEARISH] COALINDIA -2.34%",
+      "confidence": 0.888,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.99,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "ONGC",
+      "label": "[GOVT 7.0] Gold edges higher on weaker dollar; focus on US-Iran talks, Fed outlook",
+      "confidence": 1.0,
+      "source_count": 6,
+      "agreement_score": 0.7,
+      "impact_score": 7.0,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 7.5] Global Market: BOJ’s Ueda warns oil shocks can trigger lasting inflation if wages and expe",
+      "confidence": 0.825,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 7.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "ONGC",
+      "label": "[GOVT 7.5] Silver rate steady as investors await cues from US Federal Reserve amid US-Iran war: What ",
+      "confidence": 1.0,
+      "source_count": 5,
+      "agreement_score": 0.7,
+      "impact_score": 7.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 5.5] US Market: Fed, FDIC push leaner, risk-focused bank supervision",
+      "confidence": 0.769,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "ONGC",
+      "label": "[GOVT 5.5] Silver gains Rs 2,000/kg, gold at Rs 1.58 lakh/10 gms on weak dollar, Iran war peace deal ",
+      "confidence": 1.0,
+      "source_count": 8,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Super El Nino Warning: Scorching Heat, Weaker Monsoon Ahead — What It Means For India",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] INR turns lower amid renewed signs of geopolitical tensions",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Sebi turns to ETFs, derivatives for debt market push",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] US Market: Fed, FDIC push leaner, risk-focused bank supervision",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Suprajit Engineering Q4 Review: Attractive Risk-Reward at Current Valuations, Says Nirmal ",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Ranveer Singh 'Don 3' Exit: Manoj Bajpayee Opens Up On FWICE Ban On Dhurandhar Actor",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=panic_volatile volatility=1.0 compression_mode=PRESERVE",
+    "Bypass: scanner FINPIPE impact=7.87",
+    "Bypass: scanner AIAENG impact=6.99",
+    "Bypass: scanner INDORAMA impact=5.71",
+    "Bypass: scanner JKTYRE impact=6.98",
+    "Bypass: scanner EASEMYTRIP impact=7.75",
+    "Bypass: scanner GRANULES impact=6.45",
+    "Bypass: scanner ATGL impact=7.82",
+    "Bypass: scanner NDTV impact=7.63",
+    "Section 'govt' expanded limit (6525 chars)",
+    "Section 'scanner' expanded limit (6525 chars)"
+  ],
+  "regime": {
+    "primary_regime": "panic_volatile",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.0,
+      "panic_volatile": 0.55,
+      "macro_uncertainty": 0.5,
+      "regime_transition": 0.548
+    },
+    "volatility_index": 1.0,
+    "sentiment_instability": 0.616,
+    "news_shock_intensity": 0.25,
+    "scanner_anomaly_strength": 1.0,
+    "compression_aggressiveness": 0.22,
+    "regime_shift": false,
+    "previous_regime": "panic_volatile",
+    "summary_block": "=== MARKET REGIME ===\n  Primary: PANIC VOLATILE | volatility=1.00\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.22)\n  Signals: news_shock=0.25 sentiment_instability=0.62 scanner_anomaly=1.00"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.22,
+    "max_per_section": 4500,
+    "max_prompt_chars": 31360,
+    "gemini_word_cap": 823,
+    "skip_gemini": true,
+    "preserve_contradictions": true,
+    "volatility_index": 1.0,
+    "disagreement_score": 0.496,
+    "news_shock_intensity": 0.25
+  }
+}
