@@ -401,20 +401,38 @@
     return !!(config.cache && config.cache.connected);
   }
 
-  const FETCH_TIMEOUT_MS = 8000;
+  const FETCH_TIMEOUT_MS = 15000;
+
+  function fetchWithTimeout(url, options, timeoutMs) {
+    const ms = timeoutMs || FETCH_TIMEOUT_MS;
+    console.log('[RuntimeManager] fetch start', { url, timeoutMs: ms });
+    return new Promise((resolve, reject) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error(`Request timeout (${ms / 1000}s): ${url}`));
+      }, ms);
+      fetch(url, { ...(options || {}), signal: controller.signal })
+        .then((res) => {
+          clearTimeout(timer);
+          resolve(res);
+        })
+        .catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  }
 
   async function fetchSnapshot() {
     const base = config.getApiBase().replace(/\/$/, '');
     const url = base + SNAPSHOT_ENDPOINT;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     const started = Date.now();
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         method: 'GET',
         headers: config.getHeaders(),
-        signal: controller.signal,
-      });
+      }, FETCH_TIMEOUT_MS);
       if (!res.ok) throw new Error(`${SNAPSHOT_ENDPOINT} → HTTP ${res.status}`);
       const payload = await res.json();
       if (!payload || typeof payload !== 'object') {
@@ -429,21 +447,29 @@
       });
       return payload;
     } catch (e) {
-      lastFetchError = e.name === 'AbortError'
+      lastFetchError = e.name === 'AbortError' || String(e.message || '').includes('timeout')
         ? `${SNAPSHOT_ENDPOINT} timeout (${FETCH_TIMEOUT_MS / 1000}s)`
         : `${SNAPSHOT_ENDPOINT}: ${e.message || 'fetch failed'}`;
       console.error('[RuntimeManager] fetchSnapshot failed:', lastFetchError);
       throw e;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
   async function refresh(opts) {
     opts = opts || {};
     const now = Date.now();
-    if (inFlight && !opts.force) return state;
-    if (!opts.force && now - lastRefreshAt < MIN_REFRESH_GAP_MS) return state;
+    if (inFlight && !opts.force) {
+      if (state) {
+        scheduleNotify({ unchanged: true, hydrationComplete: true, skipped: true });
+      }
+      return state;
+    }
+    if (!opts.force && now - lastRefreshAt < MIN_REFRESH_GAP_MS) {
+      if (state) {
+        scheduleNotify({ unchanged: true, hydrationComplete: true, skipped: true });
+      }
+      return state;
+    }
 
     const seq = ++fetchSeq;
     inFlight = true;
@@ -908,6 +934,29 @@
     };
   }
 
+  function getStaleCacheMeta() {
+    try {
+      const raw = localStorage.getItem(STALE_CACHE_META_KEY);
+      if (!raw) return null;
+      const meta = JSON.parse(raw);
+      if (!meta || typeof meta !== 'object') return null;
+      const savedAt = meta.saved_at || meta.savedAt;
+      const ageMinutes = savedAt ? Math.max(0, Math.floor((Date.now() - Number(savedAt)) / 60000)) : null;
+      return {
+        savedAt,
+        generatedAt: meta.generated_at,
+        snapshotId: meta.snapshot_id,
+        ageMinutes,
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getLastFetchError() {
+    return lastFetchError;
+  }
+
   function init(opts) {
     config.getApiBase = opts.getApiBase || config.getApiBase;
     config.getHeaders = opts.getHeaders || config.getHeaders;
@@ -942,6 +991,10 @@
     isStale,
     isUsingStaleCache,
     staleCacheBadgeHtml,
+    getStaleCacheMeta,
+    getLastFetchError,
+    fetchWithTimeout,
+    FETCH_TIMEOUT_MS,
     timestampHtml,
     lifecycleMessage,
     formatAgeSeconds,

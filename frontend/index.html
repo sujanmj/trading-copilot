@@ -918,21 +918,24 @@
     return headers
   }
 
-  const FETCH_TIMEOUT_MS = 8000
+  const FETCH_TIMEOUT_MS = 15000
 
-  async function fetchWithTimeout(url, options, timeoutMs) {
-    const ms = timeoutMs || FETCH_TIMEOUT_MS
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), ms)
-    try {
-      const res = await fetch(url, { ...(options || {}), signal: controller.signal })
-      return res
-    } catch (e) {
-      if (e.name === 'AbortError') throw new Error(`Request timeout (${ms / 1000}s): ${url}`)
-      throw e
-    } finally {
-      clearTimeout(timer)
+  function fetchWithTimeout(url, options, timeoutMs) {
+    if (window.RuntimeManager && RuntimeManager.fetchWithTimeout) {
+      return RuntimeManager.fetchWithTimeout(url, options, timeoutMs || FETCH_TIMEOUT_MS)
     }
+    const ms = timeoutMs || FETCH_TIMEOUT_MS
+    console.log('[Hydration] fetch start', url)
+    return new Promise((resolve, reject) => {
+      const controller = new AbortController()
+      const timer = setTimeout(() => {
+        controller.abort()
+        reject(new Error(`Request timeout (${ms / 1000}s): ${url}`))
+      }, ms)
+      fetch(url, { ...(options || {}), signal: controller.signal })
+        .then((res) => { clearTimeout(timer); console.log('[Hydration] fetch success', url); resolve(res) })
+        .catch((err) => { clearTimeout(timer); console.error('[Hydration] fetch fail', url, err.message); reject(err) })
+    })
   }
 
   async function bootstrapApiConfig() {
@@ -994,19 +997,13 @@
   }
 
   async function fetchAllFromAPI() {
-    if (window.RuntimeManager) {
-      try {
-        const snap = await RuntimeManager.refresh({ force: true })
-        return !!snap
-      } catch (e) {
-        console.error('[GUI] snapshot refresh failed:', e.message)
-        return false
-      } finally {
-        setGlobalLoading(false)
-      }
-    }
-    setGlobalLoading(true)
+    setGlobalLoading(true, '⏳ Loading snapshot…')
     try {
+      if (window.RuntimeManager) {
+        console.log('[Hydration] fetchAllFromAPI via RuntimeManager.refresh')
+        await RuntimeManager.refresh({ force: true })
+        return !!RuntimeManager.getState()
+      }
       const response = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/runtime/snapshot', {
         method: 'GET',
         headers: apiHeaders(),
@@ -1041,13 +1038,14 @@
       updateApiStatus(true)
       return true
     } catch (e) {
-      console.error('❌ API fetch failed:', e.message || e)
+      console.error('[Hydration] API fetch failed:', e.message || e)
       apiCache.connected = false
       updateApiStatus(false)
       renderUnavailableAllTabs(e.message || 'Data unavailable')
       return false
     } finally {
       setGlobalLoading(false)
+      console.log('[Hydration] loading false (fetchAllFromAPI)')
     }
   }
 
@@ -1080,6 +1078,23 @@
   function panelErrorCard(panelId, err) {
     const msg = (err && err.message) ? err.message : String(err || 'render error')
     return `<div class="panel-error-card"><strong>${escapeHtml(panelId)} panel</strong><p>${escapeHtml(msg)}</p></div>`
+  }
+
+  function staleIntelligenceFallbackHtml(panelId) {
+    const usingStale = window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache()
+    const meta = window.RuntimeManager && RuntimeManager.getStaleCacheMeta ? RuntimeManager.getStaleCacheMeta() : null
+    const ageText = meta && meta.ageMinutes != null ? `${meta.ageMinutes} min ago` : 'unknown'
+    const lastErr = window.RuntimeManager && RuntimeManager.getLastFetchError ? RuntimeManager.getLastFetchError() : null
+    if (usingStale || lastErr) {
+      return emptyStateHtml(
+        '⚠ Stale intelligence cache',
+        `Last successful export: ${ageText}${lastErr ? ' · ' + lastErr : ''}`
+      )
+    }
+    const lcMsg = window.RuntimeManager
+      ? RuntimeManager.lifecycleMessage(panelId || 'brain', 'Awaiting next intelligence cycle.')
+      : 'Awaiting next cycle'
+    return emptyStateHtml('No intelligence available', lcMsg)
   }
 
   function staleBadgeHtml() {
@@ -1167,6 +1182,7 @@
 
     const hydratePanel = (panelId, fn) => {
       const started = Date.now()
+      console.log('[Hydration]', panelId, 'start')
       try {
         fn()
         panelHydrationState[panelId] = { hydrated: true, error: null, at: Date.now() }
@@ -1179,6 +1195,16 @@
           const banner = panelStatusBannerHtml(panelId)
           el.innerHTML = banner + panelErrorCard(panelId, e) + emptyStateHtml('Panel degraded', 'Other tabs continue normally.')
         }
+      } finally {
+        if (isPanelPending(panelId)) {
+          console.warn('[Hydration]', panelId, 'still pending after render — applying fallback')
+          const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+          if (el) {
+            el.innerHTML = panelStatusBannerHtml(panelId) + staleBadgeHtml() + staleIntelligenceFallbackHtml(panelId)
+          }
+          panelHydrationState[panelId] = { hydrated: true, error: 'fallback', at: Date.now() }
+        }
+        console.log('[Hydration]', panelId, 'loading false')
       }
     }
 
@@ -1706,81 +1732,95 @@
     `;
   }
 
+  function buildBrainDataFromSnapshot() {
+    const norm = getNormalizedSnapshot()
+    const snap = (window.RuntimeManager && RuntimeManager.getState) ? RuntimeManager.getState() : window.runtimeSnapshot
+    const ms = (window.RuntimeManager && RuntimeManager.getMarketSnapshot)
+      ? (RuntimeManager.getMarketSnapshot() || {})
+      : ((snap && snap.market_snapshot) || {})
+    const exports = (snap && (snap.exports || snap.data)) || {}
+    const intel = (norm && norm.exports && norm.exports.intelligence)
+      || exports.intelligence
+      || ms.intelligence
+      || null
+    let data = normalizeBrainData(intel)
+    if (data && ms) {
+      if (ms.executive_summary && !data.executive_summary) data.executive_summary = ms.executive_summary
+      if (ms.action_plan && !data.action_plan) data.action_plan = ms.action_plan
+      if (ms.top_opportunities && !(data.top_opportunities || []).length) data.top_opportunities = ms.top_opportunities
+      if (ms.risk_list && !(data.risks_and_avoids || []).length) data.risks_and_avoids = ms.risk_list
+      if (ms.sector_rotation && !data.sector_rotation) data.sector_rotation = ms.sector_rotation
+    }
+    if (!data && norm && norm.brain) {
+      const b = norm.brain
+      data = {
+        executive_summary: b.summary,
+        action_plan: b.actionPlan,
+        self_calibration: b.selfCalibration,
+        market_mood: b.marketMood,
+        sector_rotation: b.sectorRotation,
+        top_opportunities: b.topOpportunities,
+        risks_and_avoids: b.risks,
+        government_impact: b.governmentImpact,
+        sources_total: b.sourcesTotal,
+        sources_used: b.sourcesUsed,
+      }
+    }
+    if (!data) {
+      data = normalizeBrainData(loadJson(files.intelligence))
+    }
+    return data
+  }
+
+  function brainHasRenderableContent(data) {
+    if (!data || typeof data !== 'object') return false
+    const mood = data.market_mood || {}
+    const summary = displayText(data.executive_summary, '')
+    const placeholder = summary === 'No intelligence available' || summary === 'Waiting for analysis...'
+    return !!(
+      (summary && !placeholder)
+      || (data.top_opportunities && data.top_opportunities.length)
+      || (data.risks_and_avoids && data.risks_and_avoids.length)
+      || displayText(data.action_plan, '')
+      || (displayText(mood.global_mood, '') && mood.global_mood !== 'Confidence building')
+      || (displayText(mood.india_outlook, '') && mood.india_outlook !== 'Confidence building')
+    )
+  }
+
   // ============================================================
   // TAB 1: BRAIN
   // ============================================================
   function loadBrain() {
     const container = document.getElementById('tab-brain')
     if (!container) return
-    const norm = getNormalizedSnapshot()
-    const raw = loadJson(files.intelligence);
-    const activeStore = loadJson(files.activePredictions);
-    let data = normalizeBrainData(raw);
-    const brainBanner = panelStatusBannerHtml('brain', 'intelligence');
-    const staleTag = staleBadgeHtml();
+    const activeStore = loadJson(files.activePredictions)
+    let data = buildBrainDataFromSnapshot()
+    const brainBanner = panelStatusBannerHtml('brain', 'intelligence')
+    const staleTag = staleBadgeHtml()
 
     const canonicalPlan = (window.RuntimeManager && RuntimeManager.getActionPlan)
       ? RuntimeManager.getActionPlan()
-      : ((norm && norm.brain && norm.brain.actionPlan) || apiCache.actionPlan || '');
-    if (data && canonicalPlan) data.action_plan = canonicalPlan;
-    if (!data && norm && norm.brain) {
-      data = {
-        executive_summary: norm.brain.summary,
-        action_plan: norm.brain.actionPlan,
-        self_calibration: norm.brain.selfCalibration,
-        market_mood: norm.brain.marketMood,
-        sector_rotation: norm.brain.sectorRotation,
-        top_opportunities: norm.brain.topOpportunities,
-        risks_and_avoids: norm.brain.risks,
-        government_impact: norm.brain.governmentImpact,
-        sources_total: norm.brain.sourcesTotal,
-        sources_used: norm.brain.sourcesUsed,
-      };
-    }
-
-    const hasRuntime = !!(window.RuntimeManager && RuntimeManager.getState && RuntimeManager.getState());
-    if (!data && !hasRuntime) {
-      const err = window.RuntimeManager && RuntimeManager.unavailableBanner
-        ? RuntimeManager.unavailableBanner()
-        : emptyStateHtml('No intelligence available', 'Check API connection or run refresh.');
-      setPanelHtml(container, brainBanner, err);
-      return;
-    }
+      : ((getNormalizedSnapshot() || {}).brain || {}).actionPlan || apiCache.actionPlan || ''
+    if (data && canonicalPlan) data.action_plan = canonicalPlan
 
     if (!data) {
-      const lcMsg = window.RuntimeManager
-        ? RuntimeManager.lifecycleMessage('brain', 'Awaiting next intelligence cycle.')
-        : 'Awaiting next cycle';
-      setPanelHtml(container, brainBanner, emptyStateHtml('No intelligence available', lcMsg));
-      return;
+      setPanelHtml(container, brainBanner, staleTag + staleIntelligenceFallbackHtml('brain'))
+      return
     }
 
-    data.top_opportunities = mergeLifecycleIntoOpportunities(data.top_opportunities || [], activeStore);
+    if (!brainHasRenderableContent(data)) {
+      setPanelHtml(container, brainBanner, staleTag + staleIntelligenceFallbackHtml('brain'))
+      return
+    }
+
+    data.top_opportunities = mergeLifecycleIntoOpportunities(data.top_opportunities || [], activeStore)
     if (activeStore && Array.isArray(activeStore.predictions)) {
       const activeCount = (activeStore.predictions || []).filter(
         (p) => (p.state === 'ACTIVE' || p.state === 'PENDING') && p.category === 'opportunity'
-      ).length;
-      data.lifecycle_active_count = activeStore.count || activeCount;
-      data.active_predictions_updated = activeStore.updated_at;
+      ).length
+      data.lifecycle_active_count = activeStore.count || activeCount
+      data.active_predictions_updated = activeStore.updated_at
     }
-
-    const summary = displayText(data.executive_summary, '');
-    const moodEarly = data.market_mood || {};
-    const hasContent = summary ||
-      (data.top_opportunities && data.top_opportunities.length) ||
-      (data.risks_and_avoids && data.risks_and_avoids.length) ||
-      displayText(data.action_plan, '') ||
-      displayText(moodEarly.global_mood, '') ||
-      displayText(moodEarly.india_outlook, '');
-
-    if (!hasContent) {
-      const lcMsg = window.RuntimeManager
-        ? RuntimeManager.lifecycleMessage('brain', 'Intelligence export empty — awaiting next analysis cycle.')
-        : 'Awaiting next cycle';
-      setPanelHtml(container, brainBanner, emptyStateHtml('No intelligence available', lcMsg));
-      return;
-    }
-
 
     const govt = data.government_impact || {};
     const rotation = data.sector_rotation || { bullish: [], bearish: [] };
@@ -2146,7 +2186,7 @@
     `
   }
 
-  const MARKETS_LOAD_TIMEOUT_MS = 8000
+  const MARKETS_LOAD_TIMEOUT_MS = 15000
 
   function normalizeMarketPayload(raw) {
     if (!raw || typeof raw !== 'object' || raw.error) return null
@@ -3340,32 +3380,45 @@
           onLoadingChange: (active) => setGlobalLoading(active, '⏳ Loading snapshot…'),
         })
         RuntimeManager.subscribe((_snap, meta) => {
-          if (meta && meta.hydrationComplete) {
-            console.log('[Hydration] snapshot cycle complete', {
-              failed: !!(meta && meta.failed),
-              unchanged: !!(meta && meta.unchanged),
-              staleCache: !!(meta && meta.staleCache),
-              ms: meta && meta.hydrationMs,
-              error: meta && meta.error,
+          try {
+            if (meta && meta.hydrationComplete) {
+              console.log('[Hydration] snapshot cycle complete', {
+                failed: !!(meta && meta.failed),
+                unchanged: !!(meta && meta.unchanged),
+                staleCache: !!(meta && meta.staleCache),
+                ms: meta && meta.hydrationMs,
+                error: meta && meta.error,
+              })
+            }
+            if (meta && meta.failed && !_snap && !(meta && meta.staleCache)) {
+              renderUnavailableAllTabs(meta.error || 'Data unavailable')
+            }
+            const anyPending = Object.keys(PANEL_TAB_MAP).some((id) => isPanelPending(id))
+            renderAllTabs({
+              force: anyPending || !!(meta && (meta.failed || meta.staleCache || !meta || !meta.unchanged)),
             })
+            if (debugOverlayOpen) renderDebugOverlay()
+          } catch (e) {
+            console.error('[Hydration] renderAllTabs subscriber failed:', e)
+            renderAllTabs({ force: true })
+          } finally {
+            setGlobalLoading(false)
+            console.log('[Hydration] loading false (subscriber)')
           }
-          if (meta && meta.failed && !_snap && !(meta && meta.staleCache)) {
-            renderUnavailableAllTabs(meta.error || 'Data unavailable')
-          }
-          try { renderAllTabs({ force: !!(meta && (meta.failed || meta.staleCache)) }) } catch (e) { console.error('[Hydration] renderAllTabs subscriber failed:', e) }
-          if (debugOverlayOpen) renderDebugOverlay()
         })
         try { RuntimeManager.start(30000) } catch (e) {
           console.error('[RuntimeManager.start]', e)
           renderUnavailableAllTabs(e.message || 'RuntimeManager failed to start')
           renderAllTabs({ force: true })
         }
+        renderAllTabs({ force: true })
         setTimeout(() => {
           const pending = Object.keys(PANEL_TAB_MAP).some((id) => isPanelPending(id))
           if (pending) {
             console.warn('[Hydration] boot safety render — panels still pending after timeout')
             renderAllTabs({ force: true })
           }
+          setGlobalLoading(false)
         }, FETCH_TIMEOUT_MS + 2000)
       } else {
         await refreshAll()
