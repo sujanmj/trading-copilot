@@ -248,6 +248,24 @@ def run_outcome_horizon_tick():
         print(f"[!] Outcome horizon tick failed: {e}", flush=True)
 
 
+def run_stability_watchdog_tick():
+    try:
+        from backend.production.stability_monitor import tick_async_watchdog
+        return tick_async_watchdog()
+    except Exception as e:
+        print(f"[!] Stability watchdog tick failed: {e}", flush=True)
+        return {'error': str(e)}
+
+
+def run_pending_cleanup_tick():
+    try:
+        from backend.lifecycle.pending_cleanup_daemon import tick_pending_cleanup
+        return tick_pending_cleanup()
+    except Exception as e:
+        print(f"[!] Pending cleanup tick failed: {e}", flush=True)
+        return {'error': str(e)}
+
+
 # Interval jobs — registered only when primary scheduler main() runs
 def register_interval_jobs():
     global _interval_jobs_registered
@@ -257,6 +275,8 @@ def register_interval_jobs():
     schedule.every(30).minutes.do(run_scheduled_collection)
     schedule.every(1).minutes.do(run_alert_scheduler_tick)
     schedule.every(15).minutes.do(run_outcome_horizon_tick)
+    schedule.every(30).minutes.do(run_pending_cleanup_tick)
+    schedule.every(10).minutes.do(run_stability_watchdog_tick)
     schedule.every(60).minutes.do(dump_task_registry)
     print("[SCHEDULER] Interval jobs registered (primary singleton)", flush=True)
 

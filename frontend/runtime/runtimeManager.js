@@ -60,6 +60,8 @@
     const panels = computePanelHashes(snapshot);
     const meta = {
       generated_at: snapshot && snapshot.generated_at,
+      active_snapshot_id: snapshot && snapshot.active_snapshot_id,
+      snapshot_version: snapshot && snapshot.snapshot_version,
       panels: snapshot && snapshot.panels,
     };
     return stableHash({ panels, meta });
@@ -341,6 +343,8 @@
     const runtimePanel = getPanelState('runtime');
     const op = state && state.operational;
     const fresh = getFreshnessState();
+    const snapVer = (state && state.snapshot_version) || runtimePanel.snapshot_version;
+    const snapFresh = runtimePanel.snapshot_freshness_minutes;
     let statusTag = '';
     if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
       statusTag = ` · <span class="runtime-idle">${op.display_status}</span>`;
@@ -349,8 +353,10 @@
     } else if (isStale()) {
       statusTag = ' · <span class="runtime-stale">snapshot stale</span>';
     }
+    const snapTag = snapVer != null ? ` · snap v${snapVer}` : '';
+    const freshTag = snapFresh != null ? ` · ${snapFresh}m old` : '';
     const suffix = extra ? ` · ${extra}` : '';
-    return `<div class="timestamp runtime-ts">Updated: ${ts}${suffix}${statusTag}</div>`;
+    return `<div class="timestamp runtime-ts">Updated: ${ts}${snapTag}${freshTag}${suffix}${statusTag}</div>`;
   }
 
   function lifecycleMessage(panelId, fallback) {

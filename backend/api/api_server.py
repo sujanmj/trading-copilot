@@ -896,15 +896,18 @@ def _build_runtime_snapshot() -> dict:
     }
     active_snapshot_meta = {}
     snapshot_health_payload = {}
+    stability_payload = {}
     try:
         from backend.intelligence.active_snapshot import (
             get_active_snapshot_meta,
             get_canonical_intelligence,
             snapshot_health,
         )
+        from backend.production.stability_monitor import run_stability_probe
         data['intelligence'] = get_canonical_intelligence()
         active_snapshot_meta = get_active_snapshot_meta()
         snapshot_health_payload = snapshot_health()
+        stability_payload = run_stability_probe()
     except Exception:
         pass
 
@@ -981,6 +984,12 @@ def _build_runtime_snapshot() -> dict:
         ready=stats_ok,
         waiting_message='Awaiting evaluated prediction sample size.',
     )
+    cal_phase = 'LEARNING'
+    try:
+        from backend.calibration.calibration_state import build_calibration_display
+        cal_phase = build_calibration_display(metrics).get('phase', 'LEARNING')
+    except Exception:
+        pass
     if stats_ok and evaluated == 0:
         lc_msg = lifecycle_panel.get('calibration_message') or 'Awaiting evaluated prediction sample size.'
         calibration_panel = {
@@ -988,7 +997,10 @@ def _build_runtime_snapshot() -> dict:
             'stale': calibration_panel.get('stale', False),
             'message': lc_msg,
             'age_seconds': calibration_panel.get('age_seconds'),
+            'phase': cal_phase,
         }
+    else:
+        calibration_panel['phase'] = cal_phase
 
     journal_panel = {
         'status': 'waiting',
@@ -1098,6 +1110,11 @@ def _build_runtime_snapshot() -> dict:
             'operational_mode': operational.get('operational_mode'),
             'lifecycle_state': operational.get('lifecycle_state'),
             'active_snapshot_id': active_snapshot_meta.get('active_snapshot_id'),
+            'snapshot_version': active_snapshot_meta.get('snapshot_version'),
+            'snapshot_freshness_minutes': snapshot_health_payload.get('age_minutes'),
+            'publish_latency_ms': None,
+            'cache_state': 'canonical' if active_snapshot_meta.get('active_snapshot_id') else 'raw',
+            'ai_mode': (ai_runtime or {}).get('mode') or (ai_runtime or {}).get('status'),
         },
         'brain': _panel_state_from_source(
             'intelligence',
@@ -1131,8 +1148,10 @@ def _build_runtime_snapshot() -> dict:
         'generated_at': generated_at,
         'active_snapshot_id': active_snapshot_meta.get('active_snapshot_id'),
         'snapshot_cycle_id': active_snapshot_meta.get('cycle_id'),
+        'snapshot_version': active_snapshot_meta.get('snapshot_version'),
         'snapshot_published_at': active_snapshot_meta.get('published_at'),
         'snapshot_health': snapshot_health_payload,
+        'stability': stability_payload,
         'operational': operational,
         'panels': panels,
         'freshness': health_payload.get('data_freshness') or {},
@@ -1153,6 +1172,7 @@ def _build_runtime_snapshot() -> dict:
             'wins': metrics.get('wins', 0),
             'losses': metrics.get('losses', 0),
             'win_rate': metrics.get('win_rate'),
+            'calibration_phase': cal_phase,
             'ai_runtime': ai_runtime,
             'dashboard_status': (stats.get('calibration_dashboard') or {}).get('status'),
         },

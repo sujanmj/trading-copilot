@@ -291,8 +291,20 @@ def _do_refresh():
     send_message("✅ <b>Refresh complete!</b>\n\nFull brain sent above. Use /elite for filtered opportunities or /scan for raw signals.")
 
 def cmd_refresh():
+    from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
+    skip, reason, key = begin_command('refresh', '', CHAT_ID)
+    if skip:
+        send_message(duplicate_command_message(reason))
+        return
     send_message("🔄 <b>Starting full refresh</b>\nThis takes 3-5 minutes. Brain will be pushed when done.\n<i>(Other commands still work during refresh)</i>")
-    run_in_background(_do_refresh)
+
+    def _wrapped():
+        try:
+            _do_refresh()
+        finally:
+            finish_command(key)
+
+    run_in_background(_wrapped)
 
 def _do_scan():
     run_module('stock_scanner')

@@ -94,15 +94,58 @@ def main() -> int:
         if section not in empty_plan:
             errors.append(f'action plan missing {section}')
 
-    from backend.intelligence.active_snapshot import get_active_snapshot_meta, snapshot_health, publish_active_snapshot
+    from backend.intelligence.active_snapshot import (
+        get_active_snapshot_meta,
+        snapshot_health,
+        publish_active_snapshot,
+        begin_publish_job,
+        assert_publish_allowed,
+    )
     from backend.intelligence.sector_consistency import stabilize_sector_rotation
     from backend.utils.market_hours import get_lifecycle_state
     sectors = stabilize_sector_rotation({'sector_rotation': {'bullish': ['POWER'], 'bearish': ['METALS']}})
     if not sectors.get('bullish') or 'rotation_strength' not in sectors:
         errors.append('sector consistency missing rotation_strength')
     publish_active_snapshot({'sector_rotation': sectors, 'action_plan': empty_plan}, source='validate')
-    if not get_active_snapshot_meta().get('active_snapshot_id'):
+    meta = get_active_snapshot_meta()
+    if not meta.get('active_snapshot_id'):
         errors.append('active snapshot not published')
+    if int(meta.get('snapshot_version') or 0) < 1:
+        errors.append('snapshot_version not monotonic')
+    begin_publish_job(source='validate_stale')
+    stale = publish_active_snapshot(
+        {'sector_rotation': sectors, 'action_plan': empty_plan},
+        source='validate_stale',
+        publish_token='invalid_token',
+        expected_version=0,
+    )
+    if stale is not None:
+        errors.append('stale snapshot publish should abort with invalid token')
+
+    from backend.calibration.calibration_state import get_calibration_phase, PHASE_LEARNING
+    from backend.analytics.confidence_hierarchy import normalize_confidence
+    from backend.trading.tactical_trade_engine import build_tactical_plan
+    from backend.lifecycle.lifecycle_states import to_canonical, RESOLVED_WIN
+    from backend.history.replay_integrity import validate_history_export
+    from backend.production.stability_monitor import run_stability_probe
+
+    if get_calibration_phase({'wins': 0, 'losses': 0, 'neutral': 0}) != PHASE_LEARNING:
+        errors.append('calibration phase learning mismatch')
+    norm = normalize_confidence({'confidence': 'HIGH', 'ml_confidence': 0.8})
+    if 'display_label' not in norm or 'macro_confidence' not in norm:
+        errors.append('confidence hierarchy incomplete')
+    plan = build_tactical_plan({'symbol': 'TEST', 'price': 100, 'change_percent': 6, 'volume_ratio': 3.5})
+    if not plan or not plan.get('entry_range'):
+        errors.append('tactical trade plan missing entry range')
+    if to_canonical('WIN') != RESOLVED_WIN:
+        errors.append('lifecycle canonical WIN mapping failed')
+    hist_ok, hist_issues = validate_history_export({'periods': {'today': {'stats': {'wins': 0, 'losses': 0, 'evaluated': 0}}}, 'intelligence_journal': {'status': 'ok', 'entries': []}, 'total_in_db': {'predictions': 0}})
+    if not hist_ok:
+        errors.append(f'history integrity baseline failed: {hist_issues[:2]}')
+    stability = run_stability_probe()
+    if 'score' not in stability:
+        errors.append('stability probe missing score')
+
     if get_lifecycle_state() not in ('PREMARKET_PREP', 'MARKET_ACTIVE', 'POSTMARKET_EVAL', 'NIGHT_IDLE'):
         errors.append('invalid lifecycle state label')
 
@@ -231,6 +274,14 @@ def main() -> int:
     print('MULTI-CHANNEL CONSISTENCY VERIFIED')
     print('ACTION ENGINE VERIFIED')
     print('LIVE STABILITY VERIFIED')
+    print('SNAPSHOT RACE FIX VERIFIED')
+    print('HISTORY ENGINE RECOVERY VERIFIED')
+    print('LIFECYCLE RESOLUTION VERIFIED')
+    print('TACTICAL TRADE ENGINE VERIFIED')
+    print('CONFIDENCE NORMALIZATION VERIFIED')
+    print('CALIBRATION HARDENING VERIFIED')
+    print('PRODUCTION HARDENING VERIFIED')
+    print('TRADING COPILOT STABILIZATION COMPLETE')
     return 0
 
 

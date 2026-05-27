@@ -510,6 +510,22 @@ def _load_scanner_ultra_candidates() -> List[dict]:
     return out
 
 
+def _load_intel(intel: Optional[dict]) -> dict:
+    if intel is not None:
+        return intel if isinstance(intel, dict) else {}
+    try:
+        from backend.intelligence.active_snapshot import get_canonical_intelligence
+        return get_canonical_intelligence()
+    except Exception:
+        pass
+    if INTEL_FILE.exists():
+        try:
+            return json.loads(INTEL_FILE.read_text(encoding='utf-8'))
+        except Exception:
+            return {}
+    return {}
+
+
 def rank_opportunities(
     intel: Optional[dict] = None,
     *,
@@ -517,16 +533,7 @@ def rank_opportunities(
     include_active: bool = True,
 ) -> List[dict]:
     """Return elite top-N ranked opportunities — fresh, high-conviction only."""
-    if intel is None:
-        if INTEL_FILE.exists():
-            try:
-                intel = json.loads(INTEL_FILE.read_text(encoding='utf-8'))
-            except Exception:
-                intel = {}
-        else:
-            intel = {}
-
-    intel = intel if isinstance(intel, dict) else {}
+    intel = _load_intel(intel)
     intel_ts = _parse_ts(intel.get('timestamp') or intel.get('generation_time'))
     ctx = _load_quality_context(intel)
     scanner_index = _load_scanner_index()
@@ -596,16 +603,7 @@ def rank_opportunities_tiered(
     Split opportunities into ELITE / TACTICAL / WATCHLIST tiers.
     Scanner ULTRA anomalies always populate TACTICAL when elite gate excludes them.
     """
-    if intel is None:
-        if INTEL_FILE.exists():
-            try:
-                intel = json.loads(INTEL_FILE.read_text(encoding='utf-8'))
-            except Exception:
-                intel = {}
-        else:
-            intel = {}
-
-    intel = intel if isinstance(intel, dict) else {}
+    intel = _load_intel(intel)
     intel_ts = _parse_ts(intel.get('timestamp') or intel.get('generation_time'))
     ctx = _load_quality_context(intel)
     scanner_index = _load_scanner_index()
@@ -667,6 +665,18 @@ def rank_opportunities_tiered(
             seen.add(sym)
 
     cap = max(1, int(limit))
+    try:
+        from backend.trading.tactical_trade_engine import attach_tactical_plans
+        from backend.analytics.confidence_hierarchy import normalize_confidence
+        tactical = attach_tactical_plans(tactical, scanner_index, intel)
+        watchlist = attach_tactical_plans(watchlist, scanner_index, intel)
+        for bucket in (elite, tactical, watchlist):
+            for item in bucket:
+                norm = normalize_confidence(item)
+                item['confidence_hierarchy'] = norm
+                item['display_confidence'] = norm.get('display_label') or item.get('display_confidence')
+    except Exception:
+        pass
     return {
         'elite': elite[:cap],
         'tactical': tactical[:cap],

@@ -201,8 +201,15 @@ def align_intelligence(intel: dict, *, limit: int = DEFAULT_OPPS_LIMIT, cycle_id
         'elite_count': sum(1 for o in clean_ranked if o.get('elite_verified')),
     }
     try:
-        from backend.intelligence.active_snapshot import publish_active_snapshot
-        publish_active_snapshot(out, cycle_id=cycle_id, source='align_intelligence')
+        from backend.intelligence.active_snapshot import begin_publish_job, publish_active_snapshot
+        job = begin_publish_job(source='align_intelligence', cycle_id=cycle_id)
+        publish_active_snapshot(
+            out,
+            cycle_id=cycle_id,
+            source='align_intelligence',
+            publish_token=job.get('publish_token'),
+            expected_version=job.get('expected_version'),
+        )
     except Exception:
         pass
     return out

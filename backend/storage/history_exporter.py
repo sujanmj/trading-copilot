@@ -411,16 +411,22 @@ def build_custom_period(start_date_str, end_date_str):
     return period
 
 
+def export_history():
+    """Validated export entry — used by history engine and retry queue."""
+    from backend.history.history_engine import run_history_export
+    return run_history_export()
+
+
 if __name__ == "__main__":
-    print("[HISTORY] history_exporter.py __main__ running build_export()")
+    print("[HISTORY] history_exporter.py __main__ running validated export")
     try:
-        build_export()
+        export_history()
     except Exception as e:
         import traceback
         print(f"[HISTORY] FATAL: {e}")
         traceback.print_exc()
         try:
-            atomic_write_json(OUTPUT_FILE, empty_history_output())
-            print(f"[HISTORY] Wrote emergency empty history to {OUTPUT_FILE}")
+            from backend.history.history_engine import update_history_heartbeat
+            update_history_heartbeat(status='failed', detail=str(e)[:200])
         except Exception:
             pass

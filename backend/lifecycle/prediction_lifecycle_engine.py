@@ -239,6 +239,17 @@ def expire_stale_pending() -> dict:
                 f"Expired {stats['expired']} · neutralized {stats['neutralized']} stale pending outcomes",
                 stage='expire_stale',
             )
+            try:
+                from backend.lifecycle.lifecycle_audit import archive_expired_rows, log_lifecycle_event
+                archive_expired_rows([{
+                    'event': 'expire_stale',
+                    'expired': stats['expired'],
+                    'neutralized': stats['neutralized'],
+                    'at': _now_iso(),
+                }])
+                log_lifecycle_event('expire_stale', f"expired={stats['expired']} neutralized={stats['neutralized']}")
+            except Exception:
+                pass
         if stats['confidence_decayed']:
             pipeline_log(f"Decayed confidence on {stats['confidence_decayed']} aged predictions", stage='expire_stale')
     except Exception as e:
@@ -539,11 +550,6 @@ def refresh_brain_opportunities() -> dict:
     try:
         from backend.intelligence.canonical_rankings import align_intelligence
         intel = align_intelligence(intel)
-    except Exception:
-        pass
-    try:
-        from backend.intelligence.active_snapshot import publish_active_snapshot
-        publish_active_snapshot(intel, source='brain_refresh')
     except Exception:
         pass
     intel['timestamp'] = _now_iso()
@@ -944,6 +950,13 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
             )
 
         if failed_critical:
+            try:
+                from backend.orchestration.retry_queue import enqueue_failed_task
+                for err in errors[-3:]:
+                    stage_name = str(err).split(':')[0]
+                    enqueue_failed_task(stage_name, {'error': err, 'trigger': trigger})
+            except Exception:
+                pass
             state.update({
                 'pipeline_status': 'FAILED',
                 'evaluation_cycle_complete': False,
@@ -1052,7 +1065,7 @@ def get_lifecycle_status() -> dict:
     except Exception:
         op = {}
 
-    return {
+    status = {
         'status': 'healthy' if display_status == 'COMPLETE' else display_status.lower(),
         'pipeline_status': display_status,
         'evaluation_cycle_complete': bool(state.get('evaluation_cycle_complete')),
@@ -1105,6 +1118,19 @@ def get_lifecycle_status() -> dict:
         'last_failure_reason': state.get('last_failure_reason'),
         'stage_history': (state.get('stage_history') or [])[-5:],
     }
+    try:
+        from backend.lifecycle.lifecycle_states import build_lifecycle_summary
+        from backend.lifecycle.unified_metrics import get_outcome_metrics
+        metrics = get_outcome_metrics('all_time')
+        status['canonical_lifecycle'] = build_lifecycle_summary(metrics, pending_cls)
+    except Exception:
+        pass
+    try:
+        from backend.history.history_engine import get_history_heartbeat
+        status['history_heartbeat'] = get_history_heartbeat()
+    except Exception:
+        pass
+    return status
 
 
 def get_lifecycle_ops_payload() -> dict:

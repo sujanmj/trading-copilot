@@ -327,10 +327,28 @@ def format_opps(opps_list, *, tier_label=None):
         note_html = f"\n   ⚠️ <i>{note}</i>" if note else ""
         ml = o.get('ml_confidence')
         ml_html = f" · ML {ml}" if ml and o.get('elite_verified') else ""
+        plan = o.get('tactical_plan') or {}
+        entry = _text(o.get('entry_zone') or plan.get('entry_range'))
+        tgt = _text(o.get('target') or plan.get('target_1'))
+        tgt2 = plan.get('target_2')
+        sl = _text(o.get('stop_loss') or plan.get('stop_loss'))
+        rr = plan.get('risk_reward') or o.get('risk_reward')
+        rr_html = f" · RR {rr}" if rr else ''
+        tgt2_html = f" · T2 {tgt2}" if tgt2 else ''
+        inv = plan.get('invalidation') or o.get('invalidation')
+        inv_html = f"\n   🛑 <i>{_text(inv)}</i>" if inv and inv != 'N/A' else ''
+        badge = ''
+        try:
+            from backend.lifecycle.lifecycle_states import lifecycle_badge
+            badge = lifecycle_badge(o.get('lifecycle_state') or o.get('state'))
+            if badge:
+                badge = f" · {badge}"
+        except Exception:
+            pass
         res.append(
-            f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b>{tier_tag} [{action}]\n"
-            f"   💰 Entry: {_text(o.get('entry_zone'))} | Tgt: {_text(o.get('target'))} | SL: {_text(o.get('stop_loss'))}\n"
-            f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html}\n"
+            f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b>{tier_tag} [{action}]{badge}\n"
+            f"   💰 Entry: {entry} | Tgt: {tgt}{tgt2_html} | SL: {sl}{rr_html}\n"
+            f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html}{inv_html}\n"
             f"   <i>{_text(o.get('logic'), 'No rationale provided.')}</i>"
         )
     return "\n\n".join(res)
@@ -577,7 +595,19 @@ def check_intel_file_stale(max_age_hours=2):
     return False, file_age_hours
 
 
+def _bind_snapshot_cycle(cycle_id: str = '') -> str:
+    try:
+        from backend.intelligence.active_snapshot import get_active_snapshot_meta
+        meta = get_active_snapshot_meta()
+        ver = int(meta.get('snapshot_version') or 0)
+        cid = meta.get('cycle_id') or cycle_id or 'snap'
+        return f"{cid}:v{ver}"
+    except Exception:
+        return cycle_id or 'snap'
+
+
 def push_full_brain(*, command='full', cycle_id=''):
+    cycle_id = _bind_snapshot_cycle(cycle_id)
     is_stale, age = check_intel_file_stale()
     if is_stale:
         safe_print(f"[BRAIN] Blocked push — intel file stale or missing (age={age})")

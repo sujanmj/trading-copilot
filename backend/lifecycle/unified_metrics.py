@@ -197,8 +197,11 @@ def get_prediction_metrics(metric_type: str = 'all_time') -> Dict[str, Any]:
 
 def get_calibration_metrics() -> Dict[str, Any]:
     """Calibration snapshot — same core counts as outcome metrics."""
+    from backend.calibration.calibration_state import build_calibration_display
+
     core = get_outcome_metrics('all_time')
     actionable = (core.get('wins') or 0) + (core.get('losses') or 0) + (core.get('neutral') or 0)
+    phase_info = build_calibration_display(core)
     return {
         'generated_at': datetime.now().isoformat(),
         'date': datetime.now().date().isoformat(),
@@ -214,12 +217,15 @@ def get_calibration_metrics() -> Dict[str, Any]:
         'partials': core['partials'],
         'expired': core['expired'],
         'invalidated': core['invalidated'],
-        'win_rate': core['win_rate'],
-        'loss_rate': round((core['losses'] / actionable * 100) if actionable else 0.0, 2),
+        'win_rate': core['win_rate'] if phase_info.get('show_win_rate') else None,
+        'loss_rate': round((core['losses'] / actionable * 100) if actionable and phase_info.get('show_win_rate') else 0.0, 2),
         'avg_gain_pct': core['avg_gain_pct'],
         'avg_loss_pct': core['avg_loss_pct'],
         'profit_factor': core['profit_factor'],
-        'message': _calibration_status_message(actionable),
+        'calibration_phase': phase_info.get('phase'),
+        'resolved_sample': phase_info.get('resolved_sample'),
+        'suppress_adaptive': phase_info.get('suppress_adaptive'),
+        'message': phase_info.get('message') or _calibration_status_message(actionable),
     }
 
 
@@ -369,24 +375,12 @@ def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
 
 def format_calibration_telegram(cal: Optional[dict] = None) -> str:
     c = cal or get_calibration_metrics()
-    actionable = (c.get('wins') or 0) + (c.get('losses') or 0) + (c.get('neutral') or 0)
-    msg = "<b>🎯 Calibration Metrics</b>\n<b>AI LEARNING STATE · HISTORICAL LEARNING</b>\n\n"
-    msg += f"Predictions: {c.get('prediction_total', 0)}\n"
-    msg += f"Evaluated: {c.get('evaluated', c.get('total_evaluated', 0))}\n"
-    msg += f"Pending: {c.get('pending', 0)}\n"
-    if actionable < 5:
-        if (c.get('wins') or 0) > 0:
-            msg += "<i>Early positive sample detected.</i>\n"
-        else:
-            msg += "<i>Adaptive learning still collecting statistically meaningful samples.</i>\n"
-    elif actionable < 20:
-        msg += f"Wins: {c.get('wins', 0)} | Losses: {c.get('losses', 0)}\n"
-        msg += "<i>Low-confidence calibration — sample still developing.</i>\n"
-    else:
-        msg += f"Win rate: {c.get('win_rate', 0):.1f}%\n"
-        msg += f"Wins: {c.get('wins', 0)} | Losses: {c.get('losses', 0)}\n"
-    if actionable >= 50:
-        msg += "<i>Adaptive confidence enabled.</i>\n"
+    phase = c.get('calibration_phase') or 'LEARNING'
+    msg = f"<b>🎯 Calibration</b> · <b>{phase}</b>\n\n"
+    msg += f"Predictions: {c.get('prediction_total', 0)} · Evaluated: {c.get('evaluated', c.get('total_evaluated', 0))}\n"
+    msg += f"Pending: {c.get('pending', 0)} · Resolved sample: {c.get('resolved_sample', 0)}\n"
+    if c.get('show_win_rate') or (c.get('resolved_sample') or 0) >= 20:
+        msg += f"Win rate: {c.get('win_rate', 0):.1f}% · Wins: {c.get('wins', 0)} · Losses: {c.get('losses', 0)}\n"
     msg += f"<i>{c.get('message', '')}</i>"
     return msg
 
