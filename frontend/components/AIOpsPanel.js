@@ -743,6 +743,7 @@
   async function refreshPanel() {
     const statusEl = $('aiOpsLoadStatus');
     if (statusEl) statusEl.textContent = 'Syncing…';
+    if (window.UiState) UiState.saveUiState($('aiOpsDrawer'));
     try {
       const runtime = config.getRuntimeState ? config.getRuntimeState() : null;
       const health = buildHealthFromRuntime(runtime);
@@ -780,9 +781,11 @@
       };
       renderPanel(data);
       markAlertsSeen(data);
+      if (window.UiState) UiState.restoreUiState($('aiOpsDrawer'));
       if (statusEl) statusEl.textContent = '';
     } catch (e) {
       if (statusEl) statusEl.textContent = 'Offline';
+      if (window.UiState) UiState.restoreUiState($('aiOpsDrawer'));
       $('aiOpsStatusGrid').innerHTML = `<div class="ai-ops-empty">Could not load AI ops: ${escapeHtml(e.message)}</div>`;
     }
   }

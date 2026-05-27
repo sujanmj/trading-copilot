@@ -167,6 +167,32 @@ def detect_hallucinations(
     plan = str(raw.get('action_plan') or '').strip()
     if len(plan) < 5:
         issues.append('empty_action_plan')
+    else:
+        ranked_pool: Set[str] = set(known)
+        feed = raw.get('canonical_opportunity_feed') or {}
+        for sym in feed.get('symbols') or []:
+            s = str(sym).strip().upper()
+            if s:
+                ranked_pool.add(s)
+        for item in opps:
+            if isinstance(item, dict):
+                sym = str(item.get('symbol') or '').strip().upper()
+                if sym:
+                    ranked_pool.add(sym)
+        if not ranked_pool or ctx.get('enforce_action_plan_symbols', True):
+            from backend.intelligence.canonical_rankings import (
+                extract_symbols_from_text,
+                get_ranked_symbol_set,
+            )
+
+            if len(ranked_pool) <= len(GENERIC_SYMBOLS):
+                ranked_pool |= get_ranked_symbol_set(raw)
+            unknown_plan = [
+                sym for sym in extract_symbols_from_text(plan)
+                if sym not in ranked_pool and sym not in GENERIC_SYMBOLS
+            ]
+            if unknown_plan:
+                issues.append(f'action_plan_unknown_symbols:{",".join(unknown_plan[:5])}')
 
     return issues
 

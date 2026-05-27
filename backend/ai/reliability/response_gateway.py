@@ -115,7 +115,6 @@ def _validate_parsed(
     context: Optional[dict] = None,
 ) -> GatewayResult:
     ctx = context or {}
-    hallucinations = detect_hallucinations(parsed, context=ctx)
     model, schema_errors = validate_schema(parsed)
 
     if schema_errors:
@@ -127,6 +126,20 @@ def _validate_parsed(
         )
         _record_gateway_metrics('schema_failure', count=len(schema_errors))
 
+    if model is None or is_blocking_issue(schema_errors):
+        return GatewayResult(
+            success=False,
+            hallucinations=[],
+            schema_errors=schema_errors,
+        )
+
+    metrics = calibrate_confidence(model, context=ctx)
+    intel_dict = intelligence_to_dict(model)
+    from backend.intelligence.canonical_rankings import align_intelligence
+
+    intel_dict = align_intelligence(intel_dict)
+    hallucinations = detect_hallucinations(intel_dict, context=ctx)
+
     if hallucinations:
         rel_log(
             'hallucination_detected',
@@ -137,7 +150,7 @@ def _validate_parsed(
         _record_gateway_metrics('hallucination_detected', count=len(hallucinations))
 
     all_issues = hallucinations + schema_errors
-    if model is None or is_blocking_issue(all_issues):
+    if is_blocking_issue(all_issues):
         return GatewayResult(
             success=False,
             hallucinations=hallucinations,
@@ -151,8 +164,6 @@ def _validate_parsed(
             schema_errors=schema_errors,
         )
 
-    metrics = calibrate_confidence(model, context=ctx)
-    intel_dict = intelligence_to_dict(model)
     intel_dict = apply_confidence_to_output(intel_dict, metrics)
 
     degraded = bool(hallucinations)

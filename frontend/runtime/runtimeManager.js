@@ -7,6 +7,7 @@
 
   const DEFAULT_POLL_MS = 30000;
   const MIN_REFRESH_GAP_MS = 4000;
+  const NOTIFY_DEBOUNCE_MS = 80;
 
   let config = {
     getApiBase: () => '',
@@ -26,21 +27,68 @@
   const subscribers = new Set();
   const panelHandlers = new Map();
 
-  function notify() {
+  let lastSnapshotHash = null;
+  let panelContentHashes = {};
+  let notifyTimer = null;
+
+  function stableHash(value) {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    let hash = 5381;
+    for (let i = 0; i < text.length; i += 1) {
+      hash = ((hash << 5) + hash) + text.charCodeAt(i);
+      hash &= 0xffffffff;
+    }
+    return String(hash >>> 0);
+  }
+
+  function computePanelHashes(snapshot) {
+    const data = (snapshot && snapshot.data) || {};
+    return {
+      brain: stableHash({ i: data.intelligence, a: data.active_predictions }),
+      govt: stableHash(data.govt),
+      scanner: stableHash(data.scanner),
+      markets: stableHash({ m: data.markets, india: data.india }),
+      news: stableHash({ n: data.news, inshorts: data.inshorts }),
+      tv: stableHash(data.youtube),
+      reddit: stableHash(data.reddit),
+      stats: stableHash(data.stats),
+      history: stableHash(data.history),
+    };
+  }
+
+  function computeSnapshotHash(snapshot) {
+    const panels = computePanelHashes(snapshot);
+    const meta = {
+      generated_at: snapshot && snapshot.generated_at,
+      panels: snapshot && snapshot.panels,
+    };
+    return stableHash({ panels, meta });
+  }
+
+  function notify(meta) {
+    const payload = meta || {};
     subscribers.forEach((fn) => {
       try {
-        fn(state);
+        fn(state, payload);
       } catch (e) {
         console.error('[RuntimeManager] subscriber error', e);
       }
     });
     panelHandlers.forEach((fn) => {
       try {
-        fn(state);
+        fn(state, payload);
       } catch (e) {
         console.error('[RuntimeManager] panel handler error', e);
       }
     });
+  }
+
+  function scheduleNotify(meta) {
+    if (notifyTimer) clearTimeout(notifyTimer);
+    notifyTimer = setTimeout(() => {
+      notifyTimer = null;
+      notify(meta);
+    }, NOTIFY_DEBOUNCE_MS);
   }
 
   function unwrapExportPayload(cached) {
@@ -89,7 +137,8 @@
     console.warn('[RuntimeManager] cache invalidated:', reason);
   }
 
-  function applySnapshot(snapshot, seq) {
+  function applySnapshot(snapshot, seq, opts) {
+    opts = opts || {};
     if (seq !== fetchSeq) return false;
     if (!snapshot || typeof snapshot !== 'object') return false;
 
@@ -103,7 +152,14 @@
       invalidateCache('gui_sync_stale');
     }
 
+    const nextHash = computeSnapshotHash(snapshot);
+    const nextPanelHashes = computePanelHashes(snapshot);
+    const unchanged = !opts.force && nextHash === lastSnapshotHash;
+
     state = snapshot;
+    lastSnapshotHash = nextHash;
+    panelContentHashes = nextPanelHashes;
+
     try {
       applyCacheFromSnapshot(snapshot);
     } catch (e) {
@@ -112,7 +168,16 @@
     if (typeof config.onConnectionChange === 'function') {
       config.onConnectionChange(!!cacheConnected());
     }
-    notify();
+
+    if (unchanged) {
+      return true;
+    }
+
+    scheduleNotify({
+      unchanged: false,
+      snapshotHash: nextHash,
+      panelHashes: nextPanelHashes,
+    });
 
     if (orch && orch.stale && !hasData) {
       const now = Date.now();
@@ -158,7 +223,7 @@
     try {
       const snapshot = await fetchSnapshot();
       lastRefreshAt = Date.now();
-      applySnapshot(snapshot, seq);
+      applySnapshot(snapshot, seq, opts);
       return state;
     } catch (e) {
       const msg = e.name === 'AbortError' ? 'API timeout (20s)' : e.message;
@@ -195,7 +260,7 @@
     subscribers.add(fn);
     if (state) {
       try {
-        fn(state);
+        fn(state, { unchanged: false, panelHashes: panelContentHashes, snapshotHash: lastSnapshotHash });
       } catch (e) {
         console.error('[RuntimeManager] subscriber error', e);
       }
@@ -208,7 +273,7 @@
     panelHandlers.set(panelId, fn);
     if (state) {
       try {
-        fn(state);
+        fn(state, { unchanged: false, panelHashes: panelContentHashes, snapshotHash: lastSnapshotHash });
       } catch (e) {
         console.error('[RuntimeManager] panel handler error', e);
       }
@@ -227,6 +292,18 @@
   function getPanelState(panelId) {
     const panels = (state && state.panels) || {};
     return panels[panelId] || { status: 'waiting', message: 'Waiting for runtime snapshot…', stale: false };
+  }
+
+  function getPanelHashes() {
+    return { ...panelContentHashes };
+  }
+
+  function getSnapshotHash() {
+    return lastSnapshotHash;
+  }
+
+  function panelChanged(panelId, previousHash) {
+    return panelContentHashes[panelId] !== previousHash;
   }
 
   function formatTimestamp() {
@@ -315,6 +392,9 @@
     getState,
     getCache,
     getPanelState,
+    getPanelHashes,
+    getSnapshotHash,
+    panelChanged,
     formatTimestamp,
     isStale,
     timestampHtml,

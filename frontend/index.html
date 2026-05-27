@@ -698,51 +698,51 @@
     </div>
     <div class="ai-ops-warnings" id="aiOpsWarnings"></div>
     <div class="ai-ops-body">
-      <details class="ai-ops-section" open>
+      <details class="ai-ops-section" data-ui-section="aiops-system-status" open>
         <summary>System Status</summary>
         <div class="ai-ops-section-body"><div class="ai-ops-stat-grid" id="aiOpsStatusGrid"></div></div>
       </details>
-      <details class="ai-ops-section" open>
+      <details class="ai-ops-section" data-ui-section="aiops-live-timeline" open>
         <summary>Live AI Timeline</summary>
         <div class="ai-ops-section-body" id="aiOpsTimeline"></div>
       </details>
-      <details class="ai-ops-section">
+      <details class="ai-ops-section" data-ui-section="aiops-preservation">
         <summary>Preservation Inspector</summary>
         <div class="ai-ops-section-body" id="aiOpsPreservation"></div>
       </details>
-      <details class="ai-ops-section" open>
+      <details class="ai-ops-section" data-ui-section="aiops-providers" open>
         <summary>AI Providers</summary>
         <div class="ai-ops-section-body" id="aiOpsProviders"></div>
       </details>
-      <details class="ai-ops-section" open>
+      <details class="ai-ops-section" data-ui-section="aiops-runtime" open>
         <summary>AI Runtime Analytics</summary>
         <div class="ai-ops-section-body" id="aiOpsRuntime"></div>
       </details>
-      <details class="ai-ops-section">
+      <details class="ai-ops-section" data-ui-section="aiops-routing">
         <summary>AI Routing</summary>
         <div class="ai-ops-section-body" id="aiOpsRouting"></div>
       </details>
-      <details class="ai-ops-section">
+      <details class="ai-ops-section" data-ui-section="aiops-telegram">
         <summary>Telegram Alerts</summary>
         <div class="ai-ops-section-body" id="aiOpsTelegram"></div>
       </details>
-      <details class="ai-ops-section">
+      <details class="ai-ops-section" data-ui-section="aiops-reliability">
         <summary>AI Reliability</summary>
         <div class="ai-ops-section-body" id="aiOpsReliability"></div>
       </details>
-      <details class="ai-ops-section" open>
+      <details class="ai-ops-section" data-ui-section="aiops-lifecycle" open>
         <summary>Prediction Lifecycle</summary>
         <div class="ai-ops-section-body" id="aiOpsLifecycle"></div>
       </details>
-      <details class="ai-ops-section">
+      <details class="ai-ops-section" data-ui-section="aiops-calibration">
         <summary>Outcome Learning</summary>
         <div class="ai-ops-section-body" id="aiOpsCalibration"></div>
       </details>
-      <details class="ai-ops-section" open>
+      <details class="ai-ops-section" data-ui-section="aiops-adaptive" open>
         <summary>Adaptive Intelligence</summary>
         <div class="ai-ops-section-body" id="aiOpsAdaptive"></div>
       </details>
-      <details class="ai-ops-section">
+      <details class="ai-ops-section" data-ui-section="aiops-health">
         <summary>Watchdog / Health</summary>
         <div class="ai-ops-section-body" id="aiOpsHealth"></div>
       </details>
@@ -796,6 +796,7 @@
     </div>
   </aside>
 
+  <script src="runtime/uiState.js"></script>
   <script src="runtime/runtimeManager.js"></script>
   <script src="components/DailyReviewPanel.js"></script>
   <script src="components/AIOpsPanel.js"></script>
@@ -947,16 +948,40 @@
     return cached.data !== undefined ? cached.data : cached
   }
 
-  function renderAllTabs() {
-    safePanelLoad('brain', loadBrain)
-    safePanelLoad('govt', loadGovt)
-    safePanelLoad('scanner', loadScanner)
-    safePanelLoad('markets', loadMarkets)
-    safePanelLoad('news', loadNews)
-    safePanelLoad('tv', loadTV)
-    safePanelLoad('reddit', loadReddit)
-    safePanelLoad('stats', loadStats)
-    safePanelLoad('history', loadHistory)
+  let lastRenderedPanelHashes = {}
+
+  function renderAllTabs(opts) {
+    opts = opts || {}
+    const panelHashes = (window.RuntimeManager && RuntimeManager.getPanelHashes)
+      ? RuntimeManager.getPanelHashes()
+      : null
+
+    if (window.UiState) UiState.saveUiState(document)
+
+    const maybeLoad = (panelId, fn) => {
+      if (panelHashes && !opts.force && lastRenderedPanelHashes[panelId] === panelHashes[panelId]) {
+        return
+      }
+      safePanelLoad(panelId, fn)
+    }
+
+    maybeLoad('brain', loadBrain)
+    maybeLoad('govt', loadGovt)
+    maybeLoad('scanner', loadScanner)
+    maybeLoad('markets', loadMarkets)
+    maybeLoad('news', loadNews)
+    maybeLoad('tv', loadTV)
+    maybeLoad('reddit', loadReddit)
+    maybeLoad('stats', loadStats)
+    maybeLoad('history', loadHistory)
+
+    if (panelHashes) lastRenderedPanelHashes = { ...panelHashes }
+
+    if (window.UiState) {
+      UiState.restoreUiState(document)
+      UiState.persistExpandedSections(document)
+    }
+
     setTimeout(() => {
       try {
         const activeTab = document.querySelector('.tab.active')
@@ -1257,6 +1282,69 @@
     return formatBrainMarkdown(raw)
   }
 
+  function mergeLifecycleIntoOpportunities(opps, activeStore) {
+    const ranked = Array.isArray(opps) ? opps.slice() : []
+    if (!activeStore || !Array.isArray(activeStore.predictions)) {
+      return ranked
+    }
+    const byTicker = {}
+    activeStore.predictions.forEach((p) => {
+      const ticker = String(p.ticker || '').toUpperCase()
+      if (ticker) byTicker[ticker] = p
+    })
+    return ranked.map((o) => {
+      const sym = String(o.symbol || o.ticker || '').toUpperCase()
+      const p = byTicker[sym]
+      if (!p) return o
+      return {
+        ...o,
+        symbol: sym,
+        ticker: sym,
+        lifecycle_state: p.state || o.lifecycle_state,
+        confidence: o.confidence || p.confidence,
+        entry_zone: o.entry_zone || p.entry_price,
+        target: o.target || p.target_price,
+        stop_loss: o.stop_loss || p.stop_loss,
+        regime: o.regime || p.regime || p.run_type,
+        generated_at: o.generated_at || p.prediction_date || activeStore.updated_at,
+      }
+    })
+  }
+
+  function patchPanelBanner(container, bannerHtml) {
+    if (!container || !bannerHtml) return
+    let banner = container.querySelector('.panel-status-banner')
+    if (!banner) {
+      container.insertAdjacentHTML('afterbegin', bannerHtml)
+      return
+    }
+    const wrap = document.createElement('div')
+    wrap.innerHTML = bannerHtml
+    const next = wrap.firstElementChild
+    if (next) banner.replaceWith(next)
+  }
+
+  function setPanelHtml(container, bannerHtml, bodyHtml, opts) {
+    opts = opts || {}
+    if (!container) return
+    if (window.UiState) UiState.saveUiState(container)
+    if (opts.patch && container.querySelector('.brain-grid, .glass-card, .journal-card, .stats-grid-4')) {
+      patchPanelBanner(container, bannerHtml)
+      const ts = container.querySelector('.runtime-ts')
+      if (ts && bodyHtml.indexOf('runtime-ts') === -1) {
+        /* keep existing timestamp when patching partial content */
+      } else {
+        container.innerHTML = bannerHtml + bodyHtml
+      }
+    } else {
+      container.innerHTML = bannerHtml + bodyHtml
+    }
+    if (window.UiState) {
+      UiState.restoreUiState(container)
+      UiState.persistExpandedSections(container)
+    }
+  }
+
   // ============================================================
   // TAB 1: BRAIN
   // ============================================================
@@ -1269,31 +1357,16 @@
     const brainBanner = panelStatusBannerHtml('brain', 'intelligence');
 
     if (!data) {
-      container.innerHTML = `${brainBanner}<div class="loading">⏳ ${escapeHtml(window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Waiting for intelligence cycle…') : 'Waiting for analysis...')}</div>`;
+      setPanelHtml(container, brainBanner, `<div class="loading">⏳ ${escapeHtml(window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Waiting for intelligence cycle…') : 'Waiting for analysis...')}</div>`);
       return;
     }
 
+    data.top_opportunities = mergeLifecycleIntoOpportunities(data.top_opportunities || [], activeStore);
     if (activeStore && Array.isArray(activeStore.predictions)) {
-      const activeOpps = (activeStore.predictions || [])
-        .filter(p => (p.state === 'ACTIVE' || p.state === 'PENDING') && p.category === 'opportunity')
-        .map(p => ({
-          symbol: p.ticker,
-          ticker: p.ticker,
-          action: 'BUY',
-          confidence: p.confidence || 'MEDIUM',
-          entry_zone: p.entry_price,
-          target: p.target_price,
-          stop_loss: p.stop_loss,
-          regime: p.regime || p.run_type || null,
-          direction: p.direction || 'BUY',
-          signal_type: p.signal_type || 'signal',
-          prediction_horizon: p.prediction_horizon || 'next_day',
-          generated_at: p.prediction_date || activeStore.updated_at,
-          logic: `${p.signal_type || 'signal'} · ${p.prediction_horizon || 'next_day'} · ${p.state || 'ACTIVE'}`,
-          lifecycle_state: p.state,
-        }));
-      data.top_opportunities = activeOpps;
-      data.lifecycle_active_count = activeStore.count || activeOpps.length;
+      const activeCount = (activeStore.predictions || []).filter(
+        (p) => (p.state === 'ACTIVE' || p.state === 'PENDING') && p.category === 'opportunity'
+      ).length;
+      data.lifecycle_active_count = activeStore.count || activeCount;
       data.active_predictions_updated = activeStore.updated_at;
     }
 
@@ -1308,7 +1381,7 @@
 
     if (!hasContent) {
       const lcMsg = window.RuntimeManager ? RuntimeManager.lifecycleMessage('brain', 'Intelligence export empty — awaiting next analysis cycle.') : 'Waiting for analysis...';
-      container.innerHTML = `${brainBanner}<div class="loading">⏳ ${escapeHtml(lcMsg)}</div>`;
+      setPanelHtml(container, brainBanner, `<div class="loading">⏳ ${escapeHtml(lcMsg)}</div>`);
       return;
     }
 
@@ -1441,7 +1514,7 @@
         </div>
       </div>
     `;
-    container.innerHTML = html;
+    setPanelHtml(container, brainBanner, html);
   }
 
   // ============================================================
@@ -2239,7 +2312,7 @@
     const warnings = entry.warnings || []
     const hl = entry.highlights || {}
     if (timeline.length || warnings.length || hl.highest_confidence_winner || hl.strongest_contradiction) {
-      html += `<details class="journal-details"><summary>Regime · warnings · wins/failures</summary>`
+      html += `<details class="journal-details" data-ui-section="journal-regime-warnings"><summary>Regime · warnings · wins/failures</summary>`
       timeline.forEach(t => {
         html += `<div class="journal-timeline-item"><strong>${escapeHtml(t.time || '—')}</strong> ${escapeHtml(t.transition || '')}${t.note ? `<br><span style="color:#8B949E;">${escapeHtml(t.note)}</span>` : ''}</div>`
       })
@@ -2261,14 +2334,14 @@
       ? RuntimeManager.lifecycleMessage('journal', 'Daily review generates after post-market EOD cycle (15:45 IST).')
       : 'Daily review generates after post-market EOD cycle (15:45 IST).'
     if (!data) {
-      container.innerHTML = `${journalBanner}<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>${escapeHtml(journalMsg)}</p></div>`
+      setPanelHtml(container, journalBanner, `<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>${escapeHtml(journalMsg)}</p></div>`)
       return
     }
 
     const journal = data.intelligence_journal || {}
     const entries = journal.entries || []
     const exportAge = window.RuntimeManager ? RuntimeManager.getExportAge('history') : ''
-    let html = journalBanner
+    let html = ''
     html += runtimeTimestampHtml(`${exportAge || ''} ${data.today_weekday || ''} ${data.today_date || ''}`.trim())
     html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`
 
@@ -2278,11 +2351,11 @@
       entries.forEach((entry, idx) => { html += renderJournalCard(entry, idx) })
     }
 
-    html += `<details class="journal-details" style="margin-top:16px;"><summary style="font-size:11px;color:#8B949E;">Legacy prediction timeline</summary>`
+    html += `<details class="journal-details" data-ui-section="journal-legacy-timeline" style="margin-top:16px;"><summary style="font-size:11px;color:#8B949E;">Legacy prediction timeline</summary>`
 
     if (!data.periods) {
       html += `<div class="calib-insufficient">Prediction history unavailable.</div></details>`
-      container.innerHTML = html
+      setPanelHtml(container, journalBanner, html)
       container.querySelectorAll('.journal-copy-btn').forEach(btn => {
         btn.addEventListener('click', () => copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn))
       })
@@ -2323,7 +2396,7 @@
       })
     }
     html += `</details>`
-    container.innerHTML = html
+    setPanelHtml(container, journalBanner, html)
 
     container.querySelectorAll('.journal-copy-btn').forEach(btn => {
       btn.addEventListener('click', () => copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn))
@@ -2444,7 +2517,8 @@
           cache: apiCache,
           onConnectionChange: updateApiStatus,
         })
-        RuntimeManager.subscribe(() => {
+        RuntimeManager.subscribe((_snap, meta) => {
+          if (meta && meta.unchanged) return
           try { renderAllTabs() } catch (e) { console.error('renderAllTabs subscriber failed:', e) }
         })
         try { RuntimeManager.start(30000) } catch (e) { console.error('[RuntimeManager.start]', e) }
@@ -2452,6 +2526,7 @@
         await refreshAll()
         setInterval(refreshAll, 30000)
       }
+      if (window.UiState) UiState.persistExpandedSections(document)
       if (window.AIOpsPanel) {
         AIOpsPanel.init({
           getApiBase: () => API_BASE,

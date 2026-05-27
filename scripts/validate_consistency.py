@@ -73,6 +73,44 @@ def main() -> int:
         if um and um.get('evaluated') != sqlite['evaluated']:
             errors.append(f"lifecycle_state unified_metrics evaluated mismatch: {um.get('evaluated')} != {sqlite['evaluated']}")
 
+    from backend.intelligence.canonical_rankings import (
+        align_intelligence,
+        extract_symbols_from_text,
+        get_action_plan_symbols,
+        get_top_ranked_signals,
+        validate_action_plan_symbols,
+    )
+    from backend.utils.config import DATA_DIR
+
+    intel_path = DATA_DIR / 'unified_intelligence.json'
+    if intel_path.exists():
+        try:
+            raw_intel = json.loads(intel_path.read_text(encoding='utf-8'))
+            aligned = align_intelligence(raw_intel if isinstance(raw_intel, dict) else {})
+            ranked = get_top_ranked_signals(aligned)
+            ranked_syms = {str(o.get('symbol') or '').upper() for o in ranked if o.get('symbol')}
+            plan_syms = get_action_plan_symbols(aligned)
+            plan_text = str(aligned.get('action_plan') or '')
+            unknown = validate_action_plan_symbols(plan_text, ranked_syms | set(plan_syms))
+            if unknown:
+                errors.append(f'action_plan unknown symbols after align: {unknown[:5]}')
+            for sym in plan_syms:
+                if sym not in ranked_syms:
+                    errors.append(f'action_plan symbol not in ranked pool: {sym}')
+            opp_syms = [
+                str(o.get('symbol') or '').upper()
+                for o in (aligned.get('top_opportunities') or [])
+                if o.get('symbol')
+            ]
+            if opp_syms and ranked_syms and set(opp_syms) != set(list(ranked_syms)[: len(opp_syms)]):
+                if set(opp_syms) - ranked_syms:
+                    errors.append(f'top_opportunities has non-ranked symbols: {sorted(set(opp_syms) - ranked_syms)[:5]}')
+            extracted = extract_symbols_from_text(plan_text)
+            if extracted and not all(s in ranked_syms or s in plan_syms for s in extracted):
+                errors.append('action_plan text references symbols outside ranked pool')
+        except Exception as exc:
+            errors.append(f'canonical intelligence validation failed: {exc}')
+
     print('=== UNIFIED METRICS CONSISTENCY ===')
     print(f"SQLite: predictions={sqlite['prediction_total']} evaluated={sqlite['evaluated']} pending={sqlite['pending']} wins={sqlite['wins']} losses={sqlite['losses']} win_rate={sqlite['win_rate']}")
     print(f"Export: evaluated={exp.get('evaluated', exp.get('total_evaluated'))} pending={exp.get('pending')} wins={exp.get('wins')} losses={exp.get('losses')}")
@@ -86,6 +124,7 @@ def main() -> int:
         return 1
 
     print('UNIFIED METRICS CONSISTENCY VERIFIED')
+    print('INTELLIGENCE SOURCE CONSISTENCY VERIFIED')
     return 0
 
 
