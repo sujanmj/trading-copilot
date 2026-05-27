@@ -1478,9 +1478,7 @@
           }, { fallbackLogic: 'Scanner anomaly — not elite-verified.' });
         });
       } else {
-        const emptyMsg = (lcPanel && lcPanel.pipeline_status === 'COMPLETE')
-          ? 'No ranked setups pass elite gates — preserve capital until scanner confirms.'
-          : 'No elite or watch opportunities in current ranked feed.';
+        const emptyMsg = 'No high-conviction opportunities detected. Capital preservation mode active.';
         oppsHtml = `<div class="calib-insufficient">${escapeHtml(emptyMsg)}</div>`;
       }
     } else {
@@ -1868,8 +1866,27 @@
 
     let html = `${runtimeTimestampHtml()}<div class="glass-card"><h2>🌙 OVERNIGHT GLOBAL IMPACT</h2>`
     html += `<div style="margin-bottom:12px;"><span class="badge badge-green">${escapeHtml(report.india_open_bias || 'PENDING')}</span> `
-    html += `<span class="badge">${escapeHtml(report.india_outlook || '—')}</span></div>`
-    if (report.narrative) html += `<p style="color:#ccc;font-size:13px;line-height:1.5;">${escapeHtml(report.narrative)}</p>`
+    html += `<span class="badge">${escapeHtml(report.india_outlook || '—')}</span>`
+    if (report.risk_score) html += ` <span class="badge badge-red">Risk ${escapeHtml(report.risk_score)}</span>`
+    html += `</div>`
+    const gap = report.gap_probability || {}
+    if (gap.gap_up_probability != null) {
+      html += `<p style="color:#8b949e;font-size:12px;">Gap probability: up ${Math.round(gap.gap_up_probability * 100)}% · down ${Math.round(gap.gap_down_probability * 100)}% (${escapeHtml(gap.gap_probability_label || '')})</p>`
+    }
+    const gs = report.global_snapshot || {}
+    if (gs.lines && gs.lines.length) {
+      html += '<div style="margin-top:8px;font-size:12px;color:#8b949e;">'
+      gs.lines.forEach(line => { html += `<div>${escapeHtml(line)}</div>` })
+      html += '</div>'
+    }
+    const indiaImpact = report.india_impact || {}
+    if (indiaImpact.bullish_sectors && indiaImpact.bullish_sectors.length) {
+      html += `<p style="color:#3fb950;margin-top:8px;">Bullish sectors: ${escapeHtml(indiaImpact.bullish_sectors.join(', '))}</p>`
+    }
+    if (indiaImpact.risk_sectors && indiaImpact.risk_sectors.length) {
+      html += `<p style="color:#ff6b6b;">Risk sectors: ${escapeHtml(indiaImpact.risk_sectors.join(', '))}</p>`
+    }
+    if (report.narrative) html += `<p style="color:#ccc;font-size:13px;line-height:1.5;margin-top:8px;">${escapeHtml(report.narrative)}</p>`
 
     if (macroCards.length) {
       html += '<div class="market-grid" style="margin-top:12px;">'

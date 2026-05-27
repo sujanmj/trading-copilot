@@ -1,0 +1,102 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 4103,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-05-27",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-27T11:01:20.640996",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 4103,
+      "force": true
+    },
+    {
+      "time": "2026-05-27T11:02:09.705148",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "f7c487f0e710ae251676",
+    "delta_reasons": [
+      "news_delta",
+      "govt_change",
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": 0.018,
+      "news_count": 125,
+      "govt_high_impact": 8,
+      "scanner_signals": 113,
+      "top_scanner_tickers": [
+        "FINPIPE",
+        "AIAENG",
+        "NDTV",
+        "INDORAMA",
+        "FDC"
+      ],
+      "scanner_signature": [
+        "('FINPIPE', 'ULTRA', 7.7)",
+        "('AIAENG', 'ULTRA', 6.9)",
+        "('NDTV', 'ULTRA', 10.1)",
+        "('INDORAMA', 'ULTRA', -5.6)",
+        "('FDC', 'ULTRA', 6.5)"
+      ],
+      "top_news_titles": [
+        "global markets: australian shares bounce back as inflation miss eases rate-hike",
+        "hdfc bank denies wrongdoing in rs 45 crore extra interest payment allegation",
+        "hdfc bank shares fall 2% on reports of internal probe over rs 45 cr interest pay",
+        "rising bond yields and inflation remain key risks for markets: candace browning",
+        "sbi says ai-driven banking still needs people, skills and leadership",
+        "us-iran war news live updates: israeli strikes kill 31 in lebanon; iran condemns"
+      ],
+      "reddit_sentiment": "bullish",
+      "reddit_confidence": 100,
+      "novelty_avg_score": 3.615,
+      "repetition_suppressed": 62
+    },
+    "source_hashes": {
+      "global_markets": "d5775c289859b060a8b6",
+      "india_markets": "a1be783e5732af123293",
+      "news": "45236547d91a6276554c",
+      "youtube": "bf1e4d84c1b79b7588a5",
+      "govt": "728d54c441c6d8691acc",
+      "inshorts": "978e5029a0474973b8fa",
+      "reddit": "78ebbeade06f39e7ce65",
+      "telegram": "empty",
+      "scanner": "6542f63e19ff61c4a25b",
+      "twitter": "0690d6f5dcbb3bba459a",
+      "nse_filings": "c97af557a78b3816e49b",
+      "composite": "1048ce7ca6aa50ade21c"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

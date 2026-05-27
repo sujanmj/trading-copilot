@@ -64,6 +64,19 @@ def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_ki
         )
         if prep.get('action') == 'skip':
             return False
+        if message_kind == 'final' and command not in ('', 'status'):
+            try:
+                from backend.orchestration.alert_deduplication import should_send_telegram_alert
+                ok, _reason = should_send_telegram_alert(
+                    command or 'brain',
+                    text[:200],
+                    'NEUTRAL',
+                    confidence=0.5,
+                )
+                if not ok:
+                    return False
+            except Exception:
+                pass
         if prep.get('action') == 'edit':
             r = requests.post(
                 f"{API_URL}/editMessageText",
@@ -109,6 +122,12 @@ def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_ki
                 message_id=message_id,
                 text=text,
             )
+            if message_kind == 'final':
+                try:
+                    from backend.orchestration.alert_deduplication import record_sent
+                    record_sent(command or 'brain', text[:200], 'NEUTRAL', confidence=0.5, channel='brain_pusher')
+                except Exception:
+                    pass
             return True
         return False
     except Exception as e:
@@ -300,6 +319,15 @@ def normalize_intel(intel):
 def format_opps(opps_list, *, tier_label=None):
     opps_list = _list(opps_list)
     if not opps_list:
+        if tier_label and 'ELITE' in str(tier_label).upper():
+            try:
+                from backend.intelligence.institutional_language import elite_empty_block
+                return elite_empty_block()
+            except Exception:
+                return (
+                    '<i>🛡️ No high-conviction opportunities detected. '
+                    'Capital preservation mode active.</i>'
+                )
         return None
     try:
         from backend.orchestration.opportunity_filter import elite_alignment_summary
@@ -387,7 +415,7 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
             pass
 
     sections = []
-    if include_elite and elite:
+    if include_elite:
         block = format_opps(elite, tier_label='🎯 ELITE')
         if block:
             sections.append(block)
@@ -402,7 +430,14 @@ def format_opps_tiered(tiers: dict, *, include_elite: bool = False) -> str:
 
     if sections:
         return "\n\n".join(sections)
-    return "<i>📊 Scanner active — monitoring for fresh anomalies</i>"
+    try:
+        from backend.intelligence.institutional_language import elite_empty_block
+        return elite_empty_block()
+    except Exception:
+        return (
+            '<i>🛡️ No high-conviction opportunities detected. '
+            'Capital preservation mode active.</i>'
+        )
 
 
 def _professionalize_calibration_text(raw: str) -> str:
@@ -424,6 +459,19 @@ def _professionalize_calibration_text(raw: str) -> str:
 def build_compressed_summary(intel):
     """Max 5 short sections — readable in under 5 seconds."""
     intel = normalize_intel(intel)
+    try:
+        from backend.intelligence.institutional_language import (
+            apply_institutional_tone,
+            format_compressed_leaders,
+            format_compressed_risks,
+            institutional_regime_label,
+        )
+    except Exception:
+        apply_institutional_tone = lambda x: x  # type: ignore
+        format_compressed_leaders = None  # type: ignore
+        format_compressed_risks = None  # type: ignore
+        institutional_regime_label = lambda x: x  # type: ignore
+
     stale = stale_warning(intel)
     mood = _dict(intel.get('market_mood'))
     sectors = _dict(intel.get('sector_rotation'))
@@ -438,21 +486,28 @@ def build_compressed_summary(intel):
     except Exception:
         pass
 
-    leaders = _join_list(sectors.get('bullish'), 'Not identified')
-    if len(leaders) > 48:
-        leaders = leaders[:45] + '...'
+    if format_compressed_leaders:
+        leaders = format_compressed_leaders(sectors)
+    else:
+        leaders = _join_list(sectors.get('bullish'), 'Not identified')
+        if len(leaders) > 48:
+            leaders = leaders[:45] + '...'
 
-    risk_bits = []
-    for r in risks[:3]:
-        r = _dict(r)
-        sym = _text(r.get('symbol'), '')
-        logic = _text(r.get('logic'), '')
-        bit = sym if sym and sym != 'UNKNOWN' else logic[:40]
-        if bit:
-            risk_bits.append(bit)
-    risks_line = ', '.join(risk_bits) if risk_bits else 'Macro headline risk — monitor liquidity'
+    if format_compressed_risks:
+        risks_line = format_compressed_risks(risks)
+    else:
+        risk_bits = []
+        for r in risks[:3]:
+            r = _dict(r)
+            sym = _text(r.get('symbol'), '')
+            logic = _text(r.get('logic'), '')
+            bit = sym if sym and sym != 'UNKNOWN' else logic[:40]
+            if bit:
+                risk_bits.append(bit)
+        risks_line = ', '.join(risk_bits) if risk_bits else 'Macro headline risk — monitor liquidity'
 
-    bias = _text(mood.get('india_outlook') or mood.get('global_mood'), 'Selective')
+    bias = apply_institutional_tone(_text(mood.get('india_outlook') or mood.get('global_mood'), 'Selective'))
+    regime = institutional_regime_label(regime)
     conf_raw = mood.get('confidence_level') or mood.get('confidence_score')
     try:
         conf_num = float(str(conf_raw).replace('/10', '').strip())
@@ -805,11 +860,32 @@ def push_global(*, command='global', cycle_id=''):
     if geo:
         geo_line = f"\n⚠️ <i>{_text(geo[0].get('message'), '')[:140]}</i>"
 
+    gs = report.get('global_snapshot') or {}
+    india_impact = report.get('india_impact') or {}
+    gap = report.get('gap_probability') or {}
     body = (
         f"{stale}{_snapshot_prefix()}🌍 <b>OVERNIGHT GLOBAL IMPACT</b>\n\n"
-        f"<b>India open bias:</b> {_text(report.get('india_open_bias') or mood.get('global_mood'), 'Unknown')}\n"
-        f"<b>India outlook:</b> {_text(report.get('india_outlook') or mood.get('india_outlook'), 'Unknown')}\n"
+        f"<b>GLOBAL SNAPSHOT</b>\n"
     )
+    for line in (gs.get('lines') or [])[:4]:
+        body += f"• {line}\n"
+    body += (
+        f"\n<b>INDIA IMPACT</b>\n"
+        f"Bias: {_text(report.get('india_open_bias') or mood.get('global_mood'), 'Unknown')}\n"
+        f"Outlook: {_text(report.get('india_outlook') or mood.get('india_outlook'), 'Unknown')}\n"
+    )
+    if india_impact.get('bullish_sectors'):
+        body += f"Bullish sectors: {_join_list(india_impact.get('bullish_sectors'))}\n"
+    if india_impact.get('risk_sectors'):
+        body += f"Risk sectors: {_join_list(india_impact.get('risk_sectors'))}\n"
+    if report.get('risk_score'):
+        body += f"<b>RISK SCORE:</b> {report.get('risk_score')}\n"
+    if gap:
+        body += (
+            f"<b>GAP PROBABILITY:</b> up {gap.get('gap_up_probability', 0):.0%} · "
+            f"down {gap.get('gap_down_probability', 0):.0%} "
+            f"({gap.get('gap_probability_label', '')})\n"
+        )
     if lines:
         body += f"\n<b>Macro:</b>\n" + "\n".join(lines) + "\n"
     narrative = report.get('narrative') or mood.get('overnight_narrative') or ''

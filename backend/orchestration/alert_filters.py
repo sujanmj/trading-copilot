@@ -261,7 +261,33 @@ def should_send_alert(
     regime: str = 'sideways',
     volatility: float = 0.0,
     disagreement_score: float = 0.0,
+    headline: str = '',
+    sentiment: str = 'NEUTRAL',
+    force_priority: bool = False,
 ) -> Tuple[bool, str]:
+    try:
+        from backend.orchestration.alert_priority import evaluate_priority_gate
+        allow_pri, pri_reason, _priority = evaluate_priority_gate(
+            category, confidence, force=force_priority,
+        )
+        if not allow_pri:
+            _obs.record_suppressed(category, pri_reason, f'priority={_priority}')
+            return False, pri_reason
+    except Exception:
+        pass
+
+    try:
+        from backend.orchestration.alert_deduplication import check_duplicate
+        detail = headline or dedupe_key or category
+        ok_dedupe, dedupe_reason, _ = check_duplicate(
+            ticker or '', detail, sentiment, confidence=confidence,
+        )
+        if not ok_dedupe:
+            _obs.record_suppressed(category, 'duplicate', dedupe_reason)
+            return False, 'duplicate'
+    except Exception:
+        pass
+
     threshold = effective_confidence_threshold(category, regime, volatility)
     if disagreement_score >= 0.55 and category == INTRADAY_OPPORTUNITY:
         threshold += 0.06
@@ -292,12 +318,31 @@ def should_send_alert(
     return True, ''
 
 
-def mark_alert_sent(category: str, ticker: str = '', dedupe_key: str = ''):
+def mark_alert_sent(
+    category: str,
+    ticker: str = '',
+    dedupe_key: str = '',
+    *,
+    headline: str = '',
+    sentiment: str = 'NEUTRAL',
+    confidence: float = 0.0,
+):
     _state.mark_category_sent(category)
     if ticker:
         _state.mark_ticker_sent(category, ticker)
     if dedupe_key:
         _state.mark_dedupe_key(dedupe_key)
+    try:
+        from backend.orchestration.alert_deduplication import record_sent
+        record_sent(
+            ticker or '',
+            headline or dedupe_key or category,
+            sentiment,
+            confidence=confidence,
+            category=category,
+        )
+    except Exception:
+        pass
 
 
 def get_telegram_alert_obs_summary() -> dict:

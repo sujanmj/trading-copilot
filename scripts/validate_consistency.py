@@ -161,6 +161,65 @@ def main() -> int:
     report = build_india_next_open_report({'flat_markets': {'NASDAQ': {'change_percent': 1.2}, 'VIX': {'change_percent': 2}}})
     if not report.get('india_open_bias'):
         errors.append('india next open report missing bias')
+    for field in ('global_snapshot', 'india_impact', 'risk_score', 'gap_probability'):
+        if field not in report:
+            errors.append(f'india next open report missing {field}')
+    if report.get('risk_score') not in ('LOW', 'MODERATE', 'HIGH', 'PANIC'):
+        errors.append(f'india next open invalid risk_score: {report.get("risk_score")}')
+
+    from backend.lifecycle.win_rate_engine import compute_win_rate, win_rate_denominator
+    wr_expected = compute_win_rate(sqlite['wins'], sqlite['losses'])
+    if abs(float(sqlite.get('win_rate') or 0) - wr_expected) > 0.01:
+        errors.append(f'win rate formula mismatch: sqlite={sqlite.get("win_rate")} expected={wr_expected}')
+    if win_rate_denominator(sqlite['wins'], sqlite['losses']) > 0:
+        denom = win_rate_denominator(sqlite['wins'], sqlite['losses'])
+        if sqlite['wins'] + sqlite['losses'] != denom:
+            errors.append('win rate denominator must be wins+losses only')
+
+    from backend.intelligence.institutional_language import EMPTY_ELITE_MESSAGE, apply_institutional_tone
+    if 'ULTRA today' in apply_institutional_tone('ULTRA today top movers'):
+        errors.append('institutional language failed to remap ULTRA today')
+    from backend.orchestration.telegram_brain_pusher import format_opps
+    empty_elite = format_opps([], tier_label='ELITE')
+    if not empty_elite or EMPTY_ELITE_MESSAGE not in empty_elite:
+        errors.append('format_opps empty elite missing capital preservation message')
+    if EMPTY_ELITE_MESSAGE not in empty_plan:
+        errors.append('action plan empty elite missing capital preservation message')
+
+    import uuid
+    from backend.orchestration.alert_deduplication import check_duplicate, record_sent
+    dedupe_ticker = f'VAL{uuid.uuid4().hex[:6].upper()}'
+    dedupe_headline = f'validate headline {uuid.uuid4().hex[:8]}'
+    ok1, _, _ = check_duplicate(dedupe_ticker, dedupe_headline, 'BULLISH', confidence=0.7)
+    if not ok1:
+        errors.append('alert dedupe should allow first send')
+    record_sent(dedupe_ticker, dedupe_headline, 'BULLISH', confidence=0.7, category='test')
+    ok2, reason2, existing = check_duplicate(dedupe_ticker, dedupe_headline, 'BULLISH', confidence=0.85)
+    if ok2 or reason2 != 'duplicate_cooldown':
+        errors.append('alert dedupe should block duplicate within cooldown')
+    if existing and float(existing.get('confidence') or 0) < 0.85:
+        errors.append('alert dedupe should bump confidence on duplicate')
+
+    from backend.intelligence.cross_market_correlation import evaluate_cross_market_correlations
+    corr = evaluate_cross_market_correlations({
+        'flat_markets': {'GOLD': {'change_percent': 2}, 'DXY': {'change_percent': -0.5}, 'NASDAQ': {'change_percent': -1.2}, 'US_10Y': {'change_percent': 0.2}},
+        'geopolitics': [{'message': 'war escalation', 'keywords': ['war']}],
+    })
+    if not corr.get('signals'):
+        errors.append('cross market correlation produced no signals for stress scenario')
+
+    from backend.intelligence.market_close_intelligence import build_market_close_report
+    mclose = build_market_close_report({'sector_rotation': {'bullish': ['BANKS'], 'bearish': ['IT']}}, persist=False)
+    if not mclose.get('dominant_sectors'):
+        errors.append('market close intelligence missing dominant_sectors')
+
+    from backend.orchestration.alert_priority import evaluate_priority_gate, CRITICAL, INFO
+    allow_crit, _, pri_crit = evaluate_priority_gate('EMERGENCY_MACRO_ALERT', 0.9)
+    if not allow_crit or pri_crit != CRITICAL:
+        errors.append('alert priority emergency should be CRITICAL and allowed')
+    allow_info, reason_info, pri_info = evaluate_priority_gate('OUTCOME_REPORT', 0.4)
+    if allow_info or pri_info != INFO:
+        errors.append('alert priority outcome INFO should suppress low confidence')
     q = assess_signal_quality({'strength': 'ULTRA'}, ctx={'vix': 22})
     if q.get('tier_cap') != 'WATCH':
         errors.append('ULTRA without ML should cap at WATCH')
@@ -310,6 +369,14 @@ def main() -> int:
     print('OVERNIGHT TIMELINE VERIFIED')
     print('LIFECYCLE RECONCILIATION VERIFIED')
     print('SIGNAL QUALITY VERIFIED')
+    print('ALERT DEDUPE VERIFIED')
+    print('WIN RATE ENGINE VERIFIED')
+    print('INSTITUTIONAL LANGUAGE VERIFIED')
+    print('EMPTY ELITE HANDLING VERIFIED')
+    print('CROSS MARKET CORRELATION VERIFIED')
+    print('MARKET CLOSE INTELLIGENCE VERIFIED')
+    print('ALERT PRIORITY VERIFIED')
+    print('INDIA FORECAST FIELDS VERIFIED')
     print('24/7 GLOBAL MARKET INTELLIGENCE READY')
     print('TRADING COPILOT STABILIZATION COMPLETE')
     return 0

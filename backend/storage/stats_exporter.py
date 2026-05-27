@@ -117,16 +117,17 @@ def get_predictions_by_sector():
         result = []
         for r in rows:
             d = dict(r)
-            evaluated = d['evaluated'] or 0
             wins = d['wins'] or 0
-            win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+            losses = d['losses'] or 0
+            from backend.lifecycle.win_rate_engine import compute_win_rate
+            win_rate = compute_win_rate(wins, losses)
             result.append({
                 'sector': d['sector'],
                 'total': d['total'],
                 'wins': wins,
-                'losses': d['losses'] or 0,
-                'evaluated': evaluated,
-                'win_rate': round(win_rate, 1),
+                'losses': losses,
+                'evaluated': d['evaluated'] or 0,
+                'win_rate': win_rate,
             })
         return result
     finally:
@@ -142,6 +143,7 @@ def get_predictions_by_run_type():
                 p.run_type,
                 COUNT(p.id) as total,
                 SUM(CASE WHEN o.verdict='WIN' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN o.verdict='LOSS' THEN 1 ELSE 0 END) as losses,
                 SUM(CASE WHEN o.verdict IS NOT NULL AND o.verdict != 'PENDING' THEN 1 ELSE 0 END) as evaluated
             FROM predictions p
             LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
@@ -152,15 +154,16 @@ def get_predictions_by_run_type():
         result = []
         for r in rows:
             d = dict(r)
-            evaluated = d['evaluated'] or 0
             wins = d['wins'] or 0
-            win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+            losses = int(d.get('losses') or 0)
+            from backend.lifecycle.win_rate_engine import compute_win_rate
+            win_rate = compute_win_rate(wins, losses)
             result.append({
                 'run_type': d['run_type'] or 'unknown',
                 'total': d['total'],
                 'wins': wins,
-                'evaluated': evaluated,
-                'win_rate': round(win_rate, 1),
+                'evaluated': d['evaluated'] or 0,
+                'win_rate': win_rate,
             })
         return result
     finally:
@@ -190,16 +193,17 @@ def get_predictions_by_date():
         result = []
         for r in rows:
             d = dict(r)
-            evaluated = d['evaluated'] or 0
             wins = d['wins'] or 0
-            win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+            losses = d['losses'] or 0
+            from backend.lifecycle.win_rate_engine import compute_win_rate
+            win_rate = compute_win_rate(wins, losses)
             result.append({
                 'date': d['prediction_date'],
                 'total': d['total'],
                 'wins': wins,
-                'losses': d['losses'] or 0,
-                'evaluated': evaluated,
-                'win_rate': round(win_rate, 1),
+                'losses': losses,
+                'evaluated': d['evaluated'] or 0,
+                'win_rate': win_rate,
                 'avg_max_gain': round(d['avg_max_gain'] or 0, 2),
                 'avg_max_loss': round(d['avg_max_loss'] or 0, 2),
             })

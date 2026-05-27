@@ -51,9 +51,18 @@ def run_us_close_scan() -> dict:
 
 
 def run_macro_synthesis() -> dict:
-    """4:15 AM IST — aggregate macro + geopolitics."""
+    """4:15 AM IST — aggregate macro + geopolitics + cross-market correlation."""
     from backend.intelligence.india_next_open_engine import build_india_next_open_report
-    report = build_india_next_open_report()
+    from backend.intelligence.cross_market_correlation import evaluate_cross_market_correlations
+    global_snapshot = {}
+    if (DATA_DIR / 'global_markets.json').exists():
+        try:
+            global_snapshot = json.loads((DATA_DIR / 'global_markets.json').read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    correlation = evaluate_cross_market_correlations(global_snapshot)
+    report = build_india_next_open_report(global_snapshot)
+    report['cross_market_correlation'] = correlation
     impact = {
         'generated_at': datetime.now(IST).isoformat(),
         'stage': 'macro_synthesis',

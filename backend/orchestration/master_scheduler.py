@@ -171,6 +171,12 @@ def run_post_market_pipeline(force: bool = False, trigger: str = 'scheduled'):
 
 
 # ── IST daily jobs (Railway-safe — host TZ may be UTC) ─────────────────────
+@ist_daily(2, 0, name='overnight_global_ingest')
+def _job_overnight_global_ingest():
+    """Continuous overnight global/macro symbol tracking."""
+    run_standalone_script('global_collector.py')
+
+
 @ist_daily(4, 0, name='us_close_scan')
 def _job_us_close_scan():
     from backend.intelligence.global_intelligence_engine import run_us_close_scan
@@ -214,6 +220,18 @@ def _job_pre_market():
 @ist_daily(12, 0, name='midday')
 def _job_midday():
     run_full_cycle("Midday")
+
+
+@ist_daily(15, 35, name='market_close_intel')
+def _job_market_close_intel():
+    try:
+        from backend.intelligence.market_close_intelligence import build_market_close_report
+        from backend.orchestration import telegram_alert_engine as alert_engine
+        report = build_market_close_report()
+        alert_engine.try_close_summary()
+        print(f"[MARKET CLOSE] report generated sectors={report.get('dominant_sectors')}", flush=True)
+    except Exception as e:
+        print(f"[!] Market close intelligence failed: {e}", flush=True)
 
 
 @ist_daily(15, 45, name='eod_lifecycle')

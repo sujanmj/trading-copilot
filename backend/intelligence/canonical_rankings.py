@@ -146,10 +146,17 @@ def build_action_plan_text(symbols: List[str], ranked: List[dict], intel: Option
         if watch_syms != 'None flagged'
         else 'No active watchlist — await scanner confirmation.'
     )
+    try:
+        from backend.intelligence.institutional_language import EMPTY_ELITE_MESSAGE
+        empty_elite = EMPTY_ELITE_MESSAGE
+    except Exception:
+        empty_elite = (
+            'No high-conviction opportunities detected. Capital preservation mode active.'
+        )
     elite_line = (
         f"High-conviction swing setups: {elite_syms}."
         if elite_syms != 'None flagged'
-        else 'No high-confidence swing setups.'
+        else empty_elite
     )
 
     if symbols:

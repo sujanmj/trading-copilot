@@ -946,6 +946,15 @@ def _build_runtime_snapshot() -> dict:
         data['overnight_impact'] = overnight_impact
         data['india_next_open'] = india_next_open
         data['overnight_timeline'] = overnight_timeline
+        try:
+            from backend.intelligence.market_close_intelligence import build_market_close_report
+            mclose_path = DATA_DIR / 'market_close_intelligence.json'
+            if mclose_path.exists():
+                data['market_close_intelligence'] = load_json_file('market_close_intelligence.json')
+            else:
+                data['market_close_intelligence'] = build_market_close_report(persist=False)
+        except Exception:
+            data['market_close_intelligence'] = {}
     except Exception:
         pass
     db_stats = stats.get('db_stats') or {}

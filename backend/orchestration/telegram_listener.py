@@ -389,9 +389,17 @@ def _cmd_elite_body():
                         watch_note += f"\nWatch list: {', '.join(syms)} · use /opps"
             except Exception:
                 pass
+            try:
+                from backend.intelligence.institutional_language import EMPTY_ELITE_MESSAGE
+                empty_msg = EMPTY_ELITE_MESSAGE
+            except Exception:
+                empty_msg = (
+                    'No high-conviction opportunities detected. '
+                    'Capital preservation mode active.'
+                )
             msg = (
-                "🛡️ <b>ELITE: NONE PASSED THRESHOLD</b>\n\n"
-                "No setups exceeded the &gt;72% meta-labeler probability gate."
+                "🛡️ <b>ELITE</b>\n\n"
+                f"{empty_msg}"
                 f"{watch_note}"
             )
             send_message(msg, command='elite')

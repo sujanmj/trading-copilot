@@ -865,6 +865,14 @@ def run_master_analysis():
             print("\n[ERROR] Persistence safety check failed — unified_intelligence.json NOT updated")
             return None
 
+        try:
+            from backend.intelligence.institutional_language import apply_institutional_tone
+            for key in ('executive_summary', 'action_plan', 'self_calibration'):
+                if safe_output.get(key):
+                    safe_output[key] = apply_institutional_tone(str(safe_output[key]))
+        except Exception:
+            pass
+
         data_dir = DATA_DIR
         output_file = data_dir / 'unified_intelligence.json'
 

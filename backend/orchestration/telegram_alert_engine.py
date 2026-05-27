@@ -153,9 +153,15 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
               ticker: str = '', dedupe_key: str = '', regime: str = 'sideways',
               volatility: float = 0.0, direction: str = 'NEUTRAL',
               disagreement_score: float = 0.0) -> bool:
+    try:
+        from backend.intelligence.institutional_language import apply_institutional_tone
+        text = apply_institutional_tone(text)
+    except Exception:
+        pass
     ok, reason = should_send_alert(
         category, confidence, ticker=ticker, dedupe_key=dedupe_key,
         regime=regime, volatility=volatility, disagreement_score=disagreement_score,
+        headline=detail, sentiment=direction,
     )
     if not ok:
         return False
@@ -176,7 +182,10 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
 
     if not _send(text):
         return False
-    mark_alert_sent(category, ticker=ticker, dedupe_key=dedupe_key)
+    mark_alert_sent(
+        category, ticker=ticker, dedupe_key=dedupe_key,
+        headline=detail, sentiment=direction, confidence=confidence,
+    )
     get_observability().record_sent(category, detail, {'confidence': round(confidence, 2)})
     try:
         from backend.metrics.execution_metrics import record_reliability_event
@@ -529,7 +538,20 @@ def try_close_summary() -> int:
     mood = intel.get('market_mood') or {}
     confidence = max(_parse_confidence(str(mood.get('confidence_level', '6/10'))), 0.5)
 
-    text = format_close_summary(intel, _load(FILES['stats']), _load(FILES['scanner']), state)
+    try:
+        from backend.intelligence.market_close_intelligence import (
+            build_market_close_report,
+            format_telegram_close_summary,
+        )
+        report = build_market_close_report(intel)
+        text = format_telegram_close_summary(report)
+        metrics = (_load(FILES['stats']) or {}).get('metrics_all_time') or {}
+        from backend.lifecycle.win_rate_engine import win_rate_from_metrics
+        wr = win_rate_from_metrics(metrics)
+        text += f"\n\n<b>Resolved WR:</b> {wr:.1f}% <i>(WIN/(WIN+LOSS))</i>"
+    except Exception:
+        text = format_close_summary(intel, _load(FILES['stats']), _load(FILES['scanner']), state)
+
     dedupe = f"close_{datetime.now().strftime('%Y-%m-%d')}"
     if _dispatch(MARKET_CLOSE_SUMMARY, text, confidence, 'market close', dedupe_key=dedupe, regime=regime, volatility=vol):
         return 1
@@ -573,7 +595,10 @@ def try_emergency_macro() -> int:
         return 0
     if not _send(text):
         return 0
-    mark_alert_sent(EMERGENCY_MACRO_ALERT, dedupe_key=dedupe)
+    mark_alert_sent(
+        EMERGENCY_MACRO_ALERT, dedupe_key=dedupe,
+        headline=headline, sentiment='NEUTRAL', confidence=conf,
+    )
     get_observability().record_emergency(headline[:120])
     get_observability().record_sent(EMERGENCY_MACRO_ALERT, headline[:100], {'confidence': conf})
     return 1

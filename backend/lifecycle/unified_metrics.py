@@ -138,6 +138,8 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
     avg_loss = abs(float(row.get('avg_loss') or 0))
     profit_factor = avg_gain / avg_loss if avg_loss > 0 else 0.0
 
+    from backend.lifecycle.win_rate_engine import apply_win_rate
+
     metrics = _empty(metric_type)
     metrics.update({
         'total_predictions': total_predictions,
@@ -155,7 +157,6 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
         'unresolved': unresolved,
         'active': active,
         'predictions_without_outcome': without_outcome,
-        'win_rate': round((wins / actionable * 100) if actionable > 0 else 0.0, 2),
         'avg_gain_pct': round(avg_gain, 2),
         'avg_loss_pct': round(avg_loss, 2),
         'profit_factor': round(profit_factor, 2),
@@ -170,7 +171,7 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
         'low_conf_win_rate': round((row.get('low_wins') or 0) / (row.get('low_total') or 1) * 100, 2)
             if row.get('low_total') else 0.0,
     })
-    return metrics
+    return apply_win_rate(metrics)
 
 
 def get_outcome_metrics(metric_type: str = 'all_time') -> Dict[str, Any]:
@@ -300,11 +301,8 @@ def get_pending_classification_metrics() -> Dict[str, Any]:
 
 
 def _win_rate_line(m: dict, actionable: int) -> str:
-    if actionable < 5:
-        if (m.get('wins') or 0) > 0 and actionable > 0:
-            return '<i>Early positive sample detected.</i>\n'
-        return '<i>Win rate withheld — sample below minimum threshold.</i>\n'
-    return f"<b>Win Rate:</b> {m.get('win_rate', 0):.1f}%\n"
+    from backend.lifecycle.win_rate_engine import format_win_rate_line
+    return format_win_rate_line(m)
 
 
 def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'today') -> str:
@@ -319,7 +317,8 @@ def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'tod
         m = snap['metrics_daily']
         label = 'TODAY SESSION'
 
-    actionable = (m.get('wins') or 0) + (m.get('losses') or 0) + (m.get('neutral') or 0)
+    from backend.lifecycle.win_rate_engine import win_rate_denominator
+    actionable = win_rate_denominator(m.get('wins', 0), m.get('losses', 0))
     pending_cls = _get_pending_classification_safe()
     msg = f"<b>📊 Trading Copilot Stats</b>\n<b>{label}</b>\n\n"
     msg += f"<b>Predictions:</b> {m.get('prediction_total', m.get('total_predictions', 0))}\n"
@@ -354,7 +353,8 @@ def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
     hist_evaluated = historical.get('evaluated', historical.get('total_evaluated', 0))
     wins = historical.get('wins', 0)
     losses = historical.get('losses', 0)
-    actionable = wins + losses + (historical.get('neutral') or 0)
+    from backend.lifecycle.win_rate_engine import win_rate_denominator
+    actionable = win_rate_denominator(wins, losses)
 
     msg = "<b>📊 Outcomes</b>\n\n"
     msg += "<b>LIVE SESSION</b>\n"

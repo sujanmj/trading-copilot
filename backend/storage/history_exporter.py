@@ -185,12 +185,13 @@ def calculate_period_stats(predictions):
     losses = sum(1 for p in predictions if p.get('verdict') == 'LOSS')
     neutral = sum(1 for p in predictions if p.get('verdict') == 'NEUTRAL')
     pending = sum(1 for p in predictions if p.get('verdict') in [None, 'PENDING', ''])
+    from backend.lifecycle.win_rate_engine import compute_win_rate
     evaluated = wins + losses
-    win_rate = (wins / evaluated * 100) if evaluated > 0 else 0
+    win_rate = compute_win_rate(wins, losses)
     return {
         'total': total, 'wins': wins, 'losses': losses,
         'neutral': neutral, 'pending': pending,
-        'evaluated': evaluated, 'win_rate': round(win_rate, 1)
+        'evaluated': evaluated, 'win_rate': win_rate,
     }
 
 

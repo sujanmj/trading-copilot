@@ -1,0 +1,102 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 4068,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-05-27",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-27T10:31:07.932065",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 4068,
+      "force": true
+    },
+    {
+      "time": "2026-05-27T10:32:05.553391",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "c778ef0029e0fd178aea",
+    "delta_reasons": [
+      "news_delta",
+      "govt_change",
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": 0.076,
+      "news_count": 117,
+      "govt_high_impact": 9,
+      "scanner_signals": 106,
+      "top_scanner_tickers": [
+        "FINPIPE",
+        "AIAENG",
+        "NDTV",
+        "INDORAMA",
+        "JKTYRE"
+      ],
+      "scanner_signature": [
+        "('FINPIPE', 'ULTRA', 7.6)",
+        "('AIAENG', 'ULTRA', 7.2)",
+        "('NDTV', 'ULTRA', 10.7)",
+        "('INDORAMA', 'ULTRA', -3.5)",
+        "('JKTYRE', 'ULTRA', 4.8)"
+      ],
+      "top_news_titles": [
+        "bankers oppose rbi's 1-hour lag on online transfers over rs 10,000",
+        "central bank government ofs gets fully subscribed",
+        "mythos risk prompts india to test for financial software flaws",
+        "pushp brand files ipo papers with sebi",
+        "rising bond yields and inflation remain key risks for markets: candace browning",
+        "sebi plans bond etfs, debt market reforms to boost retail participation"
+      ],
+      "reddit_sentiment": "bullish",
+      "reddit_confidence": 100,
+      "novelty_avg_score": 4.54,
+      "repetition_suppressed": 55
+    },
+    "source_hashes": {
+      "global_markets": "a91ceb2aca221322e20b",
+      "india_markets": "f4c8ba57f17641d0cfa2",
+      "news": "eec2f638865cabebfce4",
+      "youtube": "bf1e4d84c1b79b7588a5",
+      "govt": "3232266d71016b38d185",
+      "inshorts": "a3f61edc4245b9f5befb",
+      "reddit": "372bb0fb8f8112ec0d2c",
+      "telegram": "empty",
+      "scanner": "41e9e6625f5cf41cc888",
+      "twitter": "91c85d19f84a560cf741",
+      "nse_filings": "89b77f7e3d33d64a1990",
+      "composite": "3385a91e35c63ab7972c"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

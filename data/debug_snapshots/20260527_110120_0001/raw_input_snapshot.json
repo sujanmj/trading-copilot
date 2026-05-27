@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "d5775c289859b060a8b6",
+    "india_markets": "a1be783e5732af123293",
+    "news": "45236547d91a6276554c",
+    "youtube": "bf1e4d84c1b79b7588a5",
+    "govt": "728d54c441c6d8691acc",
+    "inshorts": "978e5029a0474973b8fa",
+    "reddit": "78ebbeade06f39e7ce65",
+    "telegram": "empty",
+    "scanner": "6542f63e19ff61c4a25b",
+    "twitter": "0690d6f5dcbb3bba459a",
+    "nse_filings": "c97af557a78b3816e49b",
+    "composite": "1048ce7ca6aa50ade21c"
+  },
+  "metrics": {
+    "india_avg_change": 0.018,
+    "news_count": 125,
+    "govt_high_impact": 8,
+    "scanner_signals": 113,
+    "top_scanner_tickers": [
+      "FINPIPE",
+      "AIAENG",
+      "NDTV",
+      "INDORAMA",
+      "FDC"
+    ],
+    "scanner_signature": [
+      "('FINPIPE', 'ULTRA', 7.7)",
+      "('AIAENG', 'ULTRA', 6.9)",
+      "('NDTV', 'ULTRA', 10.1)",
+      "('INDORAMA', 'ULTRA', -5.6)",
+      "('FDC', 'ULTRA', 6.5)"
+    ],
+    "top_news_titles": [
+      "global markets: australian shares bounce back as inflation miss eases rate-hike",
+      "hdfc bank denies wrongdoing in rs 45 crore extra interest payment allegation",
+      "hdfc bank shares fall 2% on reports of internal probe over rs 45 cr interest pay",
+      "rising bond yields and inflation remain key risks for markets: candace browning",
+      "sbi says ai-driven banking still needs people, skills and leadership",
+      "us-iran war news live updates: israeli strikes kill 31 in lebanon; iran condemns"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 100,
+    "novelty_avg_score": 3.615,
+    "repetition_suppressed": 62
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 125
+  },
+  "govt_counts": {
+    "high_impact_items": 8
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 23
+  }
+}
