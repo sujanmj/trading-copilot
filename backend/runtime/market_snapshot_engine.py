@@ -169,19 +169,8 @@ def build_market_snapshot(*, force_refresh: bool = False) -> MarketSnapshot:
         global_mood = india_bias = retail_sentiment = ''
         confidence = intel_raw.get('confidence_score')
 
-    counts = rs.get('prediction_counts') or {}
-    metrics_block = {
-        'wins': counts.get('wins', 0),
-        'losses': counts.get('losses', 0),
-        'partials': counts.get('partials', 0),
-        'resolved': counts.get('resolved', 0),
-        'pending': counts.get('pending', 0),
-        'evaluated': counts.get('evaluated', 0),
-        'win_rate': (rs.get('win_rate') or {}).get('win_rate'),
-        'win_rate_display': (rs.get('win_rate') or {}).get('win_rate_display'),
-        'statistically_confident': (rs.get('win_rate') or {}).get('statistically_confident'),
-        'source': 'canonical_metrics_via_runtime_state',
-    }
+    metrics_block = dict(rs.get('metrics') or {})
+    metrics_block.setdefault('source', 'canonical_metrics_via_runtime_state')
 
     secondary = _secondary_flags(rs)
     rs = dict(rs)

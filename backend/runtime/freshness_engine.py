@@ -14,11 +14,11 @@ import pytz
 IST = pytz.timezone('Asia/Kolkata')
 FRESHNESS_UNAVAILABLE = 'freshness unavailable'
 
-# Phase-3 tiers: <5m healthy, 5-15m aging, 15m+ stale, 30m+ degraded
+# Phase-3 tiers: <5m healthy, 5-15m aging, 15m+ stale/degraded
 HEALTHY_MAX_MINUTES = 5
 AGING_MAX_MINUTES = 15
 STALE_MIN_MINUTES = 15
-DEGRADED_MAX_MINUTES = 30
+DEGRADED_MAX_MINUTES = 15
 
 
 def freshness_health_tier(age: Any) -> str:
@@ -44,7 +44,7 @@ def is_snapshot_stale(age: Any) -> bool:
 
 
 def is_snapshot_degraded(age: Any, *, pipeline_stalled: bool = False) -> bool:
-    """Degraded when pipeline stalled or snapshot age exceeds 30 minutes."""
+    """Degraded when pipeline actively stalled or snapshot age exceeds 15 minutes."""
     if pipeline_stalled:
         return True
     if age is None:

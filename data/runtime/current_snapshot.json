@@ -1,11 +1,11 @@
 {
-  "snapshot_id": "snap_fecf3a29413c",
-  "generated_at": "2026-05-28T00:40:47.749354+05:30",
+  "snapshot_id": "snap_10147f853277",
+  "generated_at": "2026-05-28T01:34:58.226601+05:30",
   "market_session": "DEGRADED",
   "lifecycle": {
     "lifecycle_state": "DEGRADED",
     "lifecycle_base": "AFTER_HOURS",
-    "lifecycle_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1428m",
+    "lifecycle_display": "Degraded — snapshot_age=54m; Scanner stalled: 9h",
     "transition_valid": true,
     "transition_reason": "ok",
     "market_period": "night",
@@ -17,70 +17,71 @@
     "market_session_open": false
   },
   "runtime_state": {
-    "generated_at": "2026-05-28T00:40:47.746792+05:30",
+    "generated_at": "2026-05-28T01:34:58.202178+05:30",
     "authority": "runtime_state",
     "primary_state": "DEGRADED",
     "secondary_flags": {
-      "stale_snapshot": false,
+      "stale_snapshot": true,
       "scanner_stalled": true,
       "cache_only": true,
+      "runtime_degraded": true,
       "missing_confirmation": true,
       "cache_mode": true
     },
     "source_freshness": {
       "scanner": {
         "status": "idle",
-        "age_seconds": 31861,
-        "age_display": "8h",
+        "age_seconds": 35112,
+        "age_display": "9h",
         "stale": false,
         "file": "scanner_data.json"
       },
       "reddit": {
         "status": "idle",
-        "age_seconds": 30018,
-        "age_display": "8h",
+        "age_seconds": 33268,
+        "age_display": "9h",
         "stale": false,
         "file": "reddit_data.json"
       },
       "govt": {
         "status": "idle",
-        "age_seconds": 30034,
-        "age_display": "8h",
+        "age_seconds": 33284,
+        "age_display": "9h",
         "stale": false,
         "file": "govt_intelligence.json"
       },
       "news": {
         "status": "idle",
-        "age_seconds": 30031,
-        "age_display": "8h",
+        "age_seconds": 33282,
+        "age_display": "9h",
         "stale": false,
         "file": "news_feed.json"
       },
       "global": {
         "status": "idle",
-        "age_seconds": 30033,
-        "age_display": "8h",
+        "age_seconds": 33284,
+        "age_display": "9h",
         "stale": false,
         "file": "global_markets.json"
       },
       "india": {
         "status": "idle",
-        "age_seconds": 30043,
-        "age_display": "8h",
+        "age_seconds": 33294,
+        "age_display": "9h",
         "stale": false,
         "file": "latest_market_data.json"
       },
       "stats": {
         "status": "ok",
-        "age_seconds": 18,
-        "age_display": "18s",
+        "age_seconds": 0,
+        "age_display": "0s",
         "stale": false,
         "file": "stats_data.json"
       },
       "history": {
         "status": "idle",
-        "age_seconds": 85726,
-        "age_display": "23h",
+        "age_seconds": 88976,
+        "age_display": "24h",
         "stale": false,
         "file": "history_data.json"
       }
@@ -94,7 +95,7 @@
     "lifecycle": {
       "lifecycle_state": "DEGRADED",
       "lifecycle_base": "AFTER_HOURS",
-      "lifecycle_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1428m",
+      "lifecycle_display": "Degraded — snapshot_age=54m; Scanner stalled: 9h",
       "transition_valid": true,
       "transition_reason": "ok",
       "market_period": "night",
@@ -107,7 +108,7 @@
     },
     "session": {
       "session_status": "DEGRADED",
-      "session_display": "Degraded — Scanner stalled: 8h; history_data.json stale 1428m",
+      "session_display": "Degraded — snapshot_age=54m; Scanner stalled: 9h",
       "market_session_open": false,
       "after_hours_mode": false,
       "suppress_trading_language": true,
@@ -118,16 +119,16 @@
       "stages": {
         "scanner": {
           "status": "test",
-          "at": "2026-05-28T00:40:38.399380+05:30",
-          "last_success_at": "2026-05-28T00:40:38.399380+05:30",
+          "at": "2026-05-28T01:34:57.709764+05:30",
+          "last_success_at": "2026-05-28T01:34:57.709764+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "validate_probe"
         },
         "aggregation": {
           "status": "start",
-          "at": "2026-05-28T00:40:41.595925+05:30",
-          "last_success_at": "2026-05-28T00:40:41.595925+05:30",
+          "at": "2026-05-28T01:34:57.905047+05:30",
+          "last_success_at": "2026-05-28T01:34:57.905047+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "validate"
@@ -140,16 +141,16 @@
         },
         "snapshot_export": {
           "status": "ok",
-          "at": "2026-05-28T00:40:32.734917+05:30",
-          "last_success_at": "2026-05-28T00:40:32.734917+05:30",
-          "age_minutes": 0,
-          "stalled": false,
-          "detail": "v50"
+          "at": "2026-05-28T00:40:51.032235+05:30",
+          "last_success_at": "2026-05-28T00:40:51.032235+05:30",
+          "age_minutes": 54,
+          "stalled": true,
+          "detail": "snap_fecf3a29413c"
         },
         "cache": {
           "status": "ok",
-          "at": "2026-05-28T00:40:29.355472+05:30",
-          "last_success_at": "2026-05-28T00:40:29.355472+05:30",
+          "at": "2026-05-28T01:34:57.966206+05:30",
+          "last_success_at": "2026-05-28T01:34:57.966206+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "stats_data.json"
@@ -161,30 +162,37 @@
           "last_success_at": null
         }
       },
-      "stalled_stages": [],
+      "stalled_stages": [
+        "synthesis",
+        "snapshot_export"
+      ],
+      "historical_stalled_stages": [
+        "synthesis",
+        "snapshot_export"
+      ],
       "healthy_stages": [
         "scanner",
         "aggregation",
-        "snapshot_export",
         "cache"
       ],
-      "any_stalled": false,
-      "last_stage": "aggregation",
-      "updated_at": "2026-05-28T00:40:41.595925+05:30"
+      "any_stalled": true,
+      "any_historical_stalled": true,
+      "last_stage": "cache",
+      "updated_at": "2026-05-28T01:34:57.966206+05:30"
     },
     "scanner_health": {
       "healthy": false,
       "stalled": true,
-      "display": "Scanner stalled: 8h",
-      "age_minutes": 531,
-      "file_age_minutes": 531,
+      "display": "Scanner stalled: 9h",
+      "age_minutes": 585,
+      "file_age_minutes": 585,
       "heartbeat_age_minutes": null,
       "stall_minutes": 45,
       "expect_quiet": false,
       "market_hours": false,
       "lock_hint": "",
       "scanner_file_exists": true,
-      "checked_at": "2026-05-28T00:40:47.663896+05:30"
+      "checked_at": "2026-05-28T01:34:58.114651+05:30"
     },
     "overnight_posture": {
       "india_open_bias": "FLAT_TO_MIXED",
@@ -198,56 +206,139 @@
     "stall_watchdog": {
       "degraded": true,
       "issues": [
+        "snapshot_stale",
         "scanner_stalled",
-        "export:history_data.json stale 1428m",
-        "stage:synthesis"
+        "export:history_data.json stale 1482m",
+        "export:active_snapshot.json stale 54m",
+        "stage:synthesis",
+        "stage:snapshot_export"
       ],
       "root_causes": [
-        "Scanner stalled: 8h",
-        "history_data.json stale 1428m",
-        "synthesis:never_run"
+        "snapshot_age=54m",
+        "Scanner stalled: 9h",
+        "history_data.json stale 1482m",
+        "active_snapshot.json stale 54m",
+        "synthesis:never_run",
+        "snapshot_export:sla_exceeded"
       ],
       "threshold_minutes": 30,
       "scanner": {
         "healthy": false,
         "stalled": true,
-        "display": "Scanner stalled: 8h",
-        "age_minutes": 531,
-        "file_age_minutes": 531,
+        "display": "Scanner stalled: 9h",
+        "age_minutes": 585,
+        "file_age_minutes": 585,
         "heartbeat_age_minutes": null,
         "stall_minutes": 30,
         "expect_quiet": false,
         "market_hours": false,
         "lock_hint": "",
         "scanner_file_exists": true,
-        "checked_at": "2026-05-28T00:40:47.659572+05:30"
+        "checked_at": "2026-05-28T01:34:58.108124+05:30"
       },
       "snapshot_freshness": {
-        "stale": false,
-        "age_minutes": 0
+        "stale": true,
+        "age_minutes": 54
+      },
+      "pipeline": {
+        "stages": {
+          "scanner": {
+            "status": "test",
+            "at": "2026-05-28T01:34:57.709764+05:30",
+            "last_success_at": "2026-05-28T01:34:57.709764+05:30",
+            "age_minutes": 0,
+            "stalled": false,
+            "detail": "validate_probe"
+          },
+          "aggregation": {
+            "status": "start",
+            "at": "2026-05-28T01:34:57.905047+05:30",
+            "last_success_at": "2026-05-28T01:34:57.905047+05:30",
+            "age_minutes": 0,
+            "stalled": false,
+            "detail": "validate"
+          },
+          "synthesis": {
+            "status": "never",
+            "age_minutes": null,
+            "stalled": false,
+            "last_success_at": null
+          },
+          "snapshot_export": {
+            "status": "ok",
+            "at": "2026-05-28T00:40:51.032235+05:30",
+            "last_success_at": "2026-05-28T00:40:51.032235+05:30",
+            "age_minutes": 54,
+            "stalled": true,
+            "detail": "snap_fecf3a29413c"
+          },
+          "cache": {
+            "status": "ok",
+            "at": "2026-05-28T01:34:57.966206+05:30",
+            "last_success_at": "2026-05-28T01:34:57.966206+05:30",
+            "age_minutes": 0,
+            "stalled": false,
+            "detail": "stats_data.json"
+          },
+          "telegram": {
+            "status": "never",
+            "age_minutes": null,
+            "stalled": false,
+            "last_success_at": null
+          }
+        },
+        "stalled_stages": [
+          "synthesis",
+          "snapshot_export"
+        ],
+        "historical_stalled_stages": [
+          "synthesis",
+          "snapshot_export"
+        ],
+        "healthy_stages": [
+          "scanner",
+          "aggregation",
+          "cache"
+        ],
+        "any_stalled": true,
+        "any_historical_stalled": true,
+        "last_stage": "cache",
+        "updated_at": "2026-05-28T01:34:57.966206+05:30"
       },
       "pipeline_stages": {
         "overdue": [
           {
             "stage": "synthesis",
             "reason": "never_run"
+          },
+          {
+            "stage": "snapshot_export",
+            "age_minutes": 54,
+            "reason": "sla_exceeded"
           }
         ],
         "critical_overdue": [
           {
             "stage": "synthesis",
             "reason": "never_run"
+          },
+          {
+            "stage": "snapshot_export",
+            "age_minutes": 54,
+            "reason": "sla_exceeded"
           }
         ],
         "threshold_minutes": 30
       },
-      "checked_at": "2026-05-28T00:40:47.660505+05:30"
+      "checked_at": "2026-05-28T01:34:58.110996+05:30"
     },
     "collector_activity": {
       "collectors_active": true,
       "collector_count": 1,
       "collector_ok_count": 0,
-      "collector_issues": []
+      "collector_issues": [
+        "intelligence_heartbeat_stale:3265s"
+      ]
     },
     "market_phase": "night",
     "operational": {
@@ -293,46 +384,72 @@
       "losses": 4,
       "partials": 0,
       "neutral": 0,
+      "neutralized": 0,
       "expired": 48
     },
     "metrics": {
+      "metric_date": "2026-05-28",
+      "metric_type": "all_time",
+      "source": "sqlite_unified_metrics",
+      "total_predictions": 201,
       "prediction_total": 201,
       "evaluated": 58,
+      "total_evaluated": 58,
       "pending": 143,
-      "resolved": 10,
       "wins": 6,
       "losses": 4,
-      "partials": 0,
       "neutral": 0,
+      "partials": 0,
       "expired": 48,
-      "win_rate": 60.0
+      "cancelled": 0,
+      "invalidated": 0,
+      "unresolved": 10,
+      "active": 0,
+      "predictions_without_outcome": 76,
+      "avg_gain_pct": 3.35,
+      "avg_loss_pct": 3.29,
+      "profit_factor": 1.02,
+      "opportunity_win_rate": 22.22,
+      "risk_avoidance_rate": 0.0,
+      "high_conf_win_rate": 30.0,
+      "medium_conf_win_rate": 6.52,
+      "low_conf_win_rate": 0.0,
+      "resolved": 10,
+      "neutralized": 0,
+      "win_rate": 60.0,
+      "win_rate_display": "60.0%",
+      "win_rate_denominator": 10,
+      "statistically_confident": true
     },
     "snapshot_freshness": {
-      "fresh": true,
-      "stale": false,
+      "fresh": false,
+      "stale": true,
       "degraded": true,
-      "health_tier": "healthy",
-      "age_minutes": 0,
+      "health_tier": "stale",
+      "age_minutes": 54,
       "stale_threshold_minutes": 15,
-      "degraded_threshold_minutes": 30,
+      "degraded_threshold_minutes": 15,
       "pipeline_stalled": true,
       "snapshot_version": 50,
       "active_snapshot_id": "snap_20260528_004032",
-      "freshness_score": 45,
+      "freshness_score": 25,
       "suppress_confidence": true,
       "block_elite_outputs": true,
       "quality_score_penalty": 0.35,
-      "collector_issues": [],
+      "collector_issues": [
+        "intelligence_heartbeat_stale:3265s"
+      ],
       "sla_seconds": 900,
       "warnings": [
-        "Snapshot older than 30 minutes",
-        "Pipeline stalled"
+        "Snapshot older than 15 minutes",
+        "Pipeline stalled",
+        "intelligence_heartbeat_stale:3265s"
       ],
       "collectors_active": true,
-      "age_display": "0m",
+      "age_display": "54m",
       "freshness_available": true,
       "freshness_unavailable": false,
-      "status_label": "fresh"
+      "status_label": "stale"
     },
     "provider_health": {
       "status": "ok",
@@ -391,10 +508,10 @@
     },
     "intelligence_status": {
       "status": "degraded",
-      "message": "Partial degradation — awaiting fresh cycle",
+      "message": "Snapshot stale — intelligence confidence suppressed",
       "degraded": true,
       "elite_blocked": true,
-      "health_tier": "healthy"
+      "health_tier": "stale"
     },
     "scheduler": {
       "phase": "STALE",
@@ -455,6 +572,7 @@
       "eligible": false,
       "execution_eligible": false,
       "block_reasons": [
+        "stale_snapshot",
         "lifecycle_mismatch",
         "missing_ai_confirmation",
         "suppressed:dedupe"
@@ -473,33 +591,36 @@
       "issues": []
     }
   },
-  "snapshot_age_sec": 0.0,
+  "snapshot_age_sec": 3240.0,
   "freshness": {
-    "fresh": true,
-    "stale": false,
+    "fresh": false,
+    "stale": true,
     "degraded": true,
-    "health_tier": "healthy",
-    "age_minutes": 0,
+    "health_tier": "stale",
+    "age_minutes": 54,
     "stale_threshold_minutes": 15,
-    "degraded_threshold_minutes": 30,
+    "degraded_threshold_minutes": 15,
     "pipeline_stalled": true,
     "snapshot_version": 50,
     "active_snapshot_id": "snap_20260528_004032",
-    "freshness_score": 45,
+    "freshness_score": 25,
     "suppress_confidence": true,
     "block_elite_outputs": true,
     "quality_score_penalty": 0.35,
-    "collector_issues": [],
+    "collector_issues": [
+      "intelligence_heartbeat_stale:3265s"
+    ],
     "sla_seconds": 900,
     "warnings": [
-      "Snapshot older than 30 minutes",
-      "Pipeline stalled"
+      "Snapshot older than 15 minutes",
+      "Pipeline stalled",
+      "intelligence_heartbeat_stale:3265s"
     ],
     "collectors_active": true,
-    "age_display": "0m",
+    "age_display": "54m",
     "freshness_available": true,
     "freshness_unavailable": false,
-    "status_label": "fresh"
+    "status_label": "stale"
   },
   "regime": {
     "regime": "panic_volatile",
@@ -678,16 +799,38 @@
     "elite_signals": []
   },
   "metrics": {
+    "metric_date": "2026-05-28",
+    "metric_type": "all_time",
+    "source": "sqlite_unified_metrics",
+    "total_predictions": 201,
+    "prediction_total": 201,
+    "evaluated": 58,
+    "total_evaluated": 58,
+    "pending": 143,
     "wins": 6,
     "losses": 4,
+    "neutral": 0,
     "partials": 0,
+    "expired": 48,
+    "cancelled": 0,
+    "invalidated": 0,
+    "unresolved": 10,
+    "active": 0,
+    "predictions_without_outcome": 76,
+    "avg_gain_pct": 3.35,
+    "avg_loss_pct": 3.29,
+    "profit_factor": 1.02,
+    "opportunity_win_rate": 22.22,
+    "risk_avoidance_rate": 0.0,
+    "high_conf_win_rate": 30.0,
+    "medium_conf_win_rate": 6.52,
+    "low_conf_win_rate": 0.0,
     "resolved": 10,
-    "pending": 143,
-    "evaluated": 58,
+    "neutralized": 0,
     "win_rate": 60.0,
     "win_rate_display": "60.0%",
-    "statistically_confident": true,
-    "source": "canonical_metrics_via_runtime_state"
+    "win_rate_denominator": 10,
+    "statistically_confident": true
   },
   "providers": {
     "groq": {
@@ -736,54 +879,55 @@
   "feeds": {
     "scanner": {
       "status": "idle",
-      "age_seconds": 31861,
-      "age_display": "8h",
+      "age_seconds": 35112,
+      "age_display": "9h",
       "stale": false
     },
     "reddit": {
       "status": "idle",
-      "age_seconds": 30018,
-      "age_display": "8h",
+      "age_seconds": 33268,
+      "age_display": "9h",
       "stale": false
     },
     "govt": {
       "status": "idle",
-      "age_seconds": 30034,
-      "age_display": "8h",
+      "age_seconds": 33284,
+      "age_display": "9h",
       "stale": false
     },
     "news": {
       "status": "idle",
-      "age_seconds": 30031,
-      "age_display": "8h",
+      "age_seconds": 33282,
+      "age_display": "9h",
       "stale": false
     },
     "global": {
       "status": "idle",
-      "age_seconds": 30033,
-      "age_display": "8h",
+      "age_seconds": 33284,
+      "age_display": "9h",
       "stale": false
     },
     "india": {
       "status": "idle",
-      "age_seconds": 30043,
-      "age_display": "8h",
+      "age_seconds": 33294,
+      "age_display": "9h",
       "stale": false
     },
     "stats": {
       "status": "ok",
-      "age_seconds": 18,
-      "age_display": "18s",
+      "age_seconds": 0,
+      "age_display": "0s",
       "stale": false
     },
     "history": {
       "status": "idle",
-      "age_seconds": 85726,
-      "age_display": "23h",
+      "age_seconds": 88976,
+      "age_display": "24h",
       "stale": false
     }
   },
   "blockers": [
+    "stale_snapshot",
     "lifecycle_mismatch",
     "missing_ai_confirmation",
     "suppressed:dedupe",
@@ -791,26 +935,26 @@
     "missing_confirmation"
   ],
   "warnings": [
-    "Partial degradation — awaiting fresh cycle",
-    "Snapshot aging — partial degradation",
+    "Snapshot stale — intelligence confidence suppressed",
+    "snapshot_stale",
     "scanner_stalled",
-    "export:history_data.json stale 1428m",
-    "stage:synthesis"
+    "export:history_data.json stale 1482m",
+    "export:active_snapshot.json stale 54m"
   ],
   "pipeline_health": {
     "stages": {
       "scanner": {
         "status": "test",
-        "at": "2026-05-28T00:40:38.399380+05:30",
-        "last_success_at": "2026-05-28T00:40:38.399380+05:30",
+        "at": "2026-05-28T01:34:57.709764+05:30",
+        "last_success_at": "2026-05-28T01:34:57.709764+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "validate_probe"
       },
       "aggregation": {
         "status": "start",
-        "at": "2026-05-28T00:40:41.595925+05:30",
-        "last_success_at": "2026-05-28T00:40:41.595925+05:30",
+        "at": "2026-05-28T01:34:57.905047+05:30",
+        "last_success_at": "2026-05-28T01:34:57.905047+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "validate"
@@ -823,16 +967,16 @@
       },
       "snapshot_export": {
         "status": "ok",
-        "at": "2026-05-28T00:40:32.734917+05:30",
-        "last_success_at": "2026-05-28T00:40:32.734917+05:30",
-        "age_minutes": 0,
-        "stalled": false,
-        "detail": "v50"
+        "at": "2026-05-28T00:40:51.032235+05:30",
+        "last_success_at": "2026-05-28T00:40:51.032235+05:30",
+        "age_minutes": 54,
+        "stalled": true,
+        "detail": "snap_fecf3a29413c"
       },
       "cache": {
         "status": "ok",
-        "at": "2026-05-28T00:40:29.355472+05:30",
-        "last_success_at": "2026-05-28T00:40:29.355472+05:30",
+        "at": "2026-05-28T01:34:57.966206+05:30",
+        "last_success_at": "2026-05-28T01:34:57.966206+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "stats_data.json"
@@ -844,11 +988,14 @@
         "last_success_at": null
       }
     },
-    "stalled_stages": [],
-    "any_stalled": false,
-    "last_stage": "aggregation",
-    "freshness_tier": "healthy",
-    "snapshot_stale": false,
+    "stalled_stages": [
+      "synthesis",
+      "snapshot_export"
+    ],
+    "any_stalled": true,
+    "last_stage": "cache",
+    "freshness_tier": "stale",
+    "snapshot_stale": true,
     "collectors_active": true
   },
   "intelligence": {
@@ -1020,7 +1167,7 @@
   "calibration": "Past 30-day performance shows 60% win rate with exceptional success in TELECOM (100%). Recent losses in HIGH confidence calls (GREENLAM -4.4%, GNFC -3.6%) indicate need for caution in current panic volatile regime. Sector rotation signals align with past TELECOM success pattern. Avoiding repetition of 10 pending tickers from today. Current regime shows 60% alert precision in panic_volatile conditions, supporting selective aggressive positioning in ultra-scanner breakouts.",
   "executive_summary": "Indian markets trade in panic volatile regime with contradictory signals. Excise duty cut on fuel creates revenue concerns (-₹1 lakh crore) while strong sectoral rotation emerges in Power, Adani Group, and Media with exceptional volume spikes. Global headwinds from inflation risks and AI-driven layoffs persist, but falling crude oil (Iran deal hopes) provides relief. Scanner anomalies show extreme divergence with 7 ultra-bullish vs 2 ultra-bearish signals.",
   "collector_at": null,
-  "snapshot_built_at": "2026-05-28T00:40:47.749434+05:30",
-  "published_at": "2026-05-28T00:40:47.749508+05:30",
-  "_committed_at": "2026-05-28T00:40:47.749508+05:30"
+  "snapshot_built_at": "2026-05-28T01:34:58.226641+05:30",
+  "published_at": "2026-05-28T01:34:58.226689+05:30",
+  "_committed_at": "2026-05-28T01:34:58.226689+05:30"
 }

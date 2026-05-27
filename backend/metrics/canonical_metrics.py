@@ -87,6 +87,8 @@ def build_canonical_metrics(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     partials = int(raw.get('partials') or 0)
     evaluated = int(raw.get('evaluated') or raw.get('total_evaluated') or 0)
     pending = int(raw.get('pending') or 0)
+    expired = int(raw.get('expired') or 0)
+    neutralized = int(raw.get('neutralized') or raw.get('neutral') or 0)
     resolved = resolved_outcomes(wins, losses)
     wr = format_win_rate_display(wins, losses)
     out = {
@@ -97,6 +99,9 @@ def build_canonical_metrics(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         'resolved': resolved,
         'evaluated': evaluated,
         'pending': pending,
+        'expired': expired,
+        'neutralized': neutralized,
+        'neutral': neutralized,
         'prediction_total': int(raw.get('prediction_total') or raw.get('total_predictions') or 0),
         'win_rate': wr.get('win_rate'),
         'win_rate_display': wr.get('win_rate_display'),

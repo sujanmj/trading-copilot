@@ -583,12 +583,13 @@ def cmd_outcomes():
             skip, _, guard_key = begin_command('outcomes', '', CHAT_ID)
             if skip:
                 return
-            from backend.lifecycle.unified_metrics import get_metrics_for_telegram, format_outcomes_telegram
+            from backend.lifecycle.unified_metrics import format_outcomes_telegram
             from backend.storage.stats_exporter import export_stats
             from backend.utils.telegram_bot import send_outcome_report
-            bundle = get_metrics_for_telegram()
-            metrics = bundle['metrics']
+            from backend.runtime.market_snapshot_engine import get_current_market_snapshot
             output = export_stats()
+            snap = get_current_market_snapshot(force_refresh=True)
+            metrics = snap.metrics or {}
             if not send_outcome_report(metrics, output.get('top_winners'), output.get('top_losers')):
                 send_message(format_outcomes_telegram(metrics))
         except Exception as e:

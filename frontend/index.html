@@ -1346,7 +1346,12 @@
   }
 
   function formatWinRateDisplay(runtimeSnap, metrics, lcCal) {
-    const rs = (runtimeSnap && runtimeSnap.runtime_state) || {}
+    const ms = (window.RuntimeManager && RuntimeManager.getMarketSnapshot)
+      ? (RuntimeManager.getMarketSnapshot() || {})
+      : {}
+    const snapMetrics = ms.metrics || {}
+    if (snapMetrics.win_rate_display) return snapMetrics.win_rate_display
+    const rs = (runtimeSnap && runtimeSnap.runtime_state) || (ms.runtime_state) || {}
     const wr = rs.win_rate || {}
     if (wr.win_rate_display) return wr.win_rate_display
     const cal = (runtimeSnap && runtimeSnap.calibration_summary) || {}
@@ -2359,11 +2364,33 @@
   // TAB: AI CALIBRATION DASHBOARD (Stats evolution)
   // ============================================================
   function loadStats() {
-    const data = loadJson(files.stats);
+    let data = loadJson(files.stats);
     const container = document.getElementById('tab-stats');
     const calBanner = panelStatusBannerHtml('calibration', 'stats');
     const lifecycle = window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Post-market evaluation at 15:45 IST populates calibration metrics.') : 'Post-market evaluation at 15:45 IST populates calibration metrics.';
-    if (!data) {
+    const canonical = (window.RuntimeManager && RuntimeManager.getCanonicalMetrics)
+      ? RuntimeManager.getCanonicalMetrics()
+      : null;
+    if ((!data || !data.metrics_all_time) && canonical) {
+      data = {
+        ...(data || {}),
+        metrics_all_time: {
+          wins: canonical.wins,
+          losses: canonical.losses,
+          partials: canonical.partials,
+          resolved: canonical.resolved,
+          pending: canonical.pending,
+          evaluated: canonical.evaluated,
+          expired: canonical.expired,
+          neutralized: canonical.neutralized,
+          win_rate: canonical.win_rate,
+          win_rate_display: canonical.win_rate_display,
+          statistically_confident: canonical.statistically_confident,
+          source: canonical.source,
+        },
+      };
+    }
+    if (!data && !canonical) {
       container.innerHTML = `${calBanner}<div class="empty-stats"><h4>📊 Calibration building...</h4><p>${escapeHtml(lifecycle)}</p></div>`;
       return;
     }

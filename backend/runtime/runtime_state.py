@@ -76,7 +76,8 @@ def _load_prediction_counts(metrics: dict) -> Dict[str, Any]:
         'wins': int(metrics.get('wins') or 0),
         'losses': int(metrics.get('losses') or 0),
         'partials': int(metrics.get('partials') or 0),
-        'neutral': int(metrics.get('neutral') or 0),
+        'neutral': int(metrics.get('neutral') or metrics.get('neutralized') or 0),
+        'neutralized': int(metrics.get('neutralized') or metrics.get('neutral') or 0),
         'expired': int(metrics.get('expired') or 0),
     }
 
@@ -223,10 +224,15 @@ def _load_ai_state(provider_health: dict) -> Dict[str, Any]:
     }
 
 
-def _load_pipeline_status() -> Dict[str, Any]:
+def _load_pipeline_status(freshness: dict, lifecycle: dict) -> Dict[str, Any]:
     try:
         from backend.runtime.pipeline_stage_log import get_pipeline_stage_summary
-        return get_pipeline_stage_summary()
+        age = freshness.get('age_minutes')
+        after_hours = bool(lifecycle.get('after_hours_mode'))
+        return get_pipeline_stage_summary(
+            snapshot_age_minutes=age,
+            after_hours=after_hours,
+        )
     except Exception:
         return {'stages': {}, 'stalled_stages': [], 'any_stalled': False}
 
@@ -261,19 +267,48 @@ def _load_overnight_posture() -> Dict[str, Any]:
 def _map_primary_runtime_state(
     lifecycle: dict,
     operational: dict,
-    stall_report: dict,
+    freshness: dict,
+    scanner_health: dict,
+    pipeline: dict,
 ) -> str:
     """Canonical GUI/Telegram primary state — four values only."""
     orch = str(operational.get('orchestrator_mode') or '').upper()
     if orch == 'RECOVERING':
         return 'RECOVERING'
-    if lifecycle.get('lifecycle_state') == 'DEGRADED' or stall_report.get('degraded'):
-        return 'DEGRADED'
-    if lifecycle.get('after_hours_mode') or lifecycle.get('lifecycle_state') in (
+
+    after_hours = bool(lifecycle.get('after_hours_mode')) or lifecycle.get('lifecycle_state') in (
         'AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY',
-    ):
-        return 'AFTER_HOURS'
-    return 'LIVE'
+    )
+    age = freshness.get('age_minutes')
+    try:
+        age_n = int(age) if age is not None else None
+    except (TypeError, ValueError):
+        age_n = None
+
+    snapshot_degraded = bool(freshness.get('degraded')) or (
+        age_n is not None and age_n >= 15
+    )
+    pipeline_stalled = bool(pipeline.get('any_stalled'))
+    scanner_ok = bool(scanner_health.get('healthy', True)) and not scanner_health.get('stalled')
+    if age_n is not None and age_n < 15 and not pipeline_stalled:
+        scanner_ok = True
+
+    if after_hours:
+        return 'DEGRADED' if snapshot_degraded else 'AFTER_HOURS'
+
+    if snapshot_degraded or pipeline_stalled:
+        return 'DEGRADED'
+
+    if age_n is not None and age_n < 5 and scanner_ok and not pipeline_stalled:
+        return 'LIVE'
+
+    if age_n is not None and age_n < 15 and scanner_ok and not pipeline_stalled:
+        return 'LIVE'
+
+    if age_n is None and not pipeline_stalled and scanner_ok:
+        return 'LIVE'
+
+    return 'DEGRADED'
 
 
 def _load_secondary_flags(
@@ -420,19 +455,37 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     except Exception:
         pass
 
-    if freshness.get('degraded') or stall_report.get('degraded'):
+    operational = get_operational_status()
+    pipeline_status = _load_pipeline_status(freshness, lifecycle)
+    scanner_health = _load_scanner_health()
+    primary_state = _map_primary_runtime_state(
+        lifecycle, operational, freshness, scanner_health, pipeline_status,
+    )
+
+    if primary_state == 'DEGRADED':
         lifecycle = dict(lifecycle)
         lifecycle['lifecycle_state'] = 'DEGRADED'
         causes = stall_report.get('root_causes') or []
         if causes:
             lifecycle['lifecycle_display'] = f"Degraded — {'; '.join(causes[:2])}"
+        elif freshness.get('stale'):
+            lifecycle['lifecycle_display'] = f"Degraded — snapshot {freshness.get('age_display', 'stale')}"
+        elif pipeline_status.get('stalled_stages'):
+            stalled = pipeline_status.get('stalled_stages') or []
+            lifecycle['lifecycle_display'] = f"Degraded — pipeline stalled: {', '.join(stalled[:2])}"
         else:
             lifecycle['lifecycle_display'] = 'Degraded — Stale or Conflicting State'
         lifecycle['suppress_trading_language'] = True
-
-    operational = get_operational_status()
-    pipeline_status = _load_pipeline_status()
-    scanner_health = _load_scanner_health()
+    elif primary_state == 'AFTER_HOURS':
+        lifecycle = dict(lifecycle)
+        lifecycle.setdefault('lifecycle_state', 'AFTER_HOURS')
+        lifecycle['suppress_trading_language'] = True
+    elif primary_state == 'LIVE':
+        lifecycle = dict(lifecycle)
+        if lifecycle.get('lifecycle_state') == 'DEGRADED':
+            lifecycle['lifecycle_state'] = lifecycle.get('market_session_open') and 'MARKET_ACTIVE' or 'PRE_MARKET'
+            lifecycle['lifecycle_display'] = lifecycle.get('lifecycle_display') or 'Market Active'
+        lifecycle['suppress_trading_language'] = False
     overnight_posture = _load_overnight_posture()
     session = _load_session_status(lifecycle, operational)
     collector_activity = _load_collector_activity(freshness)
@@ -447,8 +500,9 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     scheduler = _load_scheduler_phase(lifecycle, operational)
     ai_state = _load_ai_state(provider_health)
     alert_eligibility = _load_alert_eligibility(lifecycle, freshness, intelligence_status)
-    primary_state = _map_primary_runtime_state(lifecycle, operational, stall_report)
     secondary_flags = _load_secondary_flags(freshness, scanner_health, stall_report)
+    if primary_state == 'DEGRADED':
+        secondary_flags['runtime_degraded'] = True
     source_freshness = _load_source_freshness(operational)
     brain_age = _load_brain_age_display()
 
@@ -488,7 +542,13 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         'quality_score': quality,
         'win_rate': win_rate,
         'prediction_counts': counts,
-        'metrics': {**counts, 'win_rate': win_rate.get('win_rate')},
+        'metrics': {
+            **metrics,
+            **counts,
+            'win_rate': win_rate.get('win_rate'),
+            'win_rate_display': win_rate.get('win_rate_display'),
+            'statistically_confident': win_rate.get('statistically_confident'),
+        },
         'snapshot_freshness': freshness,
         'provider_health': provider_health,
         'telegram_metrics': telegram_metrics,

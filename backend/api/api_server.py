@@ -1508,6 +1508,21 @@ def _build_gui_snapshot() -> dict:
     payload['pipeline_health'] = ms.pipeline_health
     payload['action_plan'] = ms.action_plan or (ms.intelligence or {}).get('action_plan') or ''
     payload['exports'] = dict(payload.get('data') or {})
+    ms_metrics = ms.metrics or {}
+    payload['calibration_summary'] = {
+        'evaluated': ms_metrics.get('evaluated'),
+        'pending': ms_metrics.get('pending'),
+        'wins': ms_metrics.get('wins'),
+        'losses': ms_metrics.get('losses'),
+        'partials': ms_metrics.get('partials'),
+        'resolved': ms_metrics.get('resolved'),
+        'expired': ms_metrics.get('expired'),
+        'neutralized': ms_metrics.get('neutralized'),
+        'win_rate': ms_metrics.get('win_rate'),
+        'win_rate_display': ms_metrics.get('win_rate_display'),
+        'statistically_confident': ms_metrics.get('statistically_confident'),
+        'source': ms_metrics.get('source'),
+    }
     ok, issues = validate_market_snapshot(ms)
     payload['status'] = 'ok' if ok and not (ms.freshness or {}).get('degraded') else 'degraded'
     payload['validation_warnings'] = issues

@@ -771,62 +771,115 @@ def _enqueue_brain_push(work_fn):
     _brain_queue.put(work_fn)
 
 
+def render_brain_messages(intel: dict, *, snap=None) -> list:
+    """Single render pass — ordered brain sections for Telegram queue."""
+    from backend.lifecycle.unified_metrics import format_calibration_telegram
+
+    intel = normalize_intel(intel) or {}
+    sections = []
+
+    sections.append(('Header', build_msg1_header(intel)))
+    sections.append(('Summary', build_msg2_summary_govt(intel)))
+    sections.append(('Market mood', build_msg3_scanner_sentiment(intel)))
+
+    opps = get_opportunities(intel)
+    opps_primary = format_opps(opps[:5]) if opps else ''
+    if not opps_primary:
+        try:
+            from backend.orchestration.opportunity_filter import rank_opportunities_tiered
+            opps_primary = format_opps_tiered(rank_opportunities_tiered(intel), include_elite=True)
+        except Exception:
+            opps_primary = '<i>Monitoring for ranked setups.</i>'
+    sections.append(('Top opportunities', f"💎 <b>TOP OPPORTUNITIES</b>\n\n{opps_primary}"))
+
+    if len(opps) > 5:
+        opps_extra = format_opps(opps[5:10])
+        if opps_extra:
+            sections.append(('More opportunities', f"💎 <b>TOP OPPORTUNITIES (6-10)</b>\n\n{opps_extra}"))
+
+    risks = _list(intel.get('risks_and_avoids'))
+    sections.append(('Risks', f"⚠️ <b>TOP RISKS / AVOID LIST</b>\n\n{format_risks(risks)}"))
+
+    sectors = _dict(intel.get('sector_rotation'))
+    bullish = _join_list(sectors.get('bullish'))
+    bearish = _join_list(sectors.get('bearish'))
+    sections.append((
+        'Sectors',
+        f"🔄 <b>SECTOR ROTATION</b>\n\n🟢 <b>Bullish:</b> {bullish}\n🔴 <b>Bearish:</b> {bearish}",
+    ))
+
+    action = _text(intel.get('action_plan'), '')
+    if snap is not None:
+        action = _text(getattr(snap, 'action_plan', None) or action, action or 'No action plan provided.')
+    sections.append(('Action plan', f"🚀 <b>ACTION PLAN</b>\n\n{action or 'No action plan provided.'}"))
+
+    cal_intel = _professionalize_calibration_text(intel.get('self_calibration'))
+    cal_metrics = format_calibration_telegram()
+    sections.append((
+        'Calibration',
+        f"🎯 <b>CALIBRATION</b>\n\n{cal_intel}\n\n━━━━━━━━━━━━━━━━━━━━\n\n{cal_metrics}",
+    ))
+    return sections
+
+
+def _prepare_intel_from_snapshot(snap):
+    """Hydrate intel view from canonical MarketSnapshot — single read pass."""
+    raw_intel = load_intel()
+    intel = normalize_intel(raw_intel) or {}
+    if snap is None:
+        return intel, raw_intel
+    if snap.action_plan:
+        intel['action_plan'] = snap.action_plan
+    if snap.sector_rotation:
+        intel['sector_rotation'] = snap.sector_rotation
+    if snap.top_opportunities:
+        intel['top_opportunities'] = snap.top_opportunities
+        intel['opportunities'] = snap.top_opportunities
+    if snap.intelligence:
+        merged = normalize_intel(snap.intelligence) or {}
+        for key in (
+            'executive_summary', 'market_mood', 'risks_and_avoids',
+            'self_calibration', 'government_impact',
+        ):
+            if merged.get(key):
+                intel[key] = merged[key]
+    return intel, raw_intel
+
+
 def _push_full_brain_impl(*, command='full', cycle_id=''):
     global _brain_stale_prefix
     cycle_id = _bind_snapshot_cycle(cycle_id)
+
+    from backend.runtime.market_snapshot_engine import get_current_market_snapshot
+    snap = get_current_market_snapshot(force_refresh=True)
+    intel, raw_intel = _prepare_intel_from_snapshot(snap)
+
     is_stale, age = probe_intel_file_stale()
-    if is_stale and not INTEL_FILE.exists():
+    if is_stale and not INTEL_FILE.exists() and not intel:
         safe_print(f"[BRAIN] Blocked push — intel file stale or missing (age={age})")
         check_intel_file_stale(notify=True)
         return False
 
-    raw_intel = load_intel()
-    debug_intel_fields(raw_intel)
-    intel = normalize_intel(raw_intel)
+    debug_intel_fields(raw_intel or intel)
     if not intel:
         send_message("❌ No brain data yet. Run /refresh first.", command=command, cycle_id=cycle_id)
         return False
 
     try:
-        from backend.runtime.market_snapshot_engine import get_current_market_snapshot
-        snap = get_current_market_snapshot()
-        if snap.action_plan:
-            intel['action_plan'] = snap.action_plan
-        if snap.sector_rotation:
-            intel['sector_rotation'] = snap.sector_rotation
-        if snap.top_opportunities:
-            intel['top_opportunities'] = snap.top_opportunities
-            intel['opportunities'] = snap.top_opportunities
-    except Exception:
-        pass
-
-    _brain_stale_prefix = stale_warning(raw_intel)
-
-    try:
         from backend.orchestration.opportunity_filter import rank_opportunities_tiered, DEFAULT_OPPS_LIMIT
-        tiers = rank_opportunities_tiered(raw_intel, limit=DEFAULT_OPPS_LIMIT)
+        tiers = rank_opportunities_tiered(raw_intel or intel, limit=DEFAULT_OPPS_LIMIT)
         ranked = tiers.get('all') or []
         intel['top_opportunities'] = ranked
         intel['opportunities'] = ranked
     except Exception as e:
         safe_print(f"[WARN] opportunity rank failed: {e}")
 
-    opps = get_opportunities(intel)
-    if not opps:
-        safe_print("[BRAIN] No opportunities in intel — pushing analysis with scanner notice")
+    _brain_stale_prefix = stale_warning(raw_intel or intel)
 
-    builders = [
-        ('1/6 Header',                 build_msg1_header),
-        ('2/6 Summary + Govt',         build_msg2_summary_govt),
-        ('3/6 Sentiment',              build_msg3_scanner_sentiment),
-        ('4/6 Calibration + Opps1-5',  build_msg4_calibration_opps_top5),
-        ('5/6 Opps6-10 + Risks',       build_msg5_opps_top10_risks),
-        ('6/6 Sectors + Action',       build_msg6_sectors_global_action),
-    ]
-    safe_print("[BRAIN] Pushing 6-message JSON brain to Telegram...")
-    for label, builder in builders:
+    sections = render_brain_messages(intel, snap=snap)
+    safe_print(f"[BRAIN] Pushing {len(sections)}-message brain to Telegram (single render pass)...")
+    for label, text in sections:
         try:
-            text = builder(intel)
             send_chunked(text, command=command, cycle_id=cycle_id)
             safe_print(f"  ✓ {label}")
             time.sleep(0.8)

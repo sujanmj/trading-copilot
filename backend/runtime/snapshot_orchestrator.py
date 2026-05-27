@@ -77,6 +77,11 @@ def run_snapshot_cycle(
 def publish_snapshot(snapshot: MarketSnapshot, *, trigger: str = '') -> None:
     """Signal downstream readers — cache bust only after commit."""
     try:
+        from backend.runtime.pipeline_stage_log import refresh_stages_on_snapshot_publish
+        refresh_stages_on_snapshot_publish(snapshot.snapshot_id or trigger or 'publish')
+    except Exception:
+        pass
+    try:
         from backend.utils.config import DATA_DIR
         flag = DATA_DIR / '_runtime_cache_invalidate.flag'
         import json

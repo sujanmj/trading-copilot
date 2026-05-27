@@ -86,11 +86,18 @@ def _snapshot_age_minutes_direct() -> Optional[int]:
 
 def _pipeline_stalled() -> bool:
     try:
-        from backend.runtime.stall_watchdog import evaluate_stalls
-        report = evaluate_stalls() or {}
-        if report.get('degraded'):
-            return True
-        pipeline = report.get('pipeline') or {}
+        from backend.runtime.pipeline_stage_log import get_pipeline_stage_summary
+        age = _snapshot_age_minutes_direct()
+        after_hours = False
+        try:
+            from backend.utils.market_hours import get_operational_status
+            after_hours = bool(get_operational_status().get('expect_quiet_collectors'))
+        except Exception:
+            pass
+        pipeline = get_pipeline_stage_summary(
+            snapshot_age_minutes=age,
+            after_hours=after_hours,
+        ) or {}
         return bool(pipeline.get('any_stalled'))
     except Exception:
         return False

@@ -29,7 +29,7 @@ def _now_iso() -> str:
 
 def evaluate_stalls(*, threshold_minutes: int = STALL_THRESHOLD_MINUTES) -> Dict[str, Any]:
     """Aggregate stall signals from pipeline, snapshot, exports, scanner."""
-    from backend.runtime.pipeline_stage_log import detect_stalled_stages
+    from backend.runtime.pipeline_stage_log import detect_stalled_stages, get_pipeline_stage_summary
     from backend.runtime.scanner_heartbeat_monitor import evaluate_scanner_health
     from backend.runtime.snapshot_freshness_monitor import evaluate_snapshot_freshness
     from backend.production.stability_monitor import detect_stale_exports
@@ -39,20 +39,36 @@ def evaluate_stalls(*, threshold_minutes: int = STALL_THRESHOLD_MINUTES) -> Dict
 
     fresh = evaluate_snapshot_freshness()
     snap_age = fresh.get('age_minutes')
+    after_hours = False
+    try:
+        from backend.utils.market_hours import get_operational_status
+        after_hours = bool(get_operational_status().get('expect_quiet_collectors'))
+    except Exception:
+        pass
+
     if fresh.get('stale') or (snap_age is not None and snap_age >= threshold_minutes):
         issues.append('snapshot_stale')
         root_causes.append(f'snapshot_age={snap_age}m')
 
     scanner = evaluate_scanner_health(stall_minutes=threshold_minutes)
-    if scanner.get('stalled') and not scanner.get('expect_quiet'):
+    if scanner.get('stalled') and not scanner.get('expect_quiet') and not after_hours:
         issues.append('scanner_stalled')
         root_causes.append(scanner.get('display', 'scanner'))
 
-    for w in detect_stale_exports():
-        issues.append(f'export:{w}')
-        root_causes.append(w)
+    if not after_hours and (snap_age is None or snap_age >= threshold_minutes):
+        for w in detect_stale_exports():
+            issues.append(f'export:{w}')
+            root_causes.append(w)
 
-    stage_probe = detect_stalled_stages(threshold_minutes=threshold_minutes)
+    pipeline = get_pipeline_stage_summary(
+        snapshot_age_minutes=snap_age,
+        after_hours=after_hours,
+    )
+    stage_probe = detect_stalled_stages(
+        threshold_minutes=threshold_minutes,
+        snapshot_age_minutes=snap_age,
+        after_hours=after_hours,
+    )
     for item in stage_probe.get('critical_overdue') or []:
         issues.append(f"stage:{item.get('stage')}")
         root_causes.append(f"{item.get('stage')}:{item.get('reason')}")
@@ -68,6 +84,7 @@ def evaluate_stalls(*, threshold_minutes: int = STALL_THRESHOLD_MINUTES) -> Dict
             'stale': fresh.get('stale'),
             'age_minutes': snap_age,
         },
+        'pipeline': pipeline,
         'pipeline_stages': stage_probe,
         'checked_at': _now_iso(),
     }
