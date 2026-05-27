@@ -48,7 +48,8 @@ def _empty(metric_type: str = 'all_time') -> Dict[str, Any]:
         'unresolved': 0,
         'active': 0,
         'predictions_without_outcome': 0,
-        'win_rate': 0.0,
+        'win_rate': None,
+        'resolved': 0,
         'avg_gain_pct': 0.0,
         'avg_loss_pct': 0.0,
         'profit_factor': 0.0,
@@ -138,7 +139,7 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
     avg_loss = abs(float(row.get('avg_loss') or 0))
     profit_factor = avg_gain / avg_loss if avg_loss > 0 else 0.0
 
-    from backend.lifecycle.win_rate_engine import apply_win_rate
+    from backend.lifecycle.win_rate_engine import apply_win_rate, win_rate_denominator, MIN_WIN_RATE_SAMPLE
 
     metrics = _empty(metric_type)
     metrics.update({
@@ -171,7 +172,11 @@ def _build_from_row(row: Dict[str, Any], metric_type: str = 'all_time') -> Dict[
         'low_conf_win_rate': round((row.get('low_wins') or 0) / (row.get('low_total') or 1) * 100, 2)
             if row.get('low_total') else 0.0,
     })
-    return apply_win_rate(metrics)
+    metrics = apply_win_rate(metrics)
+    metrics['resolved'] = win_rate_denominator(wins, losses)
+    if win_rate_denominator(wins, losses) < MIN_WIN_RATE_SAMPLE:
+        metrics['win_rate'] = None
+    return metrics
 
 
 def get_outcome_metrics(metric_type: str = 'all_time') -> Dict[str, Any]:

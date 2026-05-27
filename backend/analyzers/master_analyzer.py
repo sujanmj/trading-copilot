@@ -878,6 +878,17 @@ def run_master_analysis():
 
         atomic_write_json(output_file, safe_output)
 
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log('synthesis', status='ok', detail='unified_intelligence.json')
+        except Exception:
+            pass
+        try:
+            from backend.intelligence.canonical_rankings import align_intelligence
+            align_intelligence(safe_output, cycle_id=f"master_{int(__import__('time').time())}")
+        except Exception as exc:
+            print(f"[WARN] align_intelligence skipped: {exc}")
+
         print(f"\n[SAVED] {output_file}")
         try:
             from backend.analytics.signal_outcomes import track_intelligence_snapshot

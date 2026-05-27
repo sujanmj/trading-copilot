@@ -105,6 +105,11 @@ def tick_async_watchdog() -> dict:
     """Lightweight watchdog tick — drain retry queue + pending cleanup."""
     results = {'stability': run_stability_probe()}
     try:
+        from backend.runtime.stall_watchdog import tick_stall_watchdog
+        results['stall_watchdog'] = tick_stall_watchdog()
+    except Exception as exc:
+        results['stall_watchdog'] = {'error': str(exc)}
+    try:
         from backend.lifecycle.pending_cleanup_daemon import tick_pending_cleanup
         results['pending_cleanup'] = tick_pending_cleanup()
     except Exception as exc:

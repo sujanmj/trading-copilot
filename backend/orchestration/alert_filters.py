@@ -280,7 +280,18 @@ def should_send_alert(
         rs = get_runtime_state()
         fresh = rs.get('snapshot_freshness') or {}
         if fresh.get('stale'):
-            _obs.record_suppressed(category, 'stale_snapshot', f'age={fresh.get("age_display")}')
+            detail = f'age={fresh.get("age_display")}'
+            _obs.record_suppressed(category, 'stale_snapshot', detail)
+            try:
+                from backend.logs.alert_suppression import log_dispatch_debug
+                log_dispatch_debug(
+                    ticker=ticker or category,
+                    reason='stale_snapshot',
+                    category=category,
+                    detail=detail,
+                )
+            except Exception:
+                pass
             return False, 'stale_snapshot'
         session = rs.get('session') or {}
         if session.get('after_hours_mode') and category in (INTRADAY_OPPORTUNITY, INTRADAY_EVENT):

@@ -32,9 +32,21 @@ def main() -> int:
     for key in (
         'lifecycle', 'regime', 'quality_score', 'win_rate', 'prediction_counts',
         'snapshot_freshness', 'provider_health', 'telegram_metrics', 'intelligence_status',
+        'pipeline', 'scanner_health',
     ):
         if key not in state:
             errors.append(f'runtime_state missing {key}')
+
+    scanner = state.get('scanner_health') or {}
+    if 'display' not in scanner:
+        errors.append('scanner_health missing display')
+
+    from backend.logs.alert_suppression import log_dispatch_debug
+    from backend.runtime.pipeline_stage_log import pipeline_stage_log, get_pipeline_stage_summary
+    log_dispatch_debug(ticker='TEST', reason='dedupe', category='validate')
+    pipeline_stage_log('scanner', status='test', detail='validate_probe')
+    if 'stages' not in get_pipeline_stage_summary():
+        errors.append('pipeline stage summary missing stages')
 
     lc = state.get('lifecycle') or {}
     if lc.get('lifecycle_state') not in CANONICAL_STATES:

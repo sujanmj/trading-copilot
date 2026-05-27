@@ -347,12 +347,20 @@ def format_opps(opps_list, *, tier_label=None):
     elif summary.get('has_elite_verified'):
         header = f"<i>✅ {summary.get('elite_verified_count', 0)} elite-verified</i>\n\n"
     res = [header] if header else []
+    try:
+        from backend.telegram.formatting.telegram_formatter import _single_action_label
+    except Exception:
+        _single_action_label = None  # type: ignore
+
     for i, o in enumerate(opps_list, 1):
         o = _dict(o)
         action = _text(o.get('action'), 'WATCH').upper()
         icon = "🟢" if action == "BUY" else "🟡"
         tier = o.get('display_tier') or ''
-        tier_tag = f" [{tier}]" if tier else ''
+        if _single_action_label:
+            tier_tag = f" {_single_action_label(o)}"
+        else:
+            tier_tag = f" [{tier}]" if tier and str(tier).upper() != action else f" [{action}]"
         conf = _text(o.get('display_confidence') or o.get('confidence'), 'MEDIUM').upper()
         note = o.get('confidence_note') or ''
         note_html = f"\n   ⚠️ <i>{note}</i>" if note else ""
@@ -393,7 +401,7 @@ def format_opps(opps_list, *, tier_label=None):
         except Exception:
             pass
         res.append(
-            f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b>{tier_tag} [{action}]{badge}\n"
+            f"{i}. {icon} <b>{_text(o.get('symbol'), 'UNKNOWN')}</b>{tier_tag}{badge}\n"
             f"{levels_html}"
             f"   📊 Conf: <b>{conf}</b>{ml_html}{note_html if is_elite else ''}{inv_html}{why_html}\n"
             f"   <i>{_text(o.get('logic'), 'No rationale provided.')}</i>"
@@ -545,15 +553,23 @@ def build_compressed_summary(intel):
 
 
 def format_risks(risks_list):
+    try:
+        from backend.telegram.formatting.telegram_formatter import format_risks as _fmt
+        return _fmt(_list(risks_list), max_lines_per_ticker=2)
+    except Exception:
+        pass
     risks_list = _list(risks_list)
     if not risks_list:
         return "<i>No risks found in analysis.</i>"
     res = []
     for i, r in enumerate(risks_list, 1):
         r = _dict(r)
+        logic = _text(r.get('logic'), 'No risk rationale provided.')
+        logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:2]
+        logic_block = '\n   '.join(f'<i>{ln[:160]}</i>' for ln in logic_lines)
         res.append(
             f"{i}. 🔴 <b>{_text(r.get('symbol'), 'UNKNOWN')}</b>\n"
-            f"   <i>{_text(r.get('logic'), 'No risk rationale provided.')}</i>"
+            f"   {logic_block}"
         )
     return "\n\n".join(res)
 

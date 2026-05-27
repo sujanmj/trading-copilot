@@ -54,6 +54,24 @@ def format_for_command(text: str, command: str) -> str:
     return enforce_char_limit(out)
 
 
+def _sanitize_section_line(prefix: str, body: str) -> str:
+    """Safe fallback when WATCH:/AVOID: body is empty, null, or None."""
+    cleaned = str(body or '').strip()
+    if cleaned.lower() in ('', 'none', 'null', 'nan', 'undefined', 'n/a'):
+        if prefix.upper().startswith('WATCH'):
+            return 'Monitor for confirmation — no active watchlist.'
+        if prefix.upper().startswith('AVOID'):
+            return 'No elevated risk names flagged.'
+        if 'ELITE' in prefix.upper() or 'HIGH CONVICTION' in prefix.upper():
+            try:
+                from backend.intelligence.institutional_language import EMPTY_ELITE_MESSAGE
+                return EMPTY_ELITE_MESSAGE
+            except Exception:
+                return 'No High Conviction setups — capital preservation mode.'
+        return 'No items in this tier.'
+    return cleaned
+
+
 def format_action_plan(raw: str, *, max_lines: int = 3) -> str:
     """Compress action plan to posture lines (WATCH / AVOID / posture)."""
     text = str(raw or '').strip()
@@ -67,8 +85,14 @@ def format_action_plan(raw: str, *, max_lines: int = 3) -> str:
     picked: List[str] = []
     for ln in lines:
         upper = ln.upper()
-        if any(tag in upper for tag in ('WATCH:', 'AVOID:', 'ELITE:', 'POSTURE:', 'CAPITAL')):
-            picked.append(ln)
+        for tag in ('WATCH:', 'AVOID:', 'ELITE:', 'HIGH CONVICTION:'):
+            if tag in upper:
+                head, _, body = ln.partition(':')
+                picked.append(f'{head}: {_sanitize_section_line(head, body)}')
+                break
+        else:
+            if any(k in upper for k in ('POSTURE:', 'CAPITAL')):
+                picked.append(ln)
         if len(picked) >= max_lines:
             break
     if not picked:
@@ -90,7 +114,7 @@ def format_sectors(sectors: dict) -> str:
     )
 
 
-def format_risks(risks: list) -> str:
+def format_risks(risks: list, *, max_lines_per_ticker: int = 2) -> str:
     items = risks if isinstance(risks, list) else []
     if not items:
         return '<i>No risks identified in current analysis.</i>'
@@ -98,20 +122,39 @@ def format_risks(risks: list) -> str:
     for i, r in enumerate(items[:8], 1):
         r = r if isinstance(r, dict) else {}
         sym = r.get('symbol') or 'UNKNOWN'
-        logic = str(r.get('logic') or 'No rationale')[:200]
-        rows.append(f'{i}. 🔴 <b>{sym}</b>\n   <i>{logic}</i>')
+        logic = str(r.get('logic') or 'No rationale').strip()
+        logic_lines = [x.strip() for x in logic.splitlines() if x.strip()][:max_lines_per_ticker]
+        if not logic_lines:
+            logic_lines = ['No rationale']
+        logic_block = '\n   '.join(f'<i>{ln[:160]}</i>' for ln in logic_lines[:max_lines_per_ticker])
+        rows.append(f'{i}. 🔴 <b>{sym}</b>\n   {logic_block}')
     return '\n\n'.join(rows)
+
+
+def _single_action_label(item: dict) -> str:
+    """One user-facing label — avoid duplicate [WATCH] [WATCH]."""
+    o = item if isinstance(item, dict) else {}
+    action = str(o.get('action') or 'WATCH').upper().strip()
+    tier = str(o.get('display_tier') or '').upper().strip()
+    try:
+        from backend.intelligence.institutional_language import tier_display_label
+        tier_label = tier_display_label(tier) if tier else ''
+    except Exception:
+        tier_label = tier.replace('_', ' ').title() if tier else ''
+    if tier_label and tier_label.upper() == action:
+        return f'[{tier_label}]'
+    if tier_label:
+        return f'[{tier_label}]'
+    return f'[{action}]'
 
 
 def format_opportunity(item: dict) -> str:
     o = item if isinstance(item, dict) else {}
     sym = o.get('symbol') or '?'
-    action = str(o.get('action') or 'WATCH').upper()
     conf = o.get('display_confidence') or o.get('confidence') or 'MEDIUM'
     logic = str(o.get('logic') or '')[:180]
-    tier = o.get('display_tier') or ''
-    tier_tag = f' [{tier}]' if tier else ''
-    return f'• <b>{sym}</b>{tier_tag} [{action}] · {conf}\n  <i>{logic}</i>'
+    label = _single_action_label(o)
+    return f'• <b>{sym}</b> {label} · {conf}\n  <i>{logic}</i>'
 
 
 def format_opps_tiered(tiers: dict, *, include_elite: bool = True) -> str:
@@ -151,6 +194,11 @@ def format_status(runtime_state: dict) -> str:
     tg = rs.get('telegram_metrics') or {}
     ai = rs.get('provider_health') or {}
     sched = rs.get('scheduler') or {}
+    scanner = rs.get('scanner_health') or {}
+    pipeline = rs.get('pipeline') or {}
+    counts = rs.get('prediction_counts') or {}
+    wr = rs.get('win_rate') or {}
+    alert = rs.get('alert_eligibility') or {}
 
     lines = [
         '<b>📡 System Status</b>',
@@ -160,13 +208,28 @@ def format_status(runtime_state: dict) -> str:
     age = fresh.get('age_display') or 'freshness unavailable'
     tier = fresh.get('health_tier') or ('stale' if fresh.get('stale') else 'healthy')
     lines.append(f"Snapshot: {age} ({tier})")
+    lines.append(scanner.get('display') or 'Scanner: —')
+    stalled = pipeline.get('stalled_stages') or []
+    if stalled:
+        lines.append(f"Pipeline stalled: {', '.join(stalled[:4])}")
+    elif pipeline.get('last_stage'):
+        lines.append(f"Pipeline: last {pipeline.get('last_stage')}")
     if sched.get('phase'):
         lines.append(f"Scheduler: {sched.get('phase')}")
     lines.append(f"AI: {ai.get('status', 'unknown')}")
+    wr_disp = wr.get('win_rate_display') or '—'
+    lines.append(
+        f"Metrics: resolved {counts.get('resolved', 0)} "
+        f"({counts.get('wins', 0)}W/{counts.get('losses', 0)}L) · WR {wr_disp}"
+    )
     lines.append(
         f"Alerts today: sent {tg.get('alerts_sent_today', 0)} · "
         f"suppressed {tg.get('suppressed_today', 0)}"
     )
+    if session.get('after_hours_mode'):
+        lines.append('<i>After-hours: refresh active · execution alerts suppressed</i>')
+    if alert.get('block_reasons'):
+        lines.append(f"Alert blocks: {', '.join(alert.get('block_reasons')[:3])}")
     return '\n'.join(lines)
 
 
@@ -239,9 +302,7 @@ def snapshot_meta_line(runtime_state: Optional[dict] = None) -> str:
 
 
 def maybe_delayed_loading(command: str) -> Optional[str]:
-    cmd = str(command or '').lower()
-    if cmd in ('brain', 'full', 'refresh'):
-        return confirmation_phrase('processing')
+    """Deprecated immediate loading hint — use delayed_loading.run_with_delayed_loading."""
     return None
 
 

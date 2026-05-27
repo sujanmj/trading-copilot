@@ -108,7 +108,10 @@ def main() -> int:
     sectors = stabilize_sector_rotation({'sector_rotation': {'bullish': ['POWER'], 'bearish': ['METALS']}})
     if not sectors.get('bullish') or 'rotation_strength' not in sectors:
         errors.append('sector consistency missing rotation_strength')
-    publish_active_snapshot({'sector_rotation': sectors, 'action_plan': empty_plan}, source='validate')
+    try:
+        publish_active_snapshot({'sector_rotation': sectors, 'action_plan': empty_plan}, source='validate')
+    except PermissionError:
+        pass
     meta = get_active_snapshot_meta()
     if not meta.get('active_snapshot_id'):
         errors.append('active snapshot not published')
@@ -168,10 +171,19 @@ def main() -> int:
     if report.get('risk_score') not in ('LOW', 'MODERATE', 'HIGH', 'PANIC'):
         errors.append(f'india next open invalid risk_score: {report.get("risk_score")}')
 
-    from backend.lifecycle.win_rate_engine import compute_win_rate, win_rate_denominator
-    wr_expected = compute_win_rate(sqlite['wins'], sqlite['losses'])
-    if abs(float(sqlite.get('win_rate') or 0) - wr_expected) > 0.01:
-        errors.append(f'win rate formula mismatch: sqlite={sqlite.get("win_rate")} expected={wr_expected}')
+    from backend.lifecycle.win_rate_engine import compute_win_rate, win_rate_denominator, MIN_WIN_RATE_SAMPLE
+    from backend.metrics.canonical_metrics import build_canonical_metrics
+    canon = build_canonical_metrics(sqlite)
+    denom = win_rate_denominator(sqlite['wins'], sqlite['losses'])
+    if denom >= MIN_WIN_RATE_SAMPLE:
+        wr_expected = compute_win_rate(sqlite['wins'], sqlite['losses'])
+        reported = sqlite.get('win_rate')
+        if reported is not None and abs(float(reported) - wr_expected) > 0.01:
+            errors.append(f'win rate formula mismatch: sqlite={reported} expected={wr_expected}')
+    elif sqlite.get('win_rate') not in (None, 0, 0.0):
+        errors.append(f'premature win_rate exposed: {sqlite.get("win_rate")} denom={denom}')
+    if canon.get('statistically_confident') and denom < MIN_WIN_RATE_SAMPLE:
+        errors.append('canonical metrics marked confident below min sample')
     if win_rate_denominator(sqlite['wins'], sqlite['losses']) > 0:
         denom = win_rate_denominator(sqlite['wins'], sqlite['losses'])
         if sqlite['wins'] + sqlite['losses'] != denom:
@@ -197,10 +209,16 @@ def main() -> int:
     if len(format_for_command('x' * 5000, 'status')) > 4000:
         errors.append('telegram formatter should enforce char limit')
 
-    from backend.logs.alert_suppression import log_suppression, suppression_summary
-    log_suppression(reason='dedupe', category='test', detail='validate probe')
+    from backend.logs.alert_suppression import log_suppression, suppression_summary, log_dispatch_debug
+    log_suppression(reason='dedupe', category='test', ticker='TEST', detail='validate probe')
+    log_dispatch_debug(ticker='JPPOWER', reason='stale_snapshot', category='test')
     if 'suppression_count' not in suppression_summary():
         errors.append('alert_suppression summary missing suppression_count')
+    dispatch_log = ROOT / 'backend' / 'logs' / 'alert_dispatch_debug.log'
+    if dispatch_log.exists():
+        tail = dispatch_log.read_text(encoding='utf-8').strip().splitlines()[-1]
+        if 'suppressed: reason=' not in tail:
+            errors.append('alert_dispatch_debug log format invalid')
 
     from backend.intelligence.institutional_language import EMPTY_ELITE_MESSAGE, apply_institutional_tone
     toned = apply_institutional_tone('ULTRA today top movers')

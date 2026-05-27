@@ -264,31 +264,132 @@ def run_module_with_arg(module_name, arg, timeout=120):
 # COMMAND HANDLERS (long-running ones spawn threads)
 # ============================================================
 
+REFRESH_TIMEOUT_SEC = int(os.environ.get('TELEGRAM_REFRESH_TIMEOUT', '600'))
+
+
+def _invalidate_runtime_cache(reason: str = 'telegram_refresh') -> None:
+    """Signal GUI/API cache bust — RuntimeManager.invalidateCache on next fetch."""
+    flag = DATA_DIR / '_runtime_cache_invalidate.flag'
+    try:
+        flag.write_text(
+            json.dumps({'at': datetime.now().isoformat(), 'reason': reason}),
+            encoding='utf-8',
+        )
+    except Exception:
+        pass
+
+
+def _rebuild_canonical_snapshot() -> bool:
+    """align_intelligence + publish_active_snapshot + export refresh."""
+    from backend.utils.config import DATA_DIR
+    intel_path = DATA_DIR / 'unified_intelligence.json'
+    if not intel_path.exists():
+        return False
+    try:
+        with open(intel_path, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+        from backend.intelligence.canonical_rankings import align_intelligence
+        cycle_id = f"refresh_{int(time.time())}"
+        align_intelligence(raw if isinstance(raw, dict) else {}, cycle_id=cycle_id)
+        from backend.runtime.pipeline_stage_log import pipeline_stage_log
+        pipeline_stage_log('snapshot_export', status='ok', detail=cycle_id)
+        return True
+    except Exception as e:
+        safe_print(f"[REFRESH] snapshot rebuild failed: {e}")
+        return False
+
+
 def _do_refresh():
-    """Heavy lifting for /refresh — runs in background thread."""
-    modules = [
+    """Heavy lifting for /refresh — force scanner, invalidate cache, rebuild snapshot."""
+    started = time.time()
+    deadline = started + REFRESH_TIMEOUT_SEC
+
+    def _timed_out() -> bool:
+        return time.time() >= deadline
+
+    try:
+        from backend.runtime.pipeline_stage_log import pipeline_stage_log
+        pipeline_stage_log('cache', status='start', detail='telegram_refresh')
+    except Exception:
+        pass
+
+    _invalidate_runtime_cache('telegram_refresh')
+
+    if not _timed_out():
+        run_module('stock_scanner', '⚡ Forcing scanner refresh...')
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log('scanner', status='ok', detail='manual_refresh')
+        except Exception:
+            pass
+
+    collectors = [
         ('collector', None),
         ('global_collector', None),
         ('news_aggregator', None),
         ('inshorts_tracker', None),
         ('govt_tracker', None),
         ('reddit_tracker', None),
-        ('stock_scanner', None),
-        ('meta_labeler', '🤖 Running Meta-Labeling Guards...'),
-        ('master_analyzer', '🧠 AI analysis (slowest step)...'),
+    ]
+    for module, status in collectors:
+        if _timed_out():
+            break
+        run_module(module, status)
+
+    if not _timed_out():
+        run_module('meta_labeler', '🤖 Running Meta-Labeling Guards...')
+    if not _timed_out():
+        run_module('master_analyzer', '🧠 AI analysis (slowest step)...')
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log('synthesis', status='ok', detail='master_analyzer')
+        except Exception:
+            pass
+
+    if not _timed_out():
+        _rebuild_canonical_snapshot()
+
+    for module, status in (
         ('prediction_logger', None),
         ('history_exporter', None),
         ('stats_exporter', None),
-    ]
-
-    for module, status in modules:
+    ):
+        if _timed_out():
+            break
         run_module(module, status)
 
-    # Push fresh brain to Telegram
-    run_module_with_arg('telegram_brain_pusher', 'full', timeout=120)
-    
-    run_module('alert_engine')
-    send_message("✅ <b>Refresh complete!</b>\n\nFull brain sent above. Use /elite for filtered opportunities or /scan for raw signals.")
+    if not _timed_out():
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log('cache', status='ok', detail='exports')
+            from backend.runtime.runtime_state import build_runtime_state
+            build_runtime_state(force_refresh=True)
+        except Exception:
+            pass
+
+    if not _timed_out():
+        run_module_with_arg('telegram_brain_pusher', 'full', timeout=min(120, REFRESH_TIMEOUT_SEC))
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log('telegram', status='ok', detail='brain_push')
+        except Exception:
+            pass
+
+    if not _timed_out():
+        run_module('alert_engine')
+
+    elapsed = int(time.time() - started)
+    if _timed_out():
+        send_message(
+            f"⏱️ <b>Refresh timed out</b> ({REFRESH_TIMEOUT_SEC // 60} min cap).\n"
+            "Partial updates may have landed — check /status."
+        )
+    else:
+        send_message(
+            "✅ <b>Refresh complete!</b>\n\n"
+            f"Finished in {elapsed}s. Brain pushed above.\n"
+            "<i>/elite · /scan · /status</i>"
+        )
 
 def cmd_refresh():
     from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
@@ -300,7 +401,13 @@ def cmd_refresh():
 
     def _wrapped():
         try:
-            _do_refresh()
+            from backend.orchestration.delayed_loading import run_with_delayed_loading
+            run_with_delayed_loading(
+                send_fn=send_message,
+                loading_text='🔄 <b>Refresh in progress</b> — this may take several minutes…',
+                command='refresh',
+                work_fn=_do_refresh,
+            )
         finally:
             finish_command(key)
 
@@ -506,13 +613,6 @@ def cmd_brain_pusher(mode, status_msg=None):
                 return
             cycle_id = new_cycle_id(mode)
             bind_cycle(mode, cycle_id)
-            if status_msg:
-                send_message(
-                    status_msg,
-                    command=mode,
-                    cycle_id=cycle_id,
-                    message_kind='loading',
-                )
             from backend.orchestration import telegram_brain_pusher as tbp
             dispatch = {
                 'full': tbp.push_full_brain,
@@ -532,7 +632,22 @@ def cmd_brain_pusher(mode, status_msg=None):
             }
             fn = dispatch.get(mode)
             if fn:
-                fn(command=mode, cycle_id=cycle_id)
+                from backend.orchestration.delayed_loading import run_with_delayed_loading
+
+                def _brain_work():
+                    if fn:
+                        fn(command=mode, cycle_id=cycle_id)
+
+                if status_msg:
+                    run_with_delayed_loading(
+                        send_fn=send_message,
+                        loading_text=status_msg,
+                        command=mode,
+                        cycle_id=cycle_id or '',
+                        work_fn=_brain_work,
+                    )
+                else:
+                    _brain_work()
             else:
                 send_message(
                     f"❌ Unknown brain mode: <code>{mode}</code>",

@@ -20,8 +20,14 @@ __all__ = [
     'MIN_WIN_RATE_SAMPLE',
     'build_canonical_metrics',
     'format_win_rate_display',
+    'resolved_outcomes',
     'validate_win_rate',
 ]
+
+
+def resolved_outcomes(wins: int, losses: int) -> int:
+    """Win/loss only — excludes neutral/expired from win-rate denominator."""
+    return win_rate_denominator(wins, losses)
 
 
 def format_win_rate_display(
@@ -78,17 +84,25 @@ def build_canonical_metrics(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     raw = dict(raw or {})
     wins = int(raw.get('wins') or 0)
     losses = int(raw.get('losses') or 0)
+    partials = int(raw.get('partials') or 0)
+    evaluated = int(raw.get('evaluated') or raw.get('total_evaluated') or 0)
+    pending = int(raw.get('pending') or 0)
+    resolved = resolved_outcomes(wins, losses)
     wr = format_win_rate_display(wins, losses)
     out = {
         **raw,
         'wins': wins,
         'losses': losses,
-        'evaluated': int(raw.get('evaluated') or raw.get('total_evaluated') or 0),
-        'pending': int(raw.get('pending') or 0),
+        'partials': partials,
+        'resolved': resolved,
+        'evaluated': evaluated,
+        'pending': pending,
         'prediction_total': int(raw.get('prediction_total') or raw.get('total_predictions') or 0),
         'win_rate': wr.get('win_rate'),
         'win_rate_display': wr.get('win_rate_display'),
         'win_rate_denominator': wr.get('win_rate_denominator'),
         'statistically_confident': wr.get('statistically_confident'),
     }
+    if not wr.get('statistically_confident'):
+        out['win_rate'] = None
     return out

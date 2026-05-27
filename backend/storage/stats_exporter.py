@@ -343,6 +343,11 @@ def export_stats():
         output['last_updated'] = datetime.now(timezone.utc).isoformat()
         output['generation_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         write_stats_output(output)
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log('cache', status='ok', detail='stats_data.json')
+        except Exception:
+            pass
         safe_print(f"\n[OK] Saved {OUTPUT_FILE}")
         safe_print(f"  Predictions: {db_stats.get('total_predictions', 0)}")
         safe_print("=" * 60)

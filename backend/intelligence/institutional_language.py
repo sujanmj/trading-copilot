@@ -14,11 +14,15 @@ HIGH_CONVICTION_INTERNAL = frozenset({'ULTRA', 'HIGH_CONVICTION', 'HIGH CONVICTI
 # Retail phrase → institutional replacement (case-insensitive word boundaries where possible)
 PHRASE_MAP = [
     (r'\bULTRA\s+today\b', 'High Conviction leadership today'),
+    (r'\bVERY\s+STRONG\b', 'Strong'),
+    (r'\bELITE\b', 'High Conviction'),
     (r'\btop\s+movers?\b', 'relative strength leaders'),
     (r'\bmomentum\s+spam\b', 'broad participation extension'),
     (r'\bscanner\s+ULTRA\b', 'High Conviction scanner signal'),
     (r'\bULTRA\s+SIGNALS?\b', 'High Conviction signals'),
     (r'\bULTRA\b', 'High Conviction'),
+    (r'\bMODERATE\b', 'Moderate'),
+    (r'\bWEAK\b', 'Weak'),
     (r'\btop\s+opportunities\b', 'priority setups'),
     (r'\bbull\s+run\b', 'risk-on extension'),
     (r'\bbear\s+market\b', 'risk-off regime'),
@@ -61,22 +65,25 @@ def is_high_conviction_strength(strength: Optional[str]) -> bool:
 
 
 def normalize_strength_label(strength: Optional[str], direction: Optional[str] = None) -> str:
-    """Map legacy ULTRA tier to institutional labels."""
+    """Map legacy tiers to: High Conviction, Strong, Moderate, Weak."""
     s = str(strength or '').upper().strip()
     d = str(direction or '').upper().strip()
+    if s in HIGH_CONVICTION_INTERNAL or s == 'ELITE':
+        return 'High Conviction'
+    if s.startswith('VERY STRONG') or s == 'STRONG':
+        return 'Strong'
+    if s == 'MODERATE':
+        return 'Moderate'
+    if s == 'WEAK':
+        return 'Weak'
     if s == 'ULTRA':
-        if 'BEAR' in d:
-            return 'VERY STRONG BEARISH'
-        if 'BULL' in d:
-            return 'VERY STRONG BULLISH'
-        return 'HIGH CONVICTION'
-    if s == 'STRONG':
-        if 'BEAR' in d:
-            return 'STRONG BREAKDOWN'
-        if 'BULL' in d:
-            return 'STRONG BREAKOUT'
-        return 'HIGH MOMENTUM'
-    return apply_institutional_tone(s.replace('_', ' '))
+        return 'High Conviction'
+    out = apply_institutional_tone(s.replace('_', ' '))
+    if 'BEAR' in d and out == 'Strong':
+        return 'Strong bearish'
+    if 'BULL' in d and out == 'Strong':
+        return 'Strong bullish'
+    return out
 
 
 def tier_display_label(tier: Optional[str]) -> str:

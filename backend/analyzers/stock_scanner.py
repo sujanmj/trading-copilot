@@ -522,6 +522,22 @@ def run_scanner():
     
     # Save
     atomic_write_json(OUTPUT_FILE, output)
+
+    try:
+        from backend.runtime.snapshot_freshness_monitor import record_collector_heartbeat
+        record_collector_heartbeat('scanner', status='ok', detail=f"signals={len(signals_found)}")
+    except Exception:
+        pass
+    try:
+        from backend.runtime.pipeline_stage_log import pipeline_stage_log
+        pipeline_stage_log(
+            'scanner',
+            status='ok',
+            detail=f"scanned={len(all_metrics)} signals={len(signals_found)}",
+        )
+        pipeline_stage_log('aggregation', status='ok', detail='scanner_data.json')
+    except Exception:
+        pass
     
     # ============================================================
     # PRINT SUMMARY

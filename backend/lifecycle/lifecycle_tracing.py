@@ -33,6 +33,16 @@ def pipeline_log(message: str, *, stage: Optional[str] = None):
         print(f"{prefix} {message}", flush=True)
 
 
+def pipeline_stage_log(stage: str, *, status: str = 'ok', detail: str = '', **kwargs):
+    """Delegate to runtime pipeline_stage_log for frozen snapshot tracing."""
+    try:
+        from backend.runtime.pipeline_stage_log import pipeline_stage_log as _stage_log
+        return _stage_log(stage, status=status, detail=detail, extra=kwargs or None)
+    except Exception:
+        pipeline_log(f'{stage} {status} {detail}'.strip(), stage=stage)
+        return {}
+
+
 def log_error(context: str, exc: BaseException, *, stage: Optional[str] = None):
     """Append full exception to lifecycle_errors.log — never silent."""
     pipeline_log(f"ERROR in {context}: {exc}", stage=stage)

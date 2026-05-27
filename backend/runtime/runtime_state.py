@@ -54,8 +54,9 @@ def _load_regime() -> Dict[str, Any]:
 def _load_metrics() -> Dict[str, Any]:
     try:
         from backend.lifecycle.unified_metrics import get_unified_snapshot
+        from backend.metrics.canonical_metrics import build_canonical_metrics
         snap = get_unified_snapshot() or {}
-        return snap.get('metrics_all_time') or {}
+        return build_canonical_metrics(snap.get('metrics_all_time') or {})
     except Exception:
         return {}
 
@@ -65,8 +66,10 @@ def _load_prediction_counts(metrics: dict) -> Dict[str, Any]:
         'prediction_total': int(metrics.get('prediction_total') or metrics.get('total_predictions') or 0),
         'evaluated': int(metrics.get('evaluated') or metrics.get('total_evaluated') or 0),
         'pending': int(metrics.get('pending') or 0),
+        'resolved': int(metrics.get('resolved') or 0),
         'wins': int(metrics.get('wins') or 0),
         'losses': int(metrics.get('losses') or 0),
+        'partials': int(metrics.get('partials') or 0),
         'neutral': int(metrics.get('neutral') or 0),
         'expired': int(metrics.get('expired') or 0),
     }
@@ -214,17 +217,54 @@ def _load_ai_state(provider_health: dict) -> Dict[str, Any]:
     }
 
 
+def _load_pipeline_status() -> Dict[str, Any]:
+    try:
+        from backend.runtime.pipeline_stage_log import get_pipeline_stage_summary
+        return get_pipeline_stage_summary()
+    except Exception:
+        return {'stages': {}, 'stalled_stages': [], 'any_stalled': False}
+
+
+def _load_scanner_health() -> Dict[str, Any]:
+    try:
+        from backend.runtime.scanner_heartbeat_monitor import evaluate_scanner_health
+        return evaluate_scanner_health()
+    except Exception:
+        return {'healthy': True, 'display': 'Scanner: unknown'}
+
+
+def _load_overnight_posture() -> Dict[str, Any]:
+    try:
+        from backend.intelligence.india_next_open_engine import build_india_next_open_report
+        from backend.utils.config import DATA_DIR
+        import json
+        global_path = DATA_DIR / 'global_markets.json'
+        payload = {}
+        if global_path.exists():
+            payload = json.loads(global_path.read_text(encoding='utf-8'))
+        report = build_india_next_open_report(payload if isinstance(payload, dict) else {})
+        return {
+            'india_open_bias': report.get('india_open_bias'),
+            'risk_score': report.get('risk_score'),
+            'gap_probability': report.get('gap_probability'),
+        }
+    except Exception:
+        return {}
+
+
 def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_status: dict) -> Dict[str, Any]:
     lc_state = lifecycle.get('lifecycle_state')
     after_hours = bool(lifecycle.get('after_hours_mode'))
     stale = bool(freshness.get('stale'))
     ai_blocked = intelligence_status.get('elite_blocked')
     eligible = not stale and lc_state not in ('DEGRADED',) and not after_hours
+    execution_eligible = eligible and not after_hours
     reasons = []
     if stale:
         reasons.append('stale_snapshot')
     if after_hours:
         reasons.append('after_hours_block')
+        reasons.append('execution_alerts_suppressed')
     if lc_state == 'DEGRADED':
         reasons.append('lifecycle_mismatch')
     if ai_blocked and intelligence_status.get('status') == 'degraded':
@@ -236,6 +276,7 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
         sup = {'suppression_count': 0, 'by_reason': {}}
     return {
         'eligible': eligible,
+        'execution_eligible': execution_eligible,
         'block_reasons': reasons,
         'suppression_count': sup.get('suppression_count', 0),
         'suppression_by_reason': sup.get('by_reason') or {},
@@ -258,13 +299,27 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
 
     freshness = evaluate_snapshot_freshness()
     lifecycle = sync_with_scheduler()
-    if freshness.get('stale') or freshness.get('degraded'):
+    stall_report = {}
+    try:
+        from backend.runtime.stall_watchdog import evaluate_stalls
+        stall_report = evaluate_stalls()
+    except Exception:
+        pass
+
+    if freshness.get('stale') or freshness.get('degraded') or stall_report.get('degraded'):
         lifecycle = dict(lifecycle)
         lifecycle['lifecycle_state'] = 'DEGRADED'
-        lifecycle['lifecycle_display'] = 'Degraded — Stale or Conflicting State'
+        causes = stall_report.get('root_causes') or []
+        if causes:
+            lifecycle['lifecycle_display'] = f"Degraded — {'; '.join(causes[:2])}"
+        else:
+            lifecycle['lifecycle_display'] = 'Degraded — Stale or Conflicting State'
         lifecycle['suppress_trading_language'] = True
 
     operational = get_operational_status()
+    pipeline_status = _load_pipeline_status()
+    scanner_health = _load_scanner_health()
+    overnight_posture = _load_overnight_posture()
     session = _load_session_status(lifecycle, operational)
     collector_activity = _load_collector_activity(freshness)
     metrics = _load_metrics()
@@ -293,6 +348,10 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         'authority': 'runtime_state',
         'lifecycle': lifecycle,
         'session': session,
+        'pipeline': pipeline_status,
+        'scanner_health': scanner_health,
+        'overnight_posture': overnight_posture,
+        'stall_watchdog': stall_report,
         'collector_activity': collector_activity,
         'market_phase': operational.get('period'),
         'operational': operational,
@@ -354,6 +413,8 @@ def apply_to_snapshot_payload(snapshot: dict) -> dict:
     runtime_panel['scheduler_phase'] = (state.get('scheduler') or {}).get('phase')
     runtime_panel['freshness_tier'] = fresh.get('health_tier')
     runtime_panel['alert_suppression_count'] = (state.get('alert_eligibility') or {}).get('suppression_count', 0)
+    runtime_panel['scanner_display'] = (state.get('scanner_health') or {}).get('display')
+    runtime_panel['pipeline_stalled'] = (state.get('pipeline') or {}).get('any_stalled')
     panels['runtime'] = runtime_panel
     out['panels'] = panels
 

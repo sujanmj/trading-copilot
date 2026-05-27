@@ -184,6 +184,16 @@ def publish_active_snapshot(
         except Exception:
             pass
         _log.info('[SNAPSHOT] published v%s %s cycle=%s source=%s', new_version, snapshot_id, resolved_cycle, source)
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log(
+                'snapshot_export',
+                status='ok',
+                detail=f'v{new_version}',
+                extra={'cycle_id': resolved_cycle, 'source': source},
+            )
+        except Exception:
+            pass
         return payload
 
 

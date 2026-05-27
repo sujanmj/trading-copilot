@@ -1279,7 +1279,28 @@ def api_runtime_debug():
         'dedupe': get_dedup_summary(),
         'telegram_obs': get_telegram_alert_obs_summary(),
         'consistency': state.get('consistency'),
+        'scanner_health': state.get('scanner_health'),
+        'pipeline': state.get('pipeline'),
+        'stall_watchdog': state.get('stall_watchdog'),
     }
+
+
+@app.post("/api/runtime/invalidate-cache", dependencies=[Depends(verify_api_key)])
+def api_runtime_invalidate_cache(payload: dict = Body(default={})):
+    """Bust GUI RuntimeManager cache after manual /refresh or recovery."""
+    from backend.utils.config import DATA_DIR
+    reason = str((payload or {}).get('reason') or 'api_invalidate')
+    flag = DATA_DIR / '_runtime_cache_invalidate.flag'
+    try:
+        import json
+        from datetime import datetime
+        flag.write_text(
+            json.dumps({'at': datetime.now().isoformat(), 'reason': reason}),
+            encoding='utf-8',
+        )
+        return {'success': True, 'reason': reason}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def _build_health_payload() -> dict:
