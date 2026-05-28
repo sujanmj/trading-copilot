@@ -279,9 +279,51 @@ def print_migration_summary(records: Iterable[dict], *, label: str = 'all') -> D
     return stats
 
 
+def invalidate_timeline_caches() -> Dict[str, Any]:
+    """
+    Drop stale timeline / weekly aggregate snapshots so the next export rebuilds
+    all windows from canonical SQLite prediction rows only.
+    """
+    removed: List[str] = []
+    flag = DATA_DIR / '_runtime_cache_invalidate.flag'
+    try:
+        flag.write_text('timeline_rebuild', encoding='utf-8')
+        removed.append(str(flag.name))
+    except Exception as exc:
+        print(f'[TIMELINE_REBUILD] cache flag write failed: {exc}', flush=True)
+
+    for path in (HISTORY_DATA_FILE, STATS_DATA_FILE):
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except Exception:
+            data = None
+        if not isinstance(data, dict):
+            continue
+        changed = False
+        if path == HISTORY_DATA_FILE and isinstance(data.get('periods'), dict):
+            data['periods'] = {}
+            data.pop('export_manifest', None)
+            changed = True
+        if path == STATS_DATA_FILE:
+            for key in ('metrics_weekly', 'metrics_daily', 'metrics_all_time'):
+                if key in data:
+                    data.pop(key, None)
+                    changed = True
+        if changed:
+            from backend.storage.json_io import atomic_write_json
+            atomic_write_json(path, data)
+            removed.append(path.name)
+
+    print(f'[TIMELINE_REBUILD] invalidated caches: {removed or ["none"]}', flush=True)
+    return {'invalidated': removed}
+
+
 def rebuild_exports() -> Dict[str, str]:
     """Regenerate history_data.json and stats_data.json from migrated SQLite."""
     paths: Dict[str, str] = {}
+    invalidate_timeline_caches()
     from backend.history.history_engine import run_history_export
     from backend.storage.stats_exporter import export_stats
 

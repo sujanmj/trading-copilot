@@ -16,6 +16,7 @@ from backend.lifecycle.prediction_reconciliation import (
     TERMINAL_STATES,
     WIN,
     aggregate_period_stats,
+    buildTimelineStats,
     log_lifecycle_transition,
     normalize_canonical_state,
     reconcile_prediction_stats,

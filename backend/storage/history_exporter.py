@@ -74,41 +74,31 @@ def empty_history_output():
 
 
 def get_today_range():
-    today = _ist_today()
-    return today, today
+    from backend.lifecycle.prediction_reconciliation import timeframe_date_range
+    return timeframe_date_range('today')
 
 
 def get_yesterday_range():
-    yesterday = _ist_today() - timedelta(days=1)
-    return yesterday, yesterday
+    from backend.lifecycle.prediction_reconciliation import timeframe_date_range
+    return timeframe_date_range('yesterday')
 
 
 def get_this_week_range():
-    today = _ist_today()
-    weekday = today.weekday()
-    if weekday == 6:
-        return today, today
-    else:
-        prev_sunday = today - timedelta(days=weekday + 1)
-        return prev_sunday, today
+    from backend.lifecycle.prediction_reconciliation import timeframe_date_range
+    return timeframe_date_range('this_week')
 
 
 def get_last_week_range():
-    today = _ist_today()
-    weekday = today.weekday()
-    if weekday == 6:
-        this_sunday = today
-    else:
-        this_sunday = today - timedelta(days=weekday + 1)
-    last_sunday = this_sunday - timedelta(days=7)
-    last_friday = last_sunday + timedelta(days=5)
-    return last_sunday, last_friday
+    from backend.lifecycle.prediction_reconciliation import timeframe_date_range
+    return timeframe_date_range('last_week')
 
 
 def get_days_back_range(days):
+    from backend.lifecycle.prediction_reconciliation import timeframe_date_range
+    if days == 15:
+        return timeframe_date_range('15d')
     today = _ist_today()
-    start = today - timedelta(days=days)
-    return start, today
+    return today - timedelta(days=days), today
 
 
 def get_predictions_in_range(start_date, end_date):
@@ -188,8 +178,17 @@ def get_context_snapshots(days=30):
     return [dict(r) for r in rows]
 
 
-def calculate_period_stats(predictions, *, source: str = 'history_export'):
+def calculate_period_stats(
+    predictions,
+    *,
+    source: str = 'history_export',
+    timeframe: str | None = None,
+    start_date=None,
+    end_date=None,
+):
+    """Period stats from canonical rows — uses buildTimelineStats when timeframe is set."""
     from backend.lifecycle.prediction_reconciliation import (
+        buildTimelineStats,
         dedupe_prediction_records,
         reconcile_prediction_stats,
         validate_prediction_lifecycle,
@@ -202,8 +201,13 @@ def calculate_period_stats(predictions, *, source: str = 'history_export'):
             'evaluated': 0, 'resolved': 0, 'expired': 0, 'neutralized': 0,
             'win_rate': 0, 'reconciliation_valid': True,
         }
+    if timeframe:
+        stats = buildTimelineStats(
+            unique, timeframe, source=source, start_date=start_date, end_date=end_date,
+        )
+    else:
+        stats = reconcile_prediction_stats(unique, source=source)
     report = validate_prediction_lifecycle(unique)
-    stats = reconcile_prediction_stats(unique, source=source)
     stats['lifecycle_valid'] = bool(report.get('valid')) and stats.get('reconciliation_valid', True)
     if not stats['lifecycle_valid']:
         stats['lifecycle_issues'] = (report.get('issues') or [])[:10]
@@ -251,8 +255,37 @@ def group_by_date(predictions):
     return timeline
 
 
-def build_period(name, start_date, end_date, label):
-    preds = get_predictions_in_range(start_date, end_date)
+def build_period(
+    name,
+    start_date,
+    end_date,
+    label,
+    *,
+    canonical_predictions: list | None = None,
+):
+    from backend.lifecycle.prediction_reconciliation import (
+        buildTimelineStats,
+        filter_predictions_for_timeframe,
+    )
+
+    tf = 'custom' if name == 'custom' else name
+    if canonical_predictions is not None:
+        preds = filter_predictions_for_timeframe(
+            canonical_predictions, tf, start_date=start_date, end_date=end_date,
+        )
+        stats = buildTimelineStats(
+            canonical_predictions,
+            tf,
+            source=f'history_{name}',
+            start_date=start_date,
+            end_date=end_date,
+        )
+    else:
+        preds = get_predictions_in_range(start_date, end_date)
+        stats = buildTimelineStats(
+            preds, tf, source=f'history_{name}',
+            start_date=start_date, end_date=end_date,
+        )
     signals = get_signals_in_range(start_date, end_date)
     return {
         'name': name,
@@ -260,7 +293,7 @@ def build_period(name, start_date, end_date, label):
         'start_date': start_date.isoformat(),
         'end_date': end_date.isoformat(),
         'days_count': (end_date - start_date).days + 1,
-        'stats': calculate_period_stats(preds),
+        'stats': stats,
         'top_winners': get_top_winners(preds, 10),
         'top_losers': get_top_losers(preds, 10),
         'timeline': group_by_date(preds),
@@ -272,11 +305,14 @@ def build_period(name, start_date, end_date, label):
 
 def build_export():
     print("=" * 60)
-    print("HISTORY EXPORTER v2.2 - Smart Periods + Custom")
+    print("HISTORY EXPORTER v2.3 - Unified timeline rebuild")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
     try:
+        from backend.lifecycle.prediction_state_migration import invalidate_timeline_caches
+        invalidate_timeline_caches()
+
         from backend.storage.db_finder import resolve_db_path
         db_path = resolve_db_path()
         print(f"[DB] Using: {db_path}")
@@ -285,32 +321,48 @@ def build_export():
         weekday_name = today.strftime('%A')
         print(f"\nToday is: {today.isoformat()} ({weekday_name})")
 
+        start_all = today - timedelta(days=90)
+        from backend.lifecycle.prediction_reconciliation import dedupe_prediction_records
+        canonical_predictions = dedupe_prediction_records(
+            get_predictions_in_range(start_all, today),
+        )
+        print(f"[CANONICAL] loaded {len(canonical_predictions)} SQLite prediction rows (90d)")
+
         periods = {}
 
         start, end = get_today_range()
-        periods['today'] = build_period('today', start, end, 'Today')
+        periods['today'] = build_period(
+            'today', start, end, 'Today', canonical_predictions=canonical_predictions,
+        )
         print(f"\n[TODAY]      ({start})            {periods['today']['stats']['total']} predictions")
 
         start, end = get_yesterday_range()
-        periods['yesterday'] = build_period('yesterday', start, end, 'Yesterday')
+        periods['yesterday'] = build_period(
+            'yesterday', start, end, 'Yesterday', canonical_predictions=canonical_predictions,
+        )
         print(f"[YESTERDAY]  ({start})            {periods['yesterday']['stats']['total']} predictions")
 
         start, end = get_this_week_range()
         label = f'This Week ({start.strftime("%a %d %b")} - {end.strftime("%a %d %b")})'
-        periods['this_week'] = build_period('this_week', start, end, label)
+        periods['this_week'] = build_period(
+            'this_week', start, end, label, canonical_predictions=canonical_predictions,
+        )
         print(f"[THIS WEEK]  ({start} to {end}) {periods['this_week']['stats']['total']} predictions")
 
         start, end = get_last_week_range()
         label = f'Last Week ({start.strftime("%a %d %b")} - {end.strftime("%a %d %b")})'
-        periods['last_week'] = build_period('last_week', start, end, label)
+        periods['last_week'] = build_period(
+            'last_week', start, end, label, canonical_predictions=canonical_predictions,
+        )
         print(f"[LAST WEEK]  ({start} to {end}) {periods['last_week']['stats']['total']} predictions")
 
         start, end = get_days_back_range(15)
-        periods['15d'] = build_period('15d', start, end, 'Last 15 Days')
+        periods['15d'] = build_period(
+            '15d', start, end, 'Last 15 Days', canonical_predictions=canonical_predictions,
+        )
         print(f"[15D]                              {periods['15d']['stats']['total']} predictions")
 
-        start_all = today - timedelta(days=90)
-        all_predictions = get_predictions_in_range(start_all, today)
+        all_predictions = canonical_predictions
 
         if not all_predictions:
             print("[INFO] No predictions yet — writing empty history JSON")
@@ -325,11 +377,7 @@ def build_export():
             print("=" * 60)
             return output
 
-        from backend.lifecycle.prediction_reconciliation import (
-            dedupe_prediction_records,
-            normalize_canonical_state,
-        )
-        all_predictions = dedupe_prediction_records(all_predictions)
+        from backend.lifecycle.prediction_reconciliation import normalize_canonical_state
 
         sector_stats = defaultdict(lambda: {'total': 0, 'wins': 0, 'losses': 0, 'pending': 0})
         for p in all_predictions:
@@ -429,7 +477,13 @@ def build_custom_period(start_date_str, end_date_str):
         return {'error': 'Start date must be before end date'}
     
     label = f'Custom ({start.strftime("%d %b %Y")} - {end.strftime("%d %b %Y")})'
-    period = build_period('custom', start, end, label)
+    from backend.lifecycle.prediction_reconciliation import dedupe_prediction_records
+    canonical = dedupe_prediction_records(
+        get_predictions_in_range(start, end),
+    )
+    period = build_period(
+        'custom', start, end, label, canonical_predictions=canonical,
+    )
     return period
 
 

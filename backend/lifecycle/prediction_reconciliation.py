@@ -7,7 +7,16 @@ All export/GUI period totals must use reconcile_prediction_stats() on raw SQLite
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+import pytz
+
+_IST = pytz.timezone('Asia/Kolkata')
+
+TIMELINE_WINDOWS = frozenset({
+    'today', 'yesterday', 'this_week', 'last_week', '15d', 'custom',
+})
 
 # Canonical partition states (exactly one per prediction id)
 ACTIVE = 'ACTIVE'
@@ -180,6 +189,120 @@ def reconcile_prediction_stats(
 def aggregate_period_stats(records: Iterable[dict]) -> Dict[str, Any]:
     """Backward-compatible alias for reconcile_prediction_stats."""
     return reconcile_prediction_stats(records)
+
+
+def _ist_today() -> date:
+    return datetime.now(_IST).date()
+
+
+def _parse_prediction_date(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    text = str(value).strip()[:10]
+    try:
+        return datetime.strptime(text, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
+def timeframe_date_range(
+    timeframe: str,
+    *,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> Tuple[date, date]:
+    """IST calendar bounds for a timeline window (shared by all exports)."""
+    if timeframe == 'custom':
+        if start_date is None or end_date is None:
+            raise ValueError('custom timeframe requires start_date and end_date')
+        if start_date > end_date:
+            raise ValueError('start_date must be <= end_date')
+        return start_date, end_date
+
+    today = _ist_today()
+    if timeframe == 'today':
+        return today, today
+    if timeframe == 'yesterday':
+        y = today - timedelta(days=1)
+        return y, y
+    if timeframe == '15d':
+        return today - timedelta(days=15), today
+
+    weekday = today.weekday()
+    if weekday == 6:
+        this_sunday = today
+    else:
+        this_sunday = today - timedelta(days=weekday + 1)
+
+    if timeframe == 'this_week':
+        if weekday == 6:
+            return today, today
+        return this_sunday, today
+    if timeframe == 'last_week':
+        last_sunday = this_sunday - timedelta(days=7)
+        last_friday = last_sunday + timedelta(days=5)
+        return last_sunday, last_friday
+
+    raise ValueError(f'unknown timeline timeframe: {timeframe}')
+
+
+def filter_predictions_for_timeframe(
+    predictions: Iterable[dict],
+    timeframe: str,
+    *,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> List[dict]:
+    """Keep canonical prediction rows whose prediction_date falls in the window."""
+    start, end = timeframe_date_range(timeframe, start_date=start_date, end_date=end_date)
+    filtered: List[dict] = []
+    for rec in predictions:
+        if not isinstance(rec, dict):
+            continue
+        pred_date = _parse_prediction_date(rec.get('prediction_date'))
+        if pred_date is None:
+            continue
+        if start <= pred_date <= end:
+            filtered.append(rec)
+    return filtered
+
+
+def log_timeline_rebuild(timeframe: str, stats: Dict[str, Any]) -> None:
+    print(
+        f'[TIMELINE_REBUILD] window={timeframe} '
+        f'total={int(stats.get("total") or 0)} '
+        f'wins={int(stats.get("wins") or 0)} '
+        f'losses={int(stats.get("losses") or 0)} '
+        f'pending={int(stats.get("pending") or stats.get("active") or 0)} '
+        f'expired={int(stats.get("expired") or 0)} '
+        f'neutralized={int(stats.get("neutralized") or stats.get("neutral") or 0)}',
+        flush=True,
+    )
+
+
+def buildTimelineStats(
+    predictions: Iterable[dict],
+    timeframe: str,
+    *,
+    source: str = '',
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> Dict[str, Any]:
+    """
+    Single timeline aggregation entry — filter window, then reconcile canonical states.
+    All GUI history periods (today … custom) must use this function only.
+    """
+    if timeframe not in TIMELINE_WINDOWS:
+        raise ValueError(f'unsupported timeline timeframe: {timeframe}')
+    filtered = filter_predictions_for_timeframe(
+        predictions, timeframe, start_date=start_date, end_date=end_date,
+    )
+    src = source or f'timeline_{timeframe}'
+    stats = reconcile_prediction_stats(filtered, source=src)
+    log_timeline_rebuild(timeframe, stats)
+    return stats
 
 
 def validate_prediction_lifecycle(records: Iterable[dict]) -> Dict[str, Any]:

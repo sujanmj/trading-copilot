@@ -26,15 +26,13 @@ def _partition_ok(stats: dict) -> bool:
 
 def main() -> int:
     from backend.lifecycle.prediction_reconciliation import (
-        reconcile_prediction_stats,
+        buildTimelineStats,
         validate_prediction_totals,
     )
     from backend.lifecycle.unified_metrics import _validate_sqlite_lifecycle
     from backend.storage.history_exporter import (
-        calculate_period_stats,
         get_days_back_range,
         get_predictions_in_range,
-        get_this_week_range,
     )
 
     report = _validate_sqlite_lifecycle()
@@ -47,10 +45,11 @@ def main() -> int:
         'issues': report.get('issues'),
     }, indent=2))
 
-    start, end = get_days_back_range(15)
-    preds = get_predictions_in_range(start, end)
-    period_stats = calculate_period_stats(preds, source='validate_15d')
-    print('[validate_prediction_lifecycle] 15d period stats (raw rows)')
+    start_all, end_all = get_days_back_range(90)
+    canonical = get_predictions_in_range(start_all, end_all)
+
+    period_stats = buildTimelineStats(canonical, '15d', source='validate_15d')
+    print('[validate_prediction_lifecycle] 15d buildTimelineStats')
     print(json.dumps({
         'total': period_stats.get('total'),
         'wins': period_stats.get('wins'),
@@ -58,22 +57,36 @@ def main() -> int:
         'pending': period_stats.get('pending'),
         'expired': period_stats.get('expired'),
         'neutralized': period_stats.get('neutralized'),
-        'partition_sum': (
-            (period_stats.get('wins') or 0)
-            + (period_stats.get('losses') or 0)
-            + (period_stats.get('pending') or 0)
-            + (period_stats.get('expired') or 0)
-            + (period_stats.get('neutralized') or 0)
-        ),
+        'partition_reconciles': _partition_ok(period_stats),
         'reconciliation_valid': period_stats.get('reconciliation_valid'),
-        'lifecycle_valid': period_stats.get('lifecycle_valid', True),
-        'issues': period_stats.get('lifecycle_issues'),
     }, indent=2))
 
-    wstart, wend = get_this_week_range()
-    week_preds = get_predictions_in_range(wstart, wend)
-    week_stats = reconcile_prediction_stats(week_preds, source='validate_this_week')
-    print('[validate_prediction_lifecycle] this_week reconciled stats')
+    y_stats = buildTimelineStats(canonical, 'yesterday', source='validate_yesterday')
+    print('[validate_prediction_lifecycle] yesterday buildTimelineStats')
+    print(json.dumps({
+        'total': y_stats.get('total'),
+        'wins': y_stats.get('wins'),
+        'losses': y_stats.get('losses'),
+        'pending': y_stats.get('pending'),
+        'expired': y_stats.get('expired'),
+        'neutralized': y_stats.get('neutralized'),
+        'partition_reconciles': _partition_ok(y_stats),
+    }, indent=2))
+
+    lw_stats = buildTimelineStats(canonical, 'last_week', source='validate_last_week')
+    print('[validate_prediction_lifecycle] last_week buildTimelineStats')
+    print(json.dumps({
+        'total': lw_stats.get('total'),
+        'wins': lw_stats.get('wins'),
+        'losses': lw_stats.get('losses'),
+        'pending': lw_stats.get('pending'),
+        'expired': lw_stats.get('expired'),
+        'neutralized': lw_stats.get('neutralized'),
+        'partition_reconciles': _partition_ok(lw_stats),
+    }, indent=2))
+
+    week_stats = buildTimelineStats(canonical, 'this_week', source='validate_this_week')
+    print('[validate_prediction_lifecycle] this_week buildTimelineStats')
     print(json.dumps({
         'total': week_stats.get('total'),
         'wins': week_stats.get('wins'),
@@ -84,13 +97,22 @@ def main() -> int:
         'partition_reconciles': _partition_ok(week_stats),
     }, indent=2))
 
+    lw_has_terminal = (lw_stats.get('total') or 0) == 0 or (
+        (lw_stats.get('expired') or 0) + (lw_stats.get('neutralized') or 0) > 0
+        or (lw_stats.get('wins') or 0) + (lw_stats.get('losses') or 0) > 0
+    )
+
     ok = (
         bool(report.get('valid'))
-        and period_stats.get('lifecycle_valid', True)
         and period_stats.get('reconciliation_valid', True)
         and validate_prediction_totals(week_stats, source='validate_this_week')
+        and validate_prediction_totals(lw_stats, source='validate_last_week')
+        and validate_prediction_totals(y_stats, source='validate_yesterday')
         and _partition_ok(period_stats)
         and _partition_ok(week_stats)
+        and _partition_ok(lw_stats)
+        and _partition_ok(y_stats)
+        and lw_has_terminal
     )
     print(f'[validate_prediction_lifecycle] overall_ok={ok}')
     return 0 if ok else 1

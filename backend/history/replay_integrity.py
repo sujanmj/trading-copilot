@@ -36,6 +36,11 @@ def validate_history_export(output: dict) -> Tuple[bool, List[str]]:
     for name, period in (periods or {}).items():
         stats = (period or {}).get('stats') or {}
         from backend.lifecycle.prediction_reconciliation import validate_prediction_totals
+        if int(stats.get('total') or 0) > 0:
+            if 'expired' not in stats:
+                issues.append(f'period {name} missing expired partition field')
+            if 'neutralized' not in stats and 'neutral' not in stats:
+                issues.append(f'period {name} missing neutralized partition field')
         if not validate_prediction_totals(stats, source=f'history_export:{name}'):
             issues.append(
                 f'period {name} reconciliation mismatch: total={stats.get("total")} '
