@@ -26,7 +26,7 @@ except Exception:
 try:
     from fastapi import FastAPI, HTTPException, Body, Header, Depends, Query, Request
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, JSONResponse
     import uvicorn
 except ImportError:
     print("[ERROR] FastAPI not installed.")
@@ -43,6 +43,8 @@ from backend.utils.config import (
     PROJECT_ROOT,
     DATA_DIR,
     LOGS_DIR,
+    RUNTIME_SNAPSHOT_CACHE,
+    CURRENT_SNAPSHOT_FILE,
     API_HOST,
     API_PORT,
     DB_PATH,
@@ -1468,18 +1470,131 @@ def _build_health_payload() -> dict:
 
 @app.get("/api/runtime/snapshot", dependencies=[Depends(verify_api_key)])
 def api_market_snapshot():
-    """Canonical GUI snapshot — market state + exports + panels, validated."""
+    """Canonical GUI snapshot — fast cache read, then live build fallback."""
+    try:
+        cached = _load_runtime_snapshot_cache()
+        if cached:
+            return sanitize_json_value(cached)
+    except Exception as exc:
+        backend_log.warning('runtime snapshot cache read failed: %s', exc)
+
     from backend.runtime.global_job_locks import DEFAULT_TIMEOUT_SEC, run_with_timeout
 
     try:
-        return run_with_timeout(
+        payload = run_with_timeout(
             _build_gui_snapshot,
             job='aggregation',
             timeout=DEFAULT_TIMEOUT_SEC,
             owner='api_runtime_snapshot',
         )
+        _write_runtime_snapshot_cache(payload)
+        return sanitize_json_value(payload)
     except TimeoutError as exc:
-        return _build_gui_snapshot_cached_fallback(str(exc))
+        payload = _build_gui_snapshot_cached_fallback(str(exc))
+        _write_runtime_snapshot_cache(payload)
+        return sanitize_json_value(payload)
+    except Exception as exc:
+        backend_log.error('runtime snapshot build failed: %s', exc)
+        return JSONResponse(
+            status_code=503,
+            content={
+                'status': 'warming_up',
+                'message': 'snapshot unavailable',
+                'error': str(exc)[:200],
+            },
+        )
+
+
+def _boot_runtime_snapshot_payload() -> dict:
+    """Minimum GUI-shaped snapshot for cold start."""
+    ts = datetime.now().isoformat()
+    intel = {
+        'summary': 'Boot snapshot',
+        'executive_summary': 'Boot snapshot',
+        'market_mood': {'global_mood': 'NEUTRAL', 'india_outlook': 'NEUTRAL', 'retail_mood': 'NEUTRAL'},
+    }
+    return {
+        'snapshot_id': 'boot_snapshot',
+        'generated_at': ts,
+        'status': 'warming_up',
+        'runtime_state': 'warming_up',
+        'action_plan': '',
+        'intelligence': intel,
+        'market_snapshot': {
+            'executive_summary': 'Boot snapshot',
+            'action_plan': '',
+            'sector_rotation': {'bullish': [], 'bearish': []},
+            'top_opportunities': [],
+            'risk_list': [],
+            'runtime_state': 'warming_up',
+            'intelligence': intel,
+        },
+        'exports': {
+            'intelligence': intel,
+        },
+        'data': {
+            'intelligence': intel,
+        },
+        'panels': {},
+    }
+
+
+def _load_runtime_snapshot_cache() -> Optional[dict]:
+    """Read latest cached GUI snapshot JSON."""
+    if not RUNTIME_SNAPSHOT_CACHE.is_file():
+        return None
+    payload = json.loads(RUNTIME_SNAPSHOT_CACHE.read_text(encoding='utf-8'))
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _write_runtime_snapshot_cache(payload: dict) -> None:
+    """Persist GUI snapshot payload for fast API reads."""
+    if not isinstance(payload, dict):
+        return
+    try:
+        RUNTIME_SNAPSHOT_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        RUNTIME_SNAPSHOT_CACHE.write_text(
+            json.dumps(payload, indent=2, default=str) + '\n',
+            encoding='utf-8',
+        )
+    except Exception as exc:
+        backend_log.warning('runtime snapshot cache write failed: %s', exc)
+
+
+def ensure_runtime_snapshot_cache() -> Path:
+    """Create or refresh data/cache/runtime_snapshot.json for GUI hydration."""
+    if RUNTIME_SNAPSHOT_CACHE.is_file():
+        try:
+            existing = _load_runtime_snapshot_cache()
+            if existing and (existing.get('snapshot_id') or existing.get('generated_at')):
+                return RUNTIME_SNAPSHOT_CACHE
+        except Exception:
+            pass
+
+    payload = None
+    try:
+        payload = _build_gui_snapshot_cached_fallback('cache_seed')
+    except Exception as exc:
+        backend_log.warning('runtime snapshot cache seed fallback failed: %s', exc)
+
+    if not payload or not isinstance(payload, dict):
+        payload = _boot_runtime_snapshot_payload()
+    elif CURRENT_SNAPSHOT_FILE.is_file():
+        try:
+            committed = json.loads(CURRENT_SNAPSHOT_FILE.read_text(encoding='utf-8'))
+            if isinstance(committed, dict):
+                payload.setdefault('snapshot_id', committed.get('snapshot_id'))
+                payload.setdefault('generated_at', committed.get('generated_at'))
+                ms = committed if committed.get('market_session') else committed
+                if isinstance(ms, dict):
+                    payload['market_snapshot'] = payload.get('market_snapshot') or ms
+        except Exception:
+            pass
+
+    _write_runtime_snapshot_cache(payload)
+    return RUNTIME_SNAPSHOT_CACHE
 
 
 @app.get("/api/runtime_snapshot", dependencies=[Depends(verify_api_key)])
@@ -2006,6 +2121,11 @@ def main():
         print(f"[AI PROVIDERS] WARN diagnostics failed: {e}")
     print("=" * 60)
     backend_log.info("Uvicorn starting host=%s port=%s railway=%s", host, port, IS_RAILWAY)
+    try:
+        cache_path = ensure_runtime_snapshot_cache()
+        print(f"Runtime snapshot cache: {cache_path}")
+    except Exception as exc:
+        print(f"[WARN] runtime snapshot cache init failed: {exc}")
     try:
         from backend.orchestration.recovery_loop import enforce_single_worker_mode
         enforce_single_worker_mode()

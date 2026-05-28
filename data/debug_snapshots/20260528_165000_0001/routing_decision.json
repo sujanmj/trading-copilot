@@ -1,0 +1,103 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 4126,
+    "force": false,
+    "budget_at_call": {
+      "date": "2026-05-28",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-28T16:50:00.933821",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 4126,
+      "force": false
+    },
+    {
+      "time": "2026-05-28T16:51:11.400741",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": false,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "276ff8a6b2e62613b680",
+    "delta_reasons": [
+      "news_delta",
+      "govt_change",
+      "scanner_count_change",
+      "reddit_sentiment_change",
+      "reddit_sentiment_spike"
+    ],
+    "metrics": {
+      "india_avg_change": -0.015,
+      "news_count": 117,
+      "govt_high_impact": 16,
+      "scanner_signals": 112,
+      "top_scanner_tickers": [
+        "FINPIPE",
+        "AIAENG",
+        "NDTV",
+        "INDORAMA",
+        "FDC"
+      ],
+      "scanner_signature": [
+        "('FINPIPE', 'ULTRA', 7.7)",
+        "('AIAENG', 'ULTRA', 6.9)",
+        "('NDTV', 'ULTRA', 10.1)",
+        "('INDORAMA', 'ULTRA', -5.6)",
+        "('FDC', 'ULTRA', 6.5)"
+      ],
+      "top_news_titles": [
+        "akasa air aircraft runs short on fuel, makes emergency landing at lucknow airpor",
+        "australia's pm albanese welcomes modi, calls india's rise to 3rd-largest economy",
+        "gmr widens lead over adani airports on delhi tariff boost",
+        "hdfc bank denies allegations of disguising interest payout",
+        "non-banks increase microfinance share amid muted demand",
+        "watch: jofra archer closes in on bhuvneshwar, rabada in ipl 2026 purple cap race"
+      ],
+      "reddit_sentiment": "neutral",
+      "reddit_confidence": 50,
+      "novelty_avg_score": 4.143,
+      "repetition_suppressed": 46
+    },
+    "source_hashes": {
+      "global_markets": "34cf2790d04bd61a5888",
+      "india_markets": "664f8c6c9c533ccfbca2",
+      "news": "367295905ce798e94d0b",
+      "youtube": "bf1e4d84c1b79b7588a5",
+      "govt": "7f9b5212d36ad5cdc9a5",
+      "inshorts": "de2643a4a10c244d1d19",
+      "reddit": "e73330d1311d23ab50c7",
+      "telegram": "empty",
+      "scanner": "f6f566f06ea32e9844f4",
+      "twitter": "60c7bef4ae4937bec7aa",
+      "nse_filings": "39d5515f05506cc2fba4",
+      "composite": "16420c410fa8be5025e4"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

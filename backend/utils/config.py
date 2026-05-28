@@ -10,6 +10,8 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_DIR.parent
 DATA_DIR = PROJECT_ROOT / 'data'
 RUNTIME_DIR = DATA_DIR / 'runtime'
+RUNTIME_CACHE_DIR = DATA_DIR / 'cache'
+RUNTIME_SNAPSHOT_CACHE = RUNTIME_CACHE_DIR / 'runtime_snapshot.json'
 CURRENT_SNAPSHOT_FILE = RUNTIME_DIR / 'current_snapshot.json'
 LOGS_DIR = PROJECT_ROOT / 'logs'
 CONFIG_DIR = PROJECT_ROOT / 'config'
@@ -69,7 +71,7 @@ ALERT_COOLDOWN_HIGH = int(os.environ.get('ALERT_COOLDOWN_HIGH', '14400'))
 def ensure_dirs():
     """Create runtime folders if missing."""
     for directory in (
-        DATA_DIR, RUNTIME_DIR, LOGS_DIR, CONFIG_DIR, LOCKS_DIR, AI_CACHE_DIR, DEBUG_SNAPSHOTS_DIR,
+        DATA_DIR, RUNTIME_DIR, RUNTIME_CACHE_DIR, LOGS_DIR, CONFIG_DIR, LOCKS_DIR, AI_CACHE_DIR, DEBUG_SNAPSHOTS_DIR,
     ):
         directory.mkdir(parents=True, exist_ok=True)
 

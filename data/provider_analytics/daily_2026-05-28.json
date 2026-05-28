@@ -1,17 +1,19 @@
 {
   "date": "2026-05-28",
-  "generated_at": "2026-05-28T03:43:58.655389",
+  "generated_at": "2026-05-28T16:50:22.200488",
   "providers": {
     "gemini": {
       "provider": "gemini",
-      "requests_today": 0,
-      "requests_per_hour": {},
-      "avg_latency_ms": 0.0,
-      "failovers": 0,
+      "requests_today": 2,
+      "requests_per_hour": {
+        "16": 2
+      },
+      "avg_latency_ms": 5560.1,
+      "failovers": 3,
       "cooldown_activations": 0,
-      "quota_failures": 0,
+      "quota_failures": 1,
       "success_rate_pct": 0.0,
-      "degraded_count": 0,
+      "degraded_count": 2,
       "fallback_count": 0,
       "cache_hits": 0,
       "uptime_score": 0.0
@@ -56,5 +58,5 @@
     "Claude reserved — no strategic synthesis runs."
   ],
   "ai_uptime_pct": 0.0,
-  "total_requests": 0
+  "total_requests": 2
 }
