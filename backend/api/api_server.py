@@ -596,7 +596,7 @@ def start_local_background_processes():
 
     schedule_local_force_eod(delay_seconds=25)
     run_local_validation_loop(max_rounds=40, interval=15)
-    local_log('LOCAL RUNTIME', 'GUI hooks: set API_BASE_URL=http://127.0.0.1:8000 then npm start')
+    local_log('LOCAL RUNTIME', 'GUI hooks: set API_BASE_URL=http://127.0.0.1:8080 then npm start')
 
 
 def start_background_processes():
@@ -1468,9 +1468,26 @@ def _build_health_payload() -> dict:
     }
 
 
+def _runtime_snapshot_warming_up_response() -> dict:
+    """503 payload when data/cache/runtime_snapshot.json is not yet available."""
+    return {
+        'snapshot_id': 'warming_up',
+        'generated_at': '',
+        'intelligence': {},
+        'action_plan': {},
+        'status': 'warming_up',
+    }
+
+
 @app.get("/api/runtime/snapshot", dependencies=[Depends(verify_api_key)])
 def api_market_snapshot():
     """Canonical GUI snapshot — fast cache read, then live build fallback."""
+    if not RUNTIME_SNAPSHOT_CACHE.is_file():
+        return JSONResponse(
+            status_code=503,
+            content=_runtime_snapshot_warming_up_response(),
+        )
+
     try:
         cached = _load_runtime_snapshot_cache()
         if cached:
@@ -1498,7 +1515,7 @@ def api_market_snapshot():
         return JSONResponse(
             status_code=503,
             content={
-                'status': 'warming_up',
+                **_runtime_snapshot_warming_up_response(),
                 'message': 'snapshot unavailable',
                 'error': str(exc)[:200],
             },

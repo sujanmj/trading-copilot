@@ -46,8 +46,8 @@ def prepare_local_env() -> None:
     """Apply deterministic local defaults before backend boot."""
     os.environ.setdefault('LOCAL_DEV_MODE', '1')
     os.environ.setdefault('HOST', '127.0.0.1')
-    os.environ.setdefault('PORT', '8000')
-    os.environ.setdefault('API_BASE_URL', 'http://127.0.0.1:8000')
+    os.environ.setdefault('PORT', '8080')
+    os.environ.setdefault('API_BASE_URL', 'http://127.0.0.1:8080')
     os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
     os.environ.setdefault('PYTHONUTF8', '1')
     os.environ.setdefault('TZ', 'Asia/Kolkata')

@@ -921,9 +921,10 @@
   // ============================================================
   // API CONFIG — Railway production (override via keys.env / env vars)
   // ============================================================
-  const DEFAULT_API_BASE = 'https://web-production-0592e.up.railway.app'
+  const LOCAL_API_BASE = 'http://127.0.0.1:8080'
+  const REMOTE_API_BASE = 'https://web-production-0592e.up.railway.app'
   const USE_API = true
-  const API_BASE = process.env.API_BASE_URL || DEFAULT_API_BASE
+  const API_BASE = process.env.API_BASE_URL || LOCAL_API_BASE || REMOTE_API_BASE
   const API_KEY = process.env.API_KEY || ''
   let localAuthBypass = API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')
 

@@ -6,9 +6,9 @@ REM ============================================================
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-set PORT=8000
+set PORT=8080
 set HOST=127.0.0.1
-set API_BASE_URL=http://localhost:8000
+set API_BASE_URL=http://localhost:8080
 set PYTHONIOENCODING=utf-8
 set PYTHONUTF8=1
 
@@ -32,6 +32,6 @@ echo.
 echo Legacy split mode: uvicorn + npm in separate windows below...
 start "Copilot-Backend-Local" cmd /k "set TZ=Asia/Kolkata&& %PYTHON% -m uvicorn backend.api.api_server:app --host 127.0.0.1 --port %PORT%"
 timeout /t 5 /nobreak >nul
-where npm >nul 2>&1 && start "Copilot-GUI" cmd /k "cd /d %~dp0frontend&& set API_BASE_URL=http://localhost:8000&& npm start"
-echo Local dev started. Set API_BASE_URL=http://localhost:8000 in config\keys.env for GUI.
+where npm >nul 2>&1 && start "Copilot-GUI" cmd /k "cd /d %~dp0frontend&& set API_BASE_URL=http://localhost:8080&& npm start"
+echo Local dev started. Set API_BASE_URL=http://localhost:8080 in config\keys.env for GUI.
 pause

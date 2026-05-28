@@ -1,6 +1,6 @@
 /**
  * Headless startup smoke test — run with Electron to capture renderer console.
- * Usage: $env:API_BASE_URL='http://127.0.0.1:8000'; npx electron smoke-test.js
+ * Usage: $env:API_BASE_URL='http://127.0.0.1:8080'; npx electron smoke-test.js
  */
 const { app, BrowserWindow } = require('electron')
 const path = require('path')

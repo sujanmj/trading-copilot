@@ -33,7 +33,7 @@ IS_RAILWAY = bool(
 )
 
 # ── API (Railway sets PORT; bind 0.0.0.0 in production) ───────────────────
-API_PORT = int(os.environ.get('PORT', 8000))
+API_PORT = int(os.environ.get('PORT', 8080))
 API_HOST = os.environ.get('HOST', '0.0.0.0')
 API_BASE_URL = os.environ.get('API_BASE_URL', '').rstrip('/')
 
