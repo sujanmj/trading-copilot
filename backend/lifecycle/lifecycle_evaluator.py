@@ -115,6 +115,12 @@ def _evaluate_one_prediction(
     signal_type = pred.get('signal_type') or 'breakout'
     style = infer_trade_style(pred, signal_type, horizon)
     state = _prediction_state(pred)
+    old_canon = state
+    try:
+        from backend.lifecycle.prediction_reconciliation import normalize_canonical_state
+        old_canon = normalize_canonical_state(state)
+    except Exception:
+        pass
     at_eod = force_eod or is_past_market_close_for_prediction(pred_date_str)
 
     if should_expire_by_style(
@@ -263,6 +269,22 @@ def _evaluate_one_prediction(
     target_hit = _normalize_sqlite_value(target_hit, 'target_hit')
     stop_hit = _normalize_sqlite_value(stop_hit, 'stop_loss_hit')
     verdict = _normalize_sqlite_value(verdict, 'verdict')
+
+    try:
+        from backend.lifecycle.prediction_reconciliation import (
+            log_lifecycle_transition,
+            normalize_canonical_state,
+        )
+        new_canon = normalize_canonical_state(verdict)
+        if new_canon != old_canon:
+            log_lifecycle_transition(
+                pred.get('id'),
+                old_canon,
+                new_canon,
+                resolution_reason=failure or f'eval_{horizon}',
+            )
+    except Exception:
+        pass
 
     conn.execute("""
         UPDATE outcomes SET

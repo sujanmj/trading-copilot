@@ -42,7 +42,10 @@ def empty_history_output():
         'start_date': _ist_today().isoformat(),
         'end_date': _ist_today().isoformat(),
         'days_count': 1,
-        'stats': {'total': 0, 'wins': 0, 'losses': 0, 'neutral': 0, 'pending': 0, 'evaluated': 0, 'win_rate': 0},
+        'stats': {
+            'total': 0, 'wins': 0, 'losses': 0, 'neutral': 0, 'pending': 0,
+            'evaluated': 0, 'resolved': 0, 'expired': 0, 'neutralized': 0, 'win_rate': 0,
+        },
         'top_winners': [],
         'top_losers': [],
         'timeline': [],
@@ -186,21 +189,27 @@ def get_context_snapshots(days=30):
 
 
 def calculate_period_stats(predictions):
-    total = len(predictions)
-    if total == 0:
-        return {'total': 0, 'wins': 0, 'losses': 0, 'neutral': 0, 'pending': 0, 'evaluated': 0, 'win_rate': 0}
-    wins = sum(1 for p in predictions if p.get('verdict') == 'WIN')
-    losses = sum(1 for p in predictions if p.get('verdict') == 'LOSS')
-    neutral = sum(1 for p in predictions if p.get('verdict') == 'NEUTRAL')
-    pending = sum(1 for p in predictions if p.get('verdict') in [None, 'PENDING', ''])
-    from backend.lifecycle.win_rate_engine import compute_win_rate
-    evaluated = wins + losses
-    win_rate = compute_win_rate(wins, losses)
-    return {
-        'total': total, 'wins': wins, 'losses': losses,
-        'neutral': neutral, 'pending': pending,
-        'evaluated': evaluated, 'win_rate': win_rate,
-    }
+    from backend.lifecycle.prediction_reconciliation import (
+        aggregate_period_stats,
+        dedupe_prediction_records,
+        validate_prediction_lifecycle,
+    )
+
+    unique = dedupe_prediction_records(predictions)
+    if not unique:
+        return {
+            'total': 0, 'wins': 0, 'losses': 0, 'neutral': 0, 'pending': 0,
+            'evaluated': 0, 'resolved': 0, 'expired': 0, 'neutralized': 0,
+            'win_rate': 0,
+        }
+    report = validate_prediction_lifecycle(unique)
+    stats = aggregate_period_stats(unique)
+    if not report.get('valid'):
+        stats['lifecycle_valid'] = False
+        stats['lifecycle_issues'] = (report.get('issues') or [])[:10]
+    else:
+        stats['lifecycle_valid'] = True
+    return stats
 
 
 def get_top_winners(predictions, limit=10):
@@ -318,16 +327,22 @@ def build_export():
             print("=" * 60)
             return output
 
+        from backend.lifecycle.prediction_reconciliation import (
+            dedupe_prediction_records,
+            normalize_canonical_state,
+        )
+        all_predictions = dedupe_prediction_records(all_predictions)
+
         sector_stats = defaultdict(lambda: {'total': 0, 'wins': 0, 'losses': 0, 'pending': 0})
         for p in all_predictions:
             sector = p.get('sector') or 'UNKNOWN'
             sector_stats[sector]['total'] += 1
-            verdict = p.get('verdict')
-            if verdict == 'WIN':
+            canon = normalize_canonical_state(p.get('verdict'), state=p.get('state'))
+            if canon == 'WIN':
                 sector_stats[sector]['wins'] += 1
-            elif verdict == 'LOSS':
+            elif canon == 'LOSS':
                 sector_stats[sector]['losses'] += 1
-            else:
+            elif canon == 'ACTIVE':
                 sector_stats[sector]['pending'] += 1
 
         sectors_list = []

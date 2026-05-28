@@ -748,8 +748,11 @@
     const bootCached = loadSnapshotCache();
     if (bootCached) {
       usingStaleCache = true;
-      applySnapshot(bootCached, ++fetchSeq, { force: true, staleCache: true, bootCache: true });
+      const bootApplied = applySnapshot(bootCached, ++fetchSeq, { force: true, staleCache: true, bootCache: true });
       console.log('[RuntimeManager] boot hydrated from stale cache');
+      if (bootApplied && bootApplied.ok && !isSnapshotMissing(bootCached)) {
+        markHydrationFinished(true);
+      }
       scheduleNotify({
         unchanged: false,
         hydrationComplete: true,
@@ -757,7 +760,9 @@
         bootCache: true,
       });
     }
-    setHydrationPhase(HYDRATION_WARMING_UP);
+    if (!hydrationFinished) {
+      setHydrationPhase(HYDRATION_WARMING_UP);
+    }
     refresh({ force: true }).catch((e) => {
       console.error('[Hydration] hydration fail — initial refresh', e);
       if (!state) {
@@ -1177,7 +1182,10 @@
 
   function runtimeDegradedBannerHtml() {
     if (hydrationPhase === HYDRATION_READY && !usingStaleCache && !lastFetchError) return '';
-    if (hydrationPhase === HYDRATION_WARMING_UP || hydrationPhase === HYDRATION_INITIALIZING) {
+    if (
+      !hydrationFinished
+      && (hydrationPhase === HYDRATION_WARMING_UP || hydrationPhase === HYDRATION_INITIALIZING)
+    ) {
       return '<div class="runtime-degraded-banner">Initializing intelligence runtime…</div>';
     }
     const parts = ['⚠ Runtime delayed'];

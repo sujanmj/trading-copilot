@@ -1113,7 +1113,12 @@
 
   function staleIntelligenceFallbackHtml(panelId) {
     const phase = window.RuntimeManager && RuntimeManager.getHydrationPhase ? RuntimeManager.getHydrationPhase() : ''
-    if (window.RuntimeManager && (phase === RuntimeManager.HYDRATION_WARMING_UP || phase === RuntimeManager.HYDRATION_INITIALIZING)) {
+    const hydrationDone = window.RuntimeManager && RuntimeManager.isHydrationFinished && RuntimeManager.isHydrationFinished()
+    if (
+      window.RuntimeManager
+      && !hydrationDone
+      && (phase === RuntimeManager.HYDRATION_WARMING_UP || phase === RuntimeManager.HYDRATION_INITIALIZING)
+    ) {
       return emptyStateHtml('Initializing intelligence runtime…', 'Snapshot warming up — tabs remain interactive.')
     }
     const usingStale = window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache()

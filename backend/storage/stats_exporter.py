@@ -284,6 +284,10 @@ def export_stats():
 
         from backend.lifecycle.unified_metrics import get_unified_snapshot
         agg = get_unified_snapshot()
+        lv = agg.get('lifecycle_validation') or {}
+        if lv and not lv.get('valid'):
+            safe_print(f"[WARN] lifecycle validation issues: {(lv.get('issues') or [])[:5]}")
+        output['lifecycle_validation'] = lv
         output['db_stats'] = agg.get('db_stats') or output['db_stats']
         output['metrics_all_time'] = agg.get('metrics_all_time') or output['metrics_all_time']
         output['metrics_weekly'] = agg.get('metrics_weekly') or output['metrics_weekly']

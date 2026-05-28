@@ -6,33 +6,30 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-ACTIVE = 'ACTIVE'
-RESOLVED_WIN = 'RESOLVED_WIN'
-RESOLVED_LOSS = 'RESOLVED_LOSS'
-EXPIRED = 'EXPIRED'
-NEUTRALIZED = 'NEUTRALIZED'
-CANCELLED = 'CANCELLED'
+from backend.lifecycle.prediction_reconciliation import (
+    ACTIVE,
+    CANCELLED,
+    CANONICAL_STATES,
+    EXPIRED,
+    LOSS,
+    NEUTRALIZED,
+    TERMINAL_STATES,
+    WIN,
+    aggregate_period_stats,
+    log_lifecycle_transition,
+    normalize_canonical_state,
+    validate_prediction_lifecycle,
+)
 
-CANONICAL_TERMINAL = frozenset({RESOLVED_WIN, RESOLVED_LOSS, EXPIRED, NEUTRALIZED, CANCELLED})
+RESOLVED_WIN = WIN
+RESOLVED_LOSS = LOSS
+
+CANONICAL_TERMINAL = TERMINAL_STATES
 CANONICAL_ACTIVE = frozenset({ACTIVE})
 
-_VERDICT_MAP = {
-    'ACTIVE': ACTIVE,
-    'PENDING': ACTIVE,
-    'WIN': RESOLVED_WIN,
-    'LOSS': RESOLVED_LOSS,
-    'PARTIAL': RESOLVED_WIN,
-    'NEUTRAL': NEUTRALIZED,
-    'EXPIRED': EXPIRED,
-    'INVALIDATED': EXPIRED,
-    'CANCELLED': CANCELLED,
-    'UNRESOLVED': ACTIVE,
-}
-
-
 def to_canonical(verdict: Optional[str]) -> str:
-    key = (verdict or 'ACTIVE').upper().strip()
-    return _VERDICT_MAP.get(key, ACTIVE)
+    """Map legacy verdict strings to canonical lifecycle (reconciliation module)."""
+    return normalize_canonical_state(verdict)
 
 
 def is_resolved_for_win_rate(verdict: Optional[str]) -> bool:

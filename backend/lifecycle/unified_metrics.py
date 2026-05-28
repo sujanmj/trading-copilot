@@ -278,6 +278,7 @@ def get_unified_snapshot() -> Dict[str, Any]:
     )
     all_time = {**all_time, 'sections': sections}
     daily = {**daily, 'sections': sections}
+    lifecycle_validation = _validate_sqlite_lifecycle()
     return {
         'generated_at': datetime.now().isoformat(),
         'source': 'sqlite_unified_metrics',
@@ -292,7 +293,27 @@ def get_unified_snapshot() -> Dict[str, Any]:
         'partition_validation': __import__(
             'backend.lifecycle.eod_reconciliation_engine', fromlist=['validate_metrics_partition']
         ).validate_metrics_partition(),
+        'lifecycle_validation': lifecycle_validation,
     }
+
+
+def _validate_sqlite_lifecycle() -> Dict[str, Any]:
+    """Reconcile raw prediction rows — export/API must not use frontend-derived counts."""
+    init_db()
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT p.id, o.verdict, o.verdict AS state
+            FROM predictions p
+            LEFT JOIN outcomes o ON o.source_type='prediction' AND o.source_id=p.id
+            """
+        ).fetchall()
+        records = [dict(r) for r in rows]
+    finally:
+        conn.close()
+    from backend.lifecycle.prediction_reconciliation import validate_prediction_lifecycle
+    return validate_prediction_lifecycle(records)
 
 
 def get_metrics_for_telegram() -> Dict[str, Any]:
