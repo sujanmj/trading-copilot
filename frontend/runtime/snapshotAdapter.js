@@ -173,9 +173,13 @@
     if (!isObject(raw)) {
       console.warn(LOG_PREFIX, 'invalid payload — using empty normalized snapshot');
       return {
+        snapshot_id: `snapshot_${Date.now()}`,
+        generated_at: new Date().toISOString(),
+        action_plan: '',
+        intelligence: {},
         meta: {
-          snapshotId: null,
-          generatedAt: null,
+          snapshotId: `snapshot_${Date.now()}`,
+          generatedAt: new Date().toISOString(),
           version: null,
           status: 'degraded',
           stale: true,
@@ -201,11 +205,30 @@
     const globalNorm = normalizeGlobal(raw);
     const shape = collectWarnings(raw, exportsNorm, brain);
 
+    const snapshotId = pickField(raw, ['snapshot_id', 'active_snapshot_id', 'id'], null)
+      || pickField(ms, ['snapshot_id'], null)
+      || `snapshot_${Date.now()}`;
+    const generatedAt = pickField(raw, ['generated_at', 'timestamp'], null)
+      || pickField(ms, ['generated_at'], null)
+      || new Date().toISOString();
+    const actionPlanRaw = raw.action_plan || raw.positioning || ms.action_plan || brain.actionPlan || '';
+    const intelligenceRaw = exportsNorm.intelligence
+      || unwrapExport(pickField(raw, ['intelligence', 'summary'], null))
+      || ms.intelligence
+      || {};
+
+    if (!exportsNorm.intelligence && intelligenceRaw) {
+      exportsNorm.intelligence = intelligenceRaw;
+    }
+
     return {
+      snapshot_id: snapshotId,
+      generated_at: generatedAt,
+      action_plan: actionPlanRaw,
+      intelligence: intelligenceRaw,
       meta: {
-        snapshotId: pickField(raw, ['snapshot_id', 'active_snapshot_id'], null)
-          || pickField(ms, ['snapshot_id'], null),
-        generatedAt: pickField(raw, ['generated_at'], null) || pickField(ms, ['generated_at'], null),
+        snapshotId,
+        generatedAt,
         version: raw.snapshot_version != null ? raw.snapshot_version
           : ((ms.freshness || {}).snapshot_version ?? null),
         status: asString(raw.status || raw.primary_state, 'unknown'),
@@ -219,7 +242,7 @@
       global: globalNorm,
       marketSnapshot: ms,
       panels: normalizePanels(raw),
-      actionPlan: brain.actionPlan,
+      actionPlan: typeof actionPlanRaw === 'string' ? actionPlanRaw : (brain.actionPlan || ''),
       calibrationSummary: isObject(raw.calibration_summary) ? raw.calibration_summary : {},
       operational: isObject(raw.operational) ? raw.operational : {},
       raw,

@@ -56,13 +56,24 @@
   let hydrationFinished = false;
 
   function stableHash(value) {
-    const text = typeof value === 'string' ? value : JSON.stringify(value);
-    let hash = 5381;
-    for (let i = 0; i < text.length; i += 1) {
-      hash = ((hash << 5) + hash) + text.charCodeAt(i);
-      hash &= 0xffffffff;
+    if (value === undefined || value === null) {
+      return 'empty';
     }
-    return String(hash >>> 0);
+
+    if (typeof value !== 'string') {
+      value = JSON.stringify(value || {});
+    }
+
+    value = String(value);
+
+    let hash = 0;
+
+    for (let i = 0; i < value.length; i += 1) {
+      hash = ((hash << 5) - hash) + value.charCodeAt(i);
+      hash |= 0;
+    }
+
+    return hash.toString();
   }
 
   function computePanelHashes(snapshot) {
@@ -88,15 +99,20 @@
   }
 
   function computeSnapshotHash(snapshot) {
-    const panels = computePanelHashes(snapshot);
-    const meta = {
-      generated_at: snapshot && snapshot.generated_at,
-      active_snapshot_id: snapshot && snapshot.active_snapshot_id,
-      snapshot_version: snapshot && snapshot.snapshot_version,
-      snapshot_id: snapshot && snapshot.snapshot_id,
-      panels: snapshot && snapshot.panels,
-    };
-    return stableHash({ panels, meta });
+    try {
+      const panels = computePanelHashes(snapshot);
+      const meta = {
+        generated_at: snapshot && snapshot.generated_at,
+        active_snapshot_id: snapshot && snapshot.active_snapshot_id,
+        snapshot_version: snapshot && snapshot.snapshot_version,
+        snapshot_id: snapshot && snapshot.snapshot_id,
+        panels: snapshot && snapshot.panels,
+      };
+      return stableHash({ panels, meta });
+    } catch (err) {
+      console.warn('[RuntimeManager] snapshot hash skipped', err && err.message ? err.message : err);
+      return 'fallback';
+    }
   }
 
   function setHydrationPhase(phase) {
@@ -273,13 +289,13 @@
     const out = { ...intel };
     if (ms.action_plan) out.action_plan = ms.action_plan;
     else if (snapshot.action_plan) out.action_plan = snapshot.action_plan;
-    if (ms.sector_rotation && Object.keys(ms.sector_rotation).length) {
+    if (ms.sector_rotation && Object.keys(ms.sector_rotation || {}).length) {
       out.sector_rotation = ms.sector_rotation;
     }
-    if (Array.isArray(ms.top_opportunities) && ms.top_opportunities.length) {
+    if (Array.isArray(ms.top_opportunities) && (ms.top_opportunities || []).length) {
       out.top_opportunities = ms.top_opportunities;
     }
-    if (Array.isArray(ms.risk_list) && ms.risk_list.length) {
+    if (Array.isArray(ms.risk_list) && (ms.risk_list || []).length) {
       out.risks_and_avoids = ms.risk_list;
     }
     if (ms.executive_summary) out.executive_summary = ms.executive_summary;
@@ -451,8 +467,8 @@
 
     global.runtimeSnapshot = snapshot;
     normalizedState = normalizeRawSnapshot(snapshot);
-    if (normalizedState && normalizedState.meta && normalizedState.meta.missingFields.length) {
-      console.warn('[RuntimeManager] normalized snapshot missing:', normalizedState.meta.missingFields.join(', '));
+    if (normalizedState && normalizedState.meta && (normalizedState.meta.missingFields || []).length) {
+      console.warn('[RuntimeManager] normalized snapshot missing:', (normalizedState.meta.missingFields || []).join(', '));
     }
 
     const exports = snapshot.exports || snapshot.data || {};
@@ -471,8 +487,16 @@
       invalidateCache('gui_sync_stale');
     }
 
-    const nextHash = computeSnapshotHash(snapshot);
-    const nextPanelHashes = computePanelHashes(snapshot);
+    let nextHash = 'fallback';
+    let nextPanelHashes = {};
+    try {
+      nextHash = computeSnapshotHash(snapshot);
+      nextPanelHashes = computePanelHashes(snapshot);
+    } catch (err) {
+      console.warn('[RuntimeManager] snapshot hash skipped', err && err.message ? err.message : err);
+      nextHash = 'fallback';
+      nextPanelHashes = {};
+    }
     const unchanged = !opts.force && nextHash === lastSnapshotHash;
 
     state = snapshot;
