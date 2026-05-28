@@ -64,6 +64,12 @@ def run_history_export() -> Dict[str, Any]:
     from backend.history.replay_integrity import validate_history_export
     from backend.storage.history_exporter import build_export
 
+    try:
+        from backend.lifecycle.prediction_state_migration import ensure_prediction_states_on_startup
+        ensure_prediction_states_on_startup()
+    except Exception as exc:
+        update_history_heartbeat(status='running', detail=f'migration guard: {exc}'[:200])
+
     update_history_heartbeat(status='running', detail='export started')
     try:
         output = build_export()

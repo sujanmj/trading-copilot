@@ -31,13 +31,29 @@ _VERDICT_TO_CANONICAL = {
     'WIN': WIN,
     'LOSS': LOSS,
     'EXPIRED': EXPIRED,
-    'INVALIDATED': EXPIRED,
     'ARCHIVED': EXPIRED,
+    'STALE': EXPIRED,
+    'TIMEOUT': EXPIRED,
+    'INVALIDATED': NEUTRALIZED,
+    'INVALID': NEUTRALIZED,
     'NEUTRAL': NEUTRALIZED,
     'NEUTRALIZED': NEUTRALIZED,
-    'STALE': NEUTRALIZED,
     'UNKNOWN': NEUTRALIZED,
     'CANCELLED': NEUTRALIZED,
+}
+
+# Raw SQLite/JSON verdict strings that require one-time or startup normalization
+LEGACY_STORAGE_VERDICTS = frozenset({
+    'PENDING', 'UNRESOLVED', 'PARTIAL', 'STALE', 'ARCHIVED', 'TIMEOUT',
+    'UNKNOWN', 'INVALIDATED', 'INVALID', 'CANCELLED',
+})
+
+_CANONICAL_TO_STORAGE = {
+    WIN: 'WIN',
+    LOSS: 'LOSS',
+    ACTIVE: 'ACTIVE',
+    EXPIRED: 'EXPIRED',
+    NEUTRALIZED: 'NEUTRAL',
 }
 
 
@@ -49,8 +65,19 @@ def normalize_canonical_state(
     """Map raw verdict/state to exactly one canonical lifecycle bucket."""
     raw = (verdict or state or '').strip().upper()
     if not raw:
-        return ACTIVE
+        return NEUTRALIZED
     return _VERDICT_TO_CANONICAL.get(raw, NEUTRALIZED)
+
+
+def canonical_to_storage_verdict(canonical: str) -> str:
+    """Map canonical partition state to outcomes.verdict column value."""
+    return _CANONICAL_TO_STORAGE.get(canonical, 'NEUTRAL')
+
+
+def is_legacy_storage_verdict(verdict: Optional[str]) -> bool:
+    if verdict is None:
+        return True
+    return str(verdict).strip().upper() in LEGACY_STORAGE_VERDICTS
 
 
 def log_lifecycle_transition(
