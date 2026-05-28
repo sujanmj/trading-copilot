@@ -1,19 +1,20 @@
 {
   "date": "2026-05-28",
-  "generated_at": "2026-05-28T16:59:10.420601",
+  "generated_at": "2026-05-28T17:39:36.242429",
   "providers": {
     "gemini": {
       "provider": "gemini",
-      "requests_today": 2,
+      "requests_today": 3,
       "requests_per_hour": {
-        "16": 2
+        "16": 2,
+        "17": 1
       },
-      "avg_latency_ms": 5560.1,
-      "failovers": 3,
+      "avg_latency_ms": 5178.6,
+      "failovers": 6,
       "cooldown_activations": 0,
-      "quota_failures": 1,
+      "quota_failures": 2,
       "success_rate_pct": 0.0,
-      "degraded_count": 2,
+      "degraded_count": 3,
       "fallback_count": 0,
       "cache_hits": 0,
       "uptime_score": 0.0
@@ -59,6 +60,6 @@
     "No degraded-mode activations recorded.",
     "Claude reserved — no strategic synthesis runs."
   ],
-  "ai_uptime_pct": 33.3,
-  "total_requests": 3
+  "ai_uptime_pct": 25.0,
+  "total_requests": 4
 }

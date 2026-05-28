@@ -1,7 +1,7 @@
 /**
  * RuntimeManager — single coordinated refresh loop + shared runtime state.
  * All intelligence tabs subscribe here instead of polling independently.
- * Hydrates exclusively from GET /api/runtime/snapshot.
+ * Hydrates exclusively from GET /api/runtime_snapshot.
  */
 (function (global) {
   'use strict';
@@ -9,7 +9,7 @@
   const DEFAULT_POLL_MS = 30000;
   const MIN_REFRESH_GAP_MS = 4000;
   const NOTIFY_DEBOUNCE_MS = 80;
-  const SNAPSHOT_ENDPOINT = '/api/runtime/snapshot';
+  const SNAPSHOT_ENDPOINT = '/api/runtime_snapshot';
 
   let config = {
     getApiBase: () => '',
