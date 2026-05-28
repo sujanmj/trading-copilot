@@ -188,10 +188,10 @@ def get_context_snapshots(days=30):
     return [dict(r) for r in rows]
 
 
-def calculate_period_stats(predictions):
+def calculate_period_stats(predictions, *, source: str = 'history_export'):
     from backend.lifecycle.prediction_reconciliation import (
-        aggregate_period_stats,
         dedupe_prediction_records,
+        reconcile_prediction_stats,
         validate_prediction_lifecycle,
     )
 
@@ -200,15 +200,13 @@ def calculate_period_stats(predictions):
         return {
             'total': 0, 'wins': 0, 'losses': 0, 'neutral': 0, 'pending': 0,
             'evaluated': 0, 'resolved': 0, 'expired': 0, 'neutralized': 0,
-            'win_rate': 0,
+            'win_rate': 0, 'reconciliation_valid': True,
         }
     report = validate_prediction_lifecycle(unique)
-    stats = aggregate_period_stats(unique)
-    if not report.get('valid'):
-        stats['lifecycle_valid'] = False
+    stats = reconcile_prediction_stats(unique, source=source)
+    stats['lifecycle_valid'] = bool(report.get('valid')) and stats.get('reconciliation_valid', True)
+    if not stats['lifecycle_valid']:
         stats['lifecycle_issues'] = (report.get('issues') or [])[:10]
-    else:
-        stats['lifecycle_valid'] = True
     return stats
 
 

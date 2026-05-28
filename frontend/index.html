@@ -3005,11 +3005,13 @@
     html += `
       <div class="history-summary-card" id="historyTimelineSummary">
         <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">${escapeHtml(period.label || currentPeriod)}</div>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">TOTAL</div><div style="font-size:18px;font-weight:bold;color:#88ccff;">${stats.total || 0}</div></div>
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00E676;">${stats.wins || 0}</div></div>
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#FF3D00;">${stats.losses || 0}</div></div>
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${stats.pending || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">EXPIRED</div><div style="font-size:18px;font-weight:bold;color:#8B949E;">${stats.expired || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:8px;color:#8B949E;">NEUTRALIZED</div><div style="font-size:18px;font-weight:bold;color:#B0BEC5;">${stats.neutralized || stats.neutral || 0}</div></div>
           <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRateConfident ? (winRateNumeric >= 60 ? '#00E676' : winRateNumeric >= 40 ? '#ffaa00' : '#FF3D00') : '#8B949E'};">${escapeHtml(winRateLabel)}</div></div>
         </div>
       </div>

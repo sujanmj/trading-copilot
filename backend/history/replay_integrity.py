@@ -35,9 +35,10 @@ def validate_history_export(output: dict) -> Tuple[bool, List[str]]:
         issues.append(f'db cross-check skipped: {exc}')
     for name, period in (periods or {}).items():
         stats = (period or {}).get('stats') or {}
-        wins = int(stats.get('wins') or 0)
-        losses = int(stats.get('losses') or 0)
-        evaluated = int(stats.get('evaluated') or 0)
-        if evaluated and wins + losses > evaluated + int(stats.get('neutral') or 0) + 5:
-            issues.append(f'period {name} stats inconsistent')
+        from backend.lifecycle.prediction_reconciliation import validate_prediction_totals
+        if not validate_prediction_totals(stats, source=f'history_export:{name}'):
+            issues.append(
+                f'period {name} reconciliation mismatch: total={stats.get("total")} '
+                f'partition={stats.get("reconciliation_partition")}'
+            )
     return (len(issues) == 0, issues)

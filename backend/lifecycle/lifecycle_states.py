@@ -18,7 +18,9 @@ from backend.lifecycle.prediction_reconciliation import (
     aggregate_period_stats,
     log_lifecycle_transition,
     normalize_canonical_state,
+    reconcile_prediction_stats,
     validate_prediction_lifecycle,
+    validate_prediction_totals,
 )
 
 RESOLVED_WIN = WIN

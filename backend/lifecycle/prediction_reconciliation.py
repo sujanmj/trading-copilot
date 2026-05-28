@@ -1,8 +1,8 @@
 """
 Canonical prediction lifecycle reconciliation — single state per prediction record.
 
-States: ACTIVE, WIN, LOSS, EXPIRED, NEUTRALIZED (+ CANCELLED for partition).
-All export/GUI period totals must use aggregate_period_stats() on raw SQLite rows only.
+Partition states: ACTIVE, WIN, LOSS, EXPIRED, NEUTRALIZED.
+All export/GUI period totals must use reconcile_prediction_stats() on raw SQLite rows only.
 """
 
 from __future__ import annotations
@@ -15,10 +15,13 @@ WIN = 'WIN'
 LOSS = 'LOSS'
 EXPIRED = 'EXPIRED'
 NEUTRALIZED = 'NEUTRALIZED'
+
+# Legacy alias kept for imports; maps to NEUTRALIZED at normalization time
 CANCELLED = 'CANCELLED'
 
-CANONICAL_STATES = frozenset({ACTIVE, WIN, LOSS, EXPIRED, NEUTRALIZED, CANCELLED})
-TERMINAL_STATES = frozenset({WIN, LOSS, EXPIRED, NEUTRALIZED, CANCELLED})
+PARTITION_STATES = frozenset({ACTIVE, WIN, LOSS, EXPIRED, NEUTRALIZED})
+CANONICAL_STATES = PARTITION_STATES
+TERMINAL_STATES = frozenset({WIN, LOSS, EXPIRED, NEUTRALIZED})
 
 _VERDICT_TO_CANONICAL = {
     'ACTIVE': ACTIVE,
@@ -29,9 +32,12 @@ _VERDICT_TO_CANONICAL = {
     'LOSS': LOSS,
     'EXPIRED': EXPIRED,
     'INVALIDATED': EXPIRED,
+    'ARCHIVED': EXPIRED,
     'NEUTRAL': NEUTRALIZED,
     'NEUTRALIZED': NEUTRALIZED,
-    'CANCELLED': CANCELLED,
+    'STALE': NEUTRALIZED,
+    'UNKNOWN': NEUTRALIZED,
+    'CANCELLED': NEUTRALIZED,
 }
 
 
@@ -44,7 +50,7 @@ def normalize_canonical_state(
     raw = (verdict or state or '').strip().upper()
     if not raw:
         return ACTIVE
-    return _VERDICT_TO_CANONICAL.get(raw, ACTIVE)
+    return _VERDICT_TO_CANONICAL.get(raw, NEUTRALIZED)
 
 
 def log_lifecycle_transition(
@@ -78,42 +84,75 @@ def dedupe_prediction_records(records: Iterable[dict]) -> List[dict]:
     return [seen[k] for k in order]
 
 
-def aggregate_period_stats(records: Iterable[dict]) -> Dict[str, Any]:
+def validate_prediction_totals(stats: Dict[str, Any], *, source: str = '') -> bool:
+    """Ensure total = wins + losses + pending + expired + neutralized."""
+    total = int(stats.get('total') or 0)
+    wins = int(stats.get('wins') or 0)
+    losses = int(stats.get('losses') or 0)
+    pending = int(stats.get('pending') or stats.get('active') or 0)
+    expired = int(stats.get('expired') or 0)
+    neutralized = int(stats.get('neutralized') or stats.get('neutral') or 0)
+    partition = wins + losses + pending + expired + neutralized
+    if partition != total:
+        src = f' source={source}' if source else ''
+        print(
+            f'[RECONCILIATION_ERROR]{src} total={total} '
+            f'wins={wins} losses={losses} pending={pending} '
+            f'expired={expired} neutralized={neutralized} partition={partition}',
+            flush=True,
+        )
+        stats['reconciliation_valid'] = False
+        stats['reconciliation_partition'] = partition
+        return False
+    stats['reconciliation_valid'] = True
+    stats['reconciliation_partition'] = partition
+    return True
+
+
+def reconcile_prediction_stats(
+    records: Iterable[dict],
+    *,
+    source: str = '',
+) -> Dict[str, Any]:
     """Recompute period totals from raw prediction rows only."""
     unique = dedupe_prediction_records(records)
-    counts = {s: 0 for s in CANONICAL_STATES}
+    counts = {s: 0 for s in PARTITION_STATES}
     for rec in unique:
         canon = normalize_canonical_state(rec.get('verdict'), state=rec.get('state'))
         counts[canon] = counts.get(canon, 0) + 1
 
-    total = len(unique)
     wins = counts[WIN]
     losses = counts[LOSS]
     pending = counts[ACTIVE]
     expired = counts[EXPIRED]
-    neutral = counts[NEUTRALIZED]
-    cancelled = counts[CANCELLED]
+    neutralized = counts[NEUTRALIZED]
+    total = wins + losses + pending + expired + neutralized
     resolved = wins + losses
-    evaluated = resolved + expired + neutral + cancelled
 
     from backend.lifecycle.win_rate_engine import compute_win_rate
 
-    return {
+    stats = {
         'total': total,
         'wins': wins,
         'losses': losses,
-        'neutral': neutral,
+        'neutral': neutralized,
         'pending': pending,
         'active': pending,
         'expired': expired,
-        'neutralized': neutral,
-        'cancelled': cancelled,
+        'neutralized': neutralized,
         'resolved': resolved,
-        'evaluated': evaluated,
+        'evaluated': resolved + expired + neutralized,
         'win_rate': compute_win_rate(wins, losses),
         'canonical_counts': counts,
-        'partition_sum': sum(counts.values()),
+        'partition_sum': total,
     }
+    validate_prediction_totals(stats, source=source)
+    return stats
+
+
+def aggregate_period_stats(records: Iterable[dict]) -> Dict[str, Any]:
+    """Backward-compatible alias for reconcile_prediction_stats."""
+    return reconcile_prediction_stats(records)
 
 
 def validate_prediction_lifecycle(records: Iterable[dict]) -> Dict[str, Any]:
@@ -137,11 +176,15 @@ def validate_prediction_lifecycle(records: Iterable[dict]) -> Dict[str, Any]:
             continue
         by_id[pid] = canon
 
-    counts = aggregate_period_stats(unique)
-    partition_sum = counts.get('partition_sum', 0)
-    total = counts.get('total', 0)
+    stats = reconcile_prediction_stats(unique)
+    partition_sum = stats.get('partition_sum', 0)
+    total = stats.get('total', 0)
     if partition_sum != total:
         issues.append(f'partition_mismatch:sum={partition_sum} total={total}')
+    if not stats.get('reconciliation_valid', True):
+        issues.append(
+            f'reconciliation_error:partition={stats.get("reconciliation_partition")} total={total}'
+        )
 
     raw_total = sum(1 for r in records if isinstance(r, dict))
     if raw_total > total:
@@ -151,8 +194,8 @@ def validate_prediction_lifecycle(records: Iterable[dict]) -> Dict[str, Any]:
         'valid': len(issues) == 0,
         'total': total,
         'partition_sum': partition_sum,
-        'counts': counts.get('canonical_counts') or {},
-        'stats': counts,
+        'counts': stats.get('canonical_counts') or {},
+        'stats': stats,
         'duplicate_ids': duplicates[:50],
         'issues': issues,
     }
