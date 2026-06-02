@@ -36,6 +36,10 @@ from backend.utils.bootstrap import setup_project_path
 
 setup_project_path()
 
+from backend.config.local_safe_mode import apply_railway_telegram_defaults
+
+apply_railway_telegram_defaults()
+
 from backend.utils.config import (
     IS_RAILWAY,
     IS_LOCAL_DEV,
@@ -44,6 +48,7 @@ from backend.utils.config import (
     DISABLE_TELEGRAM,
     DISABLE_TELEGRAM_LISTENER,
     DISABLE_TELEGRAM_SENDS,
+    DISABLE_LEGACY_TELEGRAM_LISTENER,
     PROJECT_ROOT,
     DATA_DIR,
     LOGS_DIR,
@@ -557,15 +562,23 @@ def _run_local_scheduler_loop():
             time.sleep(5)
 
 
+def _legacy_telegram_listener_disabled() -> bool:
+    return DISABLE_TELEGRAM or DISABLE_TELEGRAM_LISTENER or DISABLE_LEGACY_TELEGRAM_LISTENER
+
+
 def _telegram_listener_disabled() -> bool:
-    return DISABLE_TELEGRAM or DISABLE_TELEGRAM_LISTENER
+    return _legacy_telegram_listener_disabled()
 
 
 def _log_telegram_disabled(component: str = 'listener') -> None:
+    if DISABLE_LEGACY_TELEGRAM_LISTENER and not (DISABLE_TELEGRAM or DISABLE_TELEGRAM_LISTENER):
+        print('LEGACY_TELEGRAM_LISTENER_DISABLED', flush=True)
+        return
     print(
         f'[TELEGRAM DISABLED] {component} not started '
         f'(DISABLE_TELEGRAM={int(DISABLE_TELEGRAM)} '
         f'DISABLE_TELEGRAM_LISTENER={int(DISABLE_TELEGRAM_LISTENER)} '
+        f'DISABLE_LEGACY_TELEGRAM_LISTENER={int(DISABLE_LEGACY_TELEGRAM_LISTENER)} '
         f'DISABLE_TELEGRAM_SENDS={int(DISABLE_TELEGRAM_SENDS)})',
         flush=True,
     )
@@ -837,6 +850,27 @@ def api_config():
 @app.get("/api/health")
 def health():
     return _build_health_payload()
+
+
+@app.get("/api/debug/build-info")
+def api_debug_build_info():
+    """Deployment build identity — handler selection and data root."""
+    from backend.config.local_safe_mode import is_railway_mode
+    from backend.storage.data_paths import get_data_root
+
+    app_mode = os.environ.get('APP_MODE', '').strip().lower()
+    if not app_mode:
+        app_mode = 'railway' if is_railway_mode() else 'local'
+    data_root = get_data_root()
+    legacy_active = not _legacy_telegram_listener_disabled()
+    return sanitize_json_value({
+        'app': 'AstraEdge',
+        'stage': '46D',
+        'telegram_handler': 'astraedge_analysis_bot',
+        'legacy_telegram_listener': legacy_active,
+        'app_mode': app_mode,
+        'data_root': str(data_root).replace('\\', '/'),
+    })
 
 
 def _load_explanations_light() -> dict:

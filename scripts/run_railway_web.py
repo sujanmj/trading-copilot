@@ -22,12 +22,14 @@ _RAILWAY_WEB_DEFAULTS = {
     'TZ': 'Asia/Kolkata',
     'PYTHONIOENCODING': 'utf-8',
     'PYTHONUTF8': '1',
+    'DISABLE_LEGACY_TELEGRAM_LISTENER': '1',
 }
 for _key, _val in _RAILWAY_WEB_DEFAULTS.items():
     os.environ.setdefault(_key, _val)
 
 if not os.environ.get('ENABLE_TELEGRAM_IN_WEB', '').strip().lower() in ('1', 'true', 'yes', 'on'):
     os.environ.setdefault('DISABLE_TELEGRAM_LISTENER', '1')
+    os.environ.setdefault('DISABLE_LEGACY_TELEGRAM_LISTENER', '1')
 
 try:
     sys.stdout.reconfigure(encoding='utf-8')
@@ -62,11 +64,18 @@ def main() -> int:
         'yes',
         'on',
     )
+    legacy_disabled = os.environ.get('DISABLE_LEGACY_TELEGRAM_LISTENER', '').strip().lower() in (
+        '1',
+        'true',
+        'yes',
+        'on',
+    )
 
     print('[RAILWAY_WEB] starting API service', flush=True)
     print(f'[RAILWAY_WEB] host={host} port={port}', flush=True)
     print(f'[RAILWAY_WEB] data_root={get_data_root()}', flush=True)
     print(f'[RAILWAY_WEB] telegram_listener_disabled={listener_disabled}', flush=True)
+    print(f'[RAILWAY_WEB] legacy_telegram_listener_disabled={legacy_disabled}', flush=True)
     print(f'[RAILWAY_WEB] trade_execution_disabled={TRADE_EXECUTION_PERMANENTLY_DISABLED}', flush=True)
 
     uvicorn.run(
