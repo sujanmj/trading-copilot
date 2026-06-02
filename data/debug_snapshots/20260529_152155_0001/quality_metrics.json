@@ -1,0 +1,27 @@
+{
+  "quality": {
+    "information_retention_score": 0.966,
+    "contradiction_retention_score": 1.0,
+    "sentiment_preservation_score": 0.83,
+    "sentiment_diversity_score": 0.667,
+    "minority_signal_retention_score": 0.15,
+    "truncation_severity": 1.0,
+    "compression_ratio": 1.198,
+    "intelligence_quality_score": 0.758,
+    "raw_evidence_chars": 696,
+    "novelty_avg_score": 4.54,
+    "repetition_suppressed_count": 56,
+    "primary_regime": "sideways"
+  },
+  "warnings": [],
+  "explanations": {
+    "why_claude_ran": "Claude ran via claude-sonnet-4-5",
+    "why_gemini_used": "Gemini failed — fallback token truncation",
+    "why_cache_skipped": "cache_miss: claude allowed — calling API",
+    "why_regime_changed": "Stable regime: sideways",
+    "why_signal_preserved": "9 high-impact signals bypass heavy compression (ULTRA/macro/SEBI).",
+    "why_signal_compressed": "Bulk sections lightly compressed — input below Gemini threshold.",
+    "contradiction_count": 0,
+    "disagreement_score": 0.0
+  }
+}

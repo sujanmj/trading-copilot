@@ -1,0 +1,101 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3826,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-01",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-01T17:03:56.361475",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3826,
+      "force": true
+    },
+    {
+      "time": "2026-06-01T17:04:47.935888",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "9dbb3eb0318eab31a348",
+    "delta_reasons": [
+      "govt_change",
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": -0.092,
+      "news_count": 142,
+      "govt_high_impact": 7,
+      "scanner_signals": 162,
+      "top_scanner_tickers": [
+        "INOXWIND",
+        "KPRMILL",
+        "NATCOPHARM",
+        "ZEEL",
+        "AEGISLOG"
+      ],
+      "scanner_signature": [
+        "('INOXWIND', 'ULTRA', -9.9)",
+        "('KPRMILL', 'ULTRA', 2.6)",
+        "('NATCOPHARM', 'ULTRA', -8.1)",
+        "('ZEEL', 'ULTRA', 2.9)",
+        "('AEGISLOG', 'ULTRA', 3.5)"
+      ],
+      "top_news_titles": [
+        "carvana is out: this high-yield cash cow is the ultimate inflation-beating buy r",
+        "ed arrests ex-kotak mahindra bank vp in panchkula municipal body 'fraud' case",
+        "ibm stock adds to quantum-powered rally. analyst says don't overlook software gr",
+        "indian firms line up for us tariff refunds amid looming legal challenge",
+        "inr slides further as renewed geopolitical tensions led to surge in crude oil pr",
+        "oil shock looms: brent jumps 7% as iran renews hormuz threat, adds bab el-mandeb"
+      ],
+      "reddit_sentiment": "neutral",
+      "reddit_confidence": 50,
+      "novelty_avg_score": 4.52,
+      "repetition_suppressed": 66
+    },
+    "source_hashes": {
+      "global_markets": "a566fb9af49cb541ec30",
+      "india_markets": "b55c81c47c33a6b6c111",
+      "news": "5ab5febcc6b63792d409",
+      "youtube": "9da71501201456f015fa",
+      "govt": "5e6ebf4e400f0238455a",
+      "inshorts": "aba49a890c80bf0e937a",
+      "reddit": "9622264f82b06490316d",
+      "telegram": "empty",
+      "scanner": "42e84a01d13e4d5cd959",
+      "twitter": "bd9c4708cc8bf59bf2a5",
+      "nse_filings": "86fa9abefa1d79eb7c39",
+      "composite": "b85782cf28eb76a46ec9"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

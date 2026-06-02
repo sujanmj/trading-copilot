@@ -1,0 +1,699 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nSCANNER ANOMALY | [ULTRA|BEARISH] ANDHRSUGAR Rs.80.9 -9.54% vol=2.1x | VOLUME_SPIKE + BREAKDOWN + GAP_DOWN\nSCANNER ANOMALY | [ULTRA|BULLISH] WOCKPHARMA Rs.2200.5 +8.32% vol=2.2x | VOLUME_SPIKE + BREAKOUT + GAP_UP\nGOVT ALERT | [9.0/10 BEARISH] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget | affects: IOC, BPCL, HPCL, RELIANCE\nGOVT ALERT | [7.0/10 BEARISH] India bonds dip as Middle East war woes add to policy week caution | affects: MACRO\nHEADLINE | [neutral] India Open: Nifty Gains as Banking Strength Offsets Oil Surge, Rupee Firms | source=Investing.com (Global Macro)\nHEADLINE | [neutral] Bank credit to industry rises at faster 15.1% in April, notes RBI data | source=Business Standard Markets\n  [evidence_meta] novelty_avg=4.548 repetition_suppressed=37 diversity_suppressed=18",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "scanner",
+        "ticker": "KPRMILL",
+        "label": "[ULTRA|BULLISH] KPRMILL +3.84%",
+        "confidence": 0.892,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.16,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NATCOPHARM",
+        "label": "[ULTRA|BEARISH] NATCOPHARM -7.27%",
+        "confidence": 0.918,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.07,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "INOXWIND",
+        "label": "[ULTRA|BEARISH] INOXWIND -8.30%",
+        "confidence": 0.92,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.16,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "WOCKPHARMA",
+        "label": "[ULTRA|BULLISH] WOCKPHARMA +8.32%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.05,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "AEGISLOG",
+        "label": "[ULTRA|BULLISH] AEGISLOG +2.71%",
+        "confidence": 0.882,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.79,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ANDHRSUGAR",
+        "label": "[ULTRA|BEARISH] ANDHRSUGAR -9.54%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.02,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "SAREGAMA",
+        "label": "[ULTRA|BULLISH] SAREGAMA +5.73%",
+        "confidence": 0.892,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.15,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "PERSISTENT",
+        "label": "[ULTRA|BULLISH] PERSISTENT +5.58%",
+        "confidence": 0.889,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.05,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "COFORGE",
+        "label": "[ULTRA|BULLISH] COFORGE +5.20%",
+        "confidence": 0.882,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.79,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JWL",
+        "label": "[ULTRA|BEARISH] JWL -5.14%",
+        "confidence": 0.881,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.75,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 8.5] India bonds dip as Middle East war woes add to policy week caution",
+        "confidence": 0.853,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 8.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 7.0] US Stock Market: Powell defends Fed autonomy as political pressure reaches new highs",
+        "confidence": 0.811,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 7.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ICICIBANK",
+        "label": "[GOVT 8.5] RBI set to hold rates on 5 June as war-driven inflation clouds outlook",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 8.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 7.5] Silver gains Rs 1,100/kg, gold down at Rs 1.54lakh/10 gms amid mixed Iran war signals. Key",
+        "confidence": 1.0,
+        "source_count": 9,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 6.0] Gold price today: Rate drops on MCX amid stronger dollar, higher oil prices; experts highl",
+        "confidence": 1.0,
+        "source_count": 7,
+        "agreement_score": 0.7,
+        "impact_score": 6.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] India Open: Nifty Gains as Banking Strength Offsets Oil Surge, Rupee Firms",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Bank credit to industry rises at faster 15.1% in April, notes RBI data",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Indian firms line up for US tariff refunds amid looming legal challenge",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Suzlon Energy shares fall over 2% after SEBI fines Rs 29 crore for misleading financial st",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Non-food bank credit gains around 16% on year",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Inflation and input costs threaten earnings momentum going forward: Dhananjay Sinha",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol | conf=1.00 sources=4 agree=0.70 impact=10.0 [BYPASS]\n  [GOVT 8.5] India bonds dip as Middle East war woes add to policy week caution | conf=0.85 sources=1 agree=0.70 impact=8.5 [BYPASS]\n  [GOVT 8.5] RBI set to hold rates on 5 June as war-driven inflation clouds outlook | conf=1.00 sources=3 agree=0.70 impact=8.5 [BYPASS]\n  [GOVT 7.5] Silver gains Rs 1,100/kg, gold down at Rs 1.54lakh/10 gms amid mixed Iran war signals. Key | conf=1.00 sources=9 agree=0.70 impact=7.5 [BYPASS]\n  [ULTRA|BEARISH] INOXWIND -8.30% | conf=0.92 sources=1 agree=1.00 impact=7.2 [BYPASS]\n  [ULTRA|BEARISH] NATCOPHARM -7.27% | conf=0.92 sources=1 agree=1.00 impact=7.1 [BYPASS]\n  [ULTRA|BULLISH] WOCKPHARMA +8.32% | conf=0.92 sources=1 agree=1.00 impact=7.0 [BYPASS]\n  [ULTRA|BEARISH] ANDHRSUGAR -9.54% | conf=0.92 sources=1 agree=1.00 impact=7.0 [BYPASS]\n  [GOVT 7.0] US Stock Market: Powell defends Fed autonomy as political pressure reaches new highs | conf=0.81 sources=1 agree=0.70 impact=7.0 [BYPASS]\n  [ULTRA|BULLISH] KPRMILL +3.84% | conf=0.89 sources=1 agree=1.00 impact=6.2 [BYPASS]\n  [ULTRA|BULLISH] SAREGAMA +5.73% | conf=0.89 sources=1 agree=1.00 impact=6.2 [BYPASS]\n  [ULTRA|BULLISH] PERSISTENT +5.58% | conf=0.89 sources=1 agree=1.00 impact=6.0 [BYPASS]\n  [GOVT 6.0] Gold price today: Rate drops on MCX amid stronger dollar, higher oil prices; experts highl | conf=1.00 sources=7 agree=0.70 impact=6.0\n  [ULTRA|BULLISH] AEGISLOG +2.71% | conf=0.88 sources=1 agree=1.00 impact=5.8 [BYPASS]\n  [ULTRA|BULLISH] COFORGE +5.20% | conf=0.88 sources=1 agree=1.00 impact=5.8 [BYPASS]\n  [ULTRA|BEARISH] JWL -5.14% | conf=0.88 sources=1 agree=1.00 impact=5.8 [BYPASS]\n  [neutral] India Open: Nifty Gains as Banking Strength Offsets Oil Surge, Rupee Firms | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Bank credit to industry rises at faster 15.1% i\n...[truncated for debug safety]...",
+    "bypass_items": [
+      {
+        "kind": "scanner",
+        "ticker": "KPRMILL",
+        "label": "[ULTRA|BULLISH] KPRMILL +3.84%",
+        "confidence": 0.892,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.16,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NATCOPHARM",
+        "label": "[ULTRA|BEARISH] NATCOPHARM -7.27%",
+        "confidence": 0.918,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.07,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "INOXWIND",
+        "label": "[ULTRA|BEARISH] INOXWIND -8.30%",
+        "confidence": 0.92,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.16,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "WOCKPHARMA",
+        "label": "[ULTRA|BULLISH] WOCKPHARMA +8.32%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.05,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "AEGISLOG",
+        "label": "[ULTRA|BULLISH] AEGISLOG +2.71%",
+        "confidence": 0.882,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.79,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ANDHRSUGAR",
+        "label": "[ULTRA|BEARISH] ANDHRSUGAR -9.54%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.02,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "SAREGAMA",
+        "label": "[ULTRA|BULLISH] SAREGAMA +5.73%",
+        "confidence": 0.892,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.15,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "PERSISTENT",
+        "label": "[ULTRA|BULLISH] PERSISTENT +5.58%",
+        "confidence": 0.889,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.05,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "COFORGE",
+        "label": "[ULTRA|BULLISH] COFORGE +5.20%",
+        "confidence": 0.882,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.79,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JWL",
+        "label": "[ULTRA|BEARISH] JWL -5.14%",
+        "confidence": 0.881,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.75,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 8.5] India bonds dip as Middle East war woes add to policy week caution",
+        "confidence": 0.853,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 8.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 7.0] US Stock Market: Powell defends Fed autonomy as political pressure reaches new highs",
+        "confidence": 0.811,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 7.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ICICIBANK",
+        "label": "[GOVT 8.5] RBI set to hold rates on 5 June as war-driven inflation clouds outlook",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 8.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 7.5] Silver gains Rs 1,100/kg, gold down at Rs 1.54lakh/10 gms amid mixed Iran war signals. Key",
+        "confidence": 1.0,
+        "source_count": 9,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] India Open: Nifty Gains as Banking Strength Offsets Oil Surge, Rupee Firms",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Bank credit to industry rises at faster 15.1% in April, notes RBI data",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Indian firms line up for US tariff refunds amid looming legal challenge",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Suzlon Energy shares fall over 2% after SEBI fines Rs 29 crore for misleading financial st",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Non-food bank credit gains around 16% on year",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Inflation and input costs threaten earnings momentum going forward: Dhananjay Sinha",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "scanner",
+      "ticker": "KPRMILL",
+      "label": "[ULTRA|BULLISH] KPRMILL +3.84%",
+      "confidence": 0.892,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.16,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "NATCOPHARM",
+      "label": "[ULTRA|BEARISH] NATCOPHARM -7.27%",
+      "confidence": 0.918,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.07,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "INOXWIND",
+      "label": "[ULTRA|BEARISH] INOXWIND -8.30%",
+      "confidence": 0.92,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.16,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "WOCKPHARMA",
+      "label": "[ULTRA|BULLISH] WOCKPHARMA +8.32%",
+      "confidence": 0.917,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.05,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "AEGISLOG",
+      "label": "[ULTRA|BULLISH] AEGISLOG +2.71%",
+      "confidence": 0.882,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.79,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "ANDHRSUGAR",
+      "label": "[ULTRA|BEARISH] ANDHRSUGAR -9.54%",
+      "confidence": 0.917,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.02,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "SAREGAMA",
+      "label": "[ULTRA|BULLISH] SAREGAMA +5.73%",
+      "confidence": 0.892,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.15,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "PERSISTENT",
+      "label": "[ULTRA|BULLISH] PERSISTENT +5.58%",
+      "confidence": 0.889,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.05,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "COFORGE",
+      "label": "[ULTRA|BULLISH] COFORGE +5.20%",
+      "confidence": 0.882,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.79,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "JWL",
+      "label": "[ULTRA|BEARISH] JWL -5.14%",
+      "confidence": 0.881,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.75,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "IOC",
+      "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+      "confidence": 1.0,
+      "source_count": 4,
+      "agreement_score": 0.7,
+      "impact_score": 10.0,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 8.5] India bonds dip as Middle East war woes add to policy week caution",
+      "confidence": 0.853,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 8.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 7.0] US Stock Market: Powell defends Fed autonomy as political pressure reaches new highs",
+      "confidence": 0.811,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 7.0,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "ICICIBANK",
+      "label": "[GOVT 8.5] RBI set to hold rates on 5 June as war-driven inflation clouds outlook",
+      "confidence": 1.0,
+      "source_count": 3,
+      "agreement_score": 0.7,
+      "impact_score": 8.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "IOC",
+      "label": "[GOVT 7.5] Silver gains Rs 1,100/kg, gold down at Rs 1.54lakh/10 gms amid mixed Iran war signals. Key",
+      "confidence": 1.0,
+      "source_count": 9,
+      "agreement_score": 0.7,
+      "impact_score": 7.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] India Open: Nifty Gains as Banking Strength Offsets Oil Surge, Rupee Firms",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Bank credit to industry rises at faster 15.1% in April, notes RBI data",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Indian firms line up for US tariff refunds amid looming legal challenge",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Suzlon Energy shares fall over 2% after SEBI fines Rs 29 crore for misleading financial st",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Non-food bank credit gains around 16% on year",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Inflation and input costs threaten earnings momentum going forward: Dhananjay Sinha",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=panic_volatile volatility=1.0 compression_mode=PRESERVE",
+    "Bypass: scanner KPRMILL impact=6.16",
+    "Bypass: scanner NATCOPHARM impact=7.07",
+    "Bypass: scanner INOXWIND impact=7.16",
+    "Bypass: scanner WOCKPHARMA impact=7.05",
+    "Bypass: scanner AEGISLOG impact=5.79",
+    "Bypass: scanner ANDHRSUGAR impact=7.02",
+    "Bypass: scanner SAREGAMA impact=6.15",
+    "Bypass: scanner PERSISTENT impact=6.05",
+    "Section 'news' expanded limit (6525 chars)",
+    "Section 'govt' expanded limit (6525 chars)",
+    "Section 'scanner' expanded limit (6525 chars)"
+  ],
+  "regime": {
+    "primary_regime": "panic_volatile",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.0,
+      "volatile": 0.35,
+      "high_risk": 0.42,
+      "risk_off": 0.35,
+      "regime_transition": 0.61,
+      "macro_uncertainty": 0.5,
+      "panic_volatile": 0.72
+    },
+    "volatility_index": 1.0,
+    "sentiment_instability": 0.829,
+    "news_shock_intensity": 0.375,
+    "scanner_anomaly_strength": 1.0,
+    "compression_aggressiveness": 0.22,
+    "regime_shift": false,
+    "previous_regime": "panic_volatile",
+    "regime_since": "2026-06-01T07:31:16.381823",
+    "summary_block": "=== MARKET REGIME ===\n  Primary: PANIC VOLATILE | volatility=1.00\n  Persistence: 29m in current regime\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.22)\n  Signals: news_shock=0.38 sentiment_instability=0.83 scanner_anomaly=1.00"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.22,
+    "max_per_section": 4500,
+    "max_prompt_chars": 31360,
+    "gemini_word_cap": 823,
+    "skip_gemini": true,
+    "preserve_contradictions": true,
+    "volatility_index": 1.0,
+    "disagreement_score": 0.649,
+    "news_shock_intensity": 0.375
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "status": "ok",
+  "date": "2026-05-29",
+  "generated_at": "2026-05-29T11:03:30.991680",
+  "market_day_classification": {
+    "label": "MACRO SHOCK",
+    "confidence": 0.85,
+    "reason": "Elevated macro/news pressure",
+    "regime": "sideways",
+    "drivers": {
+      "volatility": 0.4,
+      "contradiction_intensity": 0.0,
+      "scanner_dispersion": 0.0,
+      "breadth": 0.0,
+      "macro_pressure": 1.0,
+      "avg_volume_ratio": 1.0
+    }
+  },
+  "performance_summary": {
+    "signals_generated": 38,
+    "high_confidence_signals": 1,
+    "useful_signals": 0,
+    "failed_signals": 0,
+    "false_positives": 0,
+    "suppressed_alerts": 1,
+    "missed_opportunities": 0,
+    "telegram_precision_pct": null,
+    "evaluated_signals": 0,
+    "confidence_calibration_quality": "calibration_in_progress",
+    "confidence_calibration_display": "Calibration in progress"
+  },
+  "highlights": {
+    "best_bullish": null,
+    "best_bearish": null,
+    "biggest_miss": null,
+    "highest_confidence_winner": null,
+    "worst_false_positive": null,
+    "strongest_contradiction": null
+  },
+  "regime_analysis": {
+    "timeline": [
+      {
+        "time": "—",
+        "transition": "sideways",
+        "note": "Stable regime through session (no intraday shift logged)"
+      },
+      {
+        "time": "—",
+        "transition": "regime shift",
+        "note": "Stable regime: sideways"
+      }
+    ],
+    "final_regime": "sideways",
+    "contradiction_intensity": 0.0,
+    "sentiment_diversity": 0.67
+  },
+  "warnings": [
+    {
+      "code": "hallucination_detections",
+      "message": "Symbol validation guard active (3 checks)",
+      "severity": "info",
+      "ui_tier": "info",
+      "diagnostic": true
+    },
+    {
+      "code": "low_cache_reuse",
+      "message": "Context refresh frequent — higher synthesis churn",
+      "severity": "info",
+      "ui_tier": "info",
+      "diagnostic": true
+    }
+  ],
+  "telegram": {
+    "alerts_sent": 0,
+    "alerts_suppressed": 1,
+    "duplicate_blocks": 0,
+    "low_confidence_skips": 0,
+    "cooldown_blocks": 0,
+    "emergency_alerts": 0,
+    "estimated_useful_alerts": null,
+    "telegram_precision_pct": null
+  },
+  "daily_summary": {
+    "regime": "sideways",
+    "quality_iq": 0.75,
+    "day_type": "MACRO SHOCK",
+    "best_signal": null,
+    "failed_signal": null,
+    "telegram_sent": 0,
+    "telegram_useful_est": null,
+    "warnings_count": 2
+  },
+  "observation": "Mixed session — selective signal filtering outperformed broad aggression.",
+  "copy_text": "DAILY INTELLIGENCE REVIEW — 2026-05-29\n\nDAY TYPE: MACRO SHOCK\nREGIME: sideways\nQUALITY IQ: 0.75\n\nPERFORMANCE\nSignals: 38 | Useful: 0 | False positives: 0 | Suppressed alerts: 1\nTelegram precision: —%\n\nHIGHLIGHTS\n\nTELEGRAM\nSent: 0 | Useful est: None\n\nWARNINGS\n- Symbol validation guard active (3 checks)\n- Context refresh frequent — higher synthesis churn\n\nOBSERVATION\nMixed session — selective signal filtering outperformed broad aggression.",
+  "lifecycle_summary": {
+    "evaluation_complete": false,
+    "last_cycle_at": null,
+    "resolved_today": 0,
+    "wins_today": 0,
+    "losses_today": 0,
+    "partials_today": 0,
+    "neutral_today": 0,
+    "best_prediction": null,
+    "worst_prediction": null,
+    "win_rate": null,
+    "confidence_realism": null,
+    "false_positive_rate": null,
+    "active_count": 0,
+    "stale_invalidated": 0,
+    "pending_classification": {
+      "active_pending": 16,
+      "expired_pending": 0,
+      "low_data_pending": 0,
+      "neutralized_today": 0,
+      "total_open": 16,
+      "pending_active": 16,
+      "expired": 0,
+      "neutralized": 0
+    },
+    "tomorrow_outlook": "Pending refresh"
+  },
+  "immutable": true,
+  "lifecycle_engine": "prediction_lifecycle_engine_v1"
+}

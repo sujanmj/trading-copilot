@@ -1,0 +1,21 @@
+{
+  "name": "trading-copilot-gui",
+  "version": "1.0.0",
+  "description": "Trading Copilot Electron desktop GUI — local laptop mode uses API_BASE_URL=http://127.0.0.1:8080",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "node -e \"console.log('Electron GUI deps installed for local desktop use only')\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "electron": "^42.0.1",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.0.0"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [WOCKPHARMA, SAREGAMA, PERSISTENT, COFORGE] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]",
+      "disagreement_score": 0.667,
+      "long_count": 18,
+      "short_count": 12
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 2 bullish vs 10 bearish high-impact items",
+      "disagreement_score": 0.2
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly ANDHRSUGAR ULTRA move -9.54%",
+      "disagreement_score": 0.954,
+      "ticker": "ANDHRSUGAR"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly WOCKPHARMA ULTRA move +8.32%",
+      "disagreement_score": 0.832,
+      "ticker": "WOCKPHARMA"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly NATCOPHARM ULTRA move -7.27%",
+      "disagreement_score": 0.727,
+      "ticker": "NATCOPHARM"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly JWL ULTRA move -5.14%",
+      "disagreement_score": 0.514,
+      "ticker": "JWL"
+    }
+  ],
+  "overall_disagreement_score": 0.649,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.67 | Scanner split: LONG [WOCKPHARMA, SAREGAMA, PERSISTENT, COFORGE] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]\n  [institutional_policy_divergence] disagreement=0.20 | Govt policy mix: 2 bullish vs 10 bearish high-impact items\n  [scanner_anomaly] disagreement=0.95 | Anomaly ANDHRSUGAR ULTRA move -9.54%\n  [scanner_anomaly] disagreement=0.83 | Anomaly WOCKPHARMA ULTRA move +8.32%\n  [scanner_anomaly] disagreement=0.73 | Anomaly NATCOPHARM ULTRA move -7.27%\n  [scanner_anomaly] disagreement=0.51 | Anomaly JWL ULTRA move -5.14%",
+  "count": 6
+}

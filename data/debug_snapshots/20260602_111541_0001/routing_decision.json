@@ -1,0 +1,99 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3752,
+    "force": false,
+    "budget_at_call": {
+      "date": "2026-06-02",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-02T11:15:41.240313",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3752,
+      "force": false
+    },
+    {
+      "time": "2026-06-02T11:16:36.765033",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": false,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "60eaf8ff7fc7730ac76e",
+    "delta_reasons": [
+      "govt_change"
+    ],
+    "metrics": {
+      "india_avg_change": 0.063,
+      "news_count": 154,
+      "govt_high_impact": 3,
+      "scanner_signals": 167,
+      "top_scanner_tickers": [
+        "NEWGEN",
+        "NHPC",
+        "BSOFT",
+        "MASTEK",
+        "BALAMINES"
+      ],
+      "scanner_signature": [
+        "('NEWGEN', 'ULTRA', 17.7)",
+        "('NHPC', 'ULTRA', -6.5)",
+        "('BSOFT', 'ULTRA', 5.3)",
+        "('MASTEK', 'ULTRA', 4.7)",
+        "('BALAMINES', 'ULTRA', 14.8)"
+      ],
+      "top_news_titles": [
+        "intellect design arena climbs after launching ai digital banking platform in eur",
+        "rbi may have sold gold to save foreign reserves, be report shows",
+        "reliance and softbank-backed netradyne in advanced talks with top gccs",
+        "stock market news today live updates: nifty rebounds to reclaim 23,500, sensex s",
+        "symbotic (sym) reports revenue beat as software growth and automation expansion",
+        "volumes jump at newgen software technologies ltd counter"
+      ],
+      "reddit_sentiment": "bullish",
+      "reddit_confidence": 75,
+      "novelty_avg_score": 4.54,
+      "repetition_suppressed": 75
+    },
+    "source_hashes": {
+      "global_markets": "4dfcca1ecb64f1928b01",
+      "india_markets": "f3f401b54fae8dbf63e5",
+      "news": "58222ce41f885652974d",
+      "youtube": "eda62ce9491eef1d51b6",
+      "govt": "aa8a81a7697b70cf2f11",
+      "inshorts": "4aa3756b74473f2b085a",
+      "reddit": "718502b8cc2ec6e16d61",
+      "telegram": "empty",
+      "scanner": "4922306e4d2202c3f520",
+      "twitter": "a4a3e8aa882855511484",
+      "nse_filings": "cbb77779f4f5a728d536",
+      "composite": "17de96b18830a9b246e9"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

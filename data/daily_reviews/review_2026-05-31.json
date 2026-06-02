@@ -1,0 +1,117 @@
+{
+  "status": "ok",
+  "date": "2026-05-31",
+  "generated_at": "2026-05-31T17:48:50.147923",
+  "market_day_classification": {
+    "label": "PANIC VOLATILE",
+    "confidence": 0.95,
+    "reason": "High volatility with elevated contradictions",
+    "regime": "regime_transition",
+    "drivers": {
+      "volatility": 1.0,
+      "contradiction_intensity": 0.95,
+      "scanner_dispersion": 27.16,
+      "breadth": 0.67,
+      "macro_pressure": 1.0,
+      "avg_volume_ratio": 10.17
+    }
+  },
+  "performance_summary": {
+    "signals_generated": 0,
+    "high_confidence_signals": 0,
+    "useful_signals": 0,
+    "failed_signals": 0,
+    "false_positives": 0,
+    "suppressed_alerts": 2,
+    "missed_opportunities": 0,
+    "telegram_precision_pct": null,
+    "evaluated_signals": 0,
+    "confidence_calibration_quality": "calibration_in_progress",
+    "confidence_calibration_display": "Calibration in progress"
+  },
+  "highlights": {
+    "best_bullish": null,
+    "best_bearish": null,
+    "biggest_miss": null,
+    "highest_confidence_winner": null,
+    "worst_false_positive": null,
+    "strongest_contradiction": {
+      "summary": "contradiction_retention_drop",
+      "detail": "0.5"
+    }
+  },
+  "regime_analysis": {
+    "timeline": [
+      {
+        "time": "—",
+        "transition": "regime_transition",
+        "note": "Stable regime through session (no intraday shift logged)"
+      },
+      {
+        "time": "—",
+        "transition": "regime shift",
+        "note": "Regime shift sideways -> regime_transition"
+      }
+    ],
+    "final_regime": "regime_transition",
+    "contradiction_intensity": 0.95,
+    "sentiment_diversity": 1.0
+  },
+  "warnings": [
+    {
+      "code": "contradiction_retention_drop",
+      "message": "contradiction retention drop",
+      "severity": "warning",
+      "ui_tier": "warning"
+    },
+    {
+      "code": "weak_sentiment_preservation",
+      "message": "weak sentiment preservation",
+      "severity": "warning",
+      "ui_tier": "warning"
+    },
+    {
+      "code": "contradiction_retention_drop",
+      "message": "Contradiction handling under target — review opposing signals",
+      "severity": "warning",
+      "ui_tier": "warning"
+    },
+    {
+      "code": "hallucination_detections",
+      "message": "Symbol validation guard active (3 checks)",
+      "severity": "info",
+      "ui_tier": "info",
+      "diagnostic": true
+    },
+    {
+      "code": "low_cache_reuse",
+      "message": "Context refresh frequent — higher synthesis churn",
+      "severity": "info",
+      "ui_tier": "info",
+      "diagnostic": true
+    }
+  ],
+  "telegram": {
+    "alerts_sent": 0,
+    "alerts_suppressed": 2,
+    "duplicate_blocks": 0,
+    "low_confidence_skips": 0,
+    "cooldown_blocks": 0,
+    "emergency_alerts": 0,
+    "estimated_useful_alerts": null,
+    "telegram_precision_pct": null
+  },
+  "daily_summary": {
+    "regime": "regime_transition",
+    "quality_iq": 0.66,
+    "day_type": "PANIC VOLATILE",
+    "best_signal": null,
+    "failed_signal": null,
+    "telegram_sent": 0,
+    "telegram_useful_est": null,
+    "warnings_count": 5
+  },
+  "observation": "AI correctly leaned cautious during elevated volatility and contradictions. Contradiction intensity rose — preservation layer likely prevented overconfidence.",
+  "copy_text": "DAILY INTELLIGENCE REVIEW — 2026-05-31\n\nDAY TYPE: PANIC VOLATILE\nREGIME: regime_transition\nQUALITY IQ: 0.66\n\nPERFORMANCE\nSignals: 0 | Useful: 0 | False positives: 0 | Suppressed alerts: 2\nTelegram precision: —%\n\nHIGHLIGHTS\n\nTELEGRAM\nSent: 0 | Useful est: None\n\nWARNINGS\n- contradiction retention drop\n- weak sentiment preservation\n- Contradiction handling under target — review opposing signals\n- Symbol validation guard active (3 checks)\n- Context refresh frequent — higher synthesis churn\n\nOBSERVATION\nAI correctly leaned cautious during elevated volatility and contradictions. Contradiction intensity rose — preservation layer likely prevented overconfidence.",
+  "immutable": true
+}

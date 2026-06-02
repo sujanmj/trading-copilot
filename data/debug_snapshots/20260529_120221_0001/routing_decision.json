@@ -1,0 +1,106 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 2940,
+    "force": false,
+    "budget_at_call": {
+      "date": "2026-05-29",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-29T12:02:21.890219",
+      "tier": "cheap",
+      "use_case": "compress",
+      "event": "cache_miss",
+      "reason": "no valid cache entry",
+      "estimated_input_tokens": 2117
+    },
+    {
+      "time": "2026-05-29T12:02:21.939639",
+      "tier": "cheap",
+      "use_case": "compress",
+      "event": "api_call",
+      "model": "unknown",
+      "provider": "google/gemini-2.0-flash",
+      "success": false,
+      "estimated_cost": 0.0
+    },
+    {
+      "time": "2026-05-29T12:02:21.980687",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 2940,
+      "force": false
+    },
+    {
+      "time": "2026-05-29T12:03:08.788793",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": false,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "09a50505f4b9da6b60de",
+    "delta_reasons": [
+      "govt_change",
+      "reddit_sentiment_change"
+    ],
+    "metrics": {
+      "india_avg_change": -0.196,
+      "news_count": 125,
+      "govt_high_impact": 5,
+      "scanner_signals": 0,
+      "top_scanner_tickers": [],
+      "scanner_signature": [],
+      "top_news_titles": [
+        "bank fraud cases fell 72% since fy24. but why did the amount involved quadruple?",
+        "hindware's win against google in delhi hc could reshape india's digital advertis",
+        "karur vysya bank launches premium credit card portfolio",
+        "supreme court sets aside sebi  ₹447 crore disgorgement order in reliance petrole",
+        "us-iran war news live updates: iran president orders creation of alternative tra",
+        "victims of the washington paper mill disaster included husbands and grandfathers"
+      ],
+      "reddit_sentiment": "bearish",
+      "reddit_confidence": 0,
+      "novelty_avg_score": 4.52,
+      "repetition_suppressed": 59
+    },
+    "source_hashes": {
+      "global_markets": "044422a7f3ebbbb21eed",
+      "india_markets": "d5beb4654aee3183abcd",
+      "news": "e1e4914ed728aac9239e",
+      "youtube": "empty",
+      "govt": "38d5fdafed0f9655b891",
+      "inshorts": "76e282d0541db84a94c5",
+      "reddit": "f131e714b369ac29f101",
+      "telegram": "empty",
+      "scanner": "empty",
+      "twitter": "9a9633abb2dca343b39d",
+      "nse_filings": "6485dd6ffa551a1f15e0",
+      "composite": "33161f02bf2380d89118"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

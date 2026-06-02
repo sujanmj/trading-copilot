@@ -1,0 +1,101 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3821,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-01",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-01T10:31:31.898397",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3821,
+      "force": true
+    },
+    {
+      "time": "2026-06-01T10:32:25.990787",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "a879790f753e162e9237",
+    "delta_reasons": [
+      "news_delta",
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": -0.256,
+      "news_count": 143,
+      "govt_high_impact": 13,
+      "scanner_signals": 146,
+      "top_scanner_tickers": [
+        "INOXWIND",
+        "KPRMILL",
+        "NATCOPHARM",
+        "ZEEL",
+        "AEGISLOG"
+      ],
+      "scanner_signature": [
+        "('INOXWIND', 'ULTRA', -9.8)",
+        "('KPRMILL', 'ULTRA', 3.5)",
+        "('NATCOPHARM', 'ULTRA', -7.9)",
+        "('ZEEL', 'ULTRA', 3.8)",
+        "('AEGISLOG', 'ULTRA', 3.2)"
+      ],
+      "top_news_titles": [
+        "exclusive: sebi weighs easing net worth, compliance norms for debt brokers",
+        "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+        "indian firms line up for us tariff refunds amid looming legal challenge",
+        "massachusetts sues unitedhealthcare over alleged masshealth payment fraud",
+        "nifty bank drops 1% to trade near day's low: canara, union bank among key dragge",
+        "sonos (sono) appoints frank barbieri as chief operating officer"
+      ],
+      "reddit_sentiment": "neutral",
+      "reddit_confidence": 50,
+      "novelty_avg_score": 4.57,
+      "repetition_suppressed": 58
+    },
+    "source_hashes": {
+      "global_markets": "1d84be9f40cb619d186f",
+      "india_markets": "6ca2faca557db7f1c2d2",
+      "news": "1d953e7724e88b1a04da",
+      "youtube": "9da71501201456f015fa",
+      "govt": "a95747f4beb50a52cc3c",
+      "inshorts": "891202549418df1c93bc",
+      "reddit": "3b804e7ad37e98243885",
+      "telegram": "empty",
+      "scanner": "9a159ca7900da5ec2dc6",
+      "twitter": "feb7accafc4e171957ba",
+      "nse_filings": "22924379bd9e13ca326d",
+      "composite": "f6726fa801630febb49a"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

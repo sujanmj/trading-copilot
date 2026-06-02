@@ -1,1 +1,2 @@
-web: TZ=Asia/Kolkata uvicorn backend.api.api_server:app --host 0.0.0.0 --port $PORT --workers 1
+web: TZ=Asia/Kolkata python scripts/run_railway_web.py
+telegram: TZ=Asia/Kolkata python scripts/run_railway_telegram_worker.py

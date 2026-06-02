@@ -39,7 +39,11 @@ setup_project_path()
 from backend.utils.config import (
     IS_RAILWAY,
     IS_LOCAL_DEV,
+    LOCAL_ONLY,
     LOCAL_FORCE_EOD,
+    DISABLE_TELEGRAM,
+    DISABLE_TELEGRAM_LISTENER,
+    DISABLE_TELEGRAM_SENDS,
     PROJECT_ROOT,
     DATA_DIR,
     LOGS_DIR,
@@ -553,6 +557,20 @@ def _run_local_scheduler_loop():
             time.sleep(5)
 
 
+def _telegram_listener_disabled() -> bool:
+    return DISABLE_TELEGRAM or DISABLE_TELEGRAM_LISTENER
+
+
+def _log_telegram_disabled(component: str = 'listener') -> None:
+    print(
+        f'[TELEGRAM DISABLED] {component} not started '
+        f'(DISABLE_TELEGRAM={int(DISABLE_TELEGRAM)} '
+        f'DISABLE_TELEGRAM_LISTENER={int(DISABLE_TELEGRAM_LISTENER)} '
+        f'DISABLE_TELEGRAM_SENDS={int(DISABLE_TELEGRAM_SENDS)})',
+        flush=True,
+    )
+
+
 def _run_local_telegram_loop():
     from backend.utils.local_runtime import local_log
     while True:
@@ -586,7 +604,9 @@ def start_local_background_processes():
     else:
         local_log('LOCAL RUNTIME', 'scheduler disabled via DISABLE_SCHEDULER=1')
 
-    if os.environ.get('DISABLE_TELEGRAM_LISTENER') != '1':
+    if _telegram_listener_disabled():
+        _log_telegram_disabled('in-process listener')
+    else:
         threading.Thread(
             target=_run_local_telegram_loop,
             daemon=True,
@@ -654,7 +674,9 @@ def start_background_processes():
         print("[ORCHESTRATOR] API_ONLY — scheduler disabled", flush=True)
     
     # Telegram listener thread
-    if os.environ.get('DISABLE_TELEGRAM_LISTENER') != '1':
+    if _telegram_listener_disabled():
+        _log_telegram_disabled('subprocess listener')
+    else:
         telegram_thread = threading.Thread(
             target=run_subprocess_loop, 
             args=('telegram_listener.py', 'TelegramListener'),
@@ -679,9 +701,29 @@ def start_background_processes():
 
 app = FastAPI(title="Trading Copilot API + Scheduler + Telegram", version="5.0.0")
 
+
+def _local_browser_cors_origins() -> list[str]:
+    return [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173",
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
+    ]
+
+
+def _cors_allow_origins() -> list[str]:
+    if IS_RAILWAY:
+        return ["*"]
+    if LOCAL_ONLY or IS_LOCAL_DEV:
+        return _local_browser_cors_origins()
+    return _local_browser_cors_origins()
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "X-API-Key"],
@@ -744,6 +786,16 @@ def load_json_file(filename: str) -> dict:
             return sanitize_json_value(data)
     except Exception as e:
         return {"error": str(e), "data": None}
+
+
+def load_tv_intelligence() -> dict:
+    """Load cached TV intelligence (Stage 21B); fallback to legacy youtube_feed.json."""
+    try:
+        from backend.collectors.tv_intelligence_collector import load_cached_tv_intelligence
+
+        return sanitize_json_value(load_cached_tv_intelligence())
+    except Exception as e:
+        return {'ok': False, 'error': str(e), 'videos': [], 'summary': {}}
 
 
 def file_age_seconds(filename: str) -> Optional[int]:
@@ -888,7 +940,7 @@ def _build_runtime_snapshot() -> dict:
         'reddit': load_json_file('reddit_data.json'),
         'markets': load_json_file('global_markets.json'),
         'india': load_json_file('latest_market_data.json'),
-        'youtube': load_json_file('youtube_feed.json'),
+        'youtube': load_tv_intelligence(),
         'inshorts': load_json_file('inshorts_feed.json'),
         'stats': load_json_file('stats_data.json'),
         'history': load_json_file('history_data.json'),
@@ -1352,7 +1404,7 @@ def _build_health_payload() -> dict:
             "reddit": "reddit_data.json",
             "markets": "global_markets.json",
             "india": "latest_market_data.json",
-            "youtube": "youtube_feed.json",
+            "youtube": "tv_intelligence.json",
             "inshorts": "inshorts_feed.json",
             "stats": "stats_data.json",
             "history": "history_data.json",
@@ -1468,14 +1520,28 @@ def _build_health_payload() -> dict:
     }
 
 
+def _wrap_runtime_snapshot_for_frontend(
+    payload: dict,
+    *,
+    cache_path: Optional[Path] = None,
+) -> dict:
+    from backend.runtime.snapshot_contract import wrap_runtime_snapshot_for_frontend
+    return wrap_runtime_snapshot_for_frontend(payload, cache_path=cache_path)
+
+
 def _runtime_snapshot_warming_up_response() -> dict:
     """503 payload when data/cache/runtime_snapshot.json is not yet available."""
+    ts = datetime.now().isoformat()
     return {
+        'ok': False,
         'snapshot_id': 'warming_up',
-        'generated_at': '',
+        'generated_at': ts,
         'intelligence': {},
-        'action_plan': {},
+        'action_plan': '',
         'status': 'warming_up',
+        'freshness': {'age_hours': None, 'stale': True, 'source': 'runtime_snapshot'},
+        'data': {},
+        'exports': {},
     }
 
 
@@ -1491,7 +1557,11 @@ def api_market_snapshot():
     try:
         cached = _load_runtime_snapshot_cache()
         if cached:
-            return sanitize_json_value(cached)
+            wrapped = _wrap_runtime_snapshot_for_frontend(
+                cached,
+                cache_path=RUNTIME_SNAPSHOT_CACHE,
+            )
+            return sanitize_json_value(wrapped)
     except Exception as exc:
         backend_log.warning('runtime snapshot cache read failed: %s', exc)
 
@@ -1505,11 +1575,19 @@ def api_market_snapshot():
             owner='api_runtime_snapshot',
         )
         _write_runtime_snapshot_cache(payload)
-        return sanitize_json_value(payload)
+        wrapped = _wrap_runtime_snapshot_for_frontend(
+            payload,
+            cache_path=RUNTIME_SNAPSHOT_CACHE,
+        )
+        return sanitize_json_value(wrapped)
     except TimeoutError as exc:
         payload = _build_gui_snapshot_cached_fallback(str(exc))
         _write_runtime_snapshot_cache(payload)
-        return sanitize_json_value(payload)
+        wrapped = _wrap_runtime_snapshot_for_frontend(
+            payload,
+            cache_path=RUNTIME_SNAPSHOT_CACHE,
+        )
+        return sanitize_json_value(wrapped)
     except Exception as exc:
         backend_log.error('runtime snapshot build failed: %s', exc)
         return JSONResponse(
@@ -1739,7 +1817,13 @@ def get_markets(): return load_json_file("global_markets.json")
 def get_india(): return load_json_file("latest_market_data.json")
 
 @app.get("/api/youtube", dependencies=[Depends(verify_api_key)])
-def get_youtube(): return load_json_file("youtube_feed.json")
+def get_youtube():
+    return load_tv_intelligence()
+
+
+@app.get("/api/debug/tv-intelligence", dependencies=[Depends(verify_api_key)])
+def get_debug_tv_intelligence():
+    return load_tv_intelligence()
 
 @app.get("/api/inshorts", dependencies=[Depends(verify_api_key)])
 def get_inshorts(): return load_json_file("inshorts_feed.json")
@@ -1939,6 +2023,368 @@ def db_info():
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/api/debug/market-memory", dependencies=[Depends(verify_api_key)])
+def api_debug_market_memory():
+    """Read-only visibility into canonical_market_memory.db."""
+    try:
+        from backend.storage.market_memory_db import get_connection, get_market_memory_stats
+
+        stats = get_market_memory_stats()
+        latest_predictions: list[dict] = []
+        latest_context: list[dict] = []
+
+        if stats.get('db_exists'):
+            conn = get_connection()
+            try:
+                pred_rows = conn.execute(
+                    """
+                    SELECT prediction_id, ticker, timestamp, source, direction, confidence
+                    FROM predictions
+                    ORDER BY timestamp DESC
+                    LIMIT 5
+                    """
+                ).fetchall()
+                latest_predictions = [
+                    {
+                        'prediction_id': row['prediction_id'],
+                        'ticker': row['ticker'],
+                        'timestamp': row['timestamp'],
+                        'source': row['source'],
+                        'direction': row['direction'],
+                        'confidence': row['confidence'],
+                    }
+                    for row in pred_rows
+                ]
+
+                ctx_rows = conn.execute(
+                    """
+                    SELECT context_id, timestamp, market_regime, vix, crude
+                    FROM market_context_snapshots
+                    ORDER BY timestamp DESC
+                    LIMIT 5
+                    """
+                ).fetchall()
+                latest_context = [
+                    {
+                        'context_id': row['context_id'],
+                        'timestamp': row['timestamp'],
+                        'market_regime': row['market_regime'],
+                        'vix': row['vix'],
+                        'crude': row['crude'],
+                    }
+                    for row in ctx_rows
+                ]
+            finally:
+                conn.close()
+
+        return sanitize_json_value({
+            'ok': True,
+            'stats': stats,
+            'latest_predictions': latest_predictions,
+            'latest_context': latest_context,
+        })
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/api/debug/market-memory/learning", dependencies=[Depends(verify_api_key)])
+def api_debug_market_memory_learning(
+    limit_days: int | None = Query(None),
+):
+    """Read-only learning summary from canonical_market_memory.db."""
+    try:
+        from backend.analytics.market_memory_learning import get_learning_summary
+
+        summary = get_learning_summary(limit_days=limit_days)
+        return sanitize_json_value(summary)
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/api/debug/market-memory/advisor", dependencies=[Depends(verify_api_key)])
+def api_debug_market_memory_advisor(
+    ticker: str = Query(...),
+    signal_type: str | None = Query(None),
+    confidence_label: str | None = Query(None),
+    horizon: str | None = Query(None),
+):
+    """Read-only shadow learning advisor for a prediction candidate."""
+    try:
+        from backend.analytics.market_memory_advisor import advise_prediction
+
+        candidate: dict = {'ticker': ticker}
+        if signal_type:
+            candidate['signal_type'] = signal_type
+        if confidence_label:
+            candidate['confidence_label'] = confidence_label
+        if horizon:
+            candidate['prediction_horizon'] = horizon
+
+        advice = advise_prediction(candidate)
+        return sanitize_json_value({'ok': True, **advice})
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/api/debug/market-memory/advisor-batch", dependencies=[Depends(verify_api_key)])
+def api_debug_market_memory_advisor_batch(
+    limit: int = Query(50),
+    advice: str | None = Query(None),
+    ticker: str | None = Query(None),
+):
+    """Read-only batch shadow advisor report for unresolved predictions."""
+    try:
+        from backend.analytics.market_memory_advisor import get_advisor_batch_report
+
+        report = get_advisor_batch_report(
+            limit=limit,
+            advice=advice,
+            ticker=ticker,
+        )
+        return sanitize_json_value(report)
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/api/debug/market-memory/dashboard", dependencies=[Depends(verify_api_key)])
+def api_debug_market_memory_dashboard(
+    limit: int = Query(50),
+    price_file: str | None = Query(None),
+):
+    """Unified read-only market memory dashboard payload."""
+    try:
+        from backend.analytics.market_memory_dashboard import get_market_memory_dashboard
+
+        dashboard = get_market_memory_dashboard(
+            limit=limit,
+            price_file=price_file,
+        )
+        return sanitize_json_value(dashboard)
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/api/debug/historical-learning", dependencies=[Depends(verify_api_key)])
+def api_debug_historical_learning(
+    ticker: str | None = Query(None),
+):
+    """Read-only historical learning summary from historical_market_memory.db."""
+    try:
+        from backend.analytics.historical_learning_engine import (
+            compare_live_memory_vs_historical,
+            get_historical_learning_summary,
+            get_historical_ticker_performance,
+        )
+
+        if ticker:
+            payload = get_historical_ticker_performance(ticker)
+            return sanitize_json_value(payload)
+
+        summary = get_historical_learning_summary()
+        comparison = compare_live_memory_vs_historical()
+        return sanitize_json_value({
+            'ok': True,
+            'stats': summary.get('stats'),
+            'overall': summary.get('overall'),
+            'top_tickers': summary.get('top_tickers'),
+            'bottom_tickers': summary.get('bottom_tickers'),
+            'source_performance': summary.get('source_performance'),
+            'sample_prices': summary.get('sample_prices'),
+            'price_row_count': summary.get('price_row_count'),
+            'historical_ticker_count': summary.get('historical_ticker_count'),
+            'universe_ticker_count': summary.get('universe_ticker_count'),
+            'import_report': summary.get('import_report'),
+            'replay_report': summary.get('replay_report'),
+            'import_progress': summary.get('import_progress'),
+            'quality_anomalies': summary.get('quality_anomalies'),
+            'quality_audit': summary.get('quality_audit'),
+            'simulation': summary.get('simulation'),
+            'comparison': comparison,
+        })
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+@app.get("/api/debug/broker-consensus", dependencies=[Depends(verify_api_key)])
+def api_debug_broker_consensus(
+    ticker: str = Query(...),
+    timeframe: str | None = Query(None),
+):
+    """Read-only broker/source consensus for a ticker from canonical_market_memory.db."""
+    normalized_ticker = str(ticker).strip().upper()
+    try:
+        from backend.analytics.broker_consensus_engine import get_consensus_for_ticker
+
+        consensus = get_consensus_for_ticker(normalized_ticker, timeframe=timeframe)
+        return sanitize_json_value({
+            'ok': True,
+            'ticker': normalized_ticker,
+            'timeframe': timeframe,
+            'consensus': consensus,
+        })
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/broker-intelligence", dependencies=[Depends(verify_api_key)])
+def api_debug_broker_intelligence(
+    ticker: str | None = Query(None),
+    source: str | None = Query(None),
+):
+    """Read-only broker prediction intelligence (external evidence, not our predictions)."""
+    try:
+        from backend.analytics.broker_prediction_intelligence import (
+            get_broker_intelligence_dashboard,
+            get_source_intelligence,
+            get_ticker_intelligence,
+        )
+
+        if ticker:
+            payload = get_ticker_intelligence(ticker)
+        elif source:
+            payload = get_source_intelligence(source)
+        else:
+            payload = get_broker_intelligence_dashboard()
+        return sanitize_json_value(payload)
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/broker-intelligence/source", dependencies=[Depends(verify_api_key)])
+def api_debug_broker_intelligence_source(
+    source: str = Query(...),
+):
+    """Read-only broker intelligence for a single external source."""
+    try:
+        from backend.analytics.broker_prediction_intelligence import get_source_intelligence
+
+        payload = get_source_intelligence(source)
+        return sanitize_json_value(payload)
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/our-vs-broker", dependencies=[Depends(verify_api_key)])
+def api_debug_our_vs_broker(
+    ticker: str | None = Query(None),
+    limit: int = Query(200),
+):
+    """Read-only comparison of our predictions vs broker picks."""
+    try:
+        from backend.analytics.broker_prediction_intelligence import (
+            compare_our_predictions_vs_brokers,
+        )
+
+        report = compare_our_predictions_vs_brokers(ticker=ticker, limit=limit)
+        return sanitize_json_value(report)
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/broker-app-collector", dependencies=[Depends(verify_api_key)])
+def api_debug_broker_app_collector():
+    """Read-only latest broker/app collector cache."""
+    try:
+        from backend.collectors.broker_app_collector import get_broker_app_collector_dashboard
+
+        return sanitize_json_value(get_broker_app_collector_dashboard())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/external-source-coverage", dependencies=[Depends(verify_api_key)])
+def api_debug_external_source_coverage():
+    """Read-only external source coverage from broker/app collector cache."""
+    try:
+        from backend.collectors.broker_app_collector import get_external_source_coverage
+
+        return sanitize_json_value(get_external_source_coverage())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+# BACKEND_STAGE_44AX_FINAL_CONFIDENCE_ENDPOINT_STABLE — cached JSON only, no live scoring.
+
+
+@app.get("/api/debug/final-confidence", dependencies=[Depends(verify_api_key)])
+def api_debug_final_confidence(
+    ticker: str | None = Query(None),
+    limit: int = Query(50),
+):
+    """Read-only final confidence from cached report (shadow scoring only)."""
+    from backend.analytics.final_confidence_report_loader import (
+        load_cached_final_confidence_report,
+        load_cached_final_confidence_ticker_breakdown,
+    )
+
+    try:
+        if ticker:
+            return sanitize_json_value(load_cached_final_confidence_ticker_breakdown(ticker, limit=max(limit, 500)))
+        return sanitize_json_value(load_cached_final_confidence_report(limit=limit))
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/final-confidence/report", dependencies=[Depends(verify_api_key)])
+def api_debug_final_confidence_report(
+    limit: int = Query(50),
+):
+    """Read-only final confidence dashboard report from cached JSON."""
+    from backend.analytics.final_confidence_report_loader import load_cached_final_confidence_report
+
+    try:
+        return sanitize_json_value(load_cached_final_confidence_report(limit=limit))
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/confidence-calibration", dependencies=[Depends(verify_api_key)])
+def api_debug_confidence_calibration():
+    """Read-only confidence calibration dashboard (analysis only, no trade execution)."""
+    try:
+        from backend.analytics.confidence_calibration_engine import get_calibration_dashboard
+
+        return sanitize_json_value(get_calibration_dashboard())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/tomorrow-watchlist", dependencies=[Depends(verify_api_key)])
+def api_debug_tomorrow_watchlist(
+    limit: int = Query(25),
+):
+    """Read-only tomorrow watchlist from final confidence (shadow only, no trade execution)."""
+    try:
+        from backend.analytics.tomorrow_watchlist_report import get_top_watchlist_dashboard
+
+        return sanitize_json_value(get_top_watchlist_dashboard(limit=limit))
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+# STOCK_STAGE_45B_CONFLUENCE_DECISION_ENGINE — cached confluence only, no trade execution.
+
+
+@app.get("/api/debug/stock-decision", dependencies=[Depends(verify_api_key)])
+def api_debug_stock_decision(
+    mode: str = Query('today'),
+):
+    """Read-only stock confluence decision from cached reports (shadow only)."""
+    try:
+        from backend.analytics.stock_decision_engine import build_stock_decision
+
+        return sanitize_json_value(build_stock_decision(mode=mode))
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/daily-report-pack", dependencies=[Depends(verify_api_key)])
+def api_debug_daily_report_pack(
+    limit: int = Query(25),
+):
+    """Read-only daily report pack (shadow analysis only, no trade execution)."""
+    try:
+        from backend.analytics.daily_report_pack import get_latest_daily_report_pack
+
+        return sanitize_json_value(get_latest_daily_report_pack())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
 @app.post("/api/debug/dedup", dependencies=[Depends(verify_api_key)])
 def dedup_predictions():
     """Remove duplicate predictions."""
@@ -2094,6 +2540,121 @@ def api_debug_reliability():
 def api_debug_calibration():
     from backend.analytics.signal_outcomes import get_ops_calibration_payload
     return _safe_debug_response('calibration', get_ops_calibration_payload)
+
+
+@app.get("/api/debug/source-feed", dependencies=[Depends(verify_api_key)])
+def api_debug_source_feed(source: str = 'ET', limit: int = 100):
+    """Cached internal source feed for GUI Source Feed Viewer (Stage 44G)."""
+    try:
+        from backend.analytics.source_feed_viewer import get_source_feed
+
+        return sanitize_json_value(get_source_feed(source=source, limit=limit))
+    except Exception as e:
+        return {'ok': False, 'error': str(e), 'source': source, 'items': []}
+
+
+@app.get("/api/debug/source-freshness", dependencies=[Depends(verify_api_key)])
+def api_debug_source_freshness():
+    """Read-only source freshness / health report for GUI and CLI."""
+    try:
+        from backend.analytics.source_freshness import get_source_freshness_report
+
+        return sanitize_json_value(get_source_freshness_report())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/market-router", dependencies=[Depends(verify_api_key)])
+def api_debug_market_router():
+    """Read-only India/USA session router for GUI and CLI."""
+    try:
+        from backend.analytics.market_calendar_router import get_market_router_payload
+
+        return sanitize_json_value(get_market_router_payload())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/aihub-tab-freshness", dependencies=[Depends(verify_api_key)])
+def api_debug_aihub_tab_freshness():
+    """Per-tab AI Hub freshness from real local source files."""
+    try:
+        from backend.analytics.aihub_tab_freshness import get_aihub_tab_freshness_report
+
+        return sanitize_json_value(get_aihub_tab_freshness_report())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get("/api/debug/aihub-tab/{tab}", dependencies=[Depends(verify_api_key)])
+def api_debug_aihub_tab(tab: str, refresh: int = Query(0), force: int = Query(0)):
+    """Aggregated AI Hub tab payload (Stage 44AQ) — one response per tab."""
+    try:
+        from backend.analytics.aihub_tab_payloads import build_aihub_tab_payload
+
+        return sanitize_json_value(
+            build_aihub_tab_payload(tab, force_refresh=bool(force or refresh)),
+        )
+    except Exception as e:
+        return sanitize_json_value({
+            'ok': False,
+            'tab': tab,
+            'error': str(e),
+            'items': [],
+            'summary': {},
+            'warnings': ['api_error'],
+        })
+
+
+@app.post("/api/debug/refresh-local-intelligence", dependencies=[Depends(verify_api_key)])
+def api_debug_refresh_local_intelligence(payload: dict = Body(default={})):
+    """Run safe local collector refresh (no Telegram, no outcomes). Local-only."""
+    if not (LOCAL_ONLY or IS_LOCAL_DEV):
+        return sanitize_json_value({
+            'ok': False,
+            'error': 'refresh-local-intelligence is local-only (set LOCAL_ONLY=1 or LOCAL_DEV_MODE=1)',
+            'scope': (payload or {}).get('scope'),
+            'runtime': 'skipped',
+            'news': 'skipped',
+            'prices': 'skipped',
+            'memory': 'skipped',
+            'warnings': ['local_only_required'],
+        })
+    body = payload or {}
+    scope = body.get('scope')
+    try:
+        if scope is not None:
+            from scripts.refresh_local_intelligence import run_refresh_scoped
+
+            dry_run = bool(body.get('dry_run', False))
+            result = run_refresh_scoped(str(scope), dry_run=dry_run)
+            if isinstance(result, dict):
+                result.setdefault('dry_run', dry_run)
+            return sanitize_json_value(result)
+        from scripts.refresh_local_intelligence import run_refresh
+
+        dry_run = bool(body.get('dry_run', False))
+        results = run_refresh(
+            dry_run=dry_run,
+            news=bool(body.get('news')),
+            global_markets=bool(body.get('global')),
+            prices=bool(body.get('prices')),
+            memory=bool(body.get('memory')),
+            run_all=bool(body.get('all', True)),
+        )
+        return sanitize_json_value({
+            'ok': True,
+            'scope': 'all' if body.get('all', True) else 'legacy',
+            'dry_run': dry_run,
+            'runtime': results.get('global', 'skipped'),
+            'news': results.get('news', 'skipped'),
+            'prices': results.get('prices', 'skipped'),
+            'memory': results.get('memory', 'skipped'),
+            'results': results,
+            'warnings': [],
+        })
+    except Exception as e:
+        return {'ok': False, 'error': str(e), 'scope': scope}
 
 
 @app.get("/api/daily-review", dependencies=[Depends(verify_api_key)])

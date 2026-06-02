@@ -1,0 +1,33 @@
+{
+  "quality": {
+    "information_retention_score": 0.959,
+    "contradiction_retention_score": 0.429,
+    "sentiment_preservation_score": 0.712,
+    "sentiment_diversity_score": 1.0,
+    "minority_signal_retention_score": 0.275,
+    "truncation_severity": 1.0,
+    "compression_ratio": 1.154,
+    "intelligence_quality_score": 0.658,
+    "raw_evidence_chars": 929,
+    "novelty_avg_score": 4.58,
+    "repetition_suppressed_count": 55,
+    "primary_regime": "regime_transition"
+  },
+  "warnings": [
+    {
+      "code": "contradiction_retention_drop",
+      "value": 0.429,
+      "threshold": 0.6
+    }
+  ],
+  "explanations": {
+    "why_claude_ran": "Claude ran via claude-sonnet-4-5",
+    "why_gemini_used": "Volatile/contradictory regime — Gemini skipped, token-truncated bulk",
+    "why_cache_skipped": "cache_miss: claude allowed — calling API",
+    "why_regime_changed": "Regime shift panic_volatile -> regime_transition",
+    "why_signal_preserved": "21 high-impact signals bypass heavy compression (ULTRA/macro/SEBI).",
+    "why_signal_compressed": "Bulk sections token-truncated only — Gemini skipped due to volatile/contradictory regime.",
+    "contradiction_count": 7,
+    "disagreement_score": 0.633
+  }
+}

@@ -325,13 +325,49 @@ Or use the local runtime wrapper:
 python run_local.py
 ```
 
-### Electron GUI
+Before daily local use, run the master readiness gate:
+
+```bash
+python scripts\local_system_readiness.py
+```
+
+Prints `[LOCAL_READY]` lines and `LOCAL_SYSTEM_READY` when all safety, database, report, intelligence, frontend, and scheduler checks pass.
+
+### Live daily workflow
+
+Start backend, GUI, then run live smoke:
+
+```bash
+python run_local.py
+```
+
+**Browser GUI (port 5173):**
+
+```bash
+cd frontend
+npm install
+npm run web
+```
+
+Open: http://127.0.0.1:5173
+
+**Electron GUI (desktop):**
 
 ```bash
 cd frontend
 npm install
 npm start
 ```
+
+In another terminal:
+
+```bash
+python scripts\live_system_smoke.py --frontend-mode auto
+```
+
+Use `--frontend-mode auto` (default) to prefer the browser GUI on port 5173 when reachable, otherwise validate Electron source files. Use `--frontend-mode web --frontend-base http://127.0.0.1:5173` for explicit browser checks. Use `--frontend-mode electron` or `--skip-frontend` when only the desktop app is running.
+
+Prints `[LIVE_SMOKE]` lines and `LIVE_SYSTEM_SMOKE_OK` when the running backend and Electron GUI checks pass.
 
 GUI reads `API_BASE_URL` and `API_KEY` from `config/keys.env`.
 

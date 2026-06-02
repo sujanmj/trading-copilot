@@ -96,8 +96,12 @@ def run_alert_scheduler_tick():
     from backend.orchestration.alert_scheduler import tick
     try:
         result = tick()
-        if result.get('sent'):
-            print(f"[ALERTS] tick sent={result['sent']} actions={result.get('actions')}", flush=True)
+        if result.get('sent') or result.get('skipped'):
+            print(
+                f"[ALERTS] tick sent={result['sent']} skipped={result.get('skipped', 0)} "
+                f"actions={result.get('actions')}",
+                flush=True,
+            )
     except Exception as e:
         print(f"[!] Alert scheduler tick failed: {e}", flush=True)
 
@@ -201,6 +205,18 @@ def _job_overnight_brief():
     run_india_next_open_report(run_analyzer=True)
 
 
+@ist_daily(8, 30, name='premarket_report_pack')
+def _job_premarket_report_pack():
+    from backend.scheduler.daily_report_pack_job import run_daily_report_pack_job
+
+    result = run_daily_report_pack_job(mode='premarket')
+    print(
+        f"[DAILY_PACK_JOB] premarket generated={result.get('generated')} "
+        f"mode={result.get('market_mode')} warnings={len(result.get('warnings') or [])}",
+        flush=True,
+    )
+
+
 @ist_daily(8, 30, name='premarket_scanner')
 def _job_premarket_scanner():
     from backend.intelligence.global_intelligence_engine import run_premarket_scanner
@@ -238,6 +254,30 @@ def _job_market_close_intel():
         print(f"[MARKET CLOSE] report generated sectors={report.get('dominant_sectors')}", flush=True)
     except Exception as e:
         print(f"[!] Market close intelligence failed: {e}", flush=True)
+
+
+@ist_daily(16, 30, name='postmarket_report_pack')
+def _job_postmarket_report_pack():
+    from backend.scheduler.daily_report_pack_job import run_daily_report_pack_job
+
+    result = run_daily_report_pack_job(mode='postmarket')
+    print(
+        f"[DAILY_PACK_JOB] postmarket generated={result.get('generated')} "
+        f"mode={result.get('market_mode')} warnings={len(result.get('warnings') or [])}",
+        flush=True,
+    )
+
+
+@ist_daily(7, 0, weekdays_only=False, name='research_mode_report_pack')
+def _job_research_mode_report_pack():
+    from backend.scheduler.daily_report_pack_job import run_daily_report_pack_job
+
+    result = run_daily_report_pack_job(mode='research')
+    print(
+        f"[DAILY_PACK_JOB] research generated={result.get('generated')} "
+        f"mode={result.get('market_mode')} warnings={len(result.get('warnings') or [])}",
+        flush=True,
+    )
 
 
 @ist_daily(15, 45, name='eod_lifecycle')

@@ -1,0 +1,101 @@
+{
+  "claude": {
+    "ran": false,
+    "skipped_reason": "synthesis failed: No gemini keys configured",
+    "model": "unknown",
+    "provider": "google/gemini-2.0-flash",
+    "cache_hit": false,
+    "prompt_tokens": 2591,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-05-28",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-28T21:02:08.575360",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 2591,
+      "force": true
+    },
+    {
+      "time": "2026-05-28T21:02:08.593535",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "claude_failed",
+      "reason": "No gemini keys configured",
+      "fallback": "gemini_synthesis"
+    },
+    {
+      "time": "2026-05-28T21:02:08.596370",
+      "tier": "cheap",
+      "use_case": "gemini_synthesis",
+      "event": "cache_miss",
+      "reason": "no valid cache entry",
+      "estimated_input_tokens": 2591
+    },
+    {
+      "time": "2026-05-28T21:02:08.623930",
+      "tier": "cheap",
+      "use_case": "gemini_synthesis",
+      "event": "api_call",
+      "model": "unknown",
+      "provider": "google/gemini-2.0-flash",
+      "success": false,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": false,
+    "semantic_changed": false,
+    "semantic_hash": "d75f94c72614649304a3",
+    "delta_reasons": [],
+    "metrics": {
+      "india_avg_change": -0.144,
+      "news_count": 121,
+      "govt_high_impact": 10,
+      "scanner_signals": 0,
+      "top_scanner_tickers": [],
+      "scanner_signature": [],
+      "top_news_titles": [
+        "policybazaar co-founders look to offload shares worth  ₹654 crore in block deal",
+        "tata motors pv sees consumer shift towards evs amid west asia crisis, says md sh",
+        "us consumer spending edges up as inflation accelerates",
+        "us warns oman amid hormuz blockade: will target any actors involved in facilitat",
+        "us-iran war news updates: iran responds to us  attack near bandar abbas",
+        "victims of the washington paper mill disaster included husbands and grandfathers"
+      ],
+      "reddit_sentiment": "unknown",
+      "reddit_confidence": 0,
+      "novelty_avg_score": 4.5,
+      "repetition_suppressed": 51
+    },
+    "source_hashes": {
+      "global_markets": "aec3f8265e3f5d0ca624",
+      "india_markets": "76780f51b59bf6b5e66e",
+      "news": "30de0c64982513bb9b9d",
+      "youtube": "empty",
+      "govt": "c592b0a5f36f9feb7235",
+      "inshorts": "empty",
+      "reddit": "empty",
+      "telegram": "empty",
+      "scanner": "empty",
+      "twitter": "empty",
+      "nse_filings": "empty",
+      "composite": "91a4021dba98f707e8f8"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

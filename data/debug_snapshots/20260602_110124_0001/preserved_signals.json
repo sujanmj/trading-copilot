@@ -1,0 +1,629 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nSCANNER ANOMALY | [ULTRA|BULLISH] NEWGEN Rs.519.65 +17.70% vol=41.4x | VOLUME_SPIKE + BREAKOUT + MAJOR_MOVE\nSCANNER ANOMALY | [ULTRA|BULLISH] BALAMINES Rs.2012.0 +14.85% vol=4.9x | VOLUME_SPIKE + BREAKOUT + MAJOR_MOVE\nGOVT ALERT | [9.0/10 BEARISH] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget | affects: BPCL, HPCL, IOC, RELIANCE\nGOVT ALERT | [4.0/10 BULLISH] Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks | affects: MACRO\nHEADLINE | [neutral] Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 Points From Day's Low; Newgen Software Surges 15% | source=NDTV Profit\nHEADLINE | [neutral] RBI may have sold gold to save foreign reserves, BE report shows | source=Economic Times (Markets)\n  [evidence_meta] novelty_avg=4.472 repetition_suppressed=54 diversity_suppressed=17",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "scanner",
+        "ticker": "NEWGEN",
+        "label": "[ULTRA|BULLISH] NEWGEN +17.70%",
+        "confidence": 1.0,
+        "source_count": 2,
+        "agreement_score": 1.0,
+        "impact_score": 7.9,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NHPC",
+        "label": "[ULTRA|BEARISH] NHPC -6.48%",
+        "confidence": 1.0,
+        "source_count": 2,
+        "agreement_score": 1.0,
+        "impact_score": 7.44,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BSOFT",
+        "label": "[ULTRA|BULLISH] BSOFT +5.28%",
+        "confidence": 0.918,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.08,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "MASTEK",
+        "label": "[ULTRA|BULLISH] MASTEK +4.67%",
+        "confidence": 0.913,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.9,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BALAMINES",
+        "label": "[ULTRA|BULLISH] BALAMINES +14.85%",
+        "confidence": 0.941,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.88,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ROUTE",
+        "label": "[ULTRA|BULLISH] ROUTE +6.31%",
+        "confidence": 0.927,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.39,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "TATAELXSI",
+        "label": "[ULTRA|BULLISH] TATAELXSI +5.35%",
+        "confidence": 0.911,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.83,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NMDC",
+        "label": "[ULTRA|BULLISH] NMDC +3.36%",
+        "confidence": 0.897,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.33,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "GUJGASLTD",
+        "label": "[ULTRA|BULLISH] GUJGASLTD -0.06%",
+        "confidence": 0.864,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.16,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "INFY",
+        "label": "[ULTRA|BULLISH] INFY +5.82%",
+        "confidence": 0.901,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.45,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "BPCL",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 4.0] Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+        "confidence": 0.727,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "OIL INDIA",
+        "label": "[GOVT 4.0] Oil rally may fuel stagflation concerns, though AI remains market's key driver: Arnab Das",
+        "confidence": 0.967,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 4.0] Asian markets today: Air China, China Southern Airlines to Cathay Pacific Airways — why ar",
+        "confidence": 0.727,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] Aviation stocks under pressure: IndiGo and SpiceJet decline up to 2.5% as Russia bans jet ",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] RBI may have sold gold to save foreign reserves, BE report shows",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Reliance and SoftBank-backed Netradyne in advanced talks with top GCCs",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Volumes jump at Newgen Software Technologies Ltd counter",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Who Is Ritabrata Banerjee? Expelled MLA In Focus Amid TMC Turmoil, Forged-Signature Row",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol | conf=1.00 sources=4 agree=0.70 impact=10.0 [BYPASS]\n  [ULTRA|BULLISH] NEWGEN +17.70% | conf=1.00 sources=2 agree=1.00 impact=7.9 [BYPASS]\n  [ULTRA|BULLISH] BALAMINES +14.85% | conf=0.94 sources=1 agree=1.00 impact=7.9 [BYPASS]\n  [ULTRA|BEARISH] NHPC -6.48% | conf=1.00 sources=2 agree=1.00 impact=7.4 [BYPASS]\n  [ULTRA|BULLISH] ROUTE +6.31% | conf=0.93 sources=1 agree=1.00 impact=7.4 [BYPASS]\n  [ULTRA|BULLISH] BSOFT +5.28% | conf=0.92 sources=1 agree=1.00 impact=7.1 [BYPASS]\n  [ULTRA|BULLISH] MASTEK +4.67% | conf=0.91 sources=1 agree=1.00 impact=6.9 [BYPASS]\n  [ULTRA|BULLISH] TATAELXSI +5.35% | conf=0.91 sources=1 agree=1.00 impact=6.8 [BYPASS]\n  [ULTRA|BULLISH] INFY +5.82% | conf=0.90 sources=1 agree=1.00 impact=6.5 [BYPASS]\n  [ULTRA|BULLISH] NMDC +3.36% | conf=0.90 sources=1 agree=1.00 impact=6.3 [BYPASS]\n  [GOVT 5.5] Aviation stocks under pressure: IndiGo and SpiceJet decline up to 2.5% as Russia bans jet  | conf=0.77 sources=1 agree=0.70 impact=5.5 [BYPASS]\n  [neutral] Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900  | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] RBI may have sold gold to save foreign reserves, BE report shows | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Reliance and SoftBank-backed Netradyne in advanced talks with top GCCs | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Volumes jump at Newgen Software Technologies Ltd counter | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Who Is Ritabrata Banerjee? Expelled MLA In Focus Amid TMC Turmoil, Forged-Signature Row | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [ULTRA|BULLISH] GUJ\n...[truncated for debug safety]...",
+    "bypass_items": [
+      {
+        "kind": "scanner",
+        "ticker": "NEWGEN",
+        "label": "[ULTRA|BULLISH] NEWGEN +17.70%",
+        "confidence": 1.0,
+        "source_count": 2,
+        "agreement_score": 1.0,
+        "impact_score": 7.9,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NHPC",
+        "label": "[ULTRA|BEARISH] NHPC -6.48%",
+        "confidence": 1.0,
+        "source_count": 2,
+        "agreement_score": 1.0,
+        "impact_score": 7.44,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BSOFT",
+        "label": "[ULTRA|BULLISH] BSOFT +5.28%",
+        "confidence": 0.918,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.08,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "MASTEK",
+        "label": "[ULTRA|BULLISH] MASTEK +4.67%",
+        "confidence": 0.913,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.9,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BALAMINES",
+        "label": "[ULTRA|BULLISH] BALAMINES +14.85%",
+        "confidence": 0.941,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.88,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ROUTE",
+        "label": "[ULTRA|BULLISH] ROUTE +6.31%",
+        "confidence": 0.927,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.39,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "TATAELXSI",
+        "label": "[ULTRA|BULLISH] TATAELXSI +5.35%",
+        "confidence": 0.911,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.83,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NMDC",
+        "label": "[ULTRA|BULLISH] NMDC +3.36%",
+        "confidence": 0.897,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.33,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "GUJGASLTD",
+        "label": "[ULTRA|BULLISH] GUJGASLTD -0.06%",
+        "confidence": 0.864,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.16,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "INFY",
+        "label": "[ULTRA|BULLISH] INFY +5.82%",
+        "confidence": 0.901,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.45,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "BPCL",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] Aviation stocks under pressure: IndiGo and SpiceJet decline up to 2.5% as Russia bans jet ",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] RBI may have sold gold to save foreign reserves, BE report shows",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Reliance and SoftBank-backed Netradyne in advanced talks with top GCCs",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Volumes jump at Newgen Software Technologies Ltd counter",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Who Is Ritabrata Banerjee? Expelled MLA In Focus Amid TMC Turmoil, Forged-Signature Row",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "scanner",
+      "ticker": "NEWGEN",
+      "label": "[ULTRA|BULLISH] NEWGEN +17.70%",
+      "confidence": 1.0,
+      "source_count": 2,
+      "agreement_score": 1.0,
+      "impact_score": 7.9,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "NHPC",
+      "label": "[ULTRA|BEARISH] NHPC -6.48%",
+      "confidence": 1.0,
+      "source_count": 2,
+      "agreement_score": 1.0,
+      "impact_score": 7.44,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "BSOFT",
+      "label": "[ULTRA|BULLISH] BSOFT +5.28%",
+      "confidence": 0.918,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.08,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "MASTEK",
+      "label": "[ULTRA|BULLISH] MASTEK +4.67%",
+      "confidence": 0.913,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.9,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "BALAMINES",
+      "label": "[ULTRA|BULLISH] BALAMINES +14.85%",
+      "confidence": 0.941,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.88,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "ROUTE",
+      "label": "[ULTRA|BULLISH] ROUTE +6.31%",
+      "confidence": 0.927,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.39,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "TATAELXSI",
+      "label": "[ULTRA|BULLISH] TATAELXSI +5.35%",
+      "confidence": 0.911,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.83,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "NMDC",
+      "label": "[ULTRA|BULLISH] NMDC +3.36%",
+      "confidence": 0.897,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.33,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "GUJGASLTD",
+      "label": "[ULTRA|BULLISH] GUJGASLTD -0.06%",
+      "confidence": 0.864,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.16,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "INFY",
+      "label": "[ULTRA|BULLISH] INFY +5.82%",
+      "confidence": 0.901,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.45,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "BPCL",
+      "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+      "confidence": 1.0,
+      "source_count": 4,
+      "agreement_score": 0.7,
+      "impact_score": 10.0,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 5.5] Aviation stocks under pressure: IndiGo and SpiceJet decline up to 2.5% as Russia bans jet ",
+      "confidence": 0.769,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 ",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] RBI may have sold gold to save foreign reserves, BE report shows",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Reliance and SoftBank-backed Netradyne in advanced talks with top GCCs",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Volumes jump at Newgen Software Technologies Ltd counter",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Who Is Ritabrata Banerjee? Expelled MLA In Focus Amid TMC Turmoil, Forged-Signature Row",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=regime_transition volatility=1.0 compression_mode=PRESERVE",
+    "Bypass: scanner NEWGEN impact=7.9",
+    "Bypass: scanner NHPC impact=7.44",
+    "Bypass: scanner BSOFT impact=7.08",
+    "Bypass: scanner MASTEK impact=6.9",
+    "Bypass: scanner BALAMINES impact=7.88",
+    "Bypass: scanner ROUTE impact=7.39",
+    "Bypass: scanner TATAELXSI impact=6.83",
+    "Bypass: scanner NMDC impact=6.33",
+    "Section 'news' expanded limit (6525 chars)",
+    "Section 'govt' expanded limit (6525 chars)",
+    "Section 'scanner' expanded limit (6525 chars)"
+  ],
+  "regime": {
+    "primary_regime": "regime_transition",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.0,
+      "volatile": 0.35,
+      "high_risk": 0.42,
+      "risk_off": 0.35,
+      "regime_transition": 0.618,
+      "macro_uncertainty": 0.5,
+      "panic_volatile": 0.55
+    },
+    "volatility_index": 1.0,
+    "sentiment_instability": 0.911,
+    "news_shock_intensity": 0.5,
+    "scanner_anomaly_strength": 1.0,
+    "compression_aggressiveness": 0.22,
+    "regime_shift": false,
+    "previous_regime": "regime_transition",
+    "regime_since": "2026-06-02T12:39:58.247395",
+    "summary_block": "=== MARKET REGIME ===\n  Primary: REGIME TRANSITION | volatility=1.00\n  Persistence: -99m in current regime\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.22)\n  Signals: news_shock=0.50 sentiment_instability=0.91 scanner_anomaly=1.00"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.22,
+    "max_per_section": 4500,
+    "max_prompt_chars": 31360,
+    "gemini_word_cap": 823,
+    "skip_gemini": true,
+    "preserve_contradictions": true,
+    "volatility_index": 1.0,
+    "disagreement_score": 0.671,
+    "news_shock_intensity": 0.5
+  }
+}

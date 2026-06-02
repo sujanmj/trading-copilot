@@ -1,87 +1,86 @@
 {
-  "snapshot_id": "snap_30a6374efaf2",
-  "generated_at": "2026-05-28T16:50:48.923296+05:30",
-  "market_session": "DEGRADED",
+  "snapshot_id": "snap_4dd881ed069b",
+  "generated_at": "2026-06-02T15:46:56.259487+05:30",
+  "market_session": "PRE_MARKET",
   "lifecycle": {
-    "lifecycle_state": "DEGRADED",
+    "lifecycle_state": "PRE_MARKET",
     "lifecycle_base": "POST_MARKET",
-    "lifecycle_display": "Degraded — Scanner stalled: 25h; scanner:sla_exceeded",
+    "lifecycle_display": "Degraded — Stale or Conflicting State",
     "transition_valid": true,
     "transition_reason": "ok",
     "market_period": "post_market",
     "pipeline_status": "COMPLETE",
-    "after_hours_mode": true,
-    "suppress_trading_language": true,
-    "session_message": "After-hours intelligence mode active",
+    "after_hours_mode": false,
+    "suppress_trading_language": false,
+    "session_message": null,
     "collectors_may_run": true,
     "market_session_open": false
   },
   "runtime_state": {
-    "generated_at": "2026-05-28T16:50:48.911464+05:30",
+    "generated_at": "2026-06-02T15:46:56.258440+05:30",
     "authority": "runtime_state",
-    "primary_state": "DEGRADED",
+    "primary_state": "LIVE",
     "secondary_flags": {
       "stale_snapshot": false,
-      "scanner_stalled": true,
+      "scanner_stalled": false,
       "cache_only": false,
-      "runtime_degraded": true,
-      "missing_confirmation": true,
+      "missing_confirmation": false,
       "cache_mode": false
     },
     "source_freshness": {
       "scanner": {
-        "status": "idle",
-        "age_seconds": 90063,
-        "age_display": "25h",
+        "status": "ok",
+        "age_seconds": 1655,
+        "age_display": "27m",
         "stale": false,
         "file": "scanner_data.json"
       },
       "reddit": {
         "status": "ok",
-        "age_seconds": 48,
-        "age_display": "48s",
+        "age_seconds": 76,
+        "age_display": "1m",
         "stale": false,
         "file": "reddit_data.json"
       },
       "govt": {
         "status": "ok",
-        "age_seconds": 57,
-        "age_display": "57s",
+        "age_seconds": 87,
+        "age_display": "1m",
         "stale": false,
         "file": "govt_intelligence.json"
       },
       "news": {
         "status": "ok",
-        "age_seconds": 55,
-        "age_display": "55s",
+        "age_seconds": 85,
+        "age_display": "1m",
         "stale": false,
         "file": "news_feed.json"
       },
       "global": {
         "status": "ok",
-        "age_seconds": 64,
+        "age_seconds": 88,
         "age_display": "1m",
         "stale": false,
         "file": "global_markets.json"
       },
       "india": {
         "status": "ok",
-        "age_seconds": 77,
+        "age_seconds": 96,
         "age_display": "1m",
         "stale": false,
         "file": "latest_market_data.json"
       },
       "stats": {
         "status": "ok",
-        "age_seconds": 26,
-        "age_display": "26s",
+        "age_seconds": 2,
+        "age_display": "2s",
         "stale": false,
         "file": "stats_data.json"
       },
       "history": {
         "status": "ok",
-        "age_seconds": 25,
-        "age_display": "25s",
+        "age_seconds": 2,
+        "age_display": "2s",
         "stale": false,
         "file": "history_data.json"
       }
@@ -91,68 +90,68 @@
       "age_display": "—",
       "stale": false
     },
-    "db_size_display": "1.1 MB",
+    "db_size_display": "0.6 MB",
     "lifecycle": {
-      "lifecycle_state": "DEGRADED",
+      "lifecycle_state": "PRE_MARKET",
       "lifecycle_base": "POST_MARKET",
-      "lifecycle_display": "Degraded — Scanner stalled: 25h; scanner:sla_exceeded",
+      "lifecycle_display": "Degraded — Stale or Conflicting State",
       "transition_valid": true,
       "transition_reason": "ok",
       "market_period": "post_market",
       "pipeline_status": "COMPLETE",
-      "after_hours_mode": true,
-      "suppress_trading_language": true,
-      "session_message": "After-hours intelligence mode active",
+      "after_hours_mode": false,
+      "suppress_trading_language": false,
+      "session_message": null,
       "collectors_may_run": true,
       "market_session_open": false
     },
     "session": {
-      "session_status": "DEGRADED",
-      "session_display": "Degraded — Scanner stalled: 25h; scanner:sla_exceeded",
+      "session_status": "PRE_MARKET",
+      "session_display": "Degraded — Stale or Conflicting State",
       "market_session_open": false,
-      "after_hours_mode": true,
-      "suppress_trading_language": true,
-      "session_message": "After-hours intelligence mode active",
+      "after_hours_mode": false,
+      "suppress_trading_language": false,
+      "session_message": "Post-close evaluation and lifecycle resolution",
       "operational_mode": "postmarket_eval"
     },
     "pipeline": {
       "stages": {
         "scanner": {
-          "status": "test",
-          "at": "2026-05-28T03:44:04.966955+05:30",
-          "last_success_at": "2026-05-28T03:44:04.966955+05:30",
-          "age_minutes": 786,
-          "stalled": true,
-          "detail": "validate_probe"
+          "status": "ok",
+          "at": "2026-06-02T15:19:20.719666+05:30",
+          "last_success_at": "2026-06-02T15:19:20.719666+05:30",
+          "age_minutes": 27,
+          "stalled": false,
+          "detail": "scanned=439 signals=167"
         },
         "aggregation": {
           "status": "start",
-          "at": "2026-05-28T16:50:34.722071+05:30",
-          "last_success_at": "2026-05-28T03:44:05.544614+05:30",
-          "age_minutes": 786,
-          "stalled": true,
-          "detail": "eod:recovery:startup"
+          "at": "2026-06-02T15:46:53.472746+05:30",
+          "last_success_at": "2026-06-02T15:19:20.730427+05:30",
+          "age_minutes": 27,
+          "stalled": false,
+          "detail": "eod:scheduled:15:45"
         },
         "synthesis": {
           "status": "ok",
-          "at": "2026-05-28T03:44:05.548044+05:30",
-          "last_success_at": "2026-05-28T03:44:05.548044+05:30",
-          "age_minutes": 786,
-          "stalled": true,
-          "detail": "snap_61b6afa8d7c4"
+          "at": "2026-06-02T15:46:37.329297+05:30",
+          "last_success_at": "2026-06-02T15:46:37.329297+05:30",
+          "age_minutes": 0,
+          "stalled": false,
+          "detail": "unified_intelligence.json"
         },
         "snapshot_export": {
           "status": "ok",
-          "at": "2026-05-28T16:50:20.559975+05:30",
-          "last_success_at": "2026-05-28T16:50:20.559975+05:30",
+          "at": "2026-06-02T15:46:52.312251+05:30",
+          "last_success_at": "2026-06-02T15:46:52.312251+05:30",
           "age_minutes": 0,
           "stalled": false,
-          "detail": "v63"
+          "detail": "v115"
         },
         "cache": {
           "status": "ok",
-          "at": "2026-05-28T16:50:22.254288+05:30",
-          "last_success_at": "2026-05-28T16:50:22.254288+05:30",
+          "at": "2026-06-02T15:46:52.934479+05:30",
+          "last_success_at": "2026-06-02T15:46:52.934479+05:30",
           "age_minutes": 0,
           "stalled": false,
           "detail": "stats_data.json"
@@ -165,67 +164,60 @@
         }
       },
       "stalled_stages": [],
-      "historical_stalled_stages": [
+      "historical_stalled_stages": [],
+      "healthy_stages": [
         "scanner",
         "aggregation",
-        "synthesis"
-      ],
-      "healthy_stages": [
+        "synthesis",
         "snapshot_export",
         "cache"
       ],
       "any_stalled": false,
-      "any_historical_stalled": true,
+      "any_historical_stalled": false,
       "last_stage": "aggregation",
-      "updated_at": "2026-05-28T16:50:34.722071+05:30"
+      "updated_at": "2026-06-02T15:46:53.472746+05:30"
     },
     "scanner_health": {
-      "healthy": false,
-      "stalled": true,
-      "display": "Scanner stalled: 25h",
-      "age_minutes": 1501,
-      "file_age_minutes": 1501,
-      "heartbeat_age_minutes": null,
+      "healthy": true,
+      "stalled": false,
+      "display": "Scanner: healthy",
+      "age_minutes": 27,
+      "file_age_minutes": 27,
+      "heartbeat_age_minutes": 27,
       "stall_minutes": 45,
       "expect_quiet": false,
       "market_hours": false,
       "lock_hint": "",
       "scanner_file_exists": true,
-      "checked_at": "2026-05-28T16:50:48.796728+05:30"
+      "checked_at": "2026-06-02T15:46:56.191599+05:30"
     },
     "overnight_posture": {
-      "india_open_bias": "GAP_DOWN_BIAS",
+      "india_open_bias": "GAP_UP_BIAS",
       "risk_score": "LOW",
       "gap_probability": {
-        "gap_up_probability": 0.25,
-        "gap_down_probability": 0.75,
-        "gap_probability_label": "GAP_DOWN_LIKELY"
+        "gap_up_probability": 0.7,
+        "gap_down_probability": 0.3,
+        "gap_probability_label": "GAP_UP_LIKELY"
       }
     },
     "stall_watchdog": {
-      "degraded": true,
-      "issues": [
-        "scanner_stalled",
-        "stage:scanner"
-      ],
-      "root_causes": [
-        "Scanner stalled: 25h",
-        "scanner:sla_exceeded"
-      ],
+      "degraded": false,
+      "issues": [],
+      "root_causes": [],
       "threshold_minutes": 30,
       "scanner": {
-        "healthy": false,
-        "stalled": true,
-        "display": "Scanner stalled: 25h",
-        "age_minutes": 1500,
-        "file_age_minutes": 1500,
-        "heartbeat_age_minutes": null,
+        "healthy": true,
+        "stalled": false,
+        "display": "Scanner: healthy",
+        "age_minutes": 27,
+        "file_age_minutes": 27,
+        "heartbeat_age_minutes": 27,
         "stall_minutes": 30,
         "expect_quiet": false,
         "market_hours": false,
         "lock_hint": "",
         "scanner_file_exists": true,
-        "checked_at": "2026-05-28T16:50:47.289222+05:30"
+        "checked_at": "2026-06-02T15:46:55.869926+05:30"
       },
       "snapshot_freshness": {
         "stale": false,
@@ -234,41 +226,41 @@
       "pipeline": {
         "stages": {
           "scanner": {
-            "status": "test",
-            "at": "2026-05-28T03:44:04.966955+05:30",
-            "last_success_at": "2026-05-28T03:44:04.966955+05:30",
-            "age_minutes": 786,
-            "stalled": true,
-            "detail": "validate_probe"
+            "status": "ok",
+            "at": "2026-06-02T15:19:20.719666+05:30",
+            "last_success_at": "2026-06-02T15:19:20.719666+05:30",
+            "age_minutes": 27,
+            "stalled": false,
+            "detail": "scanned=439 signals=167"
           },
           "aggregation": {
             "status": "start",
-            "at": "2026-05-28T16:50:34.722071+05:30",
-            "last_success_at": "2026-05-28T03:44:05.544614+05:30",
-            "age_minutes": 786,
-            "stalled": true,
-            "detail": "eod:recovery:startup"
+            "at": "2026-06-02T15:46:53.472746+05:30",
+            "last_success_at": "2026-06-02T15:19:20.730427+05:30",
+            "age_minutes": 27,
+            "stalled": false,
+            "detail": "eod:scheduled:15:45"
           },
           "synthesis": {
             "status": "ok",
-            "at": "2026-05-28T03:44:05.548044+05:30",
-            "last_success_at": "2026-05-28T03:44:05.548044+05:30",
-            "age_minutes": 786,
-            "stalled": true,
-            "detail": "snap_61b6afa8d7c4"
+            "at": "2026-06-02T15:46:37.329297+05:30",
+            "last_success_at": "2026-06-02T15:46:37.329297+05:30",
+            "age_minutes": 0,
+            "stalled": false,
+            "detail": "unified_intelligence.json"
           },
           "snapshot_export": {
             "status": "ok",
-            "at": "2026-05-28T16:50:20.559975+05:30",
-            "last_success_at": "2026-05-28T16:50:20.559975+05:30",
+            "at": "2026-06-02T15:46:52.312251+05:30",
+            "last_success_at": "2026-06-02T15:46:52.312251+05:30",
             "age_minutes": 0,
             "stalled": false,
-            "detail": "v63"
+            "detail": "v115"
           },
           "cache": {
             "status": "ok",
-            "at": "2026-05-28T16:50:22.254288+05:30",
-            "last_success_at": "2026-05-28T16:50:22.254288+05:30",
+            "at": "2026-06-02T15:46:52.934479+05:30",
+            "last_success_at": "2026-06-02T15:46:52.934479+05:30",
             "age_minutes": 0,
             "stalled": false,
             "detail": "stats_data.json"
@@ -280,46 +272,31 @@
             "last_success_at": null
           }
         },
-        "stalled_stages": [
-          "scanner"
-        ],
-        "historical_stalled_stages": [
+        "stalled_stages": [],
+        "historical_stalled_stages": [],
+        "healthy_stages": [
           "scanner",
           "aggregation",
-          "synthesis"
-        ],
-        "healthy_stages": [
+          "synthesis",
           "snapshot_export",
           "cache"
         ],
-        "any_stalled": true,
-        "any_historical_stalled": true,
+        "any_stalled": false,
+        "any_historical_stalled": false,
         "last_stage": "aggregation",
-        "updated_at": "2026-05-28T16:50:34.722071+05:30"
+        "updated_at": "2026-06-02T15:46:53.472746+05:30"
       },
       "pipeline_stages": {
-        "overdue": [
-          {
-            "stage": "scanner",
-            "age_minutes": 786,
-            "reason": "sla_exceeded"
-          }
-        ],
-        "critical_overdue": [
-          {
-            "stage": "scanner",
-            "age_minutes": 786,
-            "reason": "sla_exceeded"
-          }
-        ],
+        "overdue": [],
+        "critical_overdue": [],
         "threshold_minutes": 30
       },
-      "checked_at": "2026-05-28T16:50:47.290098+05:30"
+      "checked_at": "2026-06-02T15:46:55.869926+05:30"
     },
     "collector_activity": {
       "collectors_active": true,
-      "collector_count": 1,
-      "collector_ok_count": 0,
+      "collector_count": 2,
+      "collector_ok_count": 1,
       "collector_issues": []
     },
     "market_phase": "post_market",
@@ -340,114 +317,111 @@
       "orchestrator_mode": "PRIMARY"
     },
     "regime": {
-      "regime": "panic_volatile",
-      "regime_internal": "panic_volatile",
-      "regime_display": "Panic Volatile"
+      "regime": "regime_transition",
+      "regime_internal": "regime_transition",
+      "regime_display": "Regime Transition"
     },
     "quality_score": {
-      "quality_score": 0.346,
-      "quality_display": "35%",
-      "suppressed": true
+      "quality_score": 0.787,
+      "quality_display": "79%",
+      "suppressed": false
     },
     "win_rate": {
-      "win_rate": 63.64,
-      "win_rate_display": "63.6%",
-      "win_rate_denominator": 11,
-      "statistically_confident": true,
-      "wins": 7,
-      "losses": 4
+      "win_rate": null,
+      "win_rate_display": "Awaiting statistical confidence",
+      "win_rate_denominator": 0,
+      "statistically_confident": false,
+      "wins": 0,
+      "losses": 0
     },
     "prediction_counts": {
-      "prediction_total": 162,
-      "evaluated": 66,
-      "pending": 96,
-      "resolved": 11,
-      "wins": 7,
-      "losses": 4,
+      "prediction_total": 25,
+      "evaluated": 0,
+      "pending": 25,
+      "resolved": 0,
+      "wins": 0,
+      "losses": 0,
       "partials": 0,
-      "neutral": 5,
-      "neutralized": 5,
-      "expired": 50
+      "neutral": 0,
+      "neutralized": 0,
+      "expired": 0
     },
     "metrics": {
-      "metric_date": "2026-05-28",
+      "metric_date": "2026-06-02",
       "metric_type": "all_time",
       "source": "sqlite_unified_metrics",
-      "total_predictions": 208,
-      "prediction_total": 162,
-      "evaluated": 66,
-      "total_evaluated": 66,
-      "pending": 96,
-      "wins": 7,
-      "losses": 4,
-      "neutral": 5,
+      "total_predictions": 25,
+      "prediction_total": 25,
+      "evaluated": 0,
+      "total_evaluated": 0,
+      "pending": 25,
+      "wins": 0,
+      "losses": 0,
+      "neutral": 0,
       "partials": 0,
-      "expired": 50,
+      "expired": 0,
       "cancelled": 0,
-      "invalidated": 46,
+      "invalidated": 0,
       "unresolved": 0,
-      "active": 76,
+      "active": 25,
       "predictions_without_outcome": 0,
-      "avg_gain_pct": 12.35,
-      "avg_loss_pct": 3.29,
-      "profit_factor": 3.75,
-      "opportunity_win_rate": 9.21,
+      "avg_gain_pct": 0.0,
+      "avg_loss_pct": 0.0,
+      "profit_factor": 0.0,
+      "opportunity_win_rate": 0.0,
       "risk_avoidance_rate": 0.0,
-      "high_conf_win_rate": 8.11,
-      "medium_conf_win_rate": 5.56,
+      "high_conf_win_rate": 0.0,
+      "medium_conf_win_rate": 0.0,
       "low_conf_win_rate": 0.0,
-      "resolved": 11,
-      "neutralized": 5,
-      "win_rate": 63.64,
-      "win_rate_display": "63.6%",
-      "win_rate_denominator": 11,
-      "statistically_confident": true,
+      "resolved": 0,
+      "neutralized": 0,
+      "win_rate": null,
+      "win_rate_display": "Awaiting statistical confidence",
+      "win_rate_denominator": 0,
+      "statistically_confident": false,
       "sections": {
         "live_session": {
-          "active_predictions": 18,
-          "pending": 18,
+          "active_predictions": 24,
+          "pending": 24,
           "resolved_today": 0,
           "wins_today": 0,
           "losses_today": 0
         },
         "historical_calibration": {
-          "evaluated_sample": 66,
-          "wins": 7,
-          "losses": 4,
-          "resolved": 11,
-          "win_rate": 63.64,
-          "win_rate_display": "63.6%",
-          "statistically_confident": true,
-          "calibration_phase": "EARLY CONFIDENCE",
-          "calibration_confidence": "Early confidence — metrics directional only, not statistically stable."
+          "evaluated_sample": 0,
+          "wins": 0,
+          "losses": 0,
+          "resolved": 0,
+          "win_rate": null,
+          "win_rate_display": "Awaiting statistical confidence",
+          "statistically_confident": false,
+          "calibration_phase": "LEARNING",
+          "calibration_confidence": "Collecting resolved outcomes — calibration suppressed until sample is meaningful."
         },
         "archived": {
-          "expired": 83,
-          "neutralized": 5
+          "expired": 1,
+          "neutralized": 0
         }
       }
     },
     "snapshot_freshness": {
       "fresh": true,
       "stale": false,
-      "degraded": true,
+      "degraded": false,
       "health_tier": "healthy",
       "age_minutes": 0,
       "stale_threshold_minutes": 15,
       "degraded_threshold_minutes": 15,
-      "pipeline_stalled": true,
-      "snapshot_version": 63,
-      "active_snapshot_id": "snap_20260528_165020",
-      "freshness_score": 45,
-      "suppress_confidence": true,
-      "block_elite_outputs": true,
-      "quality_score_penalty": 0.35,
+      "pipeline_stalled": false,
+      "snapshot_version": 115,
+      "active_snapshot_id": "snap_20260602_154651",
+      "freshness_score": 100,
+      "suppress_confidence": false,
+      "block_elite_outputs": false,
+      "quality_score_penalty": 0.0,
       "collector_issues": [],
       "sla_seconds": 900,
-      "warnings": [
-        "Snapshot older than 15 minutes",
-        "Pipeline stalled"
-      ],
+      "warnings": [],
       "collectors_active": true,
       "age_display": "0m",
       "freshness_available": true,
@@ -457,20 +431,23 @@
     "provider_health": {
       "status": "ok",
       "degraded_mode": "normal",
-      "ai_uptime_pct": 0.0,
+      "ai_uptime_pct": 41.2,
       "providers": {
         "gemini": {
           "provider": "gemini",
-          "requests_today": 2,
+          "requests_today": 10,
           "requests_per_hour": {
-            "16": 2
+            "8": 2,
+            "9": 3,
+            "10": 3,
+            "11": 2
           },
-          "avg_latency_ms": 5560.1,
-          "failovers": 3,
+          "avg_latency_ms": 2858.3,
+          "failovers": 21,
           "cooldown_activations": 0,
-          "quota_failures": 1,
+          "quota_failures": 7,
           "success_rate_pct": 0.0,
-          "degraded_count": 2,
+          "degraded_count": 10,
           "fallback_count": 0,
           "cache_hits": 0,
           "uptime_score": 0.0
@@ -491,17 +468,23 @@
         },
         "claude": {
           "provider": "claude",
-          "requests_today": 0,
-          "requests_per_hour": {},
-          "avg_latency_ms": 0.0,
+          "requests_today": 7,
+          "requests_per_hour": {
+            "8": 1,
+            "9": 2,
+            "10": 1,
+            "11": 2,
+            "12": 1
+          },
+          "avg_latency_ms": 54433.0,
           "failovers": 0,
           "cooldown_activations": 0,
           "quota_failures": 0,
-          "success_rate_pct": 0.0,
-          "degraded_count": 0,
+          "success_rate_pct": 100.0,
+          "degraded_count": 4,
           "fallback_count": 0,
           "cache_hits": 0,
-          "uptime_score": 0.0
+          "uptime_score": 70.0
         }
       }
     },
@@ -512,10 +495,10 @@
       "low_confidence_skips": 0
     },
     "intelligence_status": {
-      "status": "degraded",
-      "message": "Partial degradation — awaiting fresh cycle",
-      "degraded": true,
-      "elite_blocked": true,
+      "status": "ready",
+      "message": null,
+      "degraded": false,
+      "elite_blocked": false,
       "health_tier": "healthy"
     },
     "scheduler": {
@@ -527,20 +510,23 @@
     "ai_state": {
       "status": "ok",
       "degraded_mode": "normal",
-      "ai_uptime_pct": 0.0,
+      "ai_uptime_pct": 41.2,
       "providers": {
         "gemini": {
           "provider": "gemini",
-          "requests_today": 2,
+          "requests_today": 10,
           "requests_per_hour": {
-            "16": 2
+            "8": 2,
+            "9": 3,
+            "10": 3,
+            "11": 2
           },
-          "avg_latency_ms": 5560.1,
-          "failovers": 3,
+          "avg_latency_ms": 2858.3,
+          "failovers": 21,
           "cooldown_activations": 0,
-          "quota_failures": 1,
+          "quota_failures": 7,
           "success_rate_pct": 0.0,
-          "degraded_count": 2,
+          "degraded_count": 10,
           "fallback_count": 0,
           "cache_hits": 0,
           "uptime_score": 0.0
@@ -561,40 +547,36 @@
         },
         "claude": {
           "provider": "claude",
-          "requests_today": 0,
-          "requests_per_hour": {},
-          "avg_latency_ms": 0.0,
+          "requests_today": 7,
+          "requests_per_hour": {
+            "8": 1,
+            "9": 2,
+            "10": 1,
+            "11": 2,
+            "12": 1
+          },
+          "avg_latency_ms": 54433.0,
           "failovers": 0,
           "cooldown_activations": 0,
           "quota_failures": 0,
-          "success_rate_pct": 0.0,
-          "degraded_count": 0,
+          "success_rate_pct": 100.0,
+          "degraded_count": 4,
           "fallback_count": 0,
           "cache_hits": 0,
-          "uptime_score": 0.0
+          "uptime_score": 70.0
         }
       }
     },
     "alert_eligibility": {
-      "eligible": false,
-      "execution_eligible": false,
-      "block_reasons": [
-        "after_hours_block",
-        "execution_alerts_suppressed",
-        "lifecycle_mismatch",
-        "missing_ai_confirmation",
-        "suppressed:dedupe",
-        "suppressed:stale_snapshot"
-      ],
-      "suppression_count": 32,
-      "suppression_by_reason": {
-        "dedupe": 31,
-        "stale_snapshot": 1
-      }
+      "eligible": true,
+      "execution_eligible": true,
+      "block_reasons": [],
+      "suppression_count": 0,
+      "suppression_by_reason": {}
     },
     "metric_sources": {
-      "sqlite_evaluated": 66,
-      "export_evaluated": 66
+      "sqlite_evaluated": 0,
+      "export_evaluated": 0
     },
     "consistency": {
       "valid": true,
@@ -605,24 +587,21 @@
   "freshness": {
     "fresh": true,
     "stale": false,
-    "degraded": true,
+    "degraded": false,
     "health_tier": "healthy",
     "age_minutes": 0,
     "stale_threshold_minutes": 15,
     "degraded_threshold_minutes": 15,
-    "pipeline_stalled": true,
-    "snapshot_version": 63,
-    "active_snapshot_id": "snap_20260528_165020",
-    "freshness_score": 45,
-    "suppress_confidence": true,
-    "block_elite_outputs": true,
-    "quality_score_penalty": 0.35,
+    "pipeline_stalled": false,
+    "snapshot_version": 115,
+    "active_snapshot_id": "snap_20260602_154651",
+    "freshness_score": 100,
+    "suppress_confidence": false,
+    "block_elite_outputs": false,
+    "quality_score_penalty": 0.0,
     "collector_issues": [],
     "sla_seconds": 900,
-    "warnings": [
-      "Snapshot older than 15 minutes",
-      "Pipeline stalled"
-    ],
+    "warnings": [],
     "collectors_active": true,
     "age_display": "0m",
     "freshness_available": true,
@@ -630,124 +609,124 @@
     "status_label": "fresh"
   },
   "regime": {
-    "regime": "panic_volatile",
-    "regime_internal": "panic_volatile",
-    "regime_display": "Panic Volatile"
+    "regime": "regime_transition",
+    "regime_internal": "regime_transition",
+    "regime_display": "Regime Transition"
   },
-  "confidence": "5.2/10",
+  "confidence": "7.0/10",
   "quality_score": {
-    "quality_score": 0.346,
-    "quality_display": "35%",
-    "suppressed": true
+    "quality_score": 0.787,
+    "quality_display": "79%",
+    "suppressed": false
   },
   "market_mood": {
     "global_mood": "NEUTRAL",
     "india_outlook": "CAUTIOUSLY BULLISH",
     "retail_mood": "BULLISH",
-    "confidence_level": "5.2/10"
+    "confidence_level": "7.0/10"
   },
   "global_mood": "NEUTRAL",
   "india_bias": "",
   "retail_sentiment": "",
   "sector_rotation": {
     "bullish": [
-      "ADANI_GROUP",
-      "POWER",
-      "MEDIA_ENTERTAINMENT",
-      "METALS_MINING",
-      "INFRA_CAPGOODS",
-      "AUTO"
+      "IT",
+      "TELECOM",
+      "RAILWAYS_DEFENCE",
+      "CONSTRUCTION_REALTY",
+      "CHEMICALS",
+      "METALS_MINING"
     ],
     "bearish": [
-      "TEXTILES",
-      "HOTELS_TRAVEL",
-      "HEALTHCARE",
-      "CHEMICALS"
+      "PHARMA",
+      "CONSUMER_DURABLES",
+      "ENERGY_OIL",
+      "POWER"
     ],
     "rotation_strength": 1.0,
     "sectors": [
       {
-        "sector": "ADANI_GROUP",
-        "score": 5.058,
+        "sector": "IT",
+        "score": 3.271,
         "direction": "BULLISH",
         "rotation_strength": 1.0,
         "source": "scanner"
       },
       {
-        "sector": "POWER",
-        "score": 1.878,
-        "direction": "BULLISH",
-        "rotation_strength": 0.75,
-        "source": "scanner"
-      },
-      {
-        "sector": "MEDIA_ENTERTAINMENT",
-        "score": 1.596,
-        "direction": "BULLISH",
-        "rotation_strength": 0.64,
-        "source": "scanner"
-      },
-      {
-        "sector": "CONSUMER_DURABLES",
-        "score": 1.282,
-        "direction": "NEUTRAL",
-        "rotation_strength": 0.51,
-        "source": "scanner"
-      },
-      {
-        "sector": "METALS_MINING",
-        "score": 1.219,
-        "direction": "BULLISH",
-        "rotation_strength": 0.49,
-        "source": "scanner"
-      },
-      {
-        "sector": "INFRA_CAPGOODS",
-        "score": 1.107,
-        "direction": "BULLISH",
-        "rotation_strength": 0.44,
-        "source": "scanner"
-      },
-      {
-        "sector": "AUTO",
-        "score": 1.105,
-        "direction": "BULLISH",
-        "rotation_strength": 0.44,
-        "source": "scanner"
-      },
-      {
         "sector": "TELECOM",
-        "score": 1.078,
+        "score": 0.839,
         "direction": "BULLISH",
-        "rotation_strength": 0.43,
+        "rotation_strength": 0.34,
         "source": "scanner"
       },
       {
-        "sector": "TEXTILES",
-        "score": 0.959,
-        "direction": "BEARISH",
-        "rotation_strength": 0.38,
+        "sector": "RAILWAYS_DEFENCE",
+        "score": 0.682,
+        "direction": "BULLISH",
+        "rotation_strength": 0.27,
+        "source": "scanner"
+      },
+      {
+        "sector": "CONSTRUCTION_REALTY",
+        "score": 0.681,
+        "direction": "BULLISH",
+        "rotation_strength": 0.27,
+        "source": "scanner"
+      },
+      {
+        "sector": "CHEMICALS",
+        "score": 0.663,
+        "direction": "BULLISH",
+        "rotation_strength": 0.27,
         "source": "scanner"
       },
       {
         "sector": "PHARMA",
-        "score": 0.628,
-        "direction": "NEUTRAL",
-        "rotation_strength": 0.25,
-        "source": "scanner"
-      },
-      {
-        "sector": "HOTELS_TRAVEL",
-        "score": 0.589,
+        "score": 0.571,
         "direction": "BEARISH",
-        "rotation_strength": 0.24,
+        "rotation_strength": 0.23,
         "source": "scanner"
       },
       {
-        "sector": "FMCG",
-        "score": 0.498,
+        "sector": "INFRA_CAPGOODS",
+        "score": 0.553,
+        "direction": "NEUTRAL",
+        "rotation_strength": 0.22,
+        "source": "scanner"
+      },
+      {
+        "sector": "ADANI_GROUP",
+        "score": 0.502,
         "direction": "NEUTRAL",
         "rotation_strength": 0.2,
+        "source": "scanner"
+      },
+      {
+        "sector": "CONSUMER_DURABLES",
+        "score": 0.461,
+        "direction": "BEARISH",
+        "rotation_strength": 0.18,
+        "source": "scanner"
+      },
+      {
+        "sector": "ENERGY_OIL",
+        "score": 0.44999999999999996,
+        "direction": "BEARISH",
+        "rotation_strength": 0.18,
+        "source": "intel"
+      },
+      {
+        "sector": "METALS_MINING",
+        "score": 0.44999999999999996,
+        "direction": "BULLISH",
+        "rotation_strength": 0.18,
+        "source": "intel"
+      },
+      {
+        "sector": "BANKING",
+        "score": 0.415,
+        "direction": "NEUTRAL",
+        "rotation_strength": 0.17,
         "source": "scanner"
       }
     ],
@@ -756,110 +735,110 @@
   "top_opportunities": [],
   "risk_list": [
     {
-      "symbol": "POLYMED",
-      "logic": "ULTRA bearish -7.61% with 3.9x volume spike, breakdown and major move. Healthcare sector showing weakness. Avoid counter-trend positions in panic volatile regime."
+      "symbol": "NHPC",
+      "logic": "ULTRA bearish -6.48% with 12.8x volume spike, BREAKDOWN + GAP_DOWN confirmed. Second-highest volume anomaly. Power sector weakness evident. Confidence=1.00 on downside, impact=7.4. Scanner contradiction shows directional split - high risk zone."
     },
     {
-      "symbol": "EASEMYTRIP",
-      "logic": "ULTRA bearish -7.38% with 11.6x volume spike, breakdown, major move in Hotels/Travel. Sector showing structural weakness. High-impact scored signal with 0.94 confidence on downside."
-    },
-    {
-      "symbol": "BPCL",
-      "logic": "Government alert: Excise duty cut hits revenues by ₹1 lakh crore, directly negative for oil marketing companies. Policy headwind with 6/10 impact score affecting BPCL, IOC, HPCL."
-    },
-    {
-      "symbol": "IOC",
-      "logic": "Same excise duty revenue hit as BPCL. Additionally, crude oil falling -4.07% on Iran deal hopes compresses refining margins. Multiple contradictory signals create uncertainty."
+      "symbol": "WOCKPHARMA",
+      "logic": "STRONG bearish -8.87% with MAJOR_MOVE tag. Pharma sector weakness (-0.94%). Large single-session drop indicates institutional distribution or negative catalyst. Avoid until stabilization."
     },
     {
       "symbol": "HPCL",
-      "logic": "Triple negative: excise duty revenue loss, falling crude margins, government policy uncertainty. Avoid oil PSUs in current environment per government intelligence."
+      "logic": "Government high-impact alert (9/10 severity) warns fresh inflation risks from fuel price pressures will squeeze margins. Direct exposure to adverse policy environment. Bearish macro headwind affects all oil marketing companies."
     },
     {
-      "symbol": "ONGC",
-      "logic": "Crude oil crash -4.07% on U.S.-Iran negotiations directly impacts upstream oil producer valuations. Government alert flags ONGC specifically in excise duty impact list."
+      "symbol": "IOC",
+      "logic": "Explicitly named in government inflation warning alongside fuel price risks. Oil marketing company margin compression likely as crude at $91 with government subsidy pressure mounting. Bearish policy setup."
     },
     {
-      "symbol": "HDFCBANK",
-      "logic": "Headline: Rs 45 crore interest payment allegation creates uncertainty. Stock down -2% on internal probe reports. Avoid large-cap banking during investigation news cycle."
+      "symbol": "BPCL",
+      "logic": "Government alert targets fuel price inflation risks affecting BPCL margins. Energy/Oil sector showing weakness with GUJGASLTD volume spike on -0.06% (distribution pattern). Macro headwinds from crude volatility."
     },
     {
-      "symbol": "RVNL",
-      "logic": "Shares crashed -8% in 2 days with PL Capital seeing 36% downside potential per headline. Momentum breakdown in progress. Avoid falling knives in panic volatile regime."
+      "symbol": "RELIANCE",
+      "logic": "Included in government inflation warning on fuel prices despite flat performance today (0.00%). Large O&G exposure creates vulnerability to policy intervention. Reddit sentiment neutral-bullish but contradicted by government bearish alert (disagreement=0.50)."
     },
     {
-      "symbol": "COALINDIA",
-      "logic": "Contradictory scanner signal: marked ULTRA bearish despite +1.07% move (anomaly). Confusion in signal quality suggests avoiding until clarity emerges."
+      "symbol": "NTPC",
+      "logic": "Power sector under pressure as evidenced by NHPC -6.48% crash. Scanner shows NTPC in SHORT directional split. Avoid sector until stabilization given REGIME TRANSITION volatility."
     },
     {
-      "symbol": "INDOCO",
-      "logic": "Scanner directional split flags INDOCO in SHORT category alongside POLYMED and EASEMYTRIP weakness. Healthcare sector rotation turning negative. Avoid sector underperformers."
+      "symbol": "BLUESTARCO",
+      "logic": "Listed in scanner SHORT directional split. Consumer durables showing mixed signals with IFBIND +5.64% but below-volume (0.8x). Sector lacks conviction. Regime transition demands avoiding unclear setups."
+    },
+    {
+      "symbol": "ADANIENT",
+      "logic": "Reddit bearish mention despite Adani Group sector +0.86%. Capex announcement (Rs 1.53 lakh crore highest-ever) may strain balance sheet. Sentiment instability=0.62 suggests avoiding controversial names during transition regime."
+    },
+    {
+      "symbol": "ICICIBANK",
+      "logic": "Reddit bearish sentiment despite flat performance (0.00%). Banking stocks absent from bullish scanner signals. RBI gold sale concerns (foreign reserve management) create financial sector uncertainty. Contradiction with 1 bullish Reddit mention vs bearish - avoid mixed signals."
     }
   ],
-  "action_plan": "WATCH:\nNo active watchlist — await scanner confirmation.\n\nAVOID:\nPOLYMED, EASEMYTRIP, BPCL, IOC\n\nHIGH CONVICTION:\nNo High Conviction setups detected. Capital Preservation mode active.",
+  "action_plan": "WATCH:\nMonitor for confirmation: NEWGEN, BALAMINES, STLTECH, NMDC.\n\nAVOID:\nNHPC, WOCKPHARMA, HPCL, IOC\n\nHIGH CONVICTION:\nNo High Conviction setups detected. Capital Preservation mode active.",
   "elite_summary": {
-    "updated_at": "2026-05-28 16:48:50 IST",
+    "updated_at": "2026-06-02 15:45:04 IST",
     "engine_mode": "Mathematical_Heuristic_Ensemble",
-    "xgboost_available": false,
+    "xgboost_available": true,
     "total_raw_signals": 30,
     "elite_signals_count": 0,
     "elite_signals": []
   },
   "metrics": {
-    "metric_date": "2026-05-28",
+    "metric_date": "2026-06-02",
     "metric_type": "all_time",
     "source": "sqlite_unified_metrics",
-    "total_predictions": 208,
-    "prediction_total": 162,
-    "evaluated": 66,
-    "total_evaluated": 66,
-    "pending": 96,
-    "wins": 7,
-    "losses": 4,
-    "neutral": 5,
+    "total_predictions": 25,
+    "prediction_total": 25,
+    "evaluated": 0,
+    "total_evaluated": 0,
+    "pending": 25,
+    "wins": 0,
+    "losses": 0,
+    "neutral": 0,
     "partials": 0,
-    "expired": 50,
+    "expired": 0,
     "cancelled": 0,
-    "invalidated": 46,
+    "invalidated": 0,
     "unresolved": 0,
-    "active": 76,
+    "active": 25,
     "predictions_without_outcome": 0,
-    "avg_gain_pct": 12.35,
-    "avg_loss_pct": 3.29,
-    "profit_factor": 3.75,
-    "opportunity_win_rate": 9.21,
+    "avg_gain_pct": 0.0,
+    "avg_loss_pct": 0.0,
+    "profit_factor": 0.0,
+    "opportunity_win_rate": 0.0,
     "risk_avoidance_rate": 0.0,
-    "high_conf_win_rate": 8.11,
-    "medium_conf_win_rate": 5.56,
+    "high_conf_win_rate": 0.0,
+    "medium_conf_win_rate": 0.0,
     "low_conf_win_rate": 0.0,
-    "resolved": 11,
-    "neutralized": 5,
-    "win_rate": 63.64,
-    "win_rate_display": "63.6%",
-    "win_rate_denominator": 11,
-    "statistically_confident": true,
+    "resolved": 0,
+    "neutralized": 0,
+    "win_rate": null,
+    "win_rate_display": "Awaiting statistical confidence",
+    "win_rate_denominator": 0,
+    "statistically_confident": false,
     "sections": {
       "live_session": {
-        "active_predictions": 18,
-        "pending": 18,
+        "active_predictions": 24,
+        "pending": 24,
         "resolved_today": 0,
         "wins_today": 0,
         "losses_today": 0
       },
       "historical_calibration": {
-        "evaluated_sample": 66,
-        "wins": 7,
-        "losses": 4,
-        "resolved": 11,
-        "win_rate": 63.64,
-        "win_rate_display": "63.6%",
-        "statistically_confident": true,
-        "calibration_phase": "EARLY CONFIDENCE",
-        "calibration_confidence": "Early confidence — metrics directional only, not statistically stable."
+        "evaluated_sample": 0,
+        "wins": 0,
+        "losses": 0,
+        "resolved": 0,
+        "win_rate": null,
+        "win_rate_display": "Awaiting statistical confidence",
+        "statistically_confident": false,
+        "calibration_phase": "LEARNING",
+        "calibration_confidence": "Collecting resolved outcomes — calibration suppressed until sample is meaningful."
       },
       "archived": {
-        "expired": 83,
-        "neutralized": 5
+        "expired": 1,
+        "neutralized": 0
       }
     }
   },
@@ -880,139 +859,134 @@
     },
     "gemini": {
       "provider": "gemini",
-      "requests_today": 2,
+      "requests_today": 10,
       "requests_per_hour": {
-        "16": 2
+        "8": 2,
+        "9": 3,
+        "10": 3,
+        "11": 2
       },
-      "avg_latency_ms": 5560.1,
-      "failovers": 3,
+      "avg_latency_ms": 2858.3,
+      "failovers": 21,
       "cooldown_activations": 0,
-      "quota_failures": 1,
+      "quota_failures": 7,
       "success_rate_pct": 0.0,
-      "degraded_count": 2,
+      "degraded_count": 10,
       "fallback_count": 0,
       "cache_hits": 0,
       "uptime_score": 0.0
     },
     "claude": {
       "provider": "claude",
-      "requests_today": 0,
-      "requests_per_hour": {},
-      "avg_latency_ms": 0.0,
+      "requests_today": 7,
+      "requests_per_hour": {
+        "8": 1,
+        "9": 2,
+        "10": 1,
+        "11": 2,
+        "12": 1
+      },
+      "avg_latency_ms": 54433.0,
       "failovers": 0,
       "cooldown_activations": 0,
       "quota_failures": 0,
-      "success_rate_pct": 0.0,
-      "degraded_count": 0,
+      "success_rate_pct": 100.0,
+      "degraded_count": 4,
       "fallback_count": 0,
       "cache_hits": 0,
-      "uptime_score": 0.0
+      "uptime_score": 70.0
     }
   },
   "feeds": {
     "scanner": {
-      "status": "idle",
-      "age_seconds": 90063,
-      "age_display": "25h",
+      "status": "ok",
+      "age_seconds": 1655,
+      "age_display": "27m",
       "stale": false
     },
     "reddit": {
       "status": "ok",
-      "age_seconds": 48,
-      "age_display": "48s",
+      "age_seconds": 76,
+      "age_display": "1m",
       "stale": false
     },
     "govt": {
       "status": "ok",
-      "age_seconds": 57,
-      "age_display": "57s",
+      "age_seconds": 87,
+      "age_display": "1m",
       "stale": false
     },
     "news": {
       "status": "ok",
-      "age_seconds": 55,
-      "age_display": "55s",
+      "age_seconds": 85,
+      "age_display": "1m",
       "stale": false
     },
     "global": {
       "status": "ok",
-      "age_seconds": 64,
+      "age_seconds": 88,
       "age_display": "1m",
       "stale": false
     },
     "india": {
       "status": "ok",
-      "age_seconds": 77,
+      "age_seconds": 96,
       "age_display": "1m",
       "stale": false
     },
     "stats": {
       "status": "ok",
-      "age_seconds": 26,
-      "age_display": "26s",
+      "age_seconds": 2,
+      "age_display": "2s",
       "stale": false
     },
     "history": {
       "status": "ok",
-      "age_seconds": 25,
-      "age_display": "25s",
+      "age_seconds": 2,
+      "age_display": "2s",
       "stale": false
     }
   },
-  "blockers": [
-    "after_hours_block",
-    "execution_alerts_suppressed",
-    "lifecycle_mismatch",
-    "missing_ai_confirmation",
-    "suppressed:dedupe",
-    "suppressed:stale_snapshot",
-    "scanner_stalled",
-    "missing_confirmation"
-  ],
-  "warnings": [
-    "Partial degradation — awaiting fresh cycle",
-    "Snapshot aging — partial degradation",
-    "scanner_stalled",
-    "stage:scanner"
-  ],
+  "blockers": [],
+  "warnings": [],
   "pipeline_health": {
     "stages": {
       "scanner": {
-        "status": "test",
-        "at": "2026-05-28T03:44:04.966955+05:30",
-        "last_success_at": "2026-05-28T03:44:04.966955+05:30",
-        "age_minutes": 786,
-        "stalled": true,
-        "detail": "validate_probe"
+        "status": "ok",
+        "at": "2026-06-02T15:19:20.719666+05:30",
+        "last_success_at": "2026-06-02T15:19:20.719666+05:30",
+        "age_minutes": 27,
+        "stalled": false,
+        "detail": "scanned=439 signals=167"
       },
       "aggregation": {
         "status": "start",
-        "at": "2026-05-28T16:50:34.722071+05:30",
-        "last_success_at": "2026-05-28T03:44:05.544614+05:30",
-        "age_minutes": 786,
-        "stalled": true,
-        "detail": "eod:recovery:startup"
+        "at": "2026-06-02T15:46:53.472746+05:30",
+        "last_success_at": "2026-06-02T15:19:20.730427+05:30",
+        "age_minutes": 27,
+        "stalled": false,
+        "detail": "eod:scheduled:15:45"
       },
       "synthesis": {
         "status": "ok",
-        "at": "2026-05-28T03:44:05.548044+05:30",
-        "last_success_at": "2026-05-28T03:44:05.548044+05:30",
-        "age_minutes": 786,
-        "stalled": true,
-        "detail": "snap_61b6afa8d7c4"
+        "at": "2026-06-02T15:46:37.329297+05:30",
+        "last_success_at": "2026-06-02T15:46:37.329297+05:30",
+        "age_minutes": 0,
+        "stalled": false,
+        "detail": "unified_intelligence.json"
       },
       "snapshot_export": {
         "status": "ok",
-        "at": "2026-05-28T16:50:20.559975+05:30",
-        "last_success_at": "2026-05-28T16:50:20.559975+05:30",
+        "at": "2026-06-02T15:46:52.312251+05:30",
+        "last_success_at": "2026-06-02T15:46:52.312251+05:30",
         "age_minutes": 0,
         "stalled": false,
-        "detail": "v63"
+        "detail": "v115"
       },
       "cache": {
         "status": "ok",
-        "at": "2026-05-28T16:50:22.254288+05:30",
-        "last_success_at": "2026-05-28T16:50:22.254288+05:30",
+        "at": "2026-06-02T15:46:52.934479+05:30",
+        "last_success_at": "2026-06-02T15:46:52.934479+05:30",
         "age_minutes": 0,
         "stalled": false,
         "detail": "stats_data.json"
@@ -1032,175 +1006,175 @@
     "collectors_active": true
   },
   "intelligence": {
-    "timestamp": "2026-05-28T16:50:20.564349+05:30",
-    "generation_time": "2026-05-27 11:02:09",
-    "sources_used": 10,
-    "executive_summary": "Indian markets trade in panic volatile regime with contradictory signals. Excise duty cut on fuel creates revenue concerns (-₹1 lakh crore) while strong sectoral rotation emerges in Power, Adani Group, and Media with exceptional volume spikes. Global headwinds from inflation risks and AI-driven layoffs persist, but falling crude oil (Iran deal hopes) provides relief. Scanner anomalies show extreme divergence with 7 ultra-bullish vs 2 ultra-bearish signals.",
+    "timestamp": "2026-06-02T15:46:52.315545+05:30",
+    "generation_time": "2026-06-02 11:16:37",
+    "sources_used": 6,
+    "executive_summary": "Indian markets show strong sectoral divergence with IT sector surging +4.27% led by exceptional moves in NEWGEN (+17.7%, 41x volume) and TCS (+6.76%). However, government inflation warnings on fuel prices and monsoon risks create bearish macro headwinds affecting energy stocks. Market in REGIME TRANSITION with high volatility (1.00) and scanner anomaly flags warrant elevated caution despite intraday recovery (Nifty +0.43%, Sensex +0.52%).",
     "government_impact": {
-      "summary": "FM Sitharaman's petrol/diesel excise duty cut creates ₹1 lakh crore revenue hit, negative for oil PSUs (BPCL, IOC, HPCL) but positive for consumption sectors. RBI Governor's rupee undervaluation comments signal potential policy support. Australian inflation miss eases global rate concerns. Net impact: moderately bearish on oil PSUs, neutral on broader market.",
-      "confidence_score": "6/10"
+      "summary": "High-impact bearish alert (9/10 severity) on fresh inflation risks from fuel prices and monsoon uncertainty threatens household budgets and margin compression for oil marketing companies (HPCL, IOC, BPCL, RELIANCE). Policy divergence noted with bullish European tech sentiment offset by domestic inflation concerns.",
+      "confidence_score": "8/10"
     },
     "market_mood": {
       "global_mood": "NEUTRAL",
       "india_outlook": "CAUTIOUSLY BULLISH",
       "retail_mood": "BULLISH",
-      "confidence_level": "5.2/10"
+      "confidence_level": "7.0/10"
     },
     "sector_rotation": {
       "bullish": [
-        "ADANI_GROUP",
-        "POWER",
-        "MEDIA_ENTERTAINMENT",
-        "METALS_MINING",
-        "INFRA_CAPGOODS",
-        "AUTO"
+        "IT",
+        "TELECOM",
+        "RAILWAYS_DEFENCE",
+        "CONSTRUCTION_REALTY",
+        "CHEMICALS",
+        "METALS_MINING"
       ],
       "bearish": [
-        "TEXTILES",
-        "HOTELS_TRAVEL",
-        "HEALTHCARE",
-        "CHEMICALS"
+        "PHARMA",
+        "CONSUMER_DURABLES",
+        "ENERGY_OIL",
+        "POWER"
       ],
       "rotation_strength": 1.0,
       "sectors": [
         {
-          "sector": "ADANI_GROUP",
-          "score": 5.058,
+          "sector": "IT",
+          "score": 3.271,
           "direction": "BULLISH",
           "rotation_strength": 1.0,
           "source": "scanner"
         },
         {
-          "sector": "POWER",
-          "score": 1.878,
-          "direction": "BULLISH",
-          "rotation_strength": 0.75,
-          "source": "scanner"
-        },
-        {
-          "sector": "MEDIA_ENTERTAINMENT",
-          "score": 1.596,
-          "direction": "BULLISH",
-          "rotation_strength": 0.64,
-          "source": "scanner"
-        },
-        {
-          "sector": "CONSUMER_DURABLES",
-          "score": 1.282,
-          "direction": "NEUTRAL",
-          "rotation_strength": 0.51,
-          "source": "scanner"
-        },
-        {
-          "sector": "METALS_MINING",
-          "score": 1.219,
-          "direction": "BULLISH",
-          "rotation_strength": 0.49,
-          "source": "scanner"
-        },
-        {
-          "sector": "INFRA_CAPGOODS",
-          "score": 1.107,
-          "direction": "BULLISH",
-          "rotation_strength": 0.44,
-          "source": "scanner"
-        },
-        {
-          "sector": "AUTO",
-          "score": 1.105,
-          "direction": "BULLISH",
-          "rotation_strength": 0.44,
-          "source": "scanner"
-        },
-        {
           "sector": "TELECOM",
-          "score": 1.078,
+          "score": 0.839,
           "direction": "BULLISH",
-          "rotation_strength": 0.43,
+          "rotation_strength": 0.34,
           "source": "scanner"
         },
         {
-          "sector": "TEXTILES",
-          "score": 0.959,
-          "direction": "BEARISH",
-          "rotation_strength": 0.38,
+          "sector": "RAILWAYS_DEFENCE",
+          "score": 0.682,
+          "direction": "BULLISH",
+          "rotation_strength": 0.27,
+          "source": "scanner"
+        },
+        {
+          "sector": "CONSTRUCTION_REALTY",
+          "score": 0.681,
+          "direction": "BULLISH",
+          "rotation_strength": 0.27,
+          "source": "scanner"
+        },
+        {
+          "sector": "CHEMICALS",
+          "score": 0.663,
+          "direction": "BULLISH",
+          "rotation_strength": 0.27,
           "source": "scanner"
         },
         {
           "sector": "PHARMA",
-          "score": 0.628,
-          "direction": "NEUTRAL",
-          "rotation_strength": 0.25,
-          "source": "scanner"
-        },
-        {
-          "sector": "HOTELS_TRAVEL",
-          "score": 0.589,
+          "score": 0.571,
           "direction": "BEARISH",
-          "rotation_strength": 0.24,
+          "rotation_strength": 0.23,
           "source": "scanner"
         },
         {
-          "sector": "FMCG",
-          "score": 0.498,
+          "sector": "INFRA_CAPGOODS",
+          "score": 0.553,
+          "direction": "NEUTRAL",
+          "rotation_strength": 0.22,
+          "source": "scanner"
+        },
+        {
+          "sector": "ADANI_GROUP",
+          "score": 0.502,
           "direction": "NEUTRAL",
           "rotation_strength": 0.2,
+          "source": "scanner"
+        },
+        {
+          "sector": "CONSUMER_DURABLES",
+          "score": 0.461,
+          "direction": "BEARISH",
+          "rotation_strength": 0.18,
+          "source": "scanner"
+        },
+        {
+          "sector": "ENERGY_OIL",
+          "score": 0.44999999999999996,
+          "direction": "BEARISH",
+          "rotation_strength": 0.18,
+          "source": "intel"
+        },
+        {
+          "sector": "METALS_MINING",
+          "score": 0.44999999999999996,
+          "direction": "BULLISH",
+          "rotation_strength": 0.18,
+          "source": "intel"
+        },
+        {
+          "sector": "BANKING",
+          "score": 0.415,
+          "direction": "NEUTRAL",
+          "rotation_strength": 0.17,
           "source": "scanner"
         }
       ],
       "source": "sector_consistency"
     },
-    "action_plan": "WATCH:\nNo active watchlist — await scanner confirmation.\n\nAVOID:\nPOLYMED, EASEMYTRIP, BPCL, IOC\n\nHIGH CONVICTION:\nNo High Conviction setups detected. Capital Preservation mode active.",
-    "self_calibration": "Past 30-day performance shows 60% win rate with exceptional success in TELECOM (100%). Recent losses in HIGH confidence calls (GREENLAM -4.4%, GNFC -3.6%) indicate need for caution in current panic volatile regime. Sector rotation signals align with past TELECOM success pattern. Avoiding repetition of 10 pending tickers from today. Current regime shows 60% alert precision in panic_volatile conditions, supporting selective aggressive positioning in ultra-scanner breakouts.",
+    "action_plan": "WATCH:\nMonitor for confirmation: NEWGEN, BALAMINES, STLTECH, NMDC.\n\nAVOID:\nNHPC, WOCKPHARMA, HPCL, IOC\n\nHIGH CONVICTION:\nNo High Conviction setups detected. Capital Preservation mode active.",
+    "self_calibration": "No evaluated predictions yet (system initialization). Applying conservative confidence scaling due to REGIME TRANSITION state and high sentiment instability (0.62). Defaulting to MEDIUM confidence for most picks except cross-validated High Conviction scanner signals with >5x volume confirmation. Widening stop-loss ranges by 15% given volatility=1.00.",
     "top_opportunities": [],
     "risks_and_avoids": [
       {
-        "symbol": "POLYMED",
-        "logic": "ULTRA bearish -7.61% with 3.9x volume spike, breakdown and major move. Healthcare sector showing weakness. Avoid counter-trend positions in panic volatile regime."
+        "symbol": "NHPC",
+        "logic": "ULTRA bearish -6.48% with 12.8x volume spike, BREAKDOWN + GAP_DOWN confirmed. Second-highest volume anomaly. Power sector weakness evident. Confidence=1.00 on downside, impact=7.4. Scanner contradiction shows directional split - high risk zone."
       },
       {
-        "symbol": "EASEMYTRIP",
-        "logic": "ULTRA bearish -7.38% with 11.6x volume spike, breakdown, major move in Hotels/Travel. Sector showing structural weakness. High-impact scored signal with 0.94 confidence on downside."
-      },
-      {
-        "symbol": "BPCL",
-        "logic": "Government alert: Excise duty cut hits revenues by ₹1 lakh crore, directly negative for oil marketing companies. Policy headwind with 6/10 impact score affecting BPCL, IOC, HPCL."
-      },
-      {
-        "symbol": "IOC",
-        "logic": "Same excise duty revenue hit as BPCL. Additionally, crude oil falling -4.07% on Iran deal hopes compresses refining margins. Multiple contradictory signals create uncertainty."
+        "symbol": "WOCKPHARMA",
+        "logic": "STRONG bearish -8.87% with MAJOR_MOVE tag. Pharma sector weakness (-0.94%). Large single-session drop indicates institutional distribution or negative catalyst. Avoid until stabilization."
       },
       {
         "symbol": "HPCL",
-        "logic": "Triple negative: excise duty revenue loss, falling crude margins, government policy uncertainty. Avoid oil PSUs in current environment per government intelligence."
+        "logic": "Government high-impact alert (9/10 severity) warns fresh inflation risks from fuel price pressures will squeeze margins. Direct exposure to adverse policy environment. Bearish macro headwind affects all oil marketing companies."
       },
       {
-        "symbol": "ONGC",
-        "logic": "Crude oil crash -4.07% on U.S.-Iran negotiations directly impacts upstream oil producer valuations. Government alert flags ONGC specifically in excise duty impact list."
+        "symbol": "IOC",
+        "logic": "Explicitly named in government inflation warning alongside fuel price risks. Oil marketing company margin compression likely as crude at $91 with government subsidy pressure mounting. Bearish policy setup."
       },
       {
-        "symbol": "HDFCBANK",
-        "logic": "Headline: Rs 45 crore interest payment allegation creates uncertainty. Stock down -2% on internal probe reports. Avoid large-cap banking during investigation news cycle."
+        "symbol": "BPCL",
+        "logic": "Government alert targets fuel price inflation risks affecting BPCL margins. Energy/Oil sector showing weakness with GUJGASLTD volume spike on -0.06% (distribution pattern). Macro headwinds from crude volatility."
       },
       {
-        "symbol": "RVNL",
-        "logic": "Shares crashed -8% in 2 days with PL Capital seeing 36% downside potential per headline. Momentum breakdown in progress. Avoid falling knives in panic volatile regime."
+        "symbol": "RELIANCE",
+        "logic": "Included in government inflation warning on fuel prices despite flat performance today (0.00%). Large O&G exposure creates vulnerability to policy intervention. Reddit sentiment neutral-bullish but contradicted by government bearish alert (disagreement=0.50)."
       },
       {
-        "symbol": "COALINDIA",
-        "logic": "Contradictory scanner signal: marked ULTRA bearish despite +1.07% move (anomaly). Confusion in signal quality suggests avoiding until clarity emerges."
+        "symbol": "NTPC",
+        "logic": "Power sector under pressure as evidenced by NHPC -6.48% crash. Scanner shows NTPC in SHORT directional split. Avoid sector until stabilization given REGIME TRANSITION volatility."
       },
       {
-        "symbol": "INDOCO",
-        "logic": "Scanner directional split flags INDOCO in SHORT category alongside POLYMED and EASEMYTRIP weakness. Healthcare sector rotation turning negative. Avoid sector underperformers."
+        "symbol": "BLUESTARCO",
+        "logic": "Listed in scanner SHORT directional split. Consumer durables showing mixed signals with IFBIND +5.64% but below-volume (0.8x). Sector lacks conviction. Regime transition demands avoiding unclear setups."
+      },
+      {
+        "symbol": "ADANIENT",
+        "logic": "Reddit bearish mention despite Adani Group sector +0.86%. Capex announcement (Rs 1.53 lakh crore highest-ever) may strain balance sheet. Sentiment instability=0.62 suggests avoiding controversial names during transition regime."
+      },
+      {
+        "symbol": "ICICIBANK",
+        "logic": "Reddit bearish sentiment despite flat performance (0.00%). Banking stocks absent from bullish scanner signals. RBI gold sale concerns (foreign reserve management) create financial sector uncertainty. Contradiction with 1 bullish Reddit mention vs bearish - avoid mixed signals."
       }
     ],
     "opportunities": []
   },
-  "calibration": "Past 30-day performance shows 60% win rate with exceptional success in TELECOM (100%). Recent losses in HIGH confidence calls (GREENLAM -4.4%, GNFC -3.6%) indicate need for caution in current panic volatile regime. Sector rotation signals align with past TELECOM success pattern. Avoiding repetition of 10 pending tickers from today. Current regime shows 60% alert precision in panic_volatile conditions, supporting selective aggressive positioning in ultra-scanner breakouts.",
-  "executive_summary": "Indian markets trade in panic volatile regime with contradictory signals. Excise duty cut on fuel creates revenue concerns (-₹1 lakh crore) while strong sectoral rotation emerges in Power, Adani Group, and Media with exceptional volume spikes. Global headwinds from inflation risks and AI-driven layoffs persist, but falling crude oil (Iran deal hopes) provides relief. Scanner anomalies show extreme divergence with 7 ultra-bullish vs 2 ultra-bearish signals.",
+  "calibration": "No evaluated predictions yet (system initialization). Applying conservative confidence scaling due to REGIME TRANSITION state and high sentiment instability (0.62). Defaulting to MEDIUM confidence for most picks except cross-validated High Conviction scanner signals with >5x volume confirmation. Widening stop-loss ranges by 15% given volatility=1.00.",
+  "executive_summary": "Indian markets show strong sectoral divergence with IT sector surging +4.27% led by exceptional moves in NEWGEN (+17.7%, 41x volume) and TCS (+6.76%). However, government inflation warnings on fuel prices and monsoon risks create bearish macro headwinds affecting energy stocks. Market in REGIME TRANSITION with high volatility (1.00) and scanner anomaly flags warrant elevated caution despite intraday recovery (Nifty +0.43%, Sensex +0.52%).",
   "collector_at": null,
-  "snapshot_built_at": "2026-05-28T16:50:48.923346+05:30",
-  "published_at": "2026-05-28T16:50:48.923400+05:30",
-  "_committed_at": "2026-05-28T16:50:48.923400+05:30"
+  "snapshot_built_at": "2026-06-02T15:46:56.259487+05:30",
+  "published_at": "2026-06-02T15:46:56.259487+05:30",
+  "_committed_at": "2026-06-02T15:46:56.259487+05:30"
 }

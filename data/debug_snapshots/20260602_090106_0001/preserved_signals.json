@@ -1,0 +1,659 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nSCANNER ANOMALY | [ULTRA|BULLISH] NEWGEN Rs.509.95 +15.50% vol=29.8x | VOLUME_SPIKE + BREAKOUT + MAJOR_MOVE\nSCANNER ANOMALY | [ULTRA|BULLISH] BALAMINES Rs.1989.0 +13.54% vol=2.5x | VOLUME_SPIKE + BREAKOUT + MAJOR_MOVE\nGOVT ALERT | [9.0/10 BEARISH] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget | affects: IOC, BPCL, HPCL, RELIANCE\nGOVT ALERT | [6.0/10 NEUTRAL] Rupee opens 7 paise lower at 95.06 against US dollar | affects: IOC, OIL INDIA, ONGC, RELIANCE\nHEADLINE | [neutral] Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expiry, Sensex Falls 200 Points; NHPC Declines 7% | source=NDTV Profit\nHEADLINE | [neutral] RBI may have sold gold to save foreign reserves, BE report shows | source=Economic Times (Markets)\n  [evidence_meta] novelty_avg=4.54 repetition_suppressed=48 diversity_suppressed=18",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "scanner",
+        "ticker": "NEWGEN",
+        "label": "[ULTRA|BULLISH] NEWGEN +15.50%",
+        "confidence": 0.93,
+        "source_count": 2,
+        "agreement_score": 0.625,
+        "impact_score": 7.9,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BSOFT",
+        "label": "[ULTRA|BULLISH] BSOFT +5.06%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.02,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ZENSARTECH",
+        "label": "[ULTRA|BULLISH] ZENSARTECH +5.47%",
+        "confidence": 0.92,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.14,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NHPC",
+        "label": "[ULTRA|BEARISH] NHPC -5.27%",
+        "confidence": 0.907,
+        "source_count": 2,
+        "agreement_score": 0.625,
+        "impact_score": 7.08,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "MASTEK",
+        "label": "[ULTRA|BULLISH] MASTEK +4.42%",
+        "confidence": 0.911,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.83,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "SONATSOFTW",
+        "label": "[ULTRA|BULLISH] SONATSOFTW +5.20%",
+        "confidence": 0.918,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.06,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BALAMINES",
+        "label": "[ULTRA|BULLISH] BALAMINES +13.54%",
+        "confidence": 0.92,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.15,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NMDC",
+        "label": "[ULTRA|BULLISH] NMDC +3.18%",
+        "confidence": 0.88,
+        "source_count": 2,
+        "agreement_score": 0.625,
+        "impact_score": 6.11,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "TATAELXSI",
+        "label": "[ULTRA|BULLISH] TATAELXSI +4.46%",
+        "confidence": 0.898,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.35,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "GUJGASLTD",
+        "label": "[ULTRA|BULLISH] GUJGASLTD +2.03%",
+        "confidence": 0.875,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.52,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 6.0] Rupee opens 7 paise lower at 95.06 against US dollar",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 6.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 4.0] Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+        "confidence": 0.727,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "RELIANCE",
+        "label": "[GOVT 4.0] Oil rally may fuel stagflation concerns, though AI remains market's key driver: Arnab Das",
+        "confidence": 0.967,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "RELIANCE",
+        "label": "[GOVT 5.5] US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel infla",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "RELIANCE",
+        "label": "[GOVT 5.5] Indian bonds steady as U.S.-Iran tensions linger; RBI policy review due Friday",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expir",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] RBI may have sold gold to save foreign reserves, BE report shows",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] RBI Likely To Hold Rates, Raise Inflation Forecast: HSBC's Pranjul Bhandari",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Newgen Software Technologies Ltd leads gainers in 'A' group",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Protean eGov gains on appointing Ajay Rajan as MD & CEO; V Easwaran steps down as interim ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel infla",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol | conf=1.00 sources=4 agree=0.70 impact=10.0 [BYPASS]\n  [ULTRA|BULLISH] NEWGEN +15.50% | conf=0.93 sources=2 agree=0.62 impact=7.9 [BYPASS]\n  [ULTRA|BULLISH] BALAMINES +13.54% | conf=0.92 sources=1 agree=1.00 impact=7.2 [BYPASS]\n  [ULTRA|BULLISH] ZENSARTECH +5.47% | conf=0.92 sources=1 agree=1.00 impact=7.1 [BYPASS]\n  [ULTRA|BEARISH] NHPC -5.27% | conf=0.91 sources=2 agree=0.62 impact=7.1 [BYPASS]\n  [ULTRA|BULLISH] SONATSOFTW +5.20% | conf=0.92 sources=1 agree=1.00 impact=7.1 [BYPASS]\n  [ULTRA|BULLISH] BSOFT +5.06% | conf=0.92 sources=1 agree=1.00 impact=7.0 [BYPASS]\n  [ULTRA|BULLISH] MASTEK +4.42% | conf=0.91 sources=1 agree=1.00 impact=6.8 [BYPASS]\n  [ULTRA|BULLISH] TATAELXSI +4.46% | conf=0.90 sources=1 agree=1.00 impact=6.3 [BYPASS]\n  [ULTRA|BULLISH] NMDC +3.18% | conf=0.88 sources=2 agree=0.62 impact=6.1 [BYPASS]\n  [GOVT 6.0] Rupee opens 7 paise lower at 95.06 against US dollar | conf=1.00 sources=4 agree=0.70 impact=6.0\n  [ULTRA|BULLISH] GUJGASLTD +2.03% | conf=0.88 sources=1 agree=1.00 impact=5.5 [BYPASS]\n  [GOVT 5.5] US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel infla | conf=1.00 sources=3 agree=0.70 impact=5.5 [BYPASS]\n  [GOVT 5.5] Indian bonds steady as U.S.-Iran tensions linger; RBI policy review due Friday | conf=1.00 sources=3 agree=0.70 impact=5.5 [BYPASS]\n  [neutral] Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expir | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] RBI may have sold gold to save foreign reserves, BE report shows | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] RBI Likely To Hold Rates, Raise Inflation Forecast: HSBC's Pranjul Bhandari | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Newgen Software Technologies Ltd leads gainers in 'A' group | conf=0.70 sources=1\n...[truncated for debug safety]...",
+    "bypass_items": [
+      {
+        "kind": "scanner",
+        "ticker": "NEWGEN",
+        "label": "[ULTRA|BULLISH] NEWGEN +15.50%",
+        "confidence": 0.93,
+        "source_count": 2,
+        "agreement_score": 0.625,
+        "impact_score": 7.9,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BSOFT",
+        "label": "[ULTRA|BULLISH] BSOFT +5.06%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.02,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ZENSARTECH",
+        "label": "[ULTRA|BULLISH] ZENSARTECH +5.47%",
+        "confidence": 0.92,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.14,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NHPC",
+        "label": "[ULTRA|BEARISH] NHPC -5.27%",
+        "confidence": 0.907,
+        "source_count": 2,
+        "agreement_score": 0.625,
+        "impact_score": 7.08,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "MASTEK",
+        "label": "[ULTRA|BULLISH] MASTEK +4.42%",
+        "confidence": 0.911,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.83,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "SONATSOFTW",
+        "label": "[ULTRA|BULLISH] SONATSOFTW +5.20%",
+        "confidence": 0.918,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.06,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "BALAMINES",
+        "label": "[ULTRA|BULLISH] BALAMINES +13.54%",
+        "confidence": 0.92,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.15,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NMDC",
+        "label": "[ULTRA|BULLISH] NMDC +3.18%",
+        "confidence": 0.88,
+        "source_count": 2,
+        "agreement_score": 0.625,
+        "impact_score": 6.11,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "TATAELXSI",
+        "label": "[ULTRA|BULLISH] TATAELXSI +4.46%",
+        "confidence": 0.898,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.35,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "GUJGASLTD",
+        "label": "[ULTRA|BULLISH] GUJGASLTD +2.03%",
+        "confidence": 0.875,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.52,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "RELIANCE",
+        "label": "[GOVT 5.5] US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel infla",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "RELIANCE",
+        "label": "[GOVT 5.5] Indian bonds steady as U.S.-Iran tensions linger; RBI policy review due Friday",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expir",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] RBI may have sold gold to save foreign reserves, BE report shows",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] RBI Likely To Hold Rates, Raise Inflation Forecast: HSBC's Pranjul Bhandari",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Newgen Software Technologies Ltd leads gainers in 'A' group",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Protean eGov gains on appointing Ajay Rajan as MD & CEO; V Easwaran steps down as interim ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel infla",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "scanner",
+      "ticker": "NEWGEN",
+      "label": "[ULTRA|BULLISH] NEWGEN +15.50%",
+      "confidence": 0.93,
+      "source_count": 2,
+      "agreement_score": 0.625,
+      "impact_score": 7.9,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "BSOFT",
+      "label": "[ULTRA|BULLISH] BSOFT +5.06%",
+      "confidence": 0.917,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.02,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "ZENSARTECH",
+      "label": "[ULTRA|BULLISH] ZENSARTECH +5.47%",
+      "confidence": 0.92,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.14,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "NHPC",
+      "label": "[ULTRA|BEARISH] NHPC -5.27%",
+      "confidence": 0.907,
+      "source_count": 2,
+      "agreement_score": 0.625,
+      "impact_score": 7.08,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "MASTEK",
+      "label": "[ULTRA|BULLISH] MASTEK +4.42%",
+      "confidence": 0.911,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.83,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "SONATSOFTW",
+      "label": "[ULTRA|BULLISH] SONATSOFTW +5.20%",
+      "confidence": 0.918,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.06,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "BALAMINES",
+      "label": "[ULTRA|BULLISH] BALAMINES +13.54%",
+      "confidence": 0.92,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.15,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "NMDC",
+      "label": "[ULTRA|BULLISH] NMDC +3.18%",
+      "confidence": 0.88,
+      "source_count": 2,
+      "agreement_score": 0.625,
+      "impact_score": 6.11,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "TATAELXSI",
+      "label": "[ULTRA|BULLISH] TATAELXSI +4.46%",
+      "confidence": 0.898,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.35,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "GUJGASLTD",
+      "label": "[ULTRA|BULLISH] GUJGASLTD +2.03%",
+      "confidence": 0.875,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.52,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "IOC",
+      "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+      "confidence": 1.0,
+      "source_count": 4,
+      "agreement_score": 0.7,
+      "impact_score": 10.0,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "RELIANCE",
+      "label": "[GOVT 5.5] US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel infla",
+      "confidence": 1.0,
+      "source_count": 3,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "RELIANCE",
+      "label": "[GOVT 5.5] Indian bonds steady as U.S.-Iran tensions linger; RBI policy review due Friday",
+      "confidence": 1.0,
+      "source_count": 3,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expir",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] RBI may have sold gold to save foreign reserves, BE report shows",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] RBI Likely To Hold Rates, Raise Inflation Forecast: HSBC's Pranjul Bhandari",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Newgen Software Technologies Ltd leads gainers in 'A' group",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Protean eGov gains on appointing Ajay Rajan as MD & CEO; V Easwaran steps down as interim ",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel infla",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=regime_transition volatility=1.0 compression_mode=PRESERVE",
+    "Bypass: scanner NEWGEN impact=7.9",
+    "Bypass: scanner BSOFT impact=7.02",
+    "Bypass: scanner ZENSARTECH impact=7.14",
+    "Bypass: scanner NHPC impact=7.08",
+    "Bypass: scanner MASTEK impact=6.83",
+    "Bypass: scanner SONATSOFTW impact=7.06",
+    "Bypass: scanner BALAMINES impact=7.15",
+    "Bypass: scanner NMDC impact=6.11",
+    "Section 'news' expanded limit (6525 chars)",
+    "Section 'govt' expanded limit (6525 chars)",
+    "Section 'scanner' expanded limit (6525 chars)"
+  ],
+  "regime": {
+    "primary_regime": "regime_transition",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.0,
+      "volatile": 0.35,
+      "high_risk": 0.42,
+      "risk_off": 0.35,
+      "regime_transition": 0.669,
+      "macro_uncertainty": 0.5,
+      "panic_volatile": 0.55
+    },
+    "volatility_index": 1.0,
+    "sentiment_instability": 1.0,
+    "news_shock_intensity": 0.5,
+    "scanner_anomaly_strength": 1.0,
+    "compression_aggressiveness": 0.22,
+    "regime_shift": false,
+    "previous_regime": "regime_transition",
+    "regime_since": "2026-06-02T12:39:58.247395",
+    "summary_block": "=== MARKET REGIME ===\n  Primary: REGIME TRANSITION | volatility=1.00\n  Persistence: -219m in current regime\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.22)\n  Signals: news_shock=0.50 sentiment_instability=1.00 scanner_anomaly=1.00"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.22,
+    "max_per_section": 4500,
+    "max_prompt_chars": 31360,
+    "gemini_word_cap": 823,
+    "skip_gemini": true,
+    "preserve_contradictions": true,
+    "volatility_index": 1.0,
+    "disagreement_score": 0.798,
+    "news_shock_intensity": 0.5
+  }
+}

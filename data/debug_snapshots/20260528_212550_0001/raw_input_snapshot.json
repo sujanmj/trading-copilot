@@ -1,0 +1,65 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "df44f629e45536245408",
+    "india_markets": "5718086f0671309c6c60",
+    "news": "b73fba470fa61967a5d8",
+    "youtube": "empty",
+    "govt": "9d81df2c61d0e6f2a43b",
+    "inshorts": "empty",
+    "reddit": "empty",
+    "telegram": "empty",
+    "scanner": "empty",
+    "twitter": "empty",
+    "nse_filings": "empty",
+    "composite": "5dba900d212a3d62d97e"
+  },
+  "metrics": {
+    "india_avg_change": -0.015,
+    "news_count": 122,
+    "govt_high_impact": 10,
+    "scanner_signals": 0,
+    "top_scanner_tickers": [],
+    "scanner_signature": [],
+    "top_news_titles": [
+      "policybazaar co-founders look to offload shares worth  ₹654 crore in block deal",
+      "tata motors pv sees consumer shift towards evs amid west asia crisis, says md sh",
+      "us consumer spending edges up as inflation accelerates",
+      "us warns oman amid hormuz blockade: will target any actors involved in facilitat",
+      "us-iran war news updates: iran responds to us  attack near bandar abbas",
+      "victims of the washington paper mill disaster included husbands and grandfathers"
+    ],
+    "reddit_sentiment": "unknown",
+    "reddit_confidence": 0,
+    "novelty_avg_score": 4.5,
+    "repetition_suppressed": 52
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 122
+  },
+  "youtube_type": "NoneType",
+  "govt_counts": {
+    "high_impact_items": 10
+  },
+  "inshorts_type": "NoneType",
+  "reddit_type": "NoneType",
+  "telegram_type": "NoneType",
+  "scanner_type": "NoneType",
+  "twitter_type": "NoneType",
+  "nse_filings_type": "NoneType"
+}

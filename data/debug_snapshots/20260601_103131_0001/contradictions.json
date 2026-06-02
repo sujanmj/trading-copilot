@@ -1,0 +1,49 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [WOCKPHARMA, SAREGAMA, STLTECH, ZEEL] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]",
+      "disagreement_score": 0.875,
+      "long_count": 14,
+      "short_count": 16
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 2 bullish vs 7 bearish high-impact items",
+      "disagreement_score": 0.286
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly NATCOPHARM ULTRA move -7.88%",
+      "disagreement_score": 0.788,
+      "ticker": "NATCOPHARM"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly WOCKPHARMA ULTRA move +6.65%",
+      "disagreement_score": 0.665,
+      "ticker": "WOCKPHARMA"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly JWL ULTRA move -5.64%",
+      "disagreement_score": 0.564,
+      "ticker": "JWL"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly SAREGAMA ULTRA move +5.38%",
+      "disagreement_score": 0.538,
+      "ticker": "SAREGAMA"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly STLTECH ULTRA move +5.00%",
+      "disagreement_score": 0.5,
+      "ticker": "STLTECH"
+    }
+  ],
+  "overall_disagreement_score": 0.602,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.88 | Scanner split: LONG [WOCKPHARMA, SAREGAMA, STLTECH, ZEEL] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]\n  [institutional_policy_divergence] disagreement=0.29 | Govt policy mix: 2 bullish vs 7 bearish high-impact items\n  [scanner_anomaly] disagreement=0.79 | Anomaly NATCOPHARM ULTRA move -7.88%\n  [scanner_anomaly] disagreement=0.67 | Anomaly WOCKPHARMA ULTRA move +6.65%\n  [scanner_anomaly] disagreement=0.56 | Anomaly JWL ULTRA move -5.64%\n  [scanner_anomaly] disagreement=0.54 | Anomaly SAREGAMA ULTRA move +5.38%\n  [scanner_anomaly] disagreement=0.50 | Anomaly STLTECH ULTRA move +5.00%",
+  "count": 7
+}

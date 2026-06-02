@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "88f14672f3f48f728b5c",
+    "india_markets": "fe9d9bea489af4e010e0",
+    "news": "e2c513e5d71142d19d26",
+    "youtube": "e70f2b98e1f064cca834",
+    "govt": "a7bcf548648eef70061c",
+    "inshorts": "5d17669a25082acc32bb",
+    "reddit": "ea31ad4f4b13a69d42a6",
+    "telegram": "empty",
+    "scanner": "1ef551fcee7b19817a70",
+    "twitter": "d5d8dbd9754bb6497262",
+    "nse_filings": "b201d779d8bbfee288bb",
+    "composite": "7a84a331ed1e08f4c880"
+  },
+  "metrics": {
+    "india_avg_change": -0.039,
+    "news_count": 119,
+    "govt_high_impact": 17,
+    "scanner_signals": 109,
+    "top_scanner_tickers": [
+      "KPRMILL",
+      "WOCKPHARMA",
+      "NATCOPHARM",
+      "AEGISLOG",
+      "INOXWIND"
+    ],
+    "scanner_signature": [
+      "('KPRMILL', 'ULTRA', 4.0)",
+      "('WOCKPHARMA', 'ULTRA', 9.5)",
+      "('NATCOPHARM', 'ULTRA', -6.8)",
+      "('AEGISLOG', 'ULTRA', 2.8)",
+      "('INOXWIND', 'ULTRA', -7.9)"
+    ],
+    "top_news_titles": [
+      "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+      "indian firms line up for us tariff refunds amid looming legal challenge",
+      "inflation and input costs threaten earnings momentum going forward: dhananjay si",
+      "iphone 18 pro max camera upgrade is coming — but will apple bump the device's pr",
+      "malaysia bans social media accounts for children younger than 16",
+      "suzlon energy shares fall over 2% after sebi fines rs 29 crore for misleading fi"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.55,
+    "repetition_suppressed": 61
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 119
+  },
+  "govt_counts": {
+    "high_impact_items": 17
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 20
+  }
+}

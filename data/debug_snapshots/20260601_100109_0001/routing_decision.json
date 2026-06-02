@@ -1,0 +1,102 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3803,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-01",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-01T10:01:10.047498",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3803,
+      "force": true
+    },
+    {
+      "time": "2026-06-01T10:02:05.064525",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "091f63954b4875a31f03",
+    "delta_reasons": [
+      "scanner_count_change",
+      "scanner_opportunities_changed",
+      "reddit_sentiment_change",
+      "reddit_sentiment_spike"
+    ],
+    "metrics": {
+      "india_avg_change": -0.152,
+      "news_count": 119,
+      "govt_high_impact": 13,
+      "scanner_signals": 135,
+      "top_scanner_tickers": [
+        "INOXWIND",
+        "KPRMILL",
+        "ZEEL",
+        "NATCOPHARM",
+        "AEGISLOG"
+      ],
+      "scanner_signature": [
+        "('INOXWIND', 'ULTRA', -9.6)",
+        "('KPRMILL', 'ULTRA', 3.5)",
+        "('ZEEL', 'ULTRA', 6.7)",
+        "('NATCOPHARM', 'ULTRA', -7.4)",
+        "('AEGISLOG', 'ULTRA', 3.7)"
+      ],
+      "top_news_titles": [
+        "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+        "indian firms line up for us tariff refunds amid looming legal challenge",
+        "inflation and input costs threaten earnings momentum going forward: dhananjay si",
+        "inox wind shares crash 8% after q4 profit drops 45% yoy. should you buy, sell or",
+        "iran blames us 'contradictions', strikes for peace deal delay, links pact to leb",
+        "psu bank stocks vs private banks in fy27: the valuation trap you need to avoid"
+      ],
+      "reddit_sentiment": "neutral",
+      "reddit_confidence": 50,
+      "novelty_avg_score": 4.54,
+      "repetition_suppressed": 55
+    },
+    "source_hashes": {
+      "global_markets": "3591a600cbec15895da2",
+      "india_markets": "519a596ad17a6527136a",
+      "news": "ccc83b5e0a0ed9c07ab9",
+      "youtube": "05fd5424893c8b0a60a8",
+      "govt": "b358c5cc535a1dc17607",
+      "inshorts": "81169cbe1660a482cf98",
+      "reddit": "17393a81c28c9a6abe6a",
+      "telegram": "empty",
+      "scanner": "41e9bd33a5fbf74ec3f1",
+      "twitter": "6eea112cf83b15515551",
+      "nse_filings": "a5e5ff82927346aa2b2a",
+      "composite": "2bb53bb3a3f27cabfd8a"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

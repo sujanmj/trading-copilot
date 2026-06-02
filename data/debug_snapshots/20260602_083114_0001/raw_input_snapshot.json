@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "4c476d33cb9e8102fefc",
+    "india_markets": "e7a488c54c91c587eddf",
+    "news": "205323ebf317740d1ae0",
+    "youtube": "f5fb98b22a81eaf257af",
+    "govt": "5d15a839dda5f21f6237",
+    "inshorts": "a9b77c27b2319079532a",
+    "reddit": "144d4aef33270676abae",
+    "telegram": "empty",
+    "scanner": "205a783a27c60bc72cfc",
+    "twitter": "3efff054db66cc7ee667",
+    "nse_filings": "56e4f62dfa239a0bceef",
+    "composite": "4c33d1cd7d15d67078d7"
+  },
+  "metrics": {
+    "india_avg_change": 0.686,
+    "news_count": 127,
+    "govt_high_impact": 16,
+    "scanner_signals": 158,
+    "top_scanner_tickers": [
+      "NEWGEN",
+      "BSOFT",
+      "MASTEK",
+      "NHPC",
+      "SONATSOFTW"
+    ],
+    "scanner_signature": [
+      "('NEWGEN', 'ULTRA', 14.3)",
+      "('BSOFT', 'ULTRA', 5.2)",
+      "('MASTEK', 'ULTRA', 4.5)",
+      "('NHPC', 'ULTRA', -5.8)",
+      "('SONATSOFTW', 'ULTRA', 5.5)"
+    ],
+    "top_news_titles": [
+      "hdfc bank shares drop 25% in 2026. buying opportunity or falling knife?",
+      "indigo, spicejet shares under pressure as russia halts jet fuel exports",
+      "protean egov gains on appointing ajay rajan as md & ceo; v easwaran steps down a",
+      "rbi likely to hold rates, raise inflation forecast: hsbc's pranjul bhandari",
+      "stock market crash news today live updates: nifty sees resistance at 23,300 amid",
+      "us stock market:  treasury yields rise after strong us data, geopolitical risks"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.54,
+    "repetition_suppressed": 64
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 127
+  },
+  "govt_counts": {
+    "high_impact_items": 16
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 22
+  }
+}

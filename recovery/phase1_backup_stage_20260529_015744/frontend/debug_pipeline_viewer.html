@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Pipeline Observability</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --warn: #f59e0b;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      background: var(--panel);
+    }
+    h1 { margin: 0; font-size: 16px; font-weight: 600; }
+    input, button, select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font: inherit;
+    }
+    button { cursor: pointer; background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.secondary { background: transparent; color: var(--text); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .card h2 {
+      margin: 0;
+      padding: 10px 12px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.2);
+    }
+    .card pre {
+      margin: 0;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 360px;
+      overflow: auto;
+    }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 4px;
+      min-width: 140px;
+    }
+    .stat label { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+    .stat span { font-size: 15px; font-weight: 600; }
+    .warn { color: var(--warn); }
+    .ok { color: var(--ok); }
+    #status { color: var(--muted); margin-left: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI Pipeline Debug Viewer</h1>
+    <label>API Key <input type="password" id="apiKey" placeholder="X-API-Key" style="width:200px" /></label>
+    <label>Cycle <select id="cycleSelect"><option value="">latest</option></select></label>
+    <button onclick="loadAll()">Refresh</button>
+    <button class="secondary" onclick="saveKey()">Save Key</button>
+    <span id="status">Ready</span>
+  </header>
+
+  <div class="stats" id="healthStats"></div>
+
+  <div class="grid">
+    <div class="card"><h2>Preservation</h2><pre id="preservation">—</pre></div>
+    <div class="card"><h2>Compression</h2><pre id="compression">—</pre></div>
+    <div class="card"><h2>AI Routing</h2><pre id="routing">—</pre></div>
+    <div class="card"><h2>Delta Analysis</h2><pre id="delta">—</pre></div>
+    <div class="card"><h2>Quality Metrics</h2><pre id="quality">—</pre></div>
+    <div class="card"><h2>Explanations</h2><pre id="explanations">—</pre></div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function headers() {
+      const h = { Accept: 'application/json' };
+      const key = $('apiKey').value.trim() || sessionStorage.getItem('debug_api_key') || '';
+      if (key) h['X-API-Key'] = key;
+      return h;
+    }
+
+    function saveKey() {
+      sessionStorage.setItem('debug_api_key', $('apiKey').value.trim());
+      $('status').textContent = 'API key saved to session';
+    }
+
+    async function fetchJson(path) {
+      const r = await fetch(path, { headers: headers() });
+      if (!r.ok) throw new Error(`${path} → ${r.status} ${await r.text()}`);
+      return r.json();
+    }
+
+    function fmt(obj) {
+      return JSON.stringify(obj, null, 2);
+    }
+
+    function renderHealth(h) {
+      const obs = h.pipeline_observability || {};
+      const iq = h.last_quality_score;
+      const iqClass = iq != null && iq < 0.55 ? 'warn' : 'ok';
+      $('healthStats').innerHTML = `
+        <div class="stat"><label>Regime</label><span>${h.market_regime || obs.market_regime || '—'}</span></div>
+        <div class="stat"><label>Compression</label><span>${h.compression_mode || obs.compression_mode || '—'}</span></div>
+        <div class="stat"><label>Budget Left</label><span>$${h.ai_budget_remaining ?? obs.ai_budget_remaining ?? '—'}</span></div>
+        <div class="stat"><label>Quality IQ</label><span class="${iqClass}">${iq ?? '—'}</span></div>
+        <div class="stat"><label>Delta Trigger</label><span>${h.delta_trigger_reason || '—'}</span></div>
+        <div class="stat"><label>Latest Cycle</label><span>${obs.latest_cycle_id || '—'}</span></div>
+      `;
+    }
+
+    async function loadSnapshots() {
+      const data = await fetchJson('/api/debug/snapshots');
+      const sel = $('cycleSelect');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">latest</option>';
+      (data.cycles || []).forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.id}${c.reuse ? ' (reuse)' : ''}`;
+        sel.appendChild(opt);
+      });
+      if (cur) sel.value = cur;
+    }
+
+    async function loadAll() {
+      $('status').textContent = 'Loading…';
+      try {
+        const saved = sessionStorage.getItem('debug_api_key');
+        if (saved && !$('apiKey').value) $('apiKey').value = saved;
+
+        await loadSnapshots();
+        const cycle = $('cycleSelect').value;
+        const q = cycle ? `?cycle_id=${encodeURIComponent(cycle)}` : '';
+
+        const [health, preservation, compression, routing, delta, quality, explanations] = await Promise.all([
+          fetchJson('/api/health'),
+          fetchJson('/api/debug/preservation' + q),
+          fetchJson('/api/debug/compression' + q),
+          fetchJson('/api/debug/ai-routing' + q),
+          fetchJson('/api/debug/delta-analysis' + q),
+          fetchJson('/api/debug/quality' + q),
+          fetchJson('/api/debug/explanations'),
+        ]);
+
+        renderHealth(health);
+        $('preservation').textContent = fmt(preservation);
+        $('compression').textContent = fmt(compression);
+        $('routing').textContent = fmt(routing);
+        $('delta').textContent = fmt(delta);
+        $('quality').textContent = fmt(quality);
+        $('explanations').textContent = fmt(explanations.latest || explanations);
+        $('status').textContent = `Updated ${new Date().toLocaleTimeString()} · cycle ${preservation.cycle_id || 'none'}`;
+      } catch (e) {
+        $('status').textContent = 'Error: ' + e.message;
+        console.error(e);
+      }
+    }
+
+    $('apiKey').addEventListener('change', saveKey);
+    loadAll();
+    setInterval(loadAll, 120000);
+  </script>
+</body>
+</html>

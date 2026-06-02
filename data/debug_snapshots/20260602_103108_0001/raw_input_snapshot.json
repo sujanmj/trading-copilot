@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "e2a949a846c946bc2e06",
+    "india_markets": "1b2d24dc4078aec34313",
+    "news": "b72f05ca6c81af96acbd",
+    "youtube": "6e2014dd0b8a57ff2f07",
+    "govt": "c942e311b5fefafe4d48",
+    "inshorts": "18520db966688af84966",
+    "reddit": "230d7aa2f18bed65fd0e",
+    "telegram": "empty",
+    "scanner": "33aef24bd7bf3ba42f6b",
+    "twitter": "0287ba828b6a0fd17b8a",
+    "nse_filings": "df2e37d49cb7206d8ab7",
+    "composite": "295bf9eb7c9fe975cd1f"
+  },
+  "metrics": {
+    "india_avg_change": -0.169,
+    "news_count": 136,
+    "govt_high_impact": 6,
+    "scanner_signals": 162,
+    "top_scanner_tickers": [
+      "NEWGEN",
+      "NHPC",
+      "BSOFT",
+      "MASTEK",
+      "BALAMINES"
+    ],
+    "scanner_signature": [
+      "('NEWGEN', 'ULTRA', 15.7)",
+      "('NHPC', 'ULTRA', -6.2)",
+      "('BSOFT', 'ULTRA', 5.2)",
+      "('MASTEK', 'ULTRA', 4.4)",
+      "('BALAMINES', 'ULTRA', 15.6)"
+    ],
+    "top_news_titles": [
+      "acca signs mous with uzbekistan’s finance ministry and central bank",
+      "promoters' cousins can be independent directors, not classed as 'related', says",
+      "rbi may have sold gold to save foreign reserves, be report shows",
+      "stock market news today live updates: nifty rebounds to reclaim 23,500, sensex s",
+      "us visa overhaul: indian students could face fresh hurdles under revised policy.",
+      "volumes jump at newgen software technologies ltd counter"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.56,
+    "repetition_suppressed": 63
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 136
+  },
+  "govt_counts": {
+    "high_impact_items": 6
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 22
+  }
+}

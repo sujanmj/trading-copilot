@@ -1,0 +1,70 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "52147776464b24a39d02",
+    "india_markets": "dfa1f3fe0b91fb7a843f",
+    "news": "a24957103d690f38c6c8",
+    "youtube": "9da71501201456f015fa",
+    "govt": "27c51b0581d9a13f4845",
+    "inshorts": "9ec4153ff57a1a054143",
+    "reddit": "03b63d930cb64f0cb150",
+    "telegram": "empty",
+    "scanner": "676eb63b9f78f3b15524",
+    "twitter": "68815371ccc7346d2e93",
+    "nse_filings": "8c1480713097cfae32dd",
+    "composite": "6e04fe62d0252f613300"
+  },
+  "metrics": {
+    "india_avg_change": -0.112,
+    "news_count": 0,
+    "govt_high_impact": 12,
+    "scanner_signals": 164,
+    "top_scanner_tickers": [
+      "INOXWIND",
+      "NATCOPHARM",
+      "KPRMILL",
+      "ZEEL",
+      "AEGISLOG"
+    ],
+    "scanner_signature": [
+      "('INOXWIND', 'ULTRA', -10.0)",
+      "('NATCOPHARM', 'ULTRA', -8.8)",
+      "('KPRMILL', 'ULTRA', 1.5)",
+      "('ZEEL', 'ULTRA', 2.0)",
+      "('AEGISLOG', 'ULTRA', 3.5)"
+    ],
+    "top_news_titles": [],
+    "reddit_sentiment": "neutral",
+    "reddit_confidence": 50,
+    "novelty_avg_score": 0.0,
+    "repetition_suppressed": 0
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 0
+  },
+  "govt_counts": {
+    "high_impact_items": 12
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 20
+  }
+}

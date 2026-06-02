@@ -1,0 +1,102 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3742,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-02",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-02T12:39:58.432294",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3742,
+      "force": true
+    },
+    {
+      "time": "2026-06-02T12:40:52.325000",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "5486dfaf70e0531530c1",
+    "delta_reasons": [
+      "news_delta",
+      "govt_change",
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": -0.092,
+      "news_count": 128,
+      "govt_high_impact": 17,
+      "scanner_signals": 153,
+      "top_scanner_tickers": [
+        "NEWGEN",
+        "BSOFT",
+        "MASTEK",
+        "NHPC",
+        "NMDC"
+      ],
+      "scanner_signature": [
+        "('NEWGEN', 'ULTRA', 11.5)",
+        "('BSOFT', 'ULTRA', 5.2)",
+        "('MASTEK', 'ULTRA', 4.3)",
+        "('NHPC', 'ULTRA', -5.5)",
+        "('NMDC', 'ULTRA', 3.4)"
+      ],
+      "top_news_titles": [
+        "hdfc bank shares drop 25% in 2026. buying opportunity or falling knife?",
+        "indigo, spicejet shares under pressure as russia halts jet fuel exports",
+        "protean egov gains on appointing ajay rajan as md & ceo; v easwaran steps down a",
+        "rbi likely to hold rates, raise inflation forecast: hsbc's pranjul bhandari",
+        "stock market crash news today live updates: nifty sees resistance at 23,300 amid",
+        "us stock market:  treasury yields rise after strong us data, geopolitical risks"
+      ],
+      "reddit_sentiment": "neutral",
+      "reddit_confidence": 50,
+      "novelty_avg_score": 4.54,
+      "repetition_suppressed": 63
+    },
+    "source_hashes": {
+      "global_markets": "eb371ba52f6d66f04b3c",
+      "india_markets": "9f6626e00abc70a37610",
+      "news": "d6fa5a1ebdef597d90fa",
+      "youtube": "cf0bdabd4564a903a95c",
+      "govt": "7481d0d42f3bc45d1cf5",
+      "inshorts": "8096c1ad7a165ab98ce7",
+      "reddit": "53e43ab3d294e9f4afa5",
+      "telegram": "empty",
+      "scanner": "a669a99100d8881b4277",
+      "twitter": "65a90a88729c77e8b625",
+      "nse_filings": "a0dcb42411a23f1362e5",
+      "composite": "473e530ffc2163871445"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

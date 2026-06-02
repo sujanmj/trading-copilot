@@ -1,0 +1,659 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nSCANNER ANOMALY | [ULTRA|BEARISH] ANDHRSUGAR Rs.79.91 -10.65% vol=3.0x | VOLUME_SPIKE + BREAKDOWN + GAP_DOWN\nSCANNER ANOMALY | [ULTRA|BEARISH] INOXWIND Rs.83.84 -9.87% vol=3.8x | VOLUME_SPIKE + BREAKDOWN + GAP_DOWN\nGOVT ALERT | [9.0/10 BEARISH] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget | affects: IOC, BPCL, HPCL, RELIANCE\nGOVT ALERT | [6.0/10 BEARISH] INR slides further as renewed geopolitical tensions led to surge in crude oil prices | affects: IOC, ONGC, RELIANCE, OIL INDIA\nHEADLINE | [neutral] ​FIIs bet on high-growth smallcaps: 14 stocks rally up to 225% in 5 months, 6 turn multibaggers | source=Economic Times (Markets)\nHEADLINE | [neutral] SEBI Approves State Street Global Advisors' Stake Acquisition In Groww AMC | source=NDTV Profit\n  [evidence_meta] novelty_avg=4.54 repetition_suppressed=60 diversity_suppressed=18",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "scanner",
+        "ticker": "INOXWIND",
+        "label": "[ULTRA|BEARISH] INOXWIND -9.87%",
+        "confidence": 0.931,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.55,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "KPRMILL",
+        "label": "[ULTRA|BULLISH] KPRMILL +2.64%",
+        "confidence": 0.895,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.24,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NATCOPHARM",
+        "label": "[ULTRA|BEARISH] NATCOPHARM -8.13%",
+        "confidence": 0.933,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.59,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ZEEL",
+        "label": "[ULTRA|BULLISH] ZEEL +2.88%",
+        "confidence": 0.894,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.23,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "AEGISLOG",
+        "label": "[ULTRA|BULLISH] AEGISLOG +3.45%",
+        "confidence": 0.895,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.25,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ANDHRSUGAR",
+        "label": "[ULTRA|BEARISH] ANDHRSUGAR -10.65%",
+        "confidence": 0.925,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.31,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "LTTS",
+        "label": "[ULTRA|BEARISH] LTTS -1.37%",
+        "confidence": 0.882,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.79,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "WOCKPHARMA",
+        "label": "[ULTRA|BULLISH] WOCKPHARMA +5.98%",
+        "confidence": 0.908,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.72,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "SAREGAMA",
+        "label": "[ULTRA|BULLISH] SAREGAMA +8.39%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.03,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JWL",
+        "label": "[ULTRA|BEARISH] JWL -5.69%",
+        "confidence": 0.888,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.99,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 7.5] INR slides further as renewed geopolitical tensions led to surge in crude oil prices",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 5.0] Rupee ends little changed on two-way foreign portfolio flows, merchant hedging",
+        "confidence": 0.995,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "RELIANCE",
+        "label": "[GOVT 4.0] JetBlue flags higher fuel costs as Iran conflict drags on",
+        "confidence": 1.0,
+        "source_count": 6,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 4.0] EasyJet says possible US bid 'highly opportunistic' as shares jump 10%",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] India bonds slip ahead of RBI policy as war risks lift oil",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] ​FIIs bet on high-growth smallcaps: 14 stocks rally up to 225% in 5 months, 6 turn multiba",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] SEBI Approves State Street Global Advisors' Stake Acquisition In Groww AMC",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] INR slides further as renewed geopolitical tensions led to surge in crude oil prices",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Indian firms line up for US tariff refunds amid looming legal challenge",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Wise stock falls as Belgian prosecutors probe money laundering",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Iran Warns Of Choking Bab el-Mandeb: How This May Cripple Global Trade, Energy Flows",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol | conf=1.00 sources=4 agree=0.70 impact=10.0 [BYPASS]\n  [ULTRA|BEARISH] NATCOPHARM -8.13% | conf=0.93 sources=1 agree=1.00 impact=7.6 [BYPASS]\n  [ULTRA|BEARISH] INOXWIND -9.87% | conf=0.93 sources=1 agree=1.00 impact=7.5 [BYPASS]\n  [GOVT 7.5] INR slides further as renewed geopolitical tensions led to surge in crude oil prices | conf=1.00 sources=4 agree=0.70 impact=7.5 [BYPASS]\n  [ULTRA|BEARISH] ANDHRSUGAR -10.65% | conf=0.93 sources=1 agree=1.00 impact=7.3 [BYPASS]\n  [ULTRA|BULLISH] SAREGAMA +8.39% | conf=0.92 sources=1 agree=1.00 impact=7.0 [BYPASS]\n  [ULTRA|BULLISH] WOCKPHARMA +5.98% | conf=0.91 sources=1 agree=1.00 impact=6.7 [BYPASS]\n  [ULTRA|BULLISH] AEGISLOG +3.45% | conf=0.90 sources=1 agree=1.00 impact=6.2 [BYPASS]\n  [ULTRA|BULLISH] KPRMILL +2.64% | conf=0.90 sources=1 agree=1.00 impact=6.2 [BYPASS]\n  [ULTRA|BULLISH] ZEEL +2.88% | conf=0.89 sources=1 agree=1.00 impact=6.2 [BYPASS]\n  [ULTRA|BEARISH] JWL -5.69% | conf=0.89 sources=1 agree=1.00 impact=6.0 [BYPASS]\n  [ULTRA|BEARISH] LTTS -1.37% | conf=0.88 sources=1 agree=1.00 impact=5.8 [BYPASS]\n  [GOVT 5.5] India bonds slip ahead of RBI policy as war risks lift oil | conf=0.77 sources=1 agree=0.70 impact=5.5 [BYPASS]\n  [neutral] ​FIIs bet on high-growth smallcaps: 14 stocks rally up to 225% in 5 months, 6 turn multiba | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] SEBI Approves State Street Global Advisors' Stake Acquisition In Groww AMC | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] INR slides further as renewed geopolitical tensions led to surge in crude oil prices | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Indian firms line up for US tariff refunds amid looming legal challenge | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Wise stock falls as Belgian prosecutors probe money laundering\n...[truncated for debug safety]...",
+    "bypass_items": [
+      {
+        "kind": "scanner",
+        "ticker": "INOXWIND",
+        "label": "[ULTRA|BEARISH] INOXWIND -9.87%",
+        "confidence": 0.931,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.55,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "KPRMILL",
+        "label": "[ULTRA|BULLISH] KPRMILL +2.64%",
+        "confidence": 0.895,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.24,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "NATCOPHARM",
+        "label": "[ULTRA|BEARISH] NATCOPHARM -8.13%",
+        "confidence": 0.933,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.59,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ZEEL",
+        "label": "[ULTRA|BULLISH] ZEEL +2.88%",
+        "confidence": 0.894,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.23,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "AEGISLOG",
+        "label": "[ULTRA|BULLISH] AEGISLOG +3.45%",
+        "confidence": 0.895,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.25,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "ANDHRSUGAR",
+        "label": "[ULTRA|BEARISH] ANDHRSUGAR -10.65%",
+        "confidence": 0.925,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.31,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "LTTS",
+        "label": "[ULTRA|BEARISH] LTTS -1.37%",
+        "confidence": 0.882,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.79,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "WOCKPHARMA",
+        "label": "[ULTRA|BULLISH] WOCKPHARMA +5.98%",
+        "confidence": 0.908,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 6.72,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "SAREGAMA",
+        "label": "[ULTRA|BULLISH] SAREGAMA +8.39%",
+        "confidence": 0.917,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 7.03,
+        "bypass_compression": true
+      },
+      {
+        "kind": "scanner",
+        "ticker": "JWL",
+        "label": "[ULTRA|BEARISH] JWL -5.69%",
+        "confidence": 0.888,
+        "source_count": 1,
+        "agreement_score": 1.0,
+        "impact_score": 5.99,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 10.0,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "IOC",
+        "label": "[GOVT 7.5] INR slides further as renewed geopolitical tensions led to surge in crude oil prices",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 7.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] India bonds slip ahead of RBI policy as war risks lift oil",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] ​FIIs bet on high-growth smallcaps: 14 stocks rally up to 225% in 5 months, 6 turn multiba",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] SEBI Approves State Street Global Advisors' Stake Acquisition In Groww AMC",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] INR slides further as renewed geopolitical tensions led to surge in crude oil prices",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Indian firms line up for US tariff refunds amid looming legal challenge",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Wise stock falls as Belgian prosecutors probe money laundering",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Iran Warns Of Choking Bab el-Mandeb: How This May Cripple Global Trade, Energy Flows",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "scanner",
+      "ticker": "INOXWIND",
+      "label": "[ULTRA|BEARISH] INOXWIND -9.87%",
+      "confidence": 0.931,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.55,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "KPRMILL",
+      "label": "[ULTRA|BULLISH] KPRMILL +2.64%",
+      "confidence": 0.895,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.24,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "NATCOPHARM",
+      "label": "[ULTRA|BEARISH] NATCOPHARM -8.13%",
+      "confidence": 0.933,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.59,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "ZEEL",
+      "label": "[ULTRA|BULLISH] ZEEL +2.88%",
+      "confidence": 0.894,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.23,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "AEGISLOG",
+      "label": "[ULTRA|BULLISH] AEGISLOG +3.45%",
+      "confidence": 0.895,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.25,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "ANDHRSUGAR",
+      "label": "[ULTRA|BEARISH] ANDHRSUGAR -10.65%",
+      "confidence": 0.925,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.31,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "LTTS",
+      "label": "[ULTRA|BEARISH] LTTS -1.37%",
+      "confidence": 0.882,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.79,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "WOCKPHARMA",
+      "label": "[ULTRA|BULLISH] WOCKPHARMA +5.98%",
+      "confidence": 0.908,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 6.72,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "SAREGAMA",
+      "label": "[ULTRA|BULLISH] SAREGAMA +8.39%",
+      "confidence": 0.917,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 7.03,
+      "bypass_compression": true
+    },
+    {
+      "kind": "scanner",
+      "ticker": "JWL",
+      "label": "[ULTRA|BEARISH] JWL -5.69%",
+      "confidence": 0.888,
+      "source_count": 1,
+      "agreement_score": 1.0,
+      "impact_score": 5.99,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "IOC",
+      "label": "[GOVT 10.0] Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your househol",
+      "confidence": 1.0,
+      "source_count": 4,
+      "agreement_score": 0.7,
+      "impact_score": 10.0,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "IOC",
+      "label": "[GOVT 7.5] INR slides further as renewed geopolitical tensions led to surge in crude oil prices",
+      "confidence": 1.0,
+      "source_count": 4,
+      "agreement_score": 0.7,
+      "impact_score": 7.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 5.5] India bonds slip ahead of RBI policy as war risks lift oil",
+      "confidence": 0.769,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] ​FIIs bet on high-growth smallcaps: 14 stocks rally up to 225% in 5 months, 6 turn multiba",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] SEBI Approves State Street Global Advisors' Stake Acquisition In Groww AMC",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] INR slides further as renewed geopolitical tensions led to surge in crude oil prices",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Indian firms line up for US tariff refunds amid looming legal challenge",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Wise stock falls as Belgian prosecutors probe money laundering",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Iran Warns Of Choking Bab el-Mandeb: How This May Cripple Global Trade, Energy Flows",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=panic_volatile volatility=1.0 compression_mode=PRESERVE",
+    "Bypass: scanner INOXWIND impact=7.55",
+    "Bypass: scanner KPRMILL impact=6.24",
+    "Bypass: scanner NATCOPHARM impact=7.59",
+    "Bypass: scanner ZEEL impact=6.23",
+    "Bypass: scanner AEGISLOG impact=6.25",
+    "Bypass: scanner ANDHRSUGAR impact=7.31",
+    "Bypass: scanner LTTS impact=5.79",
+    "Bypass: scanner WOCKPHARMA impact=6.72",
+    "Section 'news' expanded limit (6525 chars)",
+    "Section 'govt' expanded limit (6525 chars)",
+    "Section 'scanner' expanded limit (6525 chars)"
+  ],
+  "regime": {
+    "primary_regime": "panic_volatile",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.0,
+      "volatile": 0.35,
+      "high_risk": 0.42,
+      "risk_off": 0.35,
+      "regime_transition": 0.64,
+      "macro_uncertainty": 0.5,
+      "panic_volatile": 0.72
+    },
+    "volatility_index": 1.0,
+    "sentiment_instability": 0.965,
+    "news_shock_intensity": 0.5,
+    "scanner_anomaly_strength": 1.0,
+    "compression_aggressiveness": 0.22,
+    "regime_shift": false,
+    "previous_regime": "panic_volatile",
+    "regime_since": "2026-06-01T17:03:56.251373",
+    "summary_block": "=== MARKET REGIME ===\n  Primary: PANIC VOLATILE | volatility=1.00\n  Persistence: 86m in current regime\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.22)\n  Signals: news_shock=0.50 sentiment_instability=0.96 scanner_anomaly=1.00"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.22,
+    "max_per_section": 4500,
+    "max_prompt_chars": 31360,
+    "gemini_word_cap": 823,
+    "skip_gemini": true,
+    "preserve_contradictions": true,
+    "volatility_index": 1.0,
+    "disagreement_score": 0.725,
+    "news_shock_intensity": 0.5
+  }
+}

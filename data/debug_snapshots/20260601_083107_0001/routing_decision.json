@@ -1,0 +1,101 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3792,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-01",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-01T08:31:08.007997",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3792,
+      "force": true
+    },
+    {
+      "time": "2026-06-01T08:31:56.706952",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "9b69e458e8b3bd365aef",
+    "delta_reasons": [
+      "govt_change",
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": -0.079,
+      "news_count": 118,
+      "govt_high_impact": 14,
+      "scanner_signals": 115,
+      "top_scanner_tickers": [
+        "KPRMILL",
+        "NATCOPHARM",
+        "AEGISLOG",
+        "INOXWIND",
+        "WOCKPHARMA"
+      ],
+      "scanner_signature": [
+        "('KPRMILL', 'ULTRA', 3.6)",
+        "('NATCOPHARM', 'ULTRA', -6.8)",
+        "('AEGISLOG', 'ULTRA', 3.7)",
+        "('INOXWIND', 'ULTRA', -8.1)",
+        "('WOCKPHARMA', 'ULTRA', 8.2)"
+      ],
+      "top_news_titles": [
+        "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+        "indian firms line up for us tariff refunds amid looming legal challenge",
+        "inflation and input costs threaten earnings momentum going forward: dhananjay si",
+        "iphone 18 pro max camera upgrade is coming — but will apple bump the device's pr",
+        "malaysia bans social media accounts for children younger than 16",
+        "suzlon energy shares crack 5% after rs 29 crore sebi fine for misleading financi"
+      ],
+      "reddit_sentiment": "bullish",
+      "reddit_confidence": 80,
+      "novelty_avg_score": 4.55,
+      "repetition_suppressed": 63
+    },
+    "source_hashes": {
+      "global_markets": "92efb99d38e35f0dc81e",
+      "india_markets": "27c5b1a6a7f81ede60ef",
+      "news": "3cf675e5cd75cd0f9021",
+      "youtube": "3cb4142e02e2636f7d4e",
+      "govt": "d379310e927a94e64ba5",
+      "inshorts": "26144d8ecf0fc3639457",
+      "reddit": "4883fd04f4449b6f58d7",
+      "telegram": "empty",
+      "scanner": "3501265033e48386a334",
+      "twitter": "3aaa80ab62517955b825",
+      "nse_filings": "e303c75dfc7c63d039aa",
+      "composite": "32468cd23975a298b823"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

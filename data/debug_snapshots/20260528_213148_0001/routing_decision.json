@@ -1,0 +1,85 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 2601,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-05-28",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-28T21:31:48.462498",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 2601,
+      "force": true
+    },
+    {
+      "time": "2026-05-28T21:32:45.574294",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": false,
+    "semantic_hash": "0c88199947eb6826ed44",
+    "delta_reasons": [],
+    "metrics": {
+      "india_avg_change": -0.015,
+      "news_count": 122,
+      "govt_high_impact": 10,
+      "scanner_signals": 0,
+      "top_scanner_tickers": [],
+      "scanner_signature": [],
+      "top_news_titles": [
+        "policybazaar co-founders look to offload shares worth  ₹654 crore in block deal",
+        "tata motors pv sees consumer shift towards evs amid west asia crisis, says md sh",
+        "us consumer spending edges up as inflation accelerates",
+        "us warns oman amid hormuz blockade: will target any actors involved in facilitat",
+        "us-iran war news updates: iran responds to us  attack near bandar abbas",
+        "victims of the washington paper mill disaster included husbands and grandfathers"
+      ],
+      "reddit_sentiment": "unknown",
+      "reddit_confidence": 0,
+      "novelty_avg_score": 4.5,
+      "repetition_suppressed": 52
+    },
+    "source_hashes": {
+      "global_markets": "5f873ded72c07d94829f",
+      "india_markets": "bca4a9f398ed9a4ceb18",
+      "news": "0d2b937e1ceff16fbc34",
+      "youtube": "empty",
+      "govt": "824aa79f54bb903db693",
+      "inshorts": "empty",
+      "reddit": "empty",
+      "telegram": "empty",
+      "scanner": "empty",
+      "twitter": "empty",
+      "nse_filings": "empty",
+      "composite": "0f7fc9724538f3f0abd3"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

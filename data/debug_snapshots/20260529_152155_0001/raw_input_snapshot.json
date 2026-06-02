@@ -1,0 +1,64 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "26e61804a09ccc50fa58",
+    "india_markets": "15ff23dcd1181abd135b",
+    "news": "c7bf967b85418bf07c1d",
+    "youtube": "empty",
+    "govt": "17c16df0b47a8c8a02e5",
+    "inshorts": "729b2dcf508b17f12143",
+    "reddit": "38f50ddcd8b560f916e9",
+    "telegram": "empty",
+    "scanner": "empty",
+    "twitter": "f6d88448c4bede59077e",
+    "nse_filings": "7de0690fd952fe58b6e5",
+    "composite": "f1c87351e590085654bb"
+  },
+  "metrics": {
+    "india_avg_change": -0.196,
+    "news_count": 146,
+    "govt_high_impact": 6,
+    "scanner_signals": 0,
+    "top_scanner_tickers": [],
+    "scanner_signature": [],
+    "top_news_titles": [
+      "dharmendra pradhan defends cbse's three-language policy, says daughter studied m",
+      "inside the mobikwik xtra issue: withdrawal freeze, rbi rules and recovery proces",
+      "rupee soars to best day in nearly two months, closes at 95 vs usd as rbi steps i",
+      "sentinelone tumbles on earnings, guidance. bofa upgrades to buy",
+      "u.s. equity funds draw weekly inflows as tech rally lifts sentiment",
+      "us-iran war news live updates: iran foreign minister discusses hormuz with oman"
+    ],
+    "reddit_sentiment": "bearish",
+    "reddit_confidence": 16,
+    "novelty_avg_score": 4.54,
+    "repetition_suppressed": 65
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 146
+  },
+  "youtube_type": "NoneType",
+  "govt_counts": {
+    "high_impact_items": 6
+  },
+  "telegram_type": "NoneType",
+  "scanner_type": "NoneType",
+  "twitter_counts": {
+    "tweets": 25
+  }
+}

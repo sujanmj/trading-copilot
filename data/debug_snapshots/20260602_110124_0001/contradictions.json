@@ -1,0 +1,25 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [NEWGEN, BALAMINES, ROUTE, INFY] vs SHORT [NHPC, WOCKPHARMA, NTPC, BLUESTARCO]",
+      "disagreement_score": 0.364,
+      "long_count": 22,
+      "short_count": 8
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 2 bullish vs 2 bearish high-impact items",
+      "disagreement_score": 1.0
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly NHPC ULTRA move -6.48%",
+      "disagreement_score": 0.648,
+      "ticker": "NHPC"
+    }
+  ],
+  "overall_disagreement_score": 0.671,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.36 | Scanner split: LONG [NEWGEN, BALAMINES, ROUTE, INFY] vs SHORT [NHPC, WOCKPHARMA, NTPC, BLUESTARCO]\n  [institutional_policy_divergence] disagreement=1.00 | Govt policy mix: 2 bullish vs 2 bearish high-impact items\n  [scanner_anomaly] disagreement=0.65 | Anomaly NHPC ULTRA move -6.48%",
+  "count": 3
+}

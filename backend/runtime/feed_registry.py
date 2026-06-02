@@ -39,7 +39,7 @@ ANALYZER_SOURCE_MAP: Dict[str, str] = {
 HEALTH_FEED_FILES: Dict[str, str] = {
     **{k: v['filename'] for k, v in CANONICAL_FEEDS.items()},
     'intelligence': 'unified_intelligence.json',
-    'youtube': 'youtube_feed.json',
+    'youtube': 'tv_intelligence.json',
     'inshorts': 'inshorts_feed.json',
 }
 

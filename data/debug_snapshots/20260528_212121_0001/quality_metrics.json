@@ -1,0 +1,38 @@
+{
+  "quality": {
+    "information_retention_score": 1.0,
+    "contradiction_retention_score": 1.0,
+    "sentiment_preservation_score": 0.381,
+    "sentiment_diversity_score": 0.333,
+    "minority_signal_retention_score": 0.0,
+    "truncation_severity": 1.0,
+    "compression_ratio": 1.595,
+    "intelligence_quality_score": 0.622,
+    "raw_evidence_chars": 728,
+    "novelty_avg_score": 4.5,
+    "repetition_suppressed_count": 47,
+    "primary_regime": "regime_transition"
+  },
+  "warnings": [
+    {
+      "code": "weak_sentiment_preservation",
+      "value": 0.381,
+      "threshold": 0.55
+    },
+    {
+      "code": "sentiment_collapse_risk",
+      "value": 0.333,
+      "threshold": 0.45
+    }
+  ],
+  "explanations": {
+    "why_claude_ran": null,
+    "why_gemini_used": "Volatile/contradictory regime — Gemini skipped, token-truncated bulk",
+    "why_cache_skipped": "No cache events recorded.",
+    "why_regime_changed": "Stable regime: regime_transition",
+    "why_signal_preserved": "8 high-impact signals bypass heavy compression (ULTRA/macro/SEBI).",
+    "why_signal_compressed": "Bulk sections token-truncated only — Gemini skipped due to volatile/contradictory regime.",
+    "contradiction_count": 1,
+    "disagreement_score": 0.667
+  }
+}

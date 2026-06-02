@@ -1,0 +1,38 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [SAREGAMA, WOCKPHARMA, STLTECH, AEGISLOG] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]",
+      "disagreement_score": 0.875,
+      "long_count": 14,
+      "short_count": 16
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly SAREGAMA ULTRA move +8.39%",
+      "disagreement_score": 0.839,
+      "ticker": "SAREGAMA"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly NATCOPHARM ULTRA move -8.13%",
+      "disagreement_score": 0.813,
+      "ticker": "NATCOPHARM"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly WOCKPHARMA ULTRA move +5.98%",
+      "disagreement_score": 0.598,
+      "ticker": "WOCKPHARMA"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly STLTECH ULTRA move +5.00%",
+      "disagreement_score": 0.5,
+      "ticker": "STLTECH"
+    }
+  ],
+  "overall_disagreement_score": 0.725,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.88 | Scanner split: LONG [SAREGAMA, WOCKPHARMA, STLTECH, AEGISLOG] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]\n  [scanner_anomaly] disagreement=0.84 | Anomaly SAREGAMA ULTRA move +8.39%\n  [scanner_anomaly] disagreement=0.81 | Anomaly NATCOPHARM ULTRA move -8.13%\n  [scanner_anomaly] disagreement=0.60 | Anomaly WOCKPHARMA ULTRA move +5.98%\n  [scanner_anomaly] disagreement=0.50 | Anomaly STLTECH ULTRA move +5.00%",
+  "count": 5
+}

@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "95c372044c79e3ed198d",
+    "india_markets": "46c6e95933a9fa4322b5",
+    "news": "4fb75fb20786be2b5216",
+    "youtube": "0fd301924644ae497ada",
+    "govt": "9f7ad28ba4f97895d572",
+    "inshorts": "6427c38f977f160f360c",
+    "reddit": "de131a47fed4710cc17b",
+    "telegram": "empty",
+    "scanner": "8cb88a7f92332b55aad3",
+    "twitter": "5b00c985ec6677fc387c",
+    "nse_filings": "17f60dce2ae8b2256c59",
+    "composite": "6c3c3e088c3eb5cab7a5"
+  },
+  "metrics": {
+    "india_avg_change": 0.059,
+    "news_count": 128,
+    "govt_high_impact": 14,
+    "scanner_signals": 163,
+    "top_scanner_tickers": [
+      "NEWGEN",
+      "BSOFT",
+      "NHPC",
+      "MASTEK",
+      "SONATSOFTW"
+    ],
+    "scanner_signature": [
+      "('NEWGEN', 'ULTRA', 14.9)",
+      "('BSOFT', 'ULTRA', 5.1)",
+      "('NHPC', 'ULTRA', -5.1)",
+      "('MASTEK', 'ULTRA', 5.0)",
+      "('SONATSOFTW', 'ULTRA', 5.0)"
+    ],
+    "top_news_titles": [
+      "indigo, spicejet shares under pressure as russia halts jet fuel exports",
+      "newgen software technologies ltd leads gainers in 'a' group",
+      "protean egov gains on appointing ajay rajan as md & ceo; v easwaran steps down a",
+      "rbi likely to hold rates, raise inflation forecast: hsbc's pranjul bhandari",
+      "rbi may have sold gold to save foreign reserves, be report shows",
+      "stock market crash news today live updates: nifty sees resistance at 23,300 amid"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.55,
+    "repetition_suppressed": 59
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 128
+  },
+  "govt_counts": {
+    "high_impact_items": 14
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 22
+  }
+}

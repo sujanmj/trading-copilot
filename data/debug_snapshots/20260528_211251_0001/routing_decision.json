@@ -1,0 +1,49 @@
+{
+  "claude": null,
+  "routing_events": [],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "0c88199947eb6826ed44",
+    "delta_reasons": [],
+    "metrics": {
+      "india_avg_change": -0.015,
+      "news_count": 122,
+      "govt_high_impact": 10,
+      "scanner_signals": 0,
+      "top_scanner_tickers": [],
+      "scanner_signature": [],
+      "top_news_titles": [
+        "policybazaar co-founders look to offload shares worth  ₹654 crore in block deal",
+        "tata motors pv sees consumer shift towards evs amid west asia crisis, says md sh",
+        "us consumer spending edges up as inflation accelerates",
+        "us warns oman amid hormuz blockade: will target any actors involved in facilitat",
+        "us-iran war news updates: iran responds to us  attack near bandar abbas",
+        "victims of the washington paper mill disaster included husbands and grandfathers"
+      ],
+      "reddit_sentiment": "unknown",
+      "reddit_confidence": 0,
+      "novelty_avg_score": 4.5,
+      "repetition_suppressed": 51
+    },
+    "source_hashes": {
+      "global_markets": "1481380187931b734de0",
+      "india_markets": "12166a00bfe0f3d649b7",
+      "news": "3fc4cf91fca986d9b2c5",
+      "youtube": "empty",
+      "govt": "103a1d96fce70cdfc4c0",
+      "inshorts": "empty",
+      "reddit": "empty",
+      "telegram": "empty",
+      "scanner": "empty",
+      "twitter": "empty",
+      "nse_filings": "empty",
+      "composite": "87256e0ea672ff25ca91"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

@@ -1,0 +1,12 @@
+{
+  "contradictions": [
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 3 bullish vs 2 bearish high-impact items",
+      "disagreement_score": 0.667
+    }
+  ],
+  "overall_disagreement_score": 0.667,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [institutional_policy_divergence] disagreement=0.67 | Govt policy mix: 3 bullish vs 2 bearish high-impact items",
+  "count": 1
+}

@@ -1,0 +1,339 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nGOVT ALERT | [6.0/10 NEUTRAL] Gold rebounds after Iran and US reach outline ceasefire deal | affects: KALYAN, OIL INDIA, TITAN, GOLDBEES, RELIANCE\nGOVT ALERT | [5.0/10 BEARISH] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hike fears | affects: VEDL, TITAN, GOLDBEES, KALYAN, SILVERBEES\nHEADLINE | [neutral] Victims of the Washington paper mill disaster included husbands and grandfathers | source=LiveMint (Companies)\nHEADLINE | [neutral] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas | source=NDTV Profit\n  [evidence_meta] novelty_avg=4.5 repetition_suppressed=47 diversity_suppressed=12",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "govt",
+        "ticker": "KALYAN",
+        "label": "[GOVT 6.0] Gold rebounds after Iran and US reach outline ceasefire deal",
+        "confidence": 1.0,
+        "source_count": 6,
+        "agreement_score": 0.7,
+        "impact_score": 6.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "VEDL",
+        "label": "[GOVT 6.5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eas",
+        "confidence": 1.0,
+        "source_count": 5,
+        "agreement_score": 0.7,
+        "impact_score": 6.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "RELIANCE",
+        "label": "[GOVT 4.0] US stocks today: US stocks hold near records even as crude oil prices rise again",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "VEDL",
+        "label": "[GOVT 4.0] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strik",
+        "confidence": 1.0,
+        "source_count": 8,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming A",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "KALYAN",
+        "label": "[GOVT 4.0] Stocks and bonds rally as hopes grow for end to West Asia conflict",
+        "confidence": 1.0,
+        "source_count": 6,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Victims of the Washington paper mill disaster included husbands and grandfathers",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Consumer Spending Edges Up As Inflation Accelerates",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 6.5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eas | conf=1.00 sources=5 agree=0.70 impact=6.5 [BYPASS]\n  [GOVT 6.0] Gold rebounds after Iran and US reach outline ceasefire deal | conf=1.00 sources=6 agree=0.70 impact=6.0\n  [GOVT 5.5] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming A | conf=0.77 sources=1 agree=0.70 impact=5.5 [BYPASS]\n  [neutral] Victims of the Washington paper mill disaster included husbands and grandfathers | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] US Consumer Spending Edges Up As Inflation Accelerates | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls  | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [GOVT 4.0] US stocks today: US stocks hold near records even as crude oil prices rise again | conf=1.00 sources=4 agree=0.70 impact=4.0\n  [GOVT 4.0] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strik | conf=1.00 sources=8 agree=0.70 impact=4.0\n  [GOVT 4.0] Stocks and bonds rally as hopes grow for end to West Asia conflict | conf=1.00 sources=6 agree=0.70 impact=4.0",
+    "bypass_items": [
+      {
+        "kind": "govt",
+        "ticker": "VEDL",
+        "label": "[GOVT 6.5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eas",
+        "confidence": 1.0,
+        "source_count": 5,
+        "agreement_score": 0.7,
+        "impact_score": 6.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 5.5] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming A",
+        "confidence": 0.769,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Victims of the Washington paper mill disaster included husbands and grandfathers",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Consumer Spending Edges Up As Inflation Accelerates",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls ",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "govt",
+      "ticker": "VEDL",
+      "label": "[GOVT 6.5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eas",
+      "confidence": 1.0,
+      "source_count": 5,
+      "agreement_score": 0.7,
+      "impact_score": 6.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 5.5] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming A",
+      "confidence": 0.769,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Victims of the Washington paper mill disaster included husbands and grandfathers",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] US Consumer Spending Edges Up As Inflation Accelerates",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls ",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=regime_transition volatility=0.321 compression_mode=PRESERVE",
+    "Bypass: govt VEDL impact=6.5",
+    "Bypass: govt MACRO impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Section 'news' expanded limit (5930 chars)",
+    "Section 'govt' expanded limit (5930 chars)",
+    "Section 'scanner' expanded limit (5930 chars)"
+  ],
+  "regime": {
+    "primary_regime": "regime_transition",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.5,
+      "volatile": 0.0,
+      "high_risk": 0.0,
+      "risk_off": 0.0,
+      "regime_transition": 0.617,
+      "macro_uncertainty": 0.5,
+      "panic_volatile": 0.0
+    },
+    "volatility_index": 0.321,
+    "sentiment_instability": 0.847,
+    "news_shock_intensity": 0.375,
+    "scanner_anomaly_strength": 0.0,
+    "compression_aggressiveness": 0.25,
+    "regime_shift": false,
+    "previous_regime": "regime_transition",
+    "regime_since": "2026-05-28T20:26:15.771449",
+    "summary_block": "=== MARKET REGIME ===\n  Primary: REGIME TRANSITION | volatility=0.32\n  Persistence: 55m in current regime\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.25)\n  Signals: news_shock=0.38 sentiment_instability=0.85 scanner_anomaly=0.00"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.25,
+    "max_per_section": 4090,
+    "max_prompt_chars": 31000,
+    "gemini_word_cap": 843,
+    "skip_gemini": true,
+    "preserve_contradictions": true,
+    "volatility_index": 0.321,
+    "disagreement_score": 0.667,
+    "news_shock_intensity": 0.375
+  }
+}

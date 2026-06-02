@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "fee88c2b3def2ac452b3",
+    "india_markets": "108a3441da2c4c37cf82",
+    "news": "e34786cf418d9be76e14",
+    "youtube": "65043d4073a1f09b737d",
+    "govt": "3ac05e51940d9ba7eb9b",
+    "inshorts": "ed7fe06fc8cded16c0f0",
+    "reddit": "0eb9d4d4632414b7cfff",
+    "telegram": "empty",
+    "scanner": "7d0a05d33ea9d45fcf30",
+    "twitter": "b4a84f5d0bad0a328774",
+    "nse_filings": "1813e2b7ce001f167125",
+    "composite": "3aef48e007a952bd85e8"
+  },
+  "metrics": {
+    "india_avg_change": -0.053,
+    "news_count": 119,
+    "govt_high_impact": 14,
+    "scanner_signals": 120,
+    "top_scanner_tickers": [
+      "KPRMILL",
+      "NATCOPHARM",
+      "AEGISLOG",
+      "INOXWIND",
+      "WOCKPHARMA"
+    ],
+    "scanner_signature": [
+      "('KPRMILL', 'ULTRA', 3.6)",
+      "('NATCOPHARM', 'ULTRA', -7.1)",
+      "('AEGISLOG', 'ULTRA', 3.7)",
+      "('INOXWIND', 'ULTRA', -8.7)",
+      "('WOCKPHARMA', 'ULTRA', 6.7)"
+    ],
+    "top_news_titles": [
+      "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+      "indian firms line up for us tariff refunds amid looming legal challenge",
+      "inflation and input costs threaten earnings momentum going forward: dhananjay si",
+      "iran blames us 'contradictions', strikes for peace deal delay, links pact to leb",
+      "psu bank stocks vs private banks in fy27: the valuation trap you need to avoid",
+      "suzlon energy shares crack 5% after rs 29 crore sebi fine for misleading financi"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.55,
+    "repetition_suppressed": 63
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 119
+  },
+  "govt_counts": {
+    "high_impact_items": 14
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 20
+  }
+}

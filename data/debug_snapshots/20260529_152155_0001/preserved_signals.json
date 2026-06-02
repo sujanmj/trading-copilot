@@ -1,0 +1,358 @@
+{
+  "raw_evidence_block": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nGOVT ALERT | [5.0/10 NEUTRAL] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil drops | affects: MACRO\nGOVT ALERT | [4.0/10 BEARISH] RBI flags US-Iran war's impact on rupee, lists measures to manage forex | affects: ONGC, RELIANCE, OIL INDIA\nHEADLINE | [neutral] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil drops | source=Economic Times (Markets)\nHEADLINE | [neutral] Inside The MobiKwik Xtra Issue: Withdrawal Freeze, RBI Rules And Recovery Process | source=NDTV Profit\n  [evidence_meta] novelty_avg=4.532 repetition_suppressed=56 diversity_suppressed=12",
+  "scored_signals": {
+    "signals": [
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 6.5] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro",
+        "confidence": 0.797,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 6.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 5.5] RBI flags US-Iran war's impact on rupee, lists measures to manage forex",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 5.5] RBI says West Asia war clouds growth outlook, but India remains relatively resilient",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 4.0] Oil falls over 1% as Iran-US talks continue despite fresh American strikes",
+        "confidence": 0.967,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 4.0] Non MF-retail ownership on NSE-listed firms falls to five year low in March 2026",
+        "confidence": 0.727,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 4.0] Crude oil prices slide 19% in May, post worst monthly fall since 2020; Will US-Iran peace ",
+        "confidence": 1.0,
+        "source_count": 4,
+        "agreement_score": 0.7,
+        "impact_score": 4.0,
+        "bypass_compression": false
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Inside The MobiKwik Xtra Issue: Withdrawal Freeze, RBI Rules And Recovery Process",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Dharmendra Pradhan Defends CBSE's Three-Language Policy, Says Daughter Studied Marathi Til",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] SentinelOne Tumbles On Earnings, Guidance. BofA Upgrades To Buy",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US-Iran War News Live Updates: Iran Foreign Minister Discusses Hormuz With Oman Counterpar",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] U.S. equity funds draw weekly inflows as tech rally lifts sentiment",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ],
+    "summary_block": "=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 6.5] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro | conf=0.80 sources=1 agree=0.70 impact=6.5 [BYPASS]\n  [GOVT 5.5] RBI flags US-Iran war's impact on rupee, lists measures to manage forex | conf=1.00 sources=3 agree=0.70 impact=5.5 [BYPASS]\n  [GOVT 5.5] RBI says West Asia war clouds growth outlook, but India remains relatively resilient | conf=1.00 sources=3 agree=0.70 impact=5.5 [BYPASS]\n  [neutral] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Inside The MobiKwik Xtra Issue: Withdrawal Freeze, RBI Rules And Recovery Process | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Dharmendra Pradhan Defends CBSE's Three-Language Policy, Says Daughter Studied Marathi Til | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] SentinelOne Tumbles On Earnings, Guidance. BofA Upgrades To Buy | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] US-Iran War News Live Updates: Iran Foreign Minister Discusses Hormuz With Oman Counterpar | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] U.S. equity funds draw weekly inflows as tech rally lifts sentiment | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [GOVT 4.0] Oil falls over 1% as Iran-US talks continue despite fresh American strikes | conf=0.97 sources=3 agree=0.70 impact=4.0\n  [GOVT 4.0] Non MF-retail ownership on NSE-listed firms falls to five year low in March 2026 | conf=0.73 sources=1 agree=0.70 impact=4.0\n  [GOVT 4.0] Crude oil prices slide 19% in May, post worst monthly fall since 2020; Will US-Iran peace  | conf=1.00 sources=4 agree=0.70 impact=4.0",
+    "bypass_items": [
+      {
+        "kind": "govt",
+        "ticker": "MACRO",
+        "label": "[GOVT 6.5] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro",
+        "confidence": 0.797,
+        "source_count": 1,
+        "agreement_score": 0.7,
+        "impact_score": 6.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 5.5] RBI flags US-Iran war's impact on rupee, lists measures to manage forex",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "govt",
+        "ticker": "ONGC",
+        "label": "[GOVT 5.5] RBI says West Asia war clouds growth outlook, but India remains relatively resilient",
+        "confidence": 1.0,
+        "source_count": 3,
+        "agreement_score": 0.7,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Inside The MobiKwik Xtra Issue: Withdrawal Freeze, RBI Rules And Recovery Process",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] Dharmendra Pradhan Defends CBSE's Three-Language Policy, Says Daughter Studied Marathi Til",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] SentinelOne Tumbles On Earnings, Guidance. BofA Upgrades To Buy",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] US-Iran War News Live Updates: Iran Foreign Minister Discusses Hormuz With Oman Counterpar",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      },
+      {
+        "kind": "news",
+        "ticker": "NEWS",
+        "label": "[neutral] U.S. equity funds draw weekly inflows as tech rally lifts sentiment",
+        "confidence": 0.699,
+        "source_count": 1,
+        "agreement_score": 0.5,
+        "impact_score": 5.5,
+        "bypass_compression": true
+      }
+    ]
+  },
+  "bypass_items": [
+    {
+      "kind": "govt",
+      "ticker": "MACRO",
+      "label": "[GOVT 6.5] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro",
+      "confidence": 0.797,
+      "source_count": 1,
+      "agreement_score": 0.7,
+      "impact_score": 6.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "ONGC",
+      "label": "[GOVT 5.5] RBI flags US-Iran war's impact on rupee, lists measures to manage forex",
+      "confidence": 1.0,
+      "source_count": 3,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "govt",
+      "ticker": "ONGC",
+      "label": "[GOVT 5.5] RBI says West Asia war clouds growth outlook, but India remains relatively resilient",
+      "confidence": 1.0,
+      "source_count": 3,
+      "agreement_score": 0.7,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Rupee soars to best day in nearly two months, closes at 95 vs USD as RBI steps in, oil dro",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Inside The MobiKwik Xtra Issue: Withdrawal Freeze, RBI Rules And Recovery Process",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] Dharmendra Pradhan Defends CBSE's Three-Language Policy, Says Daughter Studied Marathi Til",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] SentinelOne Tumbles On Earnings, Guidance. BofA Upgrades To Buy",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] US-Iran War News Live Updates: Iran Foreign Minister Discusses Hormuz With Oman Counterpar",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    },
+    {
+      "kind": "news",
+      "ticker": "NEWS",
+      "label": "[neutral] U.S. equity funds draw weekly inflows as tech rally lifts sentiment",
+      "confidence": 0.699,
+      "source_count": 1,
+      "agreement_score": 0.5,
+      "impact_score": 5.5,
+      "bypass_compression": true
+    }
+  ],
+  "preservation_reasoning": [
+    "Regime=sideways volatility=0.399 compression_mode=COMPRESS",
+    "Bypass: govt MACRO impact=6.5",
+    "Bypass: govt ONGC impact=5.5",
+    "Bypass: govt ONGC impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Bypass: news NEWS impact=5.5",
+    "Section 'news' expanded limit (4866 chars)",
+    "Section 'govt' expanded limit (4866 chars)"
+  ],
+  "regime": {
+    "primary_regime": "sideways",
+    "regime_scores": {
+      "bullish_trend": 0.0,
+      "sideways": 0.5,
+      "volatile": 0.0,
+      "high_risk": 0.0,
+      "risk_off": 0.0,
+      "regime_transition": 0.0,
+      "macro_uncertainty": 0.5,
+      "panic_volatile": 0.0
+    },
+    "volatility_index": 0.399,
+    "sentiment_instability": 0.42,
+    "news_shock_intensity": 0.875,
+    "scanner_anomaly_strength": 0.0,
+    "compression_aggressiveness": 0.62,
+    "regime_shift": false,
+    "previous_regime": "sideways",
+    "regime_since": "2026-05-29T12:02:21.862454",
+    "summary_block": "=== MARKET REGIME ===\n  Primary: SIDEWAYS | volatility=0.40\n  Persistence: 199m in current regime\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.62)\n  Signals: news_shock=0.88 sentiment_instability=0.42 scanner_anomaly=0.00"
+  },
+  "compression_profile": {
+    "compression_aggressiveness": 0.62,
+    "max_per_section": 3356,
+    "max_prompt_chars": 26560,
+    "gemini_word_cap": 1458,
+    "skip_gemini": false,
+    "preserve_contradictions": true,
+    "volatility_index": 0.399,
+    "disagreement_score": 0.0,
+    "news_shock_intensity": 0.875
+  }
+}

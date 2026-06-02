@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "d359844387c8fb6746e1",
+    "india_markets": "15f20a1ff398b0b03b41",
+    "news": "2aa162a0ecd45855d3b6",
+    "youtube": "9da71501201456f015fa",
+    "govt": "bbcda89a0d3b65ce47e0",
+    "inshorts": "6c0e27ffb128ba244ae8",
+    "reddit": "03b63d930cb64f0cb150",
+    "telegram": "empty",
+    "scanner": "676eb63b9f78f3b15524",
+    "twitter": "54ddad4bceba588b8b1a",
+    "nse_filings": "1f9054a20abd4f3d99fc",
+    "composite": "ac3e84751e89ff12aa58"
+  },
+  "metrics": {
+    "india_avg_change": -0.089,
+    "news_count": 142,
+    "govt_high_impact": 12,
+    "scanner_signals": 164,
+    "top_scanner_tickers": [
+      "INOXWIND",
+      "NATCOPHARM",
+      "KPRMILL",
+      "ZEEL",
+      "AEGISLOG"
+    ],
+    "scanner_signature": [
+      "('INOXWIND', 'ULTRA', -10.0)",
+      "('NATCOPHARM', 'ULTRA', -8.8)",
+      "('KPRMILL', 'ULTRA', 1.5)",
+      "('ZEEL', 'ULTRA', 2.0)",
+      "('AEGISLOG', 'ULTRA', 3.5)"
+    ],
+    "top_news_titles": [
+      "exclusive: sebi weighs easing net worth, compliance norms for debt brokers",
+      "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+      "indian firms line up for us tariff refunds amid looming legal challenge",
+      "nifty bank drops 1% to trade near day's low: canara, union bank among key dragge",
+      "steel stock hits 5% upper circuit after securing ₹387 cr order from bpcl",
+      "​fiis bet on high-growth smallcaps: 14 stocks rally up to 225% in 5 months, 6 tu"
+    ],
+    "reddit_sentiment": "neutral",
+    "reddit_confidence": 50,
+    "novelty_avg_score": 4.58,
+    "repetition_suppressed": 69
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 142
+  },
+  "govt_counts": {
+    "high_impact_items": 12
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 21
+  }
+}

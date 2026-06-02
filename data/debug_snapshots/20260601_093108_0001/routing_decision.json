@@ -1,0 +1,102 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3805,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-01",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-01T09:31:08.416009",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3805,
+      "force": true
+    },
+    {
+      "time": "2026-06-01T09:32:09.091699",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "a8015432ca795e4b072e",
+    "delta_reasons": [
+      "govt_change",
+      "scanner_count_change",
+      "scanner_opportunities_changed",
+      "reddit_sentiment_spike"
+    ],
+    "metrics": {
+      "india_avg_change": -0.164,
+      "news_count": 119,
+      "govt_high_impact": 13,
+      "scanner_signals": 125,
+      "top_scanner_tickers": [
+        "KPRMILL",
+        "NATCOPHARM",
+        "AEGISLOG",
+        "INOXWIND",
+        "ANDHRSUGAR"
+      ],
+      "scanner_signature": [
+        "('KPRMILL', 'ULTRA', 3.6)",
+        "('NATCOPHARM', 'ULTRA', -7.3)",
+        "('AEGISLOG', 'ULTRA', 3.9)",
+        "('INOXWIND', 'ULTRA', -8.8)",
+        "('ANDHRSUGAR', 'ULTRA', -9.8)"
+      ],
+      "top_news_titles": [
+        "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+        "indian firms line up for us tariff refunds amid looming legal challenge",
+        "inflation and input costs threaten earnings momentum going forward: dhananjay si",
+        "iran blames us 'contradictions', strikes for peace deal delay, links pact to leb",
+        "psu bank stocks vs private banks in fy27: the valuation trap you need to avoid",
+        "suzlon energy shares crack 5% after rs 29 crore sebi fine for misleading financi"
+      ],
+      "reddit_sentiment": "bullish",
+      "reddit_confidence": 100,
+      "novelty_avg_score": 4.55,
+      "repetition_suppressed": 58
+    },
+    "source_hashes": {
+      "global_markets": "ab68f1807b05bd52a01f",
+      "india_markets": "891d84f84743847ad625",
+      "news": "afeff29eb512d803f244",
+      "youtube": "6ea4dde5407ad7bc506c",
+      "govt": "2756d24329e1781ad5ab",
+      "inshorts": "4e8ef3346db19fe29b05",
+      "reddit": "884fe87b0b4a2d12b33c",
+      "telegram": "empty",
+      "scanner": "6ff7530be406b5e9844c",
+      "twitter": "e44a60eb356697d9708d",
+      "nse_filings": "b330962da9d093a33098",
+      "composite": "00e9d0b48d632533f7db"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

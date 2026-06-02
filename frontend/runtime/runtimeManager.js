@@ -1,7 +1,7 @@
 /**
  * RuntimeManager — single coordinated refresh loop + shared runtime state.
  * All intelligence tabs subscribe here instead of polling independently.
- * Hydrates exclusively from GET /api/runtime_snapshot.
+ * Hydrates from GET /api/runtime/snapshot (live API first; stale cache fallback only).
  */
 (function (global) {
   'use strict';
@@ -9,7 +9,7 @@
   const DEFAULT_POLL_MS = 30000;
   const MIN_REFRESH_GAP_MS = 4000;
   const NOTIFY_DEBOUNCE_MS = 80;
-  const SNAPSHOT_ENDPOINT = '/api/runtime_snapshot';
+  const SNAPSHOT_ENDPOINT = '/api/runtime/snapshot';
 
   let config = {
     getApiBase: () => '',
@@ -46,6 +46,7 @@
   const panelHandlers = new Map();
 
   let lastSnapshotHash = null;
+  let lastSnapshotIdentity = null;
   let panelContentHashes = {};
   let notifyTimer = null;
   let loading = false;
@@ -129,25 +130,50 @@
   }
 
   function createWarmingSnapshot() {
+    const ts = new Date().toISOString();
+    const warmId = `warming_${Date.now()}`;
     return {
+      ok: true,
       status: 'warming_up',
       runtime_state: 'warming_up',
-      generated_at: null,
-      snapshot_id: null,
+      generated_at: ts,
+      snapshot_id: warmId,
+      active_snapshot_id: warmId,
+      action_plan: '',
+      intelligence: {},
+      freshness: { age_hours: null, stale: false, source: 'runtime_snapshot' },
+      data: {},
+      exports: {},
       market_snapshot: {
+        generated_at: ts,
         executive_summary: null,
         sector_rotation: { bullish: [], bearish: [] },
         top_opportunities: [],
         risk_list: [],
         runtime_state: 'warming_up',
       },
-      exports: {},
       panels: {},
       operational: {
         display_status: 'Initializing',
         display_message: 'Initializing intelligence runtime...',
       },
     };
+  }
+
+  function prepareSnapshotForApply(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    if (global.SnapshotAdapter && typeof global.SnapshotAdapter.ensureMinimumContract === 'function') {
+      return global.SnapshotAdapter.ensureMinimumContract(snapshot);
+    }
+    return snapshot;
+  }
+
+  function snapshotIdentity(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return '';
+    const ms = snapshot.market_snapshot || {};
+    const id = snapshot.snapshot_id || snapshot.active_snapshot_id || ms.snapshot_id || '';
+    const gen = snapshot.generated_at || ms.generated_at || '';
+    return `${id}|${gen}`;
   }
 
   function createEmptyDegradedSnapshot(errorMsg) {
@@ -227,7 +253,14 @@
     const hasId = !!(snapshot.snapshot_id || snapshot.active_snapshot_id || ms.snapshot_id);
     const hasTime = !!(snapshot.generated_at || ms.generated_at);
     const exports = snapshot.exports || snapshot.data || {};
-    const hasIntel = !!(exports.intelligence || ms.intelligence || ms.action_plan || exports.scanner);
+    const hasIntel = !!(
+      snapshot.intelligence
+      || exports.intelligence
+      || ms.intelligence
+      || ms.action_plan
+      || snapshot.action_plan
+      || exports.scanner
+    );
     return !hasId && !hasTime && !hasIntel;
   }
 
@@ -362,14 +395,18 @@
 
   function trimSnapshotForStorage(snapshot) {
     return {
+      ok: snapshot.ok,
       generated_at: snapshot.generated_at,
-      snapshot_id: snapshot.snapshot_id,
+      snapshot_id: snapshot.snapshot_id || snapshot.active_snapshot_id,
       active_snapshot_id: snapshot.active_snapshot_id,
       snapshot_version: snapshot.snapshot_version,
       status: snapshot.status,
+      action_plan: snapshot.action_plan,
+      intelligence: snapshot.intelligence,
+      freshness: snapshot.freshness,
       market_snapshot: snapshot.market_snapshot,
       exports: snapshot.exports || snapshot.data,
-      data: snapshot.data,
+      data: snapshot.data || snapshot.exports,
       panels: snapshot.panels,
       calibration_summary: snapshot.calibration_summary,
       overnight_impact: snapshot.overnight_impact,
@@ -380,8 +417,18 @@
       source_status: snapshot.source_status,
       operational: snapshot.operational,
       freshness_state: snapshot.freshness_state,
-      action_plan: snapshot.action_plan,
     };
+  }
+
+  function clearStaleCache(reason) {
+    try {
+      localStorage.removeItem(STALE_CACHE_KEY);
+      localStorage.removeItem(STALE_CACHE_META_KEY);
+      usingStaleCache = false;
+      console.log('[RuntimeManager] stale cache cleared', reason || '');
+    } catch (e) {
+      console.warn('[RuntimeManager] clearStaleCache failed:', e.message || e);
+    }
   }
 
   function persistSnapshotCache(snapshot) {
@@ -411,7 +458,13 @@
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return null;
-      return parsed;
+      const prepped = prepareSnapshotForApply(parsed);
+      if (!prepped) {
+        console.warn('[RuntimeManager] discarding malformed stale cache');
+        clearStaleCache('malformed');
+        return null;
+      }
+      return prepped;
     } catch (e) {
       console.warn('[RuntimeManager] loadSnapshotCache failed:', e.message || e);
       return null;
@@ -465,6 +518,14 @@
       return { ok: false, reason: 'invalid_payload' };
     }
 
+    const prepped = prepareSnapshotForApply(snapshot);
+    if (!prepped) {
+      console.warn('[RuntimeManager] applySnapshot rejected — malformed payload');
+      if (opts.staleCache) clearStaleCache('malformed');
+      return { ok: false, reason: 'malformed_payload' };
+    }
+    snapshot = prepped;
+
     global.runtimeSnapshot = snapshot;
     normalizedState = normalizeRawSnapshot(snapshot);
     if (normalizedState && normalizedState.meta && (normalizedState.meta.missingFields || []).length) {
@@ -497,10 +558,27 @@
       nextHash = 'fallback';
       nextPanelHashes = {};
     }
-    const unchanged = !opts.force && nextHash === lastSnapshotHash;
+    const identity = snapshotIdentity(snapshot);
+    const identityUnchanged = !opts.force && identity && identity === lastSnapshotIdentity;
+    const hashUnchanged = !opts.force && nextHash === lastSnapshotHash;
+    const unchanged = identityUnchanged && hashUnchanged;
+
+    if (unchanged) {
+      console.log('[RuntimeManager] snapshot unchanged', { id: identity });
+      scheduleNotify({
+        unchanged: true,
+        snapshotHash: nextHash,
+        panelHashes: panelContentHashes,
+        hydrationMs: lastHydrationMs,
+        hydrationComplete: true,
+        normalized: !!normalizedState,
+      });
+      return { ok: true, unchanged: true };
+    }
 
     state = snapshot;
     lastSnapshotHash = nextHash;
+    lastSnapshotIdentity = identity;
     panelContentHashes = nextPanelHashes;
     failedWidgets = [];
 
@@ -520,7 +598,7 @@
     }
 
     const notifyMeta = {
-      unchanged,
+      unchanged: false,
       snapshotHash: nextHash,
       panelHashes: nextPanelHashes,
       hydrationMs: lastHydrationMs,
@@ -528,36 +606,28 @@
       normalized: !!normalizedState,
     };
 
-    const degraded = opts.degradedFallback || opts.staleCache || snapshot.status === 'degraded';
+    const liveStale = !!(snapshot.freshness && snapshot.freshness.stale)
+      || !!(normalizedState && normalizedState.meta && normalizedState.meta.stale);
+    const degraded = opts.degradedFallback || opts.staleCache
+      || (snapshot.status === 'degraded' && !hasData && !opts.warmingBoot);
     if (opts.warmingBoot && !hydrationFinished) {
       setHydrationPhase(HYDRATION_WARMING_UP);
     } else if (!hydrationFinished && !opts.warmingBoot) {
-      markHydrationFinished(degraded || !!lastFetchError);
+      markHydrationFinished(degraded);
     }
 
-    if (unchanged && !opts.force) {
-      scheduleNotify(notifyMeta);
-      return { ok: true, unchanged: true };
-    }
+    scheduleNotify(notifyMeta);
 
-    scheduleNotify({
-      ...notifyMeta,
-      unchanged: false,
-    });
-
-    if (orch && orch.stale && !hasData) {
-      const now = Date.now();
-      if (now - lastStaleForcedRefreshAt >= STALE_FORCE_REFRESH_MS) {
-        lastStaleForcedRefreshAt = now;
-        setTimeout(() => refresh({ force: true }), 2000);
-      }
+    if (opts.staleCache) {
+      console.log('[RuntimeManager] applied stale cache fallback', { id: identity });
+    } else {
+      console.log('[RuntimeManager] applied live snapshot', {
+        id: normalizedState && normalizedState.meta && normalizedState.meta.snapshotId,
+        status: normalizedState && normalizedState.meta && normalizedState.meta.status,
+        stale: liveStale,
+        ms: lastHydrationMs,
+      });
     }
-    console.log('[RuntimeManager] snapshot applied', {
-      id: normalizedState && normalizedState.meta && normalizedState.meta.snapshotId,
-      status: normalizedState && normalizedState.meta && normalizedState.meta.status,
-      stale: normalizedState && normalizedState.meta && normalizedState.meta.stale,
-      ms: lastHydrationMs,
-    });
     return { ok: true, unchanged: false };
   }
 
@@ -566,6 +636,10 @@
   }
 
   const FETCH_TIMEOUT_MS = 15000;
+  const SNAPSHOT_FETCH_TIMEOUT_MS = 30000;
+  let runtimeSnapshotPromise = null;
+  let runtimeRetryLoopActive = false;
+  let staleCacheAppliedOnTimeout = false;
 
   function fetchWithTimeout(url, options, timeoutMs) {
     const ms = timeoutMs || FETCH_TIMEOUT_MS;
@@ -590,13 +664,18 @@
 
   async function fetchSnapshot() {
     const base = config.getApiBase().replace(/\/$/, '');
-    const url = base + SNAPSHOT_ENDPOINT;
+    const url = `${base}${SNAPSHOT_ENDPOINT}?_ts=${Date.now()}`;
     const started = Date.now();
     try {
       const res = await fetchWithTimeout(url, {
         method: 'GET',
-        headers: config.getHeaders(),
-      }, FETCH_TIMEOUT_MS);
+        headers: {
+          ...config.getHeaders(),
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+        cache: 'no-store',
+      }, SNAPSHOT_FETCH_TIMEOUT_MS);
       if (!res.ok) throw new Error(`${SNAPSHOT_ENDPOINT} → HTTP ${res.status}`);
       const payload = await res.json();
       if (!payload || typeof payload !== 'object') {
@@ -604,26 +683,32 @@
       }
       lastHydrationMs = Date.now() - started;
       lastFetchError = null;
+      usingStaleCache = false;
       console.log('[RuntimeManager] fetchSnapshot success', {
         endpoint: SNAPSHOT_ENDPOINT,
         ms: lastHydrationMs,
         bytes: JSON.stringify(payload).length,
+        stale: !!(payload.freshness && payload.freshness.stale),
       });
       return payload;
     } catch (e) {
       lastFetchError = e.name === 'AbortError' || String(e.message || '').includes('timeout')
-        ? `${SNAPSHOT_ENDPOINT} timeout (${FETCH_TIMEOUT_MS / 1000}s)`
+        ? `${SNAPSHOT_ENDPOINT} timeout (${SNAPSHOT_FETCH_TIMEOUT_MS / 1000}s)`
         : `${SNAPSHOT_ENDPOINT}: ${e.message || 'fetch failed'}`;
       console.error('[RuntimeManager] fetchSnapshot failed:', lastFetchError);
       throw e;
     }
   }
 
-  async function fetchSnapshotWithRetry() {
+  async function fetchSnapshotInternal() {
     let lastError = null;
     console.log('[Hydration] snapshot fetch start');
     for (let attempt = 0; attempt <= MAX_SNAPSHOT_RETRIES; attempt += 1) {
       if (attempt > 0) {
+        if (staleCacheAppliedOnTimeout) {
+          console.warn('[Hydration] stale cache applied on timeout — stopping retry loop');
+          break;
+        }
         console.warn('[Hydration] snapshot missing — retry', attempt, 'of', MAX_SNAPSHOT_RETRIES);
         setHydrationPhase(HYDRATION_WARMING_UP);
         setLoading(true, 'Initializing intelligence runtime...');
@@ -642,22 +727,74 @@
       } catch (e) {
         lastError = e;
         console.error('[Hydration] snapshot fetch fail attempt', attempt, e.message || e);
+        const isTimeout = e.name === 'AbortError' || String(e.message || '').includes('timeout');
+        if (isTimeout && !staleCacheAppliedOnTimeout) {
+          staleCacheAppliedOnTimeout = true;
+          const seq = fetchSeq;
+          if (tryRestoreStaleCache(lastFetchError || e.message, seq)) {
+            console.warn('[Hydration] timeout — applied stale cache once, stopping retries');
+            break;
+          }
+        }
         if (attempt >= MAX_SNAPSHOT_RETRIES) break;
       }
     }
     throw lastError || new Error('snapshot missing after retries');
   }
 
+  async function fetchSnapshotWithRetry() {
+    if (runtimeSnapshotPromise) {
+      console.log('[RuntimeManager] join in-flight runtimeSnapshotPromise');
+      return runtimeSnapshotPromise;
+    }
+    staleCacheAppliedOnTimeout = false;
+    runtimeSnapshotPromise = (async () => {
+      if (runtimeRetryLoopActive) {
+        console.log('[RuntimeManager] retry loop already active — shared fetch');
+      }
+      runtimeRetryLoopActive = true;
+      try {
+        return await fetchSnapshotInternal();
+      } finally {
+        runtimeRetryLoopActive = false;
+      }
+    })().finally(() => {
+      runtimeSnapshotPromise = null;
+    });
+    return runtimeSnapshotPromise;
+  }
+
   async function refresh(opts) {
     opts = opts || {};
     const now = Date.now();
+    if (runtimeSnapshotPromise && !opts.force) {
+      console.log('[RuntimeManager] skip duplicate fetch — joining in-flight promise');
+      try {
+        await runtimeSnapshotPromise;
+      } catch (e) {
+        /* primary caller handles error path */
+      }
+      if (state) {
+        scheduleNotify({ unchanged: true, hydrationComplete: true, skipped: true });
+      }
+      return state;
+    }
     if (inFlight && !opts.force) {
+      console.log('[RuntimeManager] skip duplicate fetch — refresh in flight');
+      if (runtimeSnapshotPromise) {
+        try {
+          await runtimeSnapshotPromise;
+        } catch (e) {
+          /* primary caller handles error path */
+        }
+      }
       if (state) {
         scheduleNotify({ unchanged: true, hydrationComplete: true, skipped: true });
       }
       return state;
     }
     if (!opts.force && now - lastRefreshAt < MIN_REFRESH_GAP_MS) {
+      console.log('[RuntimeManager] skip duplicate fetch — debounced');
       if (state) {
         scheduleNotify({ unchanged: true, hydrationComplete: true, skipped: true });
       }
@@ -687,7 +824,7 @@
       }
       return state;
     } catch (e) {
-      const msg = e.name === 'AbortError' ? `API timeout (${FETCH_TIMEOUT_MS / 1000}s)` : (e.message || 'refresh failed');
+      const msg = e.name === 'AbortError' ? `API timeout (${SNAPSHOT_FETCH_TIMEOUT_MS / 1000}s)` : (e.message || 'refresh failed');
       refreshError = msg;
       console.error('[RuntimeManager] refresh failed:', msg);
       staleCacheNotified = tryRestoreStaleCache(msg, seq);
@@ -710,7 +847,7 @@
       inFlight = false;
       ensureLoadingCleared('refresh-finally');
       if (!hydrationFinished && !opts.warmingBoot) {
-        markHydrationFinished(!!refreshError || usingStaleCache);
+        markHydrationFinished(!!refreshError || usingStaleCache || opts.degradedFallback);
       }
       if (refreshError && !staleCacheNotified) {
         scheduleNotify({
@@ -745,21 +882,6 @@
     });
     console.log('[Hydration] warming shell applied');
 
-    const bootCached = loadSnapshotCache();
-    if (bootCached) {
-      usingStaleCache = true;
-      const bootApplied = applySnapshot(bootCached, ++fetchSeq, { force: true, staleCache: true, bootCache: true });
-      console.log('[RuntimeManager] boot hydrated from stale cache');
-      if (bootApplied && bootApplied.ok && !isSnapshotMissing(bootCached)) {
-        markHydrationFinished(true);
-      }
-      scheduleNotify({
-        unchanged: false,
-        hydrationComplete: true,
-        staleCache: true,
-        bootCache: true,
-      });
-    }
     if (!hydrationFinished) {
       setHydrationPhase(HYDRATION_WARMING_UP);
     }
@@ -1033,16 +1155,48 @@
     };
   }
 
-  function formatTimestamp() {
-    const snap = state || {};
-    const ms = getMarketSnapshot() || {};
-    const iso = snap.generated_at || ms.generated_at;
+  function formatAgeHours(hours) {
+    if (hours == null || hours === '' || !Number.isFinite(Number(hours))) return '—';
+    const h = Number(hours);
+    if (h < 1) return `${Math.round(h * 60)}m`;
+    const whole = Math.floor(h);
+    const rem = Math.round((h - whole) * 60);
+    return rem ? `${whole}h ${rem}m` : `${whole}h`;
+  }
+
+  function formatIsoTimeShort(iso) {
     if (!iso) return '—';
     try {
       return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     } catch (e) {
-      return '—';
+      return String(iso).slice(0, 16);
     }
+  }
+
+  function packageFreshnessLabels() {
+    const snap = state || {};
+    const pkgAt = snap.package_generated_at || snap.generated_at;
+    const dataAsOf = snap.data_as_of;
+    const marketStatus = snap.market_status || 'unknown';
+    const fresh = snap.freshness || {};
+    const dataAge = fresh.age_hours;
+    const pkgAge = fresh.package_age_hours;
+    return {
+      packageAt: pkgAt,
+      dataAsOf,
+      marketStatus,
+      dataAge,
+      pkgAge,
+      packageLabel: formatIsoTimeShort(pkgAt),
+      dataLabel: formatIsoTimeShort(dataAsOf),
+      ageLabel: formatAgeHours(dataAge),
+      pkgAgeLabel: formatAgeHours(pkgAge != null ? pkgAge : 0),
+      marketClosed: marketStatus === 'closed',
+    };
+  }
+
+  function formatTimestamp() {
+    return packageFreshnessLabels().packageLabel || '—';
   }
 
   function getFreshnessState() {
@@ -1059,53 +1213,87 @@
     };
   }
 
+  function isOnlyLifecycleStale() {
+    if (!state || usingStaleCache) return false;
+    const labels = packageFreshnessLabels();
+    if (labels.marketClosed) return false;
+    const panels = (state && state.panels) || {};
+    const lcPanel = panels.lifecycle || {};
+    const ms = getMarketSnapshot() || {};
+    const rs = ms.runtime_state || state.runtime_state || {};
+    const lcRs = rs.lifecycle || ms.lifecycle || {};
+    const lifecycleStale = !!(lcPanel.stale || lcPanel.status === 'stale'
+      || String(lcPanel.message || '').toLowerCase().indexOf('stale') >= 0
+      || lcRs.pipeline_status === 'STALE' || lcRs.exports_fresh === false
+      || lcRs.stale === true);
+    if (!lifecycleStale) return false;
+    const coreIds = ['brain', 'calibration', 'journal', 'runtime', 'orchestrator'];
+    for (let i = 0; i < coreIds.length; i += 1) {
+      const p = panels[coreIds[i]] || {};
+      if (p.stale && p.status !== 'idle') return false;
+      if (p.status === 'degraded' || p.status === 'error') return false;
+    }
+    const norm = normalizedState;
+    const brain = norm && norm.brain;
+    const hasBrain = !!(brain && (
+      (brain.summary && brain.summary !== 'No intelligence available')
+      || (brain.topOpportunities && brain.topOpportunities.length)
+      || (brain.actionPlan && brain.actionPlan !== 'Awaiting next cycle')
+    ));
+    const intel = (state.exports || state.data || {}).intelligence || ms.intelligence;
+    if (!hasBrain && !intel) return false;
+    return true;
+  }
+
   function isStale() {
+    if (isOnlyLifecycleStale()) return false;
+    const labels = packageFreshnessLabels();
+    const fresh = (state && state.freshness) || {};
+    if (labels.marketClosed) return false;
+    if (fresh.stale === false && labels.pkgAge != null && Number(labels.pkgAge) <= 0.05) return false;
     const ms = getMarketSnapshot();
-    if (ms && ms.freshness && ms.freshness.stale) return true;
+    if (ms && ms.freshness && ms.freshness.stale && !labels.marketClosed) return true;
     const rs = (ms && ms.runtime_state) || (state && state.runtime_state) || {};
     const flags = rs.secondary_flags || {};
-    if (flags.stale_snapshot) return true;
+    if (flags.stale_snapshot && !labels.marketClosed) return true;
     const runtimePanel = getPanelState('runtime');
     if (runtimePanel && runtimePanel.status === 'idle') return false;
     const op = state && state.operational;
     if (op && op.expect_quiet_collectors && runtimePanel && !runtimePanel.stale) return false;
-    const fresh = getFreshnessState();
-    if (fresh.partialLag || fresh.collectorsActive) return false;
-    return !!(runtimePanel && runtimePanel.stale);
+    const freshState = getFreshnessState();
+    if (freshState.partialLag || freshState.collectorsActive) return false;
+    return !!(runtimePanel && runtimePanel.stale && !labels.marketClosed);
   }
 
   function timestampHtml(extra) {
     const snap = state || {};
-    const ms = getMarketSnapshot() || {};
-    const ts = formatTimestamp();
+    const labels = packageFreshnessLabels();
     const runtimePanel = getPanelState('runtime');
     const op = snap.operational;
     const fresh = getFreshnessState();
-    const snapVer = snap.snapshot_version || runtimePanel.snapshot_version || (ms.freshness || {}).snapshot_version;
-    const rs = ms.runtime_state || snap.runtime_state || {};
-    const freshPanel = ms.freshness || rs.snapshot_freshness || {};
-    const snapFreshRaw = runtimePanel.snapshot_freshness_display
-      || freshPanel.age_display
-      || runtimePanel.snapshot_freshness_minutes;
-    const snapFresh = formatFreshnessDisplay(runtimePanel.snapshot_freshness_minutes ?? freshPanel.age_minutes, snapFreshRaw);
-    const tier = runtimePanel.freshness_tier || freshPanel.health_tier
-      || freshnessTierLabel(runtimePanel.snapshot_freshness_minutes ?? freshPanel.age_minutes);
+    const snapVer = snap.snapshot_version || runtimePanel.snapshot_version
+      || ((getMarketSnapshot() || {}).freshness || {}).snapshot_version;
+
     let statusTag = '';
-    if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
+    if (labels.marketClosed && labels.dataAsOf) {
+      statusTag = ` · <span class="runtime-idle">Market closed · data as-of ${labels.dataLabel}</span>`;
+    } else if (runtimePanel && runtimePanel.status === 'idle' && op && op.display_status) {
       statusTag = ` · <span class="runtime-idle">${op.display_status}</span>`;
     } else if (fresh.partialLag || (fresh.collectorsActive && fresh.exportStale)) {
       statusTag = ' · <span class="runtime-live">live collectors active</span>';
     } else if (fresh.degraded) {
       statusTag = ' · <span class="runtime-stale">degraded</span>';
     } else if (isStale()) {
-      statusTag = ' · <span class="runtime-stale">snapshot stale</span>';
+      statusTag = ' · <span class="runtime-stale">underlying data stale</span>';
     }
+
     const snapTag = snapVer != null ? ` · snap v${snapVer}` : '';
-    const freshTag = snapFresh && snapFresh !== 'freshness unavailable'
-      ? ` · ${snapFresh} (${tier})`
-      : (snapFresh === 'freshness unavailable' ? ' · freshness unavailable' : '');
     const suffix = extra ? ` · ${extra}` : '';
-    return `<div class="timestamp runtime-ts">Updated: ${ts}${snapTag}${freshTag}${suffix}${statusTag}</div>`;
+    const marketTag = labels.marketStatus ? ` · Market: ${labels.marketStatus}` : '';
+    const ageTag = labels.ageLabel && labels.ageLabel !== '—'
+      ? ` · Age: ${labels.ageLabel}`
+      : '';
+    return `<div class="timestamp runtime-ts">Updated package: ${labels.packageLabel} · Data as-of: ${labels.dataLabel}${marketTag}${ageTag}${snapTag}${suffix}${statusTag}</div>`;
   }
 
   function lifecycleMessage(panelId, fallback) {
@@ -1181,18 +1369,31 @@
   }
 
   function runtimeDegradedBannerHtml() {
-    if (hydrationPhase === HYDRATION_READY && !usingStaleCache && !lastFetchError) return '';
+    const labels = packageFreshnessLabels();
+    if (usingStaleCache) {
+      const meta = getStaleCacheMeta();
+      const ageText = meta && meta.ageMinutes != null ? `${meta.ageMinutes} min ago` : 'unknown';
+      return `<div class="runtime-degraded-banner">⚠ Runtime delayed · Using degraded intelligence cache${ageText !== 'unknown' ? ' · last export ' + ageText : ''}</div>`;
+    }
+    if (lastFetchError && !state) {
+      return `<div class="runtime-degraded-banner">⚠ Runtime delayed · ${lastFetchError}</div>`;
+    }
     if (
       !hydrationFinished
       && (hydrationPhase === HYDRATION_WARMING_UP || hydrationPhase === HYDRATION_INITIALIZING)
     ) {
       return '<div class="runtime-degraded-banner">Initializing intelligence runtime…</div>';
     }
-    const parts = ['⚠ Runtime delayed'];
-    if (usingStaleCache) parts.push('Using degraded intelligence cache');
-    else if (lastFetchError) parts.push(lastFetchError);
-    else parts.push('Using degraded intelligence cache');
-    return `<div class="runtime-degraded-banner">${parts.join(' · ')}</div>`;
+    const norm = normalizedState;
+    const liveStale = norm && norm.meta && norm.meta.stale && !usingStaleCache;
+    if (liveStale && !labels.marketClosed) {
+      if (isOnlyLifecycleStale()) return '';
+      return '<div class="runtime-stale-banner">Underlying data is stale. Run refresh or wait for next collector cycle.</div>';
+    }
+    if (hydrationPhase === HYDRATION_DEGRADED && lastFetchError) {
+      return `<div class="runtime-degraded-banner">⚠ Runtime delayed · ${lastFetchError}</div>`;
+    }
+    return '';
   }
 
   function getHydrationPhase() {
@@ -1234,7 +1435,10 @@
     getFreshnessState,
     panelChanged,
     formatTimestamp,
+    packageFreshnessLabels,
+    formatAgeHours,
     isStale,
+    isOnlyLifecycleStale,
     isUsingStaleCache,
     staleCacheBadgeHtml,
     getStaleCacheMeta,
@@ -1252,6 +1456,7 @@
     isSnapshotMissing,
     fetchWithTimeout,
     FETCH_TIMEOUT_MS,
+    SNAPSHOT_FETCH_TIMEOUT_MS,
     timestampHtml,
     lifecycleMessage,
     formatAgeSeconds,
@@ -1259,6 +1464,7 @@
     getPanelBanner,
     unavailableBanner,
     invalidateCache,
+    clearStaleCache,
     formatMetricDisplay,
     formatFreshnessDisplay,
     getJournalDayBadge,

@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "bb3989b8bb4d3a68b917",
+    "india_markets": "32742fd41da792ea1278",
+    "news": "46a4cececc8891e9cf71",
+    "youtube": "2478960643ac4a38b39e",
+    "govt": "8b2b67c6d26f25244414",
+    "inshorts": "246de93106941b1c094d",
+    "reddit": "7a65c90f203415746dd9",
+    "telegram": "empty",
+    "scanner": "498678f7dfb151ee1ed9",
+    "twitter": "5833b059eca7d515a9cc",
+    "nse_filings": "f0563e8787cdea520eb8",
+    "composite": "a7a7cf7c93ebec3876d3"
+  },
+  "metrics": {
+    "india_avg_change": 0.071,
+    "news_count": 119,
+    "govt_high_impact": 17,
+    "scanner_signals": 113,
+    "top_scanner_tickers": [
+      "KPRMILL",
+      "NATCOPHARM",
+      "INOXWIND",
+      "WOCKPHARMA",
+      "AEGISLOG"
+    ],
+    "scanner_signature": [
+      "('KPRMILL', 'ULTRA', 3.8)",
+      "('NATCOPHARM', 'ULTRA', -7.3)",
+      "('INOXWIND', 'ULTRA', -8.3)",
+      "('WOCKPHARMA', 'ULTRA', 8.3)",
+      "('AEGISLOG', 'ULTRA', 2.7)"
+    ],
+    "top_news_titles": [
+      "bank credit to industry rises at faster 15.1% in april, notes rbi data",
+      "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+      "indian firms line up for us tariff refunds amid looming legal challenge",
+      "inflation and input costs threaten earnings momentum going forward: dhananjay si",
+      "non-food bank credit gains around 16% on year",
+      "suzlon energy shares fall over 2% after sebi fines rs 29 crore for misleading fi"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 80,
+    "novelty_avg_score": 4.56,
+    "repetition_suppressed": 55
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 119
+  },
+  "govt_counts": {
+    "high_impact_items": 17
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 20
+  }
+}

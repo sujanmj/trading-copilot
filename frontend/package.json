@@ -1,10 +1,15 @@
 {
   "name": "trading-copilot-gui",
   "version": "1.0.0",
-  "description": "Trading Copilot Electron desktop GUI (local only — not deployed to Railway)",
+  "description": "AstraEdge AI local GUI — Electron desktop or browser web mode (API http://127.0.0.1:8080)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "web": "vite --host 127.0.0.1 --port 5173",
+    "dev:web": "vite --host 127.0.0.1 --port 5173",
+    "preview:web": "vite preview --host 127.0.0.1 --port 4173",
+    "test:gui": "cross-env NODE_PATH=node_modules playwright test --config playwright.config.js",
+    "test:e2e": "playwright test e2e/astraedge-full-e2e.spec.js --config playwright.config.js",
     "postinstall": "node -e \"console.log('Electron GUI deps installed for local desktop use only')\""
   },
   "keywords": [],
@@ -14,8 +19,13 @@
     "node": ">=20"
   },
   "dependencies": {
-    "electron": "^42.0.1",
     "@anthropic-ai/sdk": "^0.39.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "electron": "^42.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "cross-env": "^7.0.3",
+    "vite": "^6.3.5"
   }
 }

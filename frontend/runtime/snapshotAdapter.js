@@ -144,17 +144,114 @@
     const runtimePanel = ((raw && raw.panels) || {}).runtime || {};
     const rs = ms.runtime_state || raw.runtime_state || {};
     const flags = rs.secondary_flags || {};
+    const marketClosed = raw.market_status === 'closed'
+      || ((raw.operational || {}).market_hours === false && (raw.operational || {}).after_hours_mode);
+    if (marketClosed) return false;
+    const wrapperFresh = raw.freshness && raw.freshness.stale === false
+      && raw.freshness.package_age_hours != null
+      && Number(raw.freshness.package_age_hours) <= 0.1;
+    if (wrapperFresh && marketClosed) return false;
     return !!(
-      fresh.stale
+      (raw.freshness && raw.freshness.stale)
+      || fresh.stale
       || fs.export_stale
       || flags.stale_snapshot
       || runtimePanel.stale
     );
   }
 
+  function isWarmingPayload(raw) {
+    if (!isObject(raw)) return false;
+    const ms = isObject(raw.market_snapshot) ? raw.market_snapshot : {};
+    return !!(
+      raw.status === 'warming_up'
+      || raw.runtime_state === 'warming_up'
+      || ms.runtime_state === 'warming_up'
+    );
+  }
+
+  /**
+   * Fill minimum contract fields for warm shell / localStorage cache before normalize.
+   * Returns null when payload cannot be coerced (discard malformed cache).
+   */
+  function ensureMinimumContract(raw) {
+    if (!isObject(raw)) return null;
+
+    const out = { ...raw };
+    const ms = isObject(out.market_snapshot) ? { ...out.market_snapshot } : {};
+    out.market_snapshot = ms;
+
+    let exports = out.exports;
+    let data = out.data;
+    if (!isObject(exports) && isObject(data)) exports = { ...data };
+    if (!isObject(data) && isObject(exports)) data = { ...exports };
+    if (!isObject(exports)) exports = {};
+    if (!isObject(data)) data = { ...exports };
+    out.exports = exports;
+    out.data = data;
+
+    const snapId = pickField(out, ['snapshot_id', 'active_snapshot_id', 'id'], null)
+      || pickField(ms, ['snapshot_id'], null);
+    if (snapId) {
+      out.snapshot_id = snapId;
+      if (!out.active_snapshot_id) out.active_snapshot_id = snapId;
+    } else if (isWarmingPayload(out)) {
+      const warmId = `warming_${Date.now()}`;
+      out.snapshot_id = warmId;
+      out.active_snapshot_id = warmId;
+    }
+
+    const generatedAt = pickField(out, ['generated_at', 'timestamp'], null)
+      || pickField(ms, ['generated_at'], null);
+    if (generatedAt) {
+      out.generated_at = generatedAt;
+      if (!ms.generated_at) ms.generated_at = generatedAt;
+    } else if (isWarmingPayload(out)) {
+      const ts = new Date().toISOString();
+      out.generated_at = ts;
+      ms.generated_at = ts;
+    }
+
+    if (out.action_plan == null && ms.action_plan != null) out.action_plan = ms.action_plan;
+    if (out.action_plan == null) out.action_plan = '';
+
+    let intelligence = out.intelligence;
+    if (!isObject(intelligence)) {
+      intelligence = exports.intelligence || data.intelligence || ms.intelligence;
+    }
+    out.intelligence = isObject(intelligence) ? intelligence : {};
+
+    if (!isObject(out.freshness)) {
+      const msFresh = isObject(ms.freshness) ? ms.freshness : {};
+      out.freshness = {
+        age_hours: msFresh.age_hours != null ? msFresh.age_hours : null,
+        stale: !!msFresh.stale,
+        source: msFresh.source || 'runtime_snapshot',
+      };
+    } else if (!out.freshness.source) {
+      out.freshness.source = 'runtime_snapshot';
+    }
+
+    if (out.ok == null) {
+      out.ok = isWarmingPayload(out) ? true : out.status !== 'degraded';
+    }
+
+    if (!snapId && !isWarmingPayload(out)) return null;
+    if (!out.generated_at && !isWarmingPayload(out)) return null;
+
+    return out;
+  }
+
+  function isMalformedCacheSnapshot(raw) {
+    return ensureMinimumContract(raw) == null;
+  }
+
   function collectWarnings(raw, exportsNorm, brain) {
     const warnings = asArray(raw && raw.validation_warnings);
     const missing = [];
+    if (isWarmingPayload(raw)) {
+      return { warnings, missingFields: missing };
+    }
     if (!raw.snapshot_id && !raw.active_snapshot_id) missing.push('snapshot_id');
     if (!raw.generated_at && !(raw.market_snapshot || {}).generated_at) missing.push('generated_at');
     if (!brain.actionPlan || brain.actionPlan === 'Awaiting next cycle') missing.push('action_plan');
@@ -170,8 +267,13 @@
    * @returns {object} stable frontend schema
    */
   function normalizeSnapshot(raw) {
-    if (!isObject(raw)) {
-      console.warn(LOG_PREFIX, 'invalid payload — using empty normalized snapshot');
+    const prepped = ensureMinimumContract(raw);
+    if (prepped == null) {
+      if (isObject(raw)) {
+        console.warn(LOG_PREFIX, 'malformed payload discarded — using empty normalized snapshot');
+      } else {
+        console.warn(LOG_PREFIX, 'invalid payload — using empty normalized snapshot');
+      }
       return {
         snapshot_id: `snapshot_${Date.now()}`,
         generated_at: new Date().toISOString(),
@@ -199,27 +301,30 @@
       };
     }
 
-    const ms = isObject(raw.market_snapshot) ? raw.market_snapshot : {};
-    const exportsNorm = normalizeExports(raw);
-    const brain = normalizeBrain(exportsNorm.intelligence, ms, raw);
-    const globalNorm = normalizeGlobal(raw);
-    const shape = collectWarnings(raw, exportsNorm, brain);
+    const source = prepped || raw;
+    const ms = isObject(source.market_snapshot) ? source.market_snapshot : {};
+    const exportsNorm = normalizeExports(source);
+    const brain = normalizeBrain(exportsNorm.intelligence, ms, source);
+    const globalNorm = normalizeGlobal(source);
+    const shape = collectWarnings(source, exportsNorm, brain);
 
-    const snapshotId = pickField(raw, ['snapshot_id', 'active_snapshot_id', 'id'], null)
+    const snapshotId = pickField(source, ['snapshot_id', 'active_snapshot_id', 'id'], null)
       || pickField(ms, ['snapshot_id'], null)
       || `snapshot_${Date.now()}`;
-    const generatedAt = pickField(raw, ['generated_at', 'timestamp'], null)
+    const generatedAt = pickField(source, ['generated_at', 'timestamp'], null)
       || pickField(ms, ['generated_at'], null)
       || new Date().toISOString();
-    const actionPlanRaw = raw.action_plan || raw.positioning || ms.action_plan || brain.actionPlan || '';
+    const actionPlanRaw = source.action_plan || source.positioning || ms.action_plan || brain.actionPlan || '';
     const intelligenceRaw = exportsNorm.intelligence
-      || unwrapExport(pickField(raw, ['intelligence', 'summary'], null))
+      || unwrapExport(pickField(source, ['intelligence', 'summary'], null))
       || ms.intelligence
       || {};
 
     if (!exportsNorm.intelligence && intelligenceRaw) {
       exportsNorm.intelligence = intelligenceRaw;
     }
+
+    const warming = isWarmingPayload(source);
 
     return {
       snapshot_id: snapshotId,
@@ -229,10 +334,10 @@
       meta: {
         snapshotId,
         generatedAt,
-        version: raw.snapshot_version != null ? raw.snapshot_version
+        version: source.snapshot_version != null ? source.snapshot_version
           : ((ms.freshness || {}).snapshot_version ?? null),
-        status: asString(raw.status || raw.primary_state, 'unknown'),
-        stale: detectStale(raw, ms),
+        status: asString(source.status || source.primary_state, warming ? 'warming_up' : 'unknown'),
+        stale: warming ? false : detectStale(source, ms),
         hydrationReady: true,
         warnings: shape.warnings,
         missingFields: shape.missingFields,
@@ -243,14 +348,17 @@
       marketSnapshot: ms,
       panels: normalizePanels(raw),
       actionPlan: typeof actionPlanRaw === 'string' ? actionPlanRaw : (brain.actionPlan || ''),
-      calibrationSummary: isObject(raw.calibration_summary) ? raw.calibration_summary : {},
-      operational: isObject(raw.operational) ? raw.operational : {},
-      raw,
+      calibrationSummary: isObject(source.calibration_summary) ? source.calibration_summary : {},
+      operational: isObject(source.operational) ? source.operational : {},
+      raw: source,
     };
   }
 
   global.SnapshotAdapter = {
     normalizeSnapshot,
     unwrapExport,
+    ensureMinimumContract,
+    isMalformedCacheSnapshot,
+    isWarmingPayload,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

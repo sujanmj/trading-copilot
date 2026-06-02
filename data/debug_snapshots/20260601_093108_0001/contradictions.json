@@ -1,0 +1,43 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [WOCKPHARMA, TECHM, PERSISTENT, STLTECH] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]",
+      "disagreement_score": 0.875,
+      "long_count": 16,
+      "short_count": 14
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 2 bullish vs 7 bearish high-impact items",
+      "disagreement_score": 0.286
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly NATCOPHARM ULTRA move -7.28%",
+      "disagreement_score": 0.728,
+      "ticker": "NATCOPHARM"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly WOCKPHARMA ULTRA move +5.50%",
+      "disagreement_score": 0.55,
+      "ticker": "WOCKPHARMA"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly JWL ULTRA move -5.33%",
+      "disagreement_score": 0.533,
+      "ticker": "JWL"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly STLTECH ULTRA move +5.00%",
+      "disagreement_score": 0.5,
+      "ticker": "STLTECH"
+    }
+  ],
+  "overall_disagreement_score": 0.579,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.88 | Scanner split: LONG [WOCKPHARMA, TECHM, PERSISTENT, STLTECH] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JWL]\n  [institutional_policy_divergence] disagreement=0.29 | Govt policy mix: 2 bullish vs 7 bearish high-impact items\n  [scanner_anomaly] disagreement=0.73 | Anomaly NATCOPHARM ULTRA move -7.28%\n  [scanner_anomaly] disagreement=0.55 | Anomaly WOCKPHARMA ULTRA move +5.50%\n  [scanner_anomaly] disagreement=0.53 | Anomaly JWL ULTRA move -5.33%\n  [scanner_anomaly] disagreement=0.50 | Anomaly STLTECH ULTRA move +5.00%",
+  "count": 6
+}

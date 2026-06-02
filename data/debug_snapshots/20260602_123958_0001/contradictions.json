@@ -1,0 +1,19 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [NEWGEN, INFY, BSOFT, MASTEK] vs SHORT [NHPC, WOCKPHARMA, NTPC, RECLTD]",
+      "disagreement_score": 0.765,
+      "long_count": 17,
+      "short_count": 13
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 3 bullish vs 5 bearish high-impact items",
+      "disagreement_score": 0.6
+    }
+  ],
+  "overall_disagreement_score": 0.682,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.77 | Scanner split: LONG [NEWGEN, INFY, BSOFT, MASTEK] vs SHORT [NHPC, WOCKPHARMA, NTPC, RECLTD]\n  [institutional_policy_divergence] disagreement=0.60 | Govt policy mix: 3 bullish vs 5 bearish high-impact items",
+  "count": 2
+}

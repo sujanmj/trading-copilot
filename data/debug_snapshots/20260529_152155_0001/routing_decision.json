@@ -1,0 +1,107 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 2970,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-05-29",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-29T15:21:55.060809",
+      "tier": "cheap",
+      "use_case": "compress",
+      "event": "cache_miss",
+      "reason": "no valid cache entry",
+      "estimated_input_tokens": 2159
+    },
+    {
+      "time": "2026-05-29T15:21:55.108548",
+      "tier": "cheap",
+      "use_case": "compress",
+      "event": "api_call",
+      "model": "unknown",
+      "provider": "google/gemini-2.0-flash",
+      "success": false,
+      "estimated_cost": 0.0
+    },
+    {
+      "time": "2026-05-29T15:21:55.153823",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 2970,
+      "force": true
+    },
+    {
+      "time": "2026-05-29T15:22:50.383777",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "5e69386093f621576535",
+    "delta_reasons": [
+      "news_delta",
+      "govt_change",
+      "reddit_sentiment_spike"
+    ],
+    "metrics": {
+      "india_avg_change": -0.196,
+      "news_count": 146,
+      "govt_high_impact": 6,
+      "scanner_signals": 0,
+      "top_scanner_tickers": [],
+      "scanner_signature": [],
+      "top_news_titles": [
+        "dharmendra pradhan defends cbse's three-language policy, says daughter studied m",
+        "inside the mobikwik xtra issue: withdrawal freeze, rbi rules and recovery proces",
+        "rupee soars to best day in nearly two months, closes at 95 vs usd as rbi steps i",
+        "sentinelone tumbles on earnings, guidance. bofa upgrades to buy",
+        "u.s. equity funds draw weekly inflows as tech rally lifts sentiment",
+        "us-iran war news live updates: iran foreign minister discusses hormuz with oman"
+      ],
+      "reddit_sentiment": "bearish",
+      "reddit_confidence": 16,
+      "novelty_avg_score": 4.54,
+      "repetition_suppressed": 65
+    },
+    "source_hashes": {
+      "global_markets": "26e61804a09ccc50fa58",
+      "india_markets": "15ff23dcd1181abd135b",
+      "news": "c7bf967b85418bf07c1d",
+      "youtube": "empty",
+      "govt": "17c16df0b47a8c8a02e5",
+      "inshorts": "729b2dcf508b17f12143",
+      "reddit": "38f50ddcd8b560f916e9",
+      "telegram": "empty",
+      "scanner": "empty",
+      "twitter": "f6d88448c4bede59077e",
+      "nse_filings": "7de0690fd952fe58b6e5",
+      "composite": "f1c87351e590085654bb"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

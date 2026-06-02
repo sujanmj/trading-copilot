@@ -1,0 +1,37 @@
+{
+  "contradictions": [
+    {
+      "type": "scanner_direction_split",
+      "summary": "Scanner split: LONG [WOCKPHARMA, SAREGAMA, RATEGAIN, PERSISTENT] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JPPOWER]",
+      "disagreement_score": 0.579,
+      "long_count": 19,
+      "short_count": 11
+    },
+    {
+      "type": "institutional_policy_divergence",
+      "summary": "Govt policy mix: 2 bullish vs 10 bearish high-impact items",
+      "disagreement_score": 0.2
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly ANDHRSUGAR ULTRA move -9.68%",
+      "disagreement_score": 0.968,
+      "ticker": "ANDHRSUGAR"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly WOCKPHARMA ULTRA move +9.53%",
+      "disagreement_score": 0.953,
+      "ticker": "WOCKPHARMA"
+    },
+    {
+      "type": "scanner_anomaly",
+      "summary": "Anomaly NATCOPHARM ULTRA move -6.79%",
+      "disagreement_score": 0.679,
+      "ticker": "NATCOPHARM"
+    }
+  ],
+  "overall_disagreement_score": 0.676,
+  "summary_block": "=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [scanner_direction_split] disagreement=0.58 | Scanner split: LONG [WOCKPHARMA, SAREGAMA, RATEGAIN, PERSISTENT] vs SHORT [ANDHRSUGAR, INOXWIND, NATCOPHARM, JPPOWER]\n  [institutional_policy_divergence] disagreement=0.20 | Govt policy mix: 2 bullish vs 10 bearish high-impact items\n  [scanner_anomaly] disagreement=0.97 | Anomaly ANDHRSUGAR ULTRA move -9.68%\n  [scanner_anomaly] disagreement=0.95 | Anomaly WOCKPHARMA ULTRA move +9.53%\n  [scanner_anomaly] disagreement=0.68 | Anomaly NATCOPHARM ULTRA move -6.79%",
+  "count": 5
+}

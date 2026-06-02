@@ -1,0 +1,3587 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Trading Copilot</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; display: flex; flex-direction: column; }
+    .topbar { background: #111; border-bottom: 1px solid #222; padding: 6px 12px; display: flex; align-items: center; gap: 6px; min-height: 50px; flex-shrink: 0; flex-wrap: wrap; }
+    .topbar h1 { font-size: 15px; color: #00ff88; font-weight: 700; margin-right: 8px; }
+    .btn-group-label { font-size: 9px; color: #555; text-transform: uppercase; margin-right: 3px; letter-spacing: 0.5px; }
+    .broker-btn, .news-btn { background: #1a1a2e; border: 1px solid #333; color: #ccc; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; transition: all 0.2s; white-space: nowrap; }
+    .broker-btn:hover { background: #00ff88; color: #000; border-color: #00ff88; }
+    .news-btn:hover { background: #ffaa00; color: #000; border-color: #ffaa00; }
+    .broker-btn.active { background: #00ff88; color: #000; font-weight: bold; }
+    .news-btn.active { background: #ffaa00; color: #000; font-weight: bold; }
+    .divider { width: 1px; height: 18px; background: #333; margin: 0 3px; }
+    .right-status { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+    .api-status { font-size: 9px; padding: 2px 7px; border-radius: 8px; }
+    .api-status.connected { background: #0d2a0d; color: #00ff88; }
+    .api-status.disconnected { background: #2a0d0d; color: #ff4444; }
+    .live-badge { background: #ff4444; color: white; font-size: 10px; padding: 2px 8px; border-radius: 10px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+    .broker-panel { flex: 0 0 60%; background: #000; border-right: 2px solid #222; position: relative; overflow: hidden; }
+    .broker-placeholder { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #444; gap: 15px; }
+    .broker-placeholder h2 { font-size: 20px; color: #555; }
+    .loading-bar { position: absolute; top: 0; left: 0; right: 0; background: #1a1a2e; padding: 6px 12px; font-size: 11px; color: #00ff88; border-bottom: 1px solid #00ff88; z-index: 100; display: none; }
+    .loading-bar.active { display: block; }
+    .runtime-degraded-banner {
+      background: #3d2a00; color: #ffb347; padding: 8px 12px; font-size: 11px;
+      border-bottom: 1px solid #ffb347; text-align: center;
+    }
+    .runtime-error-boundary {
+      background: #4a1515; color: #ff8a8a; padding: 8px 12px; font-size: 11px;
+      border-bottom: 1px solid #ff6b6b; text-align: center;
+    }
+    webview { position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; border: none; }
+    .ai-panel { flex: 0 0 40%; background: #0d0d0d; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .ai-header { background: #111; padding: 10px 15px; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .ai-header h3 { font-size: 13px; color: #00ff88; font-weight: 700; }
+    .refresh-btn { background: #1a1a1a; border: 1px solid #333; color: #888; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+    .refresh-btn:hover { border-color: #00ff88; color: #00ff88; }
+    .tabs { display: flex; background: #0a0a0a; border-bottom: 1px solid #222; flex-shrink: 0; flex-wrap: wrap; }
+    .tab { flex: 1; min-width: 0; padding: 8px 4px; text-align: center; cursor: pointer; font-size: 10px; color: #666; border-right: 1px solid #1a1a1a; transition: all 0.2s; }
+    .tab:last-child { border-right: none; }
+    .tab:hover { background: #111; color: #ccc; }
+    .tab.active { background: #1a1a2e; color: #00ff88; font-weight: bold; border-bottom: 2px solid #00ff88; }
+    .tab-content { flex: 1; overflow-y: auto; min-height: 0; padding: 12px; display: none; }
+    .tab-content.active { display: block; }
+    .tab-content::-webkit-scrollbar { width: 4px; }
+    .tab-content::-webkit-scrollbar-track { background: #111; }
+    .tab-content::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    
+    /* --- LUXURY "DARK GLASS" UI SYSTEM --- */
+    .brain-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 10px; }
+    @media (min-width: 800px) { .brain-grid { grid-template-columns: 1.2fr 1fr; } }
+    .glass-card { background: #151A22; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); margin-bottom: 16px; }
+    .glass-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8B949E; margin-top: 0; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 8px; }
+    .glass-text { font-size: 12px; color: #E0E6ED; line-height: 1.6; }
+    .section-title { font-size: 13px; font-weight: 700; color: #00E676; margin: 10px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .brain-list { margin: 6px 0 6px 18px; padding: 0; }
+    .brain-list li { margin-bottom: 4px; color: #C9D1D9; }
+    
+    /* Common Data Items */
+    .trade-item, .govt-item, .news-item, .tv-video, .reddit-ticker, .reddit-discussion, .signal-row, .sector-row, .corr-break { 
+      background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255,255,255,0.03); border-radius: 8px; padding: 12px; margin-bottom: 12px; border-left: 4px solid #444; 
+    }
+    
+    .trade-item.buy, .signal-row.strong { border-left-color: #00E676; }
+    .trade-item.sell, .signal-row.bearish { border-left-color: #FF3D00; }
+    .trade-item.watch, .signal-row.moderate { border-left-color: #ffaa00; }
+    .signal-row.ultra { border-left-color: #cc88ff; }
+    
+    .trade-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .trade-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
+    .trade-badge { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
+    .trade-badge.buy { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .trade-badge.sell { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    .trade-badge.watch { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+    .trade-metrics { display: flex; flex-wrap: wrap; gap: 12px; font-family: monospace; font-size: 11px; color: #A3B3C8; margin-bottom: 8px; }
+    .trade-logic { font-size: 11px; color: #8B949E; line-height: 1.5; margin: 0; }
+    
+    .sector-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sector-tag { font-size: 10px; padding: 4px 10px; border-radius: 12px; font-weight: 600; }
+    .sector-tag.bull { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .sector-tag.bear { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    
+    .mood-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;}
+    .mood-item { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; font-size: 12px; border: 1px solid rgba(255,255,255,0.02);}
+    .mood-item span { display: block; color: #8B949E; font-size: 9px; text-transform: uppercase; margin-bottom: 4px; }
+    .mood-item strong { color: #E0E6ED; font-weight: 600; }
+    
+    .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .market-card { background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); }
+    .market-card-name { font-size: 9px; color: #8B949E; text-transform: uppercase; }
+    .market-card-value { font-size: 13px; font-weight: bold; margin: 4px 0; }
+    .market-card-change { font-size: 10px; font-family: monospace; }
+    
+    .green { color: #00E676; }
+    .red { color: #FF3D00; }
+    .yellow { color: #ffaa00; }
+    
+    .news-item.positive, .news-item.bullish, .sector-row.bullish, .reddit-ticker.bullish, .reddit-discussion.bullish { border-left-color: #00E676; }
+    .news-item.negative, .news-item.bearish, .sector-row.bearish, .reddit-ticker.bearish, .reddit-discussion.bearish { border-left-color: #FF3D00; }
+    .news-item.neutral, .sector-row.neutral, .reddit-ticker.neutral, .reddit-discussion.neutral { border-left-color: #ffaa00; }
+    
+    .news-source { color: #00E676; font-size: 9px; text-transform: uppercase; }
+    .news-title { color: #E0E6ED; margin-top: 4px; line-height: 1.4; font-size: 12px; }
+    
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: bold; margin-right: 4px; }
+    .badge-green { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .badge-red { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    .badge-yellow { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+    .badge-purple { background: rgba(204, 136, 255, 0.1); color: #cc88ff; border: 1px solid rgba(204, 136, 255, 0.3); }
+    
+    .stock-mention { display: inline-block; background: rgba(0,0,0,0.3); padding: 3px 8px; border-radius: 4px; font-size: 10px; margin: 2px; color: #00E676; border: 1px solid rgba(0,230,118,0.2); }
+    .stock-mention.hot { color: #ffaa00; border-color: rgba(255,170,0,0.3); }
+    
+    .govt-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .govt-score { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+    .govt-score.bullish { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0, 230, 118, 0.3); }
+    .govt-score.bearish { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255, 61, 0, 0.3); }
+    .govt-score.neutral { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+    .govt-source { font-size: 9px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; }
+    .govt-relevance { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
+    .govt-headline { font-size: 13px; color: #fff; line-height: 1.4; margin-bottom: 8px; font-weight: 600; }
+    .govt-reasons { font-size: 11px; color: #ffaa00; margin: 6px 0; }
+    
+    .read-link { display: inline-block; padding: 4px 10px; background: rgba(0,0,0,0.3); color: #00E676; text-decoration: none; border-radius: 4px; font-size: 10px; margin-top: 8px; margin-right: 6px; border: 1px solid rgba(0,230,118,0.3); transition: all 0.2s; cursor: pointer; }
+    .read-link:hover { background: #00E676; color: #000; }
+    
+    .tv-video.live { border-left-color: #FF3D00; }
+    .tv-channel { color: #ffaa00; font-size: 9px; text-transform: uppercase; font-weight: bold; }
+    .tv-title { color: #E0E6ED; margin-top: 3px; line-height: 1.4; font-size: 12px; }
+    .live-tag { background: rgba(255, 61, 0, 0.2); color: #FF3D00; padding: 1px 6px; border-radius: 4px; font-size: 8px; font-weight: bold; margin-left: 4px; border: 1px solid #FF3D00; animation: pulse 1.5s infinite; }
+    
+    .timestamp { font-size: 10px; color: #8B949E; text-align: right; margin-bottom: 12px; }
+    .runtime-stale { color: #D29922; }
+    .runtime-live { color: #00E676; font-weight: 600; }
+    .runtime-idle { color: #8B949E; }
+    .debug-overlay {
+      display: none; position: fixed; bottom: 12px; right: 12px; width: 360px; max-height: 50vh;
+      overflow: auto; background: rgba(13,17,23,0.96); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; padding: 12px; font-size: 11px; color: #C9D1D9; z-index: 9999;
+      font-family: ui-monospace, monospace; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .debug-overlay.open { display: block; }
+    .debug-overlay h4 { margin: 0 0 8px; color: #58A6FF; font-size: 12px; }
+    .debug-overlay .dbg-row { margin: 3px 0; }
+    .debug-overlay .dbg-label { color: #8B949E; }
+    .debug-overlay .dbg-stale { color: #D29922; }
+    .debug-overlay .dbg-healthy { color: #00E676; }
+    .debug-overlay .dbg-aging { color: #ffaa00; }
+    .panel-status-banner { font-size: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); line-height: 1.45; }
+    .panel-status-banner.ready { background: rgba(0,230,118,0.08); color: #00E676; border-color: rgba(0,230,118,0.2); }
+    .panel-status-banner.waiting, .panel-status-banner.collecting { background: rgba(255,170,0,0.08); color: #ffaa00; border-color: rgba(255,170,0,0.2); }
+    .panel-status-banner.stale { background: rgba(210,153,34,0.12); color: #D29922; border-color: rgba(210,153,34,0.25); }
+    .panel-status-banner.idle { background: rgba(139,148,158,0.10); color: #8B949E; border-color: rgba(139,148,158,0.20); }
+    .panel-status-banner.error { background: rgba(255,61,0,0.08); color: #FF3D00; border-color: rgba(255,61,0,0.2); }
+    .loading { color: #8B949E; text-align: center; padding: 20px; font-size: 12px; }
+    
+    .ask-bar { border-top: 1px solid rgba(255,255,255,0.05); padding: 10px; display: flex; gap: 8px; background: #0a0a0a; flex-shrink: 0; }
+    .ask-input { flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; outline: none; transition: border 0.2s; }
+    .ask-input:focus { border-color: #00E676; }
+    .ask-btn { background: #00E676; color: #000; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; }
+    .ask-btn:hover { background: #00cc66; }
+    .ask-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+    
+    .reddit-ticker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .reddit-ticker-name { font-size: 14px; font-weight: bold; color: #fff; }
+    .reddit-ticker-mentions { font-size: 10px; color: #8B949E; }
+    .reddit-sent-pill { font-size: 9px; padding: 2px 7px; border-radius: 4px; font-weight: bold; }
+    .reddit-top-post { font-size: 11px; color: #E0E6ED; margin-top: 8px; line-height: 1.4; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; }
+    .reddit-top-post-meta { font-size: 9px; color: #8B949E; margin-top: 6px; }
+    .reddit-discussion-title { font-size: 13px; color: #E0E6ED; line-height: 1.4; margin-bottom: 6px; font-weight: 600; }
+    .reddit-discussion-meta { display: flex; gap: 8px; align-items: center; font-size: 10px; color: #8B949E; }
+    .reddit-sub { color: #ffaa00; font-weight: bold; }
+    .reddit-stats { color: #00E676; }
+    
+    .scanner-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+    .scanner-stat-card { background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); text-align: center; }
+    .scanner-stat-label { font-size: 9px; color: #8B949E; text-transform: uppercase; }
+    .scanner-stat-value { font-size: 20px; font-weight: bold; color: #00E676; margin-top: 4px; }
+    
+    .signal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .signal-ticker { font-size: 15px; font-weight: bold; color: #fff; }
+    .signal-sector { font-size: 9px; color: #8B949E; text-transform: uppercase; margin-left: 6px; }
+    .signal-strength-pill { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid transparent; }
+    .signal-strength-pill.ultra { background: rgba(204, 136, 255, 0.1); color: #cc88ff; border-color: rgba(204,136,255,0.3); }
+    .signal-strength-pill.strong { background: rgba(0, 230, 118, 0.1); color: #00E676; border-color: rgba(0,230,118,0.3); }
+    .signal-strength-pill.moderate { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border-color: rgba(255,170,0,0.3); }
+    .signal-strength-pill.bearish { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border-color: rgba(255,61,0,0.3); }
+    .signal-price-row { display: flex; gap: 12px; align-items: center; font-size: 12px; margin: 6px 0; font-family: monospace; }
+    .signal-price { color: #fff; font-weight: bold; }
+    .signal-change { font-weight: bold; }
+    .signal-volume { color: #ffaa00; font-size: 10px; }
+    .signal-tags { margin-top: 8px; }
+    .signal-tag { display: inline-block; background: rgba(0,0,0,0.3); color: #ccc; font-size: 9px; padding: 3px 8px; border-radius: 4px; margin-right: 6px; margin-bottom: 4px; }
+    .signal-tag.volume { color: #ffaa00; border: 1px solid rgba(255,170,0,0.2); }
+    .signal-tag.breakout { color: #00E676; border: 1px solid rgba(0,230,118,0.2); }
+    .signal-tag.breakdown { color: #FF3D00; border: 1px solid rgba(255,61,0,0.2); }
+    
+    .sector-row { display: flex; justify-content: space-between; align-items: center; }
+    .sector-name { font-size: 12px; color: #fff; font-weight: bold; }
+    .sector-meta { color: #8B949E; font-size: 10px; margin-top: 2px; }
+    .sector-stats { font-family: monospace; font-size: 12px; font-weight: bold; }
+    
+    .corr-ticker { color: #cc88ff; font-weight: bold; font-size: 13px; }
+    .corr-detail { color: #A3B3C8; font-size: 11px; margin-top: 4px; line-height: 1.4; }
+    
+    .stats-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    .stat-big-card { background: rgba(0,0,0,0.25); padding: 16px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); text-align: center; }
+    .stat-big-label { font-size: 10px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-big-value { font-size: 24px; font-weight: bold; margin: 8px 0 4px 0; }
+    .stat-big-sub { font-size: 10px; color: #A3B3C8; }
+    
+    .pred-card-history { background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #444; cursor: pointer; transition: all 0.2s; border: 1px solid rgba(255,255,255,0.02); }
+    .pred-card-history:hover { background: rgba(255,255,255,0.05); }
+    .pred-card-history.opportunity { border-left-color: #00E676; }
+    .pred-card-history.risk { border-left-color: #FF3D00; }
+    .pred-card-history.evaluated.win { background: rgba(0, 230, 118, 0.05); border-left-color: #00E676; border-color: rgba(0,230,118,0.2); }
+    .pred-card-history.evaluated.loss { background: rgba(255, 61, 0, 0.05); border-left-color: #FF3D00; border-color: rgba(255,61,0,0.2); }
+    .pred-card-row { display: flex; justify-content: space-between; align-items: center; }
+    .pred-card-ticker { font-size: 14px; font-weight: bold; color: #fff; }
+    .pred-card-rec { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.5); color: #ccc; margin-left: 6px; }
+    .pred-card-meta-line { font-size: 10px; color: #8B949E; margin-top: 4px; }
+    .pred-card-prices { font-size: 10px; color: #A3B3C8; font-family: monospace; margin-top: 4px; }
+    .pred-card-change { font-size: 14px; font-weight: bold; font-family: monospace; }
+    
+    .verdict-pill { font-size: 9px; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+    .verdict-pill.win { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0,230,118,0.3); }
+    .verdict-pill.loss { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255,61,0,0.3); }
+    .verdict-pill.pending { background: rgba(0,0,0,0.4); color: #8B949E; border: 1px solid rgba(255,255,255,0.1); }
+    
+    .period-selector { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+    .period-btn { flex: 1; min-width: 80px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05); color: #8B949E; padding: 8px 4px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; transition: all 0.2s; }
+    .period-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .period-btn.active { background: rgba(0, 230, 118, 0.1); color: #00E676; border-color: #00E676; }
+    
+    .day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .day-date { font-size: 13px; color: #00E676; font-weight: bold; }
+    .day-stats { font-size: 11px; color: #8B949E; }
+    .win-rate-pill { display: inline-block; padding: 3px 8px; border-radius: 4px; font-weight: bold; margin-left: 6px; }
+    .win-rate-pill.high { background: rgba(0, 230, 118, 0.1); color: #00E676; border: 1px solid rgba(0,230,118,0.3); }
+    .win-rate-pill.medium { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3); }
+    .win-rate-pill.low { background: rgba(255, 61, 0, 0.1); color: #FF3D00; border: 1px solid rgba(255,61,0,0.3); }
+    .win-rate-pill.pending { background: rgba(0,0,0,0.4); color: #8B949E; }
+
+    /* Modals & Chat */
+    .pred-detail-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #151A22; padding: 24px; border-radius: 12px; max-width: 700px; width: 90%; max-height: 85vh; overflow-y: auto; z-index: 1000; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid rgba(0,230,118,0.3); }
+    .pred-detail-modal.active { display: block; }
+    .pred-detail-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 999; backdrop-filter: blur(4px); }
+    .pred-detail-overlay.active { display: block; }
+    .pred-detail-close { position: absolute; top: 12px; right: 16px; background: transparent; border: none; color: #8B949E; font-size: 20px; cursor: pointer; }
+    .pred-detail-close:hover { color: #FF3D00; }
+    .pred-detail-title { font-size: 20px; color: #00E676; font-weight: bold; margin-bottom: 6px; }
+    .pred-detail-subtitle { font-size: 12px; color: #A3B3C8; margin-bottom: 16px; }
+    .pred-detail-section { margin-bottom: 16px; }
+    .pred-detail-label { font-size: 10px; color: #ffaa00; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .pred-detail-value { font-size: 13px; color: #E0E6ED; line-height: 1.6; }
+    .pred-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pred-detail-cell { background: rgba(0,0,0,0.3); padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.03); }
+    .pred-detail-cell-label { font-size: 10px; color: #8B949E; }
+    .pred-detail-cell-value { font-size: 15px; color: #fff; font-weight: bold; margin-top: 4px; font-family: monospace; }
+    
+    .postmortem-btn { background: rgba(0,230,118,0.1); color: #00E676; border: 1px solid #00E676; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: bold; margin-top: 12px; width: 100%; transition: all 0.2s; }
+    .postmortem-btn:hover { background: #00E676; color: #000; }
+    .postmortem-btn:disabled { background: rgba(255,255,255,0.05); color: #888; border-color: #333; cursor: not-allowed; }
+    .postmortem-result { margin-top: 16px; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(204,136,255,0.3); max-height: 400px; overflow-y: auto; }
+    .postmortem-result h2 { color: #cc88ff; font-size: 14px; margin: 12px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+    .postmortem-result strong { color: #00E676; }
+    
+    .chat-history-block { margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px; }
+    .chat-history-header { font-size: 10px; color: #8B949E; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+    .clear-chat-btn { background: rgba(255,61,0,0.1); color: #FF3D00; border: 1px solid #FF3D00; padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+    .clear-chat-btn:hover { background: #FF3D00; color: #fff; }
+    .chat-msg-user { padding: 10px 12px; background: rgba(0,0,0,0.25); border-radius: 6px; border-left: 2px solid #00E676; margin: 8px 0; }
+    .chat-msg-ai { padding: 10px 12px; background: rgba(0,230,118,0.05); border-radius: 6px; border-left: 2px solid #00E676; margin: 8px 0; border: 1px solid rgba(0,230,118,0.1); }
+    .chat-msg-meta { color: #00E676; font-size: 10px; margin-bottom: 6px; font-weight: bold; }
+    .chat-msg-content { font-size: 12px; color: #E0E6ED; line-height: 1.5; }
+
+    /* --- AI OPS DRAWER (operator console) --- */
+    .ai-ops-btn {
+      position: relative;
+      background: rgba(20, 28, 40, 0.9);
+      border: 1px solid rgba(100, 180, 255, 0.25);
+      color: #7eb8ff;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .ai-ops-btn:hover { border-color: rgba(100, 180, 255, 0.55); color: #a8d4ff; box-shadow: 0 0 8px rgba(59, 130, 246, 0.15); }
+    .ai-ops-btn.has-alert::after {
+      content: '';
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ffaa00;
+      box-shadow: 0 0 6px rgba(255, 170, 0, 0.8);
+    }
+    .ai-ops-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 2000;
+      backdrop-filter: blur(2px);
+    }
+    .ai-ops-backdrop.open { display: block; }
+    .ai-ops-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(400px, 92vw);
+      height: 100%;
+      background: #0d1117;
+      border-left: 1px solid rgba(100, 180, 255, 0.15);
+      z-index: 2001;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.45);
+    }
+    .ai-ops-drawer.open { transform: translateX(0); }
+    .ai-ops-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid #222;
+      background: #111;
+      flex-shrink: 0;
+    }
+    .ai-ops-head h2 { margin: 0; font-size: 12px; color: #7eb8ff; letter-spacing: 0.06em; text-transform: uppercase; }
+    .ai-ops-close { background: transparent; border: 1px solid #333; color: #888; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 14px; }
+    .ai-ops-close:hover { color: #fff; border-color: #555; }
+    .ai-ops-body { flex: 1; overflow-y: auto; padding: 10px 12px 16px; }
+    .ai-ops-body::-webkit-scrollbar { width: 4px; }
+    .ai-ops-body::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .ai-ops-section { margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.04); border-radius: 8px; background: rgba(0,0,0,0.2); }
+    .ai-ops-section summary {
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #8B949E;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      list-style: none;
+    }
+    .ai-ops-section summary::-webkit-details-marker { display: none; }
+    .ai-ops-section[open] summary { color: #7eb8ff; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .ai-ops-section-body { padding: 8px 10px 10px; }
+    .ai-ops-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .ai-ops-stat { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; padding: 6px 8px; }
+    .ai-ops-stat-label { display: block; font-size: 8px; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+    .ai-ops-stat-value { display: block; font-size: 11px; color: #E0E6ED; margin-top: 2px; font-family: monospace; }
+    .ai-ops-stat-value.ai-ops-warn { color: #ffaa00; }
+    .ai-ops-stat-value.ai-ops-ok { color: #00E676; }
+    .ai-ops-timeline-row { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .ai-ops-timeline-row:last-child { border-bottom: none; }
+    .ai-ops-time { font-size: 9px; color: #555; min-width: 42px; font-family: monospace; }
+    .ai-ops-timeline-label { font-size: 10px; color: #ccc; font-weight: 600; }
+    .ai-ops-timeline-detail { font-size: 9px; color: #777; margin-top: 2px; line-height: 1.35; }
+    .ai-ops-list { margin: 0; padding-left: 16px; font-size: 10px; color: #A3B3C8; line-height: 1.45; }
+    .ai-ops-list li { margin-bottom: 4px; }
+    .ai-ops-empty { font-size: 10px; color: #555; padding: 4px 0; }
+    .ai-ops-subhead { font-size: 9px; color: #666; text-transform: uppercase; margin: 8px 0 4px; letter-spacing: 0.05em; }
+    .ai-ops-warnings { display: none; flex-wrap: wrap; gap: 4px; padding: 0 12px 8px; }
+    .ai-ops-warning-chip { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(255,170,0,0.1); color: #ffaa00; border: 1px solid rgba(255,170,0,0.25); }
+    .ai-ops-footer { padding: 8px 12px; border-top: 1px solid #222; font-size: 9px; color: #555; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; }
+    .ai-ops-load { color: #7eb8ff; font-size: 9px; }
+
+    /* --- CALIBRATION + JOURNAL (Stats / Hist evolution) --- */
+    .calib-section { margin-bottom: 14px; }
+    .calib-section-title { font-size: 10px; color: #8B949E; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .calib-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; background: rgba(0,0,0,0.22); border-radius: 6px; margin-bottom: 5px; border: 1px solid rgba(255,255,255,0.03); font-size: 11px; }
+    .calib-row-label { color: #C9D1D9; flex: 1; padding-right: 8px; }
+    .calib-row-value { font-family: monospace; font-weight: bold; white-space: nowrap; }
+    .calib-row-value.good { color: #00E676; }
+    .calib-row-value.mid { color: #ffaa00; }
+    .calib-row-value.bad { color: #FF3D00; }
+    .calib-row-value.muted { color: #8B949E; }
+    .calib-health-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 8px; }
+    .calib-health-chip { background: rgba(0,0,0,0.25); border: 1px solid rgba(136,204,255,0.12); border-radius: 8px; padding: 10px; text-align: center; }
+    .calib-health-chip .lbl { font-size: 9px; color: #8B949E; text-transform: uppercase; }
+    .calib-health-chip .val { font-size: 18px; font-weight: bold; margin-top: 4px; color: #88ccff; }
+    .calib-insufficient { font-size: 10px; color: #8B949E; text-align: center; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 6px; }
+    .journal-card { background: rgba(0,0,0,0.28); border: 1px solid rgba(212,168,83,0.15); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    .journal-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; }
+    .journal-date { font-size: 13px; font-weight: bold; color: #d4a853; }
+    .journal-day-badge { font-size: 9px; padding: 3px 8px; border-radius: 4px; background: rgba(212,168,83,0.12); color: #f0c878; border: 1px solid rgba(212,168,83,0.25); white-space: nowrap; }
+    .journal-kv { display: grid; grid-template-columns: 88px 1fr; gap: 4px 10px; font-size: 11px; margin-bottom: 8px; }
+    .journal-k { color: #8B949E; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .journal-v { color: #E0E6ED; }
+    .journal-v.win { color: #00E676; }
+    .journal-v.loss { color: #FF3D00; }
+    .journal-obs { font-size: 11px; color: #A3B3C8; line-height: 1.45; margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 2px solid rgba(212,168,83,0.35); }
+    .journal-runtime { font-size: 10px; color: #8B949E; margin: 8px 0; padding: 8px; background: rgba(56,139,253,0.06); border-radius: 6px; border-left: 2px solid rgba(56,139,253,0.35); }
+    .journal-runtime-line { margin: 4px 0; line-height: 1.4; }
+    .journal-details { margin-top: 8px; }
+    .journal-details summary { font-size: 10px; color: #8B949E; cursor: pointer; user-select: none; }
+    .journal-timeline-item { font-size: 10px; color: #A3B3C8; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .journal-warn { font-size: 10px; color: #ffaa00; padding: 4px 0; }
+    .journal-copy-btn { background: rgba(212,168,83,0.1); color: #d4a853; border: 1px solid rgba(212,168,83,0.3); padding: 6px 10px; border-radius: 6px; font-size: 10px; font-weight: bold; cursor: pointer; margin-top: 8px; width: 100%; }
+    .journal-copy-btn:hover { background: rgba(212,168,83,0.2); }
+    .journal-copy-btn.copied { color: #00E676; border-color: #00E676; }
+
+    /* --- DAILY REVIEW (strategic journal) --- */
+    .ai-review-btn {
+      position: relative;
+      background: rgba(28, 24, 16, 0.92);
+      border: 1px solid rgba(212, 168, 83, 0.28);
+      color: #d4a853;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Segoe UI', sans-serif;
+      margin-right: 4px;
+    }
+    .ai-review-btn:hover {
+      border-color: rgba(212, 168, 83, 0.55);
+      color: #f0c878;
+      box-shadow: 0 0 8px rgba(212, 168, 83, 0.12);
+    }
+    .ai-review-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 2000;
+      backdrop-filter: blur(2px);
+    }
+    .ai-review-backdrop.open { display: block; }
+    .ai-review-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(440px, 94vw);
+      height: 100%;
+      background: #0f0e0c;
+      border-left: 1px solid rgba(212, 168, 83, 0.18);
+      z-index: 2001;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+    }
+    .ai-review-drawer.open { transform: translateX(0); }
+    .ai-review-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #2a2418;
+      background: #12100c;
+      flex-shrink: 0;
+    }
+    .ai-review-head h2 {
+      margin: 0;
+      font-size: 11px;
+      color: #d4a853;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      flex: 1;
+    }
+    .ai-review-actions { display: flex; gap: 6px; align-items: center; }
+    .ai-review-copy-btn, .ai-review-refresh-btn {
+      background: rgba(212, 168, 83, 0.08);
+      border: 1px solid rgba(212, 168, 83, 0.35);
+      color: #d4a853;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .ai-review-copy-btn:hover, .ai-review-refresh-btn:hover { background: rgba(212, 168, 83, 0.15); }
+    .ai-review-close {
+      background: transparent;
+      border: 1px solid #333;
+      color: #888;
+      border-radius: 4px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .ai-review-body { flex: 1; overflow-y: auto; padding: 12px 14px 16px; }
+    .ai-review-section {
+      margin-bottom: 14px;
+      border: 1px solid rgba(212, 168, 83, 0.08);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 10px 12px;
+    }
+    .ai-review-section-title {
+      font-size: 9px;
+      font-weight: 700;
+      color: #8a7350;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    .ai-review-day-badge {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #f0c878;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+    .ai-review-hero-sub { font-size: 11px; color: #b8a88a; line-height: 1.45; margin-bottom: 8px; }
+    .ai-review-hero-meta { font-size: 10px; color: #777; margin-bottom: 8px; }
+    .ai-review-hero-meta strong { color: #ccc; }
+    .ai-review-observation {
+      font-size: 10px;
+      color: #9a8b6e;
+      line-height: 1.5;
+      padding: 8px;
+      border-left: 2px solid rgba(212, 168, 83, 0.35);
+      background: rgba(212, 168, 83, 0.04);
+      border-radius: 0 6px 6px 0;
+    }
+    .ai-review-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .ai-review-stat {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+    .ai-review-stat-label {
+      display: block;
+      font-size: 8px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .ai-review-stat-value {
+      display: block;
+      font-size: 11px;
+      color: #e8dcc8;
+      margin-top: 2px;
+      font-family: monospace;
+    }
+    .ai-review-stat-value.ai-review-ok { color: #00E676; }
+    .ai-review-stat-value.ai-review-warn { color: #ffaa00; }
+    .ai-review-list { margin: 0; padding-left: 16px; font-size: 10px; color: #c9b896; line-height: 1.5; }
+    .ai-review-list li { margin-bottom: 5px; }
+    .ai-review-empty { font-size: 10px; color: #555; }
+    .ai-review-timeline-row {
+      display: flex;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .ai-review-time { font-size: 9px; color: #666; min-width: 42px; font-family: monospace; }
+    .ai-review-timeline-label { font-size: 10px; color: #d4c4a0; font-weight: 600; }
+    .ai-review-timeline-note { font-size: 9px; color: #777; margin-top: 2px; line-height: 1.35; }
+    .ai-review-warning-chip {
+      font-size: 9px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      margin-bottom: 5px;
+      line-height: 1.35;
+    }
+    .ai-review-sev-high { background: rgba(255, 80, 80, 0.1); color: #ff8888; border: 1px solid rgba(255, 80, 80, 0.2); }
+    .ai-review-sev-medium { background: rgba(255, 170, 0, 0.08); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.2); }
+    .ai-review-sev-low { background: rgba(100, 180, 255, 0.08); color: #7eb8ff; border: 1px solid rgba(100, 180, 255, 0.15); }
+    .ai-review-summary-block {
+      font-family: monospace;
+      font-size: 9px;
+      color: #a89878;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(212, 168, 83, 0.1);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .ai-review-footer {
+      padding: 8px 12px;
+      border-top: 1px solid #2a2418;
+      font-size: 9px;
+      color: #555;
+      flex-shrink: 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    .empty-state-panel {
+      padding: 18px 16px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px dashed rgba(255, 255, 255, 0.08);
+      color: #8B949E;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .empty-state-panel small {
+      display: block;
+      margin-top: 6px;
+      font-size: 10px;
+      color: #666;
+    }
+    .panel-error-card {
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: rgba(255, 61, 0, 0.08);
+      border: 1px solid rgba(255, 61, 0, 0.25);
+      color: #ffb4a2;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+    .panel-error-card strong {
+      display: block;
+      color: #ff8a65;
+      margin-bottom: 4px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .stale-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 170, 0, 0.12);
+      color: #ffaa00;
+      border: 1px solid rgba(255, 170, 0, 0.25);
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .stale-cache-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 107, 107, 0.15);
+      color: #ff8a80;
+      border: 1px solid rgba(255, 107, 107, 0.35);
+      margin-left: 6px;
+      vertical-align: middle;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <h1>⚡ Trading Copilot</h1>
+    <span class="btn-group-label">BROKERS:</span>
+    <button class="broker-btn" data-url="https://www.angelone.in/login">Angel</button>
+    <button class="broker-btn" data-url="https://kite.zerodha.com">Zerodha</button>
+    <button class="broker-btn" data-url="https://groww.in/login">Groww</button>
+    <button class="broker-btn" data-url="https://login.upstox.com">Upstox</button>
+    <button class="broker-btn" data-url="https://www.indmoney.com/login">IndMoney</button>
+    <button class="broker-btn" data-url="https://finance.yahoo.com/portfolios">💼 Portfolio</button>
+    <div class="divider"></div>
+    <span class="btn-group-label">NEWS:</span>
+    <button class="news-btn" data-url="https://www.moneycontrol.com">MC</button>
+    <button class="news-btn" data-url="https://economictimes.indiatimes.com/markets">ET</button>
+    <button class="news-btn" data-url="https://www.livemint.com/market">Mint</button>
+    <button class="news-btn" data-url="https://www.ndtvprofit.com">NDTV</button>
+    <button class="news-btn" data-url="https://inshorts.com/en/read">📱 Inshorts</button>
+    <button class="news-btn" data-url="https://www.reddit.com/r/IndianStockMarket">🤖 Reddit</button>
+    <button class="news-btn" data-url="https://www.youtube.com/@etnow">ET Now</button>
+    <button class="news-btn" data-url="https://www.youtube.com/@CNBC-TV18">CNBC</button>
+    <button class="news-btn" data-url="https://www.nseindia.com">NSE</button>
+    <div class="right-status">
+      <button type="button" class="ai-review-btn" id="reviewBtn" title="Daily Intelligence Review">REVIEW</button>
+      <button type="button" class="ai-ops-btn" id="aiOpsBtn" title="AI Ops / Logs">OPS</button>
+      <span class="api-status" id="apiStatus">⏳</span>
+      <span class="live-badge">🔴 LIVE</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="broker-panel" id="brokerPanel">
+      <div class="loading-bar" id="loadingBar">⏳ Loading...</div>
+      <div class="broker-placeholder" id="placeholder">
+        <h2>📈 Select Broker or News Source</h2>
+        <p style="color:#8B949E; font-size:12px;">Click any button above to open</p>
+      </div>
+    </div>
+
+    <div class="ai-panel">
+      <div class="ai-header">
+        <h3>🤖 AI Intelligence Hub</h3>
+        <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+      </div>
+      <div id="runtimeDegradedBanner" style="display:none;"></div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="brain">🧠 Brain</div>
+        <div class="tab" data-tab="govt">🏛️ Govt</div>
+        <div class="tab" data-tab="scanner">📈 Scan</div>
+        <div class="tab" data-tab="markets">📊 Mkt</div>
+        <div class="tab" data-tab="global">🌐 Global</div>
+        <div class="tab" data-tab="news">📰 News</div>
+        <div class="tab" data-tab="tv">📺 TV</div>
+        <div class="tab" data-tab="reddit">🤖 Rdt</div>
+        <div class="tab" data-tab="stats">📊 Calib</div>
+        <div class="tab" data-tab="history">📜 Journal</div>
+      </div>
+
+      <div class="tab-content active" id="tab-brain"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-govt"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-scanner"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-markets"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-global"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-news"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-tv"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-reddit"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-stats"><div class="loading">⏳ Loading...</div></div>
+      <div class="tab-content" id="tab-history"><div class="loading">⏳ Loading...</div></div>
+
+      <div class="ask-bar">
+        <select id="aiModel" style="background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);color:#ccc;padding:8px;border-radius:6px;font-size:12px;cursor:pointer;">
+          <option value="ask_basic">⚡ Groq (Fast)</option>
+          <option value="ask_haiku">💨 Groq Lite</option>
+          <option value="ask_deep">🧠 Claude Strategist</option>
+        </select>
+        <input class="ask-input" id="askInput" placeholder="Ask anything..."/>
+        <button class="ask-btn" id="askBtn">Ask</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pred-detail-overlay" id="customDateOverlay"></div>
+  <div class="debug-overlay" id="debugOverlay" aria-hidden="true">
+    <h4>🔧 Runtime Debug</h4>
+    <div id="debugContent"><div class="dbg-row">Loading…</div></div>
+  </div>
+  <div class="pred-detail-modal" id="customDateModal" style="max-width:400px;">
+    <button class="pred-detail-close" id="customDateClose">✕</button>
+    <div class="pred-detail-title">📅 Custom Date Range</div>
+    <div class="pred-detail-subtitle">Pick start and end dates to see history</div>
+    <div class="pred-detail-section">
+      <div class="pred-detail-label">Start Date</div>
+      <input type="date" id="customStartDate" style="width:100%;padding:10px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:6px;font-size:14px;">
+    </div>
+    <div class="pred-detail-section">
+      <div class="pred-detail-label">End Date</div>
+      <input type="date" id="customEndDate" style="width:100%;padding:10px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:6px;font-size:14px;">
+    </div>
+    <div style="display:flex;gap:12px;margin-top:20px;">
+      <button id="customCancelBtn" style="flex:1;background:rgba(255,255,255,0.05);color:#8B949E;border:1px solid rgba(255,255,255,0.1);padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;">Cancel</button>
+      <button id="customApplyBtn" class="postmortem-btn" style="flex:2;margin-top:0;">Apply</button>
+    </div>
+  </div>
+
+  <div class="pred-detail-overlay" id="predDetailOverlay"></div>
+  <div class="pred-detail-modal" id="predDetailModal">
+    <button class="pred-detail-close" id="predDetailClose">✕</button>
+    <div id="predDetailContent"></div>
+  </div>
+
+  <div class="ai-ops-backdrop" id="aiOpsBackdrop"></div>
+  <aside class="ai-ops-drawer" id="aiOpsDrawer" aria-label="AI Ops console">
+    <div class="ai-ops-head">
+      <h2>⚙ AI Ops</h2>
+      <button type="button" class="ai-ops-close" id="aiOpsClose" title="Close">×</button>
+    </div>
+    <div class="ai-ops-warnings" id="aiOpsWarnings"></div>
+    <div class="ai-ops-body">
+      <details class="ai-ops-section" data-ui-section="aiops-system-status" open>
+        <summary>System Status</summary>
+        <div class="ai-ops-section-body"><div class="ai-ops-stat-grid" id="aiOpsStatusGrid"></div></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-live-timeline" open>
+        <summary>Live AI Timeline</summary>
+        <div class="ai-ops-section-body" id="aiOpsTimeline"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-preservation">
+        <summary>Preservation Inspector</summary>
+        <div class="ai-ops-section-body" id="aiOpsPreservation"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-providers">
+        <summary>AI Providers</summary>
+        <div class="ai-ops-section-body" id="aiOpsProviders"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-runtime">
+        <summary>AI Runtime Analytics</summary>
+        <div class="ai-ops-section-body" id="aiOpsRuntime"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-routing">
+        <summary>AI Routing</summary>
+        <div class="ai-ops-section-body" id="aiOpsRouting"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-telegram">
+        <summary>Telegram Alerts</summary>
+        <div class="ai-ops-section-body" id="aiOpsTelegram"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-reliability">
+        <summary>AI Reliability</summary>
+        <div class="ai-ops-section-body" id="aiOpsReliability"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-lifecycle">
+        <summary>Prediction Lifecycle</summary>
+        <div class="ai-ops-section-body" id="aiOpsLifecycle"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-calibration">
+        <summary>Outcome Learning</summary>
+        <div class="ai-ops-section-body" id="aiOpsCalibration"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-adaptive" open>
+        <summary>Adaptive Intelligence</summary>
+        <div class="ai-ops-section-body" id="aiOpsAdaptive"></div>
+      </details>
+      <details class="ai-ops-section" data-ui-section="aiops-health">
+        <summary>Watchdog / Health</summary>
+        <div class="ai-ops-section-body" id="aiOpsHealth"></div>
+      </details>
+    </div>
+    <div class="ai-ops-footer">
+      <span id="aiOpsFooter">—</span>
+      <span class="ai-ops-load" id="aiOpsLoadStatus"></span>
+    </div>
+  </aside>
+
+  <div class="ai-review-backdrop" id="reviewBackdrop"></div>
+  <aside class="ai-review-drawer" id="reviewDrawer" aria-label="Daily Intelligence Review">
+    <div class="ai-review-head">
+      <h2>📓 Daily Review</h2>
+      <div class="ai-review-actions">
+        <button type="button" class="ai-review-copy-btn" id="reviewCopyBtn">COPY REVIEW</button>
+        <button type="button" class="ai-review-refresh-btn" id="reviewRefreshBtn" title="Rebuild">↻</button>
+        <button type="button" class="ai-review-close" id="reviewClose" title="Close">×</button>
+      </div>
+    </div>
+    <div class="ai-review-body">
+      <section class="ai-review-section" id="reviewHero"></section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">AI Performance</div>
+        <div id="reviewPerformance"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Winners &amp; Failures</div>
+        <div id="reviewHighlights"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Regime Transitions</div>
+        <div id="reviewRegime"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Quality Warnings</div>
+        <div id="reviewWarnings"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Telegram Effectiveness</div>
+        <div id="reviewTelegram"></div>
+      </section>
+      <section class="ai-review-section">
+        <div class="ai-review-section-title">Compact Summary</div>
+        <pre class="ai-review-summary-block" id="reviewSummaryBlock">—</pre>
+      </section>
+    </div>
+    <div class="ai-review-footer">
+      <span id="reviewFooter">—</span>
+      <span id="reviewLoadStatus"></span>
+    </div>
+  </aside>
+
+  <script src="runtime/uiState.js"></script>
+  <script src="runtime/snapshotAdapter.js"></script>
+  <script src="runtime/runtimeErrorBoundary.js"></script>
+  <script src="runtime/runtimeManager.js"></script>
+  <script src="components/DailyReviewPanel.js"></script>
+  <script src="components/AIOpsPanel.js"></script>
+  <script>
+  window.__startupErrors = window.__startupErrors || []
+  if (window.RuntimeErrorBoundary) {
+    RuntimeErrorBoundary.install()
+  }
+  window.addEventListener('error', (event) => {
+    window.__startupErrors.push({
+      message: event.message,
+      source: event.filename,
+      line: event.lineno,
+    })
+    console.error('[GUI startup error]', event.message, event.filename, event.lineno)
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    window.__startupErrors.push({
+      message: String(event.reason && event.reason.message ? event.reason.message : event.reason),
+      type: 'unhandledrejection',
+    })
+    console.error('[GUI unhandled rejection]', event.reason)
+  })
+
+  console.log('[BOOT] frontend parsed')
+
+  const fs = require('fs')
+  const path = require('path')
+  const dotenv = require('dotenv')
+  const { spawn } = require('child_process')
+
+  const envPath = path.join(__dirname, '..', 'config', 'keys.env')
+  dotenv.config({ path: envPath })
+
+  // ============================================================
+  // API CONFIG — Railway production (override via keys.env / env vars)
+  // ============================================================
+  const LOCAL_API_BASE = 'http://127.0.0.1:8080'
+  const REMOTE_API_BASE = 'https://web-production-0592e.up.railway.app'
+  const USE_API = true
+  const API_BASE = process.env.API_BASE_URL || LOCAL_API_BASE || REMOTE_API_BASE
+  const API_KEY = process.env.API_KEY || ''
+  let localAuthBypass = API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')
+
+  function apiHeaders() {
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+    if (API_KEY && !localAuthBypass) headers['X-API-Key'] = API_KEY
+    return headers
+  }
+
+  const FETCH_TIMEOUT_MS = 15000
+
+  function fetchWithTimeout(url, options, timeoutMs) {
+    if (window.RuntimeManager && RuntimeManager.fetchWithTimeout) {
+      return RuntimeManager.fetchWithTimeout(url, options, timeoutMs || FETCH_TIMEOUT_MS)
+    }
+    const ms = timeoutMs || FETCH_TIMEOUT_MS
+    console.log('[Hydration] fetch start', url)
+    return new Promise((resolve, reject) => {
+      const controller = new AbortController()
+      const timer = setTimeout(() => {
+        controller.abort()
+        reject(new Error(`Request timeout (${ms / 1000}s): ${url}`))
+      }, ms)
+      fetch(url, { ...(options || {}), signal: controller.signal })
+        .then((res) => { clearTimeout(timer); console.log('[Hydration] fetch success', url); resolve(res) })
+        .catch((err) => { clearTimeout(timer); console.error('[Hydration] fetch fail', url, err.message); reject(err) })
+    })
+  }
+
+  async function bootstrapApiConfig() {
+    try {
+      const res = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/config', { method: 'GET' })
+      if (!res.ok) return
+      const cfg = await res.json()
+      if (cfg.local_auth_bypass) localAuthBypass = true
+    } catch (e) {
+      console.warn('[Hydration] /api/config failed:', e.message)
+    }
+  }
+
+  let apiCache = {
+    intelligence: null, indiaMarket: null, globalMarket: null,
+    news: null, youtube: null, govt: null, inshorts: null,
+    reddit: null, scanner: null, stats: null, history: null,
+    activePredictions: null, predictionHistory: null, lifecycleState: null,
+    runtime: null, lastFetch: 0, connected: false
+  }
+
+  const dataDir = path.join(__dirname, '..', 'data')
+  const files = {
+    intelligence: path.join(dataDir, 'unified_intelligence.json'),
+    indiaMarket: path.join(dataDir, 'latest_market_data.json'),
+    globalMarket: path.join(dataDir, 'global_markets.json'),
+    news: path.join(dataDir, 'news_feed.json'),
+    youtube: path.join(dataDir, 'youtube_feed.json'),
+    govt: path.join(dataDir, 'govt_intelligence.json'),
+    inshorts: path.join(dataDir, 'inshorts_feed.json'),
+    reddit: path.join(dataDir, 'reddit_data.json'),
+    scanner: path.join(dataDir, 'scanner_data.json'),
+    stats: path.join(dataDir, 'stats_data.json'),
+    history: path.join(dataDir, 'history_data.json'),
+    activePredictions: path.join(dataDir, 'active_predictions.json'),
+  }
+
+  function updateApiStatus(connected) {
+    const el = document.getElementById('apiStatus')
+    if (!el) return
+    if (USE_API) {
+      el.className = 'api-status ' + (connected ? 'connected' : 'disconnected')
+      el.textContent = connected ? '🟢 API' : '🔴 OFF'
+    } else {
+      el.className = 'api-status connected'
+      el.textContent = '💻 LOCAL'
+    }
+  }
+
+  function setGlobalLoading(active, message) {
+    const bar = document.getElementById('loadingBar')
+    if (!bar) return
+    if (active) {
+      bar.classList.add('active')
+      bar.textContent = message || '⏳ Loading snapshot…'
+    } else {
+      bar.classList.remove('active')
+    }
+  }
+
+  async function fetchAllFromAPI() {
+    setGlobalLoading(true, '⏳ Loading snapshot…')
+    try {
+      if (window.RuntimeManager) {
+        console.log('[Hydration] fetchAllFromAPI via RuntimeManager.refresh')
+        await RuntimeManager.refresh({ force: true })
+        return !!RuntimeManager.getState()
+      }
+      const response = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/runtime/snapshot', {
+        method: 'GET',
+        headers: apiHeaders(),
+      })
+      if (!response.ok) throw new Error(`/api/runtime/snapshot → ${response.status}`)
+      const data = await response.json()
+      if (window.SnapshotAdapter && SnapshotAdapter.normalizeSnapshot) {
+        const norm = SnapshotAdapter.normalizeSnapshot(data)
+        window.runtimeNormalized = norm
+        apiCache.normalized = norm
+      }
+      window.runtimeSnapshot = data
+      const payload = data.exports || data.data || {}
+      apiCache.intelligence = payload.intelligence
+      apiCache.indiaMarket = payload.india
+      apiCache.globalMarket = payload.markets
+      apiCache.news = payload.news
+      apiCache.youtube = payload.youtube
+      apiCache.govt = payload.govt
+      apiCache.inshorts = payload.inshorts
+      apiCache.reddit = payload.reddit
+      apiCache.scanner = payload.scanner
+      apiCache.stats = payload.stats
+      apiCache.history = payload.history
+      apiCache.activePredictions = payload.active_predictions
+      apiCache.predictionHistory = payload.prediction_history
+      apiCache.lifecycleState = payload.lifecycle_state
+      apiCache.runtime = data
+      apiCache.actionPlan = (data.market_snapshot && data.market_snapshot.action_plan) || data.action_plan || ''
+      apiCache.lastFetch = Date.now()
+      apiCache.connected = data.status !== 'degraded'
+      updateApiStatus(true)
+      return true
+    } catch (e) {
+      console.error('[Hydration] API fetch failed:', e.message || e)
+      apiCache.connected = false
+      updateApiStatus(false)
+      renderUnavailableAllTabs(e.message || 'Data unavailable')
+      return false
+    } finally {
+      setGlobalLoading(false)
+      console.log('[Hydration] loading false (fetchAllFromAPI)')
+    }
+  }
+
+  function renderUnavailableAllTabs(reason) {
+    const msg = reason || 'Data unavailable'
+    const banner = emptyStateHtml('No intelligence available', msg)
+    document.querySelectorAll('.tab-content').forEach((el) => {
+      if (isPanelPending(el.id.replace(/^tab-/, ''))) {
+        el.innerHTML = banner
+      }
+    })
+  }
+
+  function getNormalizedSnapshot() {
+    if (window.RuntimeManager && RuntimeManager.getNormalizedState) {
+      const norm = RuntimeManager.getNormalizedState()
+      if (norm) return norm
+    }
+    if (apiCache && apiCache.normalized) return apiCache.normalized
+    if (window.runtimeSnapshot && window.SnapshotAdapter) {
+      return SnapshotAdapter.normalizeSnapshot(window.runtimeSnapshot)
+    }
+    return null
+  }
+
+  function emptyStateHtml(title, subtitle) {
+    return `<div class="empty-state-panel"><p>${escapeHtml(title || 'No data available')}</p>${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ''}</div>`
+  }
+
+  function panelErrorCard(panelId, err) {
+    const msg = (err && err.message) ? err.message : String(err || 'render error')
+    return `<div class="panel-error-card"><strong>${escapeHtml(panelId)} panel</strong><p>${escapeHtml(msg)}</p></div>`
+  }
+
+  function updateRuntimeDegradedBanner() {
+    const el = document.getElementById('runtimeDegradedBanner')
+    if (!el) return
+    const html = (window.RuntimeManager && RuntimeManager.runtimeDegradedBannerHtml)
+      ? RuntimeManager.runtimeDegradedBannerHtml()
+      : ''
+    if (html) {
+      el.innerHTML = html
+      el.style.display = 'block'
+    } else {
+      el.innerHTML = ''
+      el.style.display = 'none'
+    }
+  }
+
+  function staleIntelligenceFallbackHtml(panelId) {
+    const phase = window.RuntimeManager && RuntimeManager.getHydrationPhase ? RuntimeManager.getHydrationPhase() : ''
+    const hydrationDone = window.RuntimeManager && RuntimeManager.isHydrationFinished && RuntimeManager.isHydrationFinished()
+    if (
+      window.RuntimeManager
+      && !hydrationDone
+      && (phase === RuntimeManager.HYDRATION_WARMING_UP || phase === RuntimeManager.HYDRATION_INITIALIZING)
+    ) {
+      return emptyStateHtml('Initializing intelligence runtime…', 'Snapshot warming up — tabs remain interactive.')
+    }
+    const usingStale = window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache()
+    const meta = window.RuntimeManager && RuntimeManager.getStaleCacheMeta ? RuntimeManager.getStaleCacheMeta() : null
+    const ageText = meta && meta.ageMinutes != null ? `${meta.ageMinutes} min ago` : 'unknown'
+    const lastErr = window.RuntimeManager && RuntimeManager.getLastFetchError ? RuntimeManager.getLastFetchError() : null
+    const degraded = window.RuntimeManager && RuntimeManager.getHydrationPhase
+      && RuntimeManager.getHydrationPhase() === RuntimeManager.HYDRATION_DEGRADED
+    if (usingStale || lastErr || degraded) {
+      return emptyStateHtml(
+        '⚠ Runtime delayed',
+        `Using degraded intelligence cache${ageText !== 'unknown' ? ' · last export ' + ageText : ''}${lastErr ? ' · ' + lastErr : ''}`
+      )
+    }
+    const lcMsg = window.RuntimeManager
+      ? RuntimeManager.lifecycleMessage(panelId || 'brain', 'Awaiting next intelligence cycle.')
+      : 'Awaiting next cycle'
+    return emptyStateHtml('No intelligence available', lcMsg)
+  }
+
+  function staleBadgeHtml() {
+    if (window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache()) {
+      return RuntimeManager.staleCacheBadgeHtml
+        ? RuntimeManager.staleCacheBadgeHtml()
+        : '<span class="stale-cache-badge">STALE CACHE ACTIVE</span>'
+    }
+    if (window.RuntimeManager && RuntimeManager.isStale && RuntimeManager.isStale()) {
+      return '<span class="stale-badge">stale snapshot</span>'
+    }
+    const norm = getNormalizedSnapshot()
+    if (norm && norm.meta && norm.meta.stale) return '<span class="stale-badge">stale snapshot</span>'
+    return ''
+  }
+
+  function safeField(obj, fallback, ...keys) {
+    let cur = obj
+    for (let i = 0; i < keys.length; i += 1) {
+      if (cur == null) return fallback
+      cur = cur[keys[i]]
+    }
+    return cur != null && cur !== '' ? cur : fallback
+  }
+
+  const panelHydrationState = {}
+  const PANEL_TAB_MAP = {
+    brain: 'tab-brain', govt: 'tab-govt', scanner: 'tab-scanner', markets: 'tab-markets',
+    global: 'tab-global', news: 'tab-news', tv: 'tab-tv', reddit: 'tab-reddit',
+    stats: 'tab-stats', history: 'tab-history',
+  }
+
+  function isPanelPending(panelId) {
+    const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+    if (!el) return true
+    const hasContent = el.querySelector('.brain-grid, .glass-card, .empty-state-panel, .panel-error-card, .empty-stats, .journal-card')
+    if (hasContent) return false
+    const onlyLoading = el.querySelector('.loading')
+    return !!onlyLoading || el.textContent.trim() === '' || el.textContent.indexOf('Loading') >= 0
+  }
+
+  function runtimeTimestampHtml(extra) {
+    if (window.RuntimeManager && RuntimeManager.timestampHtml) return RuntimeManager.timestampHtml(extra)
+    return `<div class="timestamp runtime-ts">Updated: —${extra ? ' • ' + extra : ''}</div>`
+  }
+
+  function panelStatusBannerHtml(panelId, sourceKey) {
+    if (!window.RuntimeManager || !RuntimeManager.getPanelBanner) return ''
+    const banner = RuntimeManager.getPanelBanner(panelId, sourceKey)
+    const parts = [banner.message].filter(Boolean)
+    if (banner.stale) parts.push('snapshot stale')
+    else if (banner.collectorsActive) parts.push('live collectors active')
+    if (!parts.length && banner.status === 'ready') return ''
+    const cls = banner.stale ? 'stale'
+      : (banner.collectorsActive ? 'ready'
+      : (banner.status === 'idle' ? 'idle'
+      : (banner.status === 'ready' ? 'ready' : (banner.status === 'collecting' ? 'collecting' : 'waiting'))))
+    return `<div class="panel-status-banner ${cls}">${escapeHtml(parts.join(' · '))}</div>`
+  }
+
+  function globalExportAgeHtml(sourceKey) {
+    if (!window.RuntimeManager || !RuntimeManager.getExportAge) return ''
+    const age = RuntimeManager.getExportAge(sourceKey || 'intelligence')
+    if (!age || age.indexOf('Export age:') !== 0) return ''
+    return age
+  }
+
+  function unwrapCachedExport(cached) {
+    if (cached == null) return null
+    if (cached.error && cached.data == null && !cached.metrics_all_time && !cached.predictions && !cached.intelligence_journal) {
+      return null
+    }
+    return cached.data !== undefined ? cached.data : cached
+  }
+
+  let lastRenderedPanelHashes = {}
+
+  function clearTabLoadingPlaceholders(message) {
+    const subtitle = message || 'Initializing intelligence runtime…'
+    Object.keys(PANEL_TAB_MAP).forEach((panelId) => {
+      const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+      if (!el) return
+      if (isPanelPending(panelId)) {
+        el.innerHTML = staleIntelligenceFallbackHtml(panelId) || emptyStateHtml('Initializing intelligence runtime…', subtitle)
+      }
+    })
+    setGlobalLoading(false)
+    console.log('[Hydration] shell placeholders cleared')
+  }
+
+  function renderShellImmediately() {
+    console.log('[GUI] app boot — render shell')
+    clearTabLoadingPlaceholders('Snapshot warming up — tabs remain interactive.')
+    updateRuntimeDegradedBanner()
+  }
+
+  function renderAllTabs(opts) {
+    if (window.RuntimeErrorBoundary) {
+      return RuntimeErrorBoundary.runSafe('renderAllTabs', () => renderAllTabsInner(opts), () => {
+        clearTabLoadingPlaceholders('Runtime delayed — using degraded intelligence cache')
+      })
+    }
+    return renderAllTabsInner(opts)
+  }
+
+  function renderAllTabsInner(opts) {
+    opts = opts || {}
+    const panelHashes = (window.RuntimeManager && RuntimeManager.getPanelHashes)
+      ? RuntimeManager.getPanelHashes()
+      : null
+
+    if (window.UiState) UiState.saveUiState(document)
+
+    const hydratePanel = (panelId, fn) => {
+      const started = Date.now()
+      console.log('[Hydration]', panelId, 'start')
+      try {
+        fn()
+        panelHydrationState[panelId] = { hydrated: true, error: null, at: Date.now() }
+        console.log('[Hydration]', panelId, 'complete', `${Date.now() - started}ms`)
+      } catch (e) {
+        console.error('[Hydration]', panelId, 'render exception:', e)
+        panelHydrationState[panelId] = { hydrated: true, error: e.message || String(e), at: Date.now() }
+        const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+        if (el) {
+          const banner = panelStatusBannerHtml(panelId)
+          el.innerHTML = banner + panelErrorCard(panelId, e) + emptyStateHtml('Panel degraded', 'Other tabs continue normally.')
+        }
+      } finally {
+        if (isPanelPending(panelId)) {
+          console.warn('[Hydration]', panelId, 'still pending after render — applying fallback')
+          const el = document.getElementById(PANEL_TAB_MAP[panelId] || ('tab-' + panelId))
+          if (el) {
+            el.innerHTML = panelStatusBannerHtml(panelId) + staleBadgeHtml() + staleIntelligenceFallbackHtml(panelId)
+          }
+          panelHydrationState[panelId] = { hydrated: true, error: 'fallback', at: Date.now() }
+        }
+        console.log('[Hydration]', panelId, 'loading false')
+      }
+    }
+
+    const maybeLoad = (panelId, fn) => {
+      const pending = isPanelPending(panelId)
+      const prevErr = panelHydrationState[panelId] && panelHydrationState[panelId].error
+      const hashUnchanged = panelHashes
+        && !opts.force
+        && !pending
+        && !prevErr
+        && lastRenderedPanelHashes[panelId] === panelHashes[panelId]
+      if (hashUnchanged) return
+      hydratePanel(panelId, fn)
+    }
+
+    maybeLoad('brain', loadBrain)
+    maybeLoad('govt', loadGovt)
+    maybeLoad('scanner', loadScanner)
+    maybeLoad('markets', loadMarkets)
+    maybeLoad('global', loadGlobal)
+    maybeLoad('news', loadNews)
+    maybeLoad('tv', loadTV)
+    maybeLoad('reddit', loadReddit)
+    maybeLoad('stats', loadStats)
+    maybeLoad('history', loadHistory)
+
+    if (panelHashes) lastRenderedPanelHashes = { ...panelHashes }
+
+    updateRuntimeDegradedBanner()
+
+    if (window.UiState) {
+      UiState.restoreUiState(document)
+      UiState.persistExpandedSections(document)
+    }
+
+    setTimeout(() => {
+      try {
+        const activeTab = document.querySelector('.tab.active')
+        if (activeTab) renderChatHistory(document.getElementById('tab-' + activeTab.dataset.tab))
+      } catch (e) {
+        console.error('[Hydration] renderChatHistory failed:', e)
+      }
+    }, 150)
+    console.log('[Hydration] render complete (all tabs scheduled)')
+  }
+
+  function resetUiOverlays() {
+    ['customDateOverlay', 'predDetailOverlay', 'aiOpsBackdrop'].forEach((id) => {
+      const el = document.getElementById(id)
+      if (el) {
+        el.classList.remove('active')
+        el.classList.remove('open')
+      }
+    })
+    if (!(window.DailyReviewPanel && DailyReviewPanel.isPanelOpen && DailyReviewPanel.isPanelOpen())) {
+      const reviewBackdrop = document.getElementById('reviewBackdrop')
+      if (reviewBackdrop) reviewBackdrop.classList.remove('open')
+      document.querySelectorAll('.ai-review-drawer.open').forEach((el) => el.classList.remove('open'))
+    }
+    document.querySelectorAll('.pred-detail-modal.active').forEach((el) => el.classList.remove('active'))
+    document.querySelectorAll('.ai-ops-drawer.open').forEach((el) => el.classList.remove('open'))
+    const bar = document.getElementById('loadingBar')
+    if (bar) bar.classList.remove('active')
+  }
+
+  function safeBind(id, event, handler) {
+    const el = document.getElementById(id)
+    if (!el) {
+      console.warn('[GUI] missing element for binding:', id)
+      return false
+    }
+    try {
+      el.addEventListener(event, handler)
+      return true
+    } catch (e) {
+      console.error('[GUI] bind failed:', id, e)
+      return false
+    }
+  }
+
+  function safePanelLoad(name, fn) {
+    try {
+      fn()
+      panelHydrationState[name] = { hydrated: true, error: null, at: Date.now() }
+    } catch (e) {
+      console.error(`[Hydration] ${name} render failed:`, e)
+      panelHydrationState[name] = { hydrated: true, error: e.message || String(e), at: Date.now() }
+      const el = document.getElementById(PANEL_TAB_MAP[name] || ('tab-' + name))
+      if (el) {
+        el.innerHTML = panelErrorCard(name, e) + emptyStateHtml('Panel unavailable', 'Other tabs continue normally.')
+      }
+    }
+  }
+
+  function wireCoreUi() {
+    resetUiOverlays()
+    console.log('[BOOT] tabs mounted')
+    document.querySelectorAll('.broker-btn, .news-btn').forEach(btn => {
+      btn.addEventListener('click', () => loadSite(btn.dataset.url, btn))
+    })
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        try {
+          const target = tab.dataset.tab
+          if (!target) return
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+          tab.classList.add('active')
+          const container = document.getElementById('tab-' + target)
+          if (container) container.classList.add('active')
+          setTimeout(() => { if (container) renderChatHistory(container) }, 50)
+        } catch (e) {
+          console.error('[GUI] tab switch failed:', e)
+        }
+      })
+    })
+    safeBind('predDetailClose', 'click', () => {
+      document.getElementById('predDetailOverlay')?.classList.remove('active')
+      document.getElementById('predDetailModal')?.classList.remove('active')
+    })
+    safeBind('predDetailOverlay', 'click', () => {
+      document.getElementById('predDetailOverlay')?.classList.remove('active')
+      document.getElementById('predDetailModal')?.classList.remove('active')
+    })
+    safeBind('customDateClose', 'click', closeCustomDatePicker)
+    safeBind('customCancelBtn', 'click', closeCustomDatePicker)
+    safeBind('customApplyBtn', 'click', applyCustomDateRange)
+    safeBind('askBtn', 'click', askClaude)
+    safeBind('askInput', 'keypress', (e) => { if (e.key === 'Enter') askClaude() })
+    safeBind('refreshBtn', 'click', refreshAll)
+    safeBind('apiStatus', 'click', () => { updateApiStatus(USE_API && apiCache.connected) })
+  }
+
+  const CHAT_STORAGE_KEY = 'tradingcopilot_chat_history'
+  const MAX_CHAT_MESSAGES = 50
+
+  function getTodayKey() {
+    if (window.RuntimeManager && RuntimeManager.getIstTradingDayKey) {
+      return RuntimeManager.getIstTradingDayKey()
+    }
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  }
+  function loadChatHistory() {
+    try {
+      const stored = localStorage.getItem(CHAT_STORAGE_KEY)
+      if (!stored) return []
+      const data = JSON.parse(stored)
+      if (data.date !== getTodayKey()) {
+        localStorage.removeItem(CHAT_STORAGE_KEY)
+        return []
+      }
+      return data.messages || []
+    } catch (e) { return [] }
+  }
+  function saveChatHistory(messages) {
+    try {
+      const trimmed = messages.slice(-MAX_CHAT_MESSAGES)
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({ date: getTodayKey(), messages: trimmed }))
+    } catch (e) {}
+  }
+  function addChatMessage(role, content, model) {
+    const messages = loadChatHistory()
+    const time = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+    messages.push({ role, content, model: model || '', time, ts: Date.now() })
+    saveChatHistory(messages)
+    return messages
+  }
+  function renderChatHistory(container) {
+    if (!container) return
+    const existing = container.querySelector('.chat-history-block')
+    if (existing) existing.remove()
+    const messages = loadChatHistory()
+    if (messages.length === 0) return
+    let html = '<div class="chat-history-block">'
+    html += '<div class="chat-history-header">'
+    html += `💬 Chat History (${messages.length})`
+    html += '<button class="clear-chat-btn" id="clearChatBtn">🗑️ Clear</button>'
+    html += '</div>'
+    messages.forEach(msg => {
+      if (msg.role === 'user') {
+        html += `<div class="chat-msg-user"><div class="chat-msg-meta">YOU [${escapeHtml(msg.model || '')}] • ${msg.time}</div><div class="chat-msg-content">${escapeHtml(msg.content)}</div></div>`
+      } else {
+        html += `<div class="chat-msg-ai"><div class="chat-msg-meta">${escapeHtml(msg.model || 'AI')} • ${msg.time}</div><div class="chat-msg-content">${escapeHtml(msg.content).replace(/\n/g, '<br>')}</div></div>`
+      }
+    })
+    html += '</div>'
+    container.insertAdjacentHTML('beforeend', html)
+    const clearBtn = document.getElementById('clearChatBtn')
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (confirm('Clear chat history?')) {
+          localStorage.removeItem(CHAT_STORAGE_KEY)
+          refreshAll()
+        }
+      })
+    }
+  }
+
+  function loadSite(url, btn) {
+    if (!url) return
+    const panel = document.getElementById('brokerPanel')
+    const placeholder = document.getElementById('placeholder')
+    if (placeholder) placeholder.style.display = 'none'
+
+    const existing = panel.querySelector('webview')
+    if (existing) existing.remove()
+
+    const wv = document.createElement('webview')
+    wv.src = url
+    wv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;'
+    wv.setAttribute('partition', 'persist:broker')
+    wv.setAttribute('allowpopups', 'true')
+    panel.style.position = 'relative'
+    panel.appendChild(wv)
+
+    const loadingBar = document.getElementById('loadingBar')
+    if (loadingBar) {
+      loadingBar.classList.add('active')
+      loadingBar.textContent = `⏳ Loading ${url}...`
+      wv.addEventListener('did-finish-load', () => {
+        loadingBar.classList.remove('active')
+      })
+      wv.addEventListener('did-fail-load', () => {
+        loadingBar.classList.add('active')
+        loadingBar.textContent = '❌ Failed to load - try another browser'
+      })
+    }
+
+    document.querySelectorAll('.broker-btn, .news-btn').forEach(b =>
+      b.classList.remove('active'))
+    if (btn) btn.classList.add('active')
+  }
+
+  function openInPanel(url) {
+    // This uses Electron's shell to open the link in your DEFAULT browser (Chrome/Edge/Brave).
+    // This bypasses the security headers (X-Frame-Options) that were making the webview blank.
+    const { shell } = require('electron');
+    shell.openExternal(url);
+  }
+
+  document.querySelectorAll('.broker-btn, .news-btn').forEach(btn => {
+    /* bound in wireCoreUi() */
+  })
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    /* bound in wireCoreUi() */
+  })
+
+  function loadJson(filePath) {
+    if (USE_API) {
+      for (const [key, fileP] of Object.entries(files)) {
+        if (fileP === filePath) {
+          const cached = apiCache[key]
+          return unwrapCachedExport(cached)
+        }
+      }
+      return null
+    }
+    try {
+      if (!fs.existsSync(filePath)) return null
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    } catch (e) { return null }
+  }
+
+  function normalizeBrainData(raw) {
+    if (!raw || raw.error) return null
+    const data = raw.data !== undefined ? raw.data : raw
+    if (!data || typeof data !== 'object') return null
+
+    const mood = data.market_mood || {}
+    const mergedMood = {
+      global_mood: mood.global_mood || data.market_bias || null,
+      india_outlook: mood.india_outlook || null,
+      retail_mood: mood.retail_mood || null,
+      confidence_level: mood.confidence_level || data.confidence_score || null,
+    }
+
+    const opps = data.top_opportunities || data.opportunities || []
+    const risks = data.risks_and_avoids || data.risks || []
+    const summary = data.executive_summary || data.analysis || null
+
+    return {
+      ...data,
+      executive_summary: summary,
+      top_opportunities: Array.isArray(opps) ? opps : [],
+      risks_and_avoids: Array.isArray(risks) ? risks : [],
+      market_mood: mergedMood,
+      sector_rotation: data.sector_rotation || { bullish: [], bearish: [] },
+      government_impact: data.government_impact || {},
+      action_plan: data.action_plan || null,
+      self_calibration: data.self_calibration || null,
+    }
+  }
+
+  function displayText(value, fallback) {
+    if (value === null || value === undefined) return fallback
+    const text = String(value).trim()
+    if (!text || text.toLowerCase() === 'none' || text.toLowerCase() === 'unknown') return fallback
+    return text
+  }
+
+  function formatSourcesDisplay(data, runtimeSnap) {
+    const total = (data && data.sources_total) || 8
+    let loaded = data && data.sources_used
+    if (loaded != null) {
+      loaded = Math.min(Math.max(0, Number(loaded) || 0), total)
+    } else {
+      const ms = (runtimeSnap && runtimeSnap.market_snapshot) || {}
+      const feeds = ms.feeds || {}
+      loaded = Object.values(feeds).filter((f) => f && f.status && f.status !== 'missing').length
+      loaded = Math.min(loaded, total)
+    }
+    return `Sources: ${loaded != null && !Number.isNaN(loaded) ? loaded : '—'}/${total}`
+  }
+
+  function truncateRiskLogic(text, maxLines) {
+    maxLines = maxLines || 2
+    const raw = String(text || '').replace(/\bScanner\s+\w+\s·\s*vol\s+[\d.]+x\b/gi, 'Elevated participation')
+      .replace(/\bvol\s+([\d.]+)x\b/gi, 'participation $1x')
+      .replace(/\bULTRA\b/gi, 'High Conviction')
+      .replace(/\bmoonshot\b/gi, 'speculative extension')
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    if (!lines.length) return ''
+    const joined = lines.slice(0, maxLines).join(' ')
+    return joined.length > 140 ? joined.slice(0, 137).trim() + '…' : joined
+  }
+
+  function formatPctSafe(value, fallback) {
+    if (value === null || value === undefined || value === '') return fallback || 'Awaiting statistical confidence'
+    const n = Number(value)
+    if (!Number.isFinite(n)) return String(value)
+    return `${n.toFixed(1)}%`
+  }
+
+  function formatWinRateDisplay(runtimeSnap, metrics, lcCal) {
+    const ms = (window.RuntimeManager && RuntimeManager.getMarketSnapshot)
+      ? (RuntimeManager.getMarketSnapshot() || {})
+      : {}
+    const snapMetrics = ms.metrics || {}
+    if (snapMetrics.win_rate_display) return snapMetrics.win_rate_display
+    const rs = (runtimeSnap && runtimeSnap.runtime_state) || (ms.runtime_state) || {}
+    const wr = rs.win_rate || {}
+    if (wr.win_rate_display) return wr.win_rate_display
+    const cal = (runtimeSnap && runtimeSnap.calibration_summary) || {}
+    if (cal.win_rate_display) return cal.win_rate_display
+    const wins = Number((metrics && metrics.wins) || 0)
+    const losses = Number((metrics && metrics.losses) || 0)
+    const denom = wins + losses
+    if (denom < 5) return 'Awaiting statistical confidence'
+    const raw = lcCal && lcCal.win_rate != null ? lcCal.win_rate : (metrics && metrics.win_rate)
+    if (raw == null || raw === 0 && denom === 0) return 'Insufficient statistical sample'
+    return `${Number(raw).toFixed(0)}%`
+  }
+
+  function formatRegimeDisplay(raw, runtimeSnap) {
+    const rs = (runtimeSnap && runtimeSnap.runtime_state) || {}
+    const regime = rs.regime || {}
+    if (regime.regime_display) return regime.regime_display
+    if (runtimeSnap && runtimeSnap.regime_display) return runtimeSnap.regime_display
+    return displayText(raw, 'Monitoring regime formation')
+  }
+
+  function escapeHtml(text) {
+    if (!text) return ''
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+
+  function formatTime(iso) {
+    if (!iso) return ''
+    try { return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) }
+    catch { return '' }
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return ''
+    try {
+      const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00+05:30`)
+      return d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short' })
+    } catch { return dateStr }
+  }
+
+  function journalDayBadge(entry) {
+    if (window.RuntimeManager && RuntimeManager.getJournalDayBadge) {
+      return RuntimeManager.getJournalDayBadge(entry && entry.date)
+    }
+    return (entry && entry.day_type) || '—'
+  }
+
+  function formatPostMortem(text) {
+    return formatBrainMarkdown(text)
+  }
+
+  function formatBrainMarkdown(text) {
+    if (!text) return ''
+    let t = escapeHtml(String(text).replace(/\r\n/g, '\n'))
+    t = t.replace(/```[\s\S]*?```/g, '')
+    t = t.replace(/^#{1,6}\s+(.+)$/gm, '<div class="section-title">$1</div>')
+    t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    t = t.replace(/__(.+?)__/g, '<strong>$1</strong>')
+    t = t.replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
+    t = t.replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
+    t = t.replace(/\n\n+/g, '<br><br>')
+    t = t.replace(/\n/g, '<br>')
+    return t
+  }
+
+  function brainHtml(text, fallback) {
+    const raw = displayText(text, fallback)
+    if (!raw || raw === fallback) return escapeHtml(fallback)
+    return formatBrainMarkdown(raw)
+  }
+
+  function mergeLifecycleIntoOpportunities(opps, activeStore) {
+    const ranked = Array.isArray(opps) ? opps.slice() : []
+    if (!activeStore || !Array.isArray(activeStore.predictions)) {
+      return ranked
+    }
+    const byTicker = {}
+    activeStore.predictions.forEach((p) => {
+      const ticker = String(p.ticker || '').toUpperCase()
+      if (ticker) byTicker[ticker] = p
+    })
+    return ranked.map((o) => {
+      const sym = String(o.symbol || o.ticker || '').toUpperCase()
+      const p = byTicker[sym]
+      if (!p) return o
+      return {
+        ...o,
+        symbol: sym,
+        ticker: sym,
+        lifecycle_state: p.state || o.lifecycle_state,
+        confidence: o.confidence || p.confidence,
+        entry_zone: o.entry_zone || p.entry_price,
+        target: o.target || p.target_price,
+        stop_loss: o.stop_loss || p.stop_loss,
+        regime: o.regime || p.regime || p.run_type,
+        generated_at: o.generated_at || p.prediction_date || activeStore.updated_at,
+      }
+    })
+  }
+
+  function patchPanelBanner(container, bannerHtml) {
+    if (!container || !bannerHtml) return
+    let banner = container.querySelector('.panel-status-banner')
+    if (!banner) {
+      container.insertAdjacentHTML('afterbegin', bannerHtml)
+      return
+    }
+    const wrap = document.createElement('div')
+    wrap.innerHTML = bannerHtml
+    const next = wrap.firstElementChild
+    if (next) banner.replaceWith(next)
+  }
+
+  function setPanelHtml(container, bannerHtml, bodyHtml, opts) {
+    opts = opts || {}
+    if (!container) return
+    if (window.UiState) UiState.saveUiState(container)
+    if (opts.patch && container.querySelector('.brain-grid, .glass-card, .journal-card, .stats-grid-4')) {
+      patchPanelBanner(container, bannerHtml)
+      const ts = container.querySelector('.runtime-ts')
+      if (ts && bodyHtml.indexOf('runtime-ts') === -1) {
+        /* keep existing timestamp when patching partial content */
+      } else {
+        container.innerHTML = bannerHtml + bodyHtml
+      }
+    } else {
+      container.innerHTML = bannerHtml + bodyHtml
+    }
+    if (window.UiState) {
+      UiState.restoreUiState(container)
+      UiState.persistExpandedSections(container)
+    }
+  }
+
+  function getScannerHighConvictionSignals() {
+    const scanner = loadJson(files.scanner);
+    if (!scanner || !Array.isArray(scanner.top_signals)) return [];
+    return scanner.top_signals.filter((s) => {
+      const strength = String(s.strength || '').toUpperCase();
+      return strength === 'ULTRA' || strength.includes('HIGH CONVICTION') || strength.includes('VERY STRONG');
+    }).slice(0, 6);
+  }
+
+  function renderOpportunityCard(o, opts) {
+    opts = opts || {};
+    const action = (o.action || 'WATCH').toUpperCase();
+    let actionClass = 'watch';
+    if (action.includes('BUY') || action.includes('ACCUMULATE')) actionClass = 'buy';
+    if (action.includes('SELL') || action.includes('AVOID')) actionClass = 'sell';
+    const tier = o.display_tier || (o.elite_verified ? 'HIGH CONVICTION' : (o.below_elite_threshold ? 'WATCH' : 'WATCH'));
+    const tierLabel = String(tier).toUpperCase() === 'ELITE' ? 'High Conviction'
+      : String(tier).toUpperCase() === 'WATCH' ? 'Watchlist'
+      : String(tier).toUpperCase() === 'AVOID' ? 'Elevated Risk'
+      : tier;
+    const isElite = String(tier).toUpperCase() === 'ELITE' || String(tier).toUpperCase() === 'HIGH CONVICTION';
+    const confRaw = o.display_confidence || o.confidence || 'MEDIUM';
+    const confLabel = String(confRaw).toUpperCase() === 'WATCH' ? 'Low'
+      : String(confRaw).toUpperCase() === 'SPECULATIVE' ? 'Low'
+      : confRaw;
+    const metaLine = [
+      o.generated_at ? `Gen ${formatTime(o.generated_at) || String(o.generated_at).slice(0, 10)}` : null,
+      `Status ${tierLabel}`,
+      confLabel ? `Confidence ${confLabel}` : null,
+      o.regime ? `Regime ${o.regime}` : null,
+      o.direction ? o.direction : null,
+      o.signal_type ? `Signal ${o.signal_type}` : null,
+      o.lifecycle_state ? o.lifecycle_state : null,
+    ].filter(Boolean).join(' · ');
+    const metricsHtml = isElite
+      ? `<div class="trade-metrics">
+          <span>Entry: ₹${escapeHtml(displayText(o.entry_zone, '-'))}</span>
+          <span>Tgt: ₹${escapeHtml(displayText(o.target, '-'))}</span>
+          <span>SL: ₹${escapeHtml(displayText(o.stop_loss, '-'))}</span>
+        </div>`
+      : `<div class="trade-metrics" style="font-style:italic;color:#8B949E;">
+          ${tier === 'AVOID' ? 'Avoid — conflict or distribution risk' : 'Observation only — monitor for breakout confirmation'}
+        </div>`;
+    return `
+      <div class="trade-item ${actionClass}">
+        <div class="trade-header">
+          <h3>${escapeHtml(o.symbol || o.ticker || 'UNKNOWN')}</h3>
+          <span class="trade-badge ${actionClass}">${escapeHtml(tierLabel)}</span>
+        </div>
+        ${metricsHtml}
+        ${metaLine ? `<div style="font-size:9px;color:#8B949E;margin:4px 0 6px;">${escapeHtml(metaLine)}</div>` : ''}
+        <p class="trade-logic">${brainHtml(o.logic, opts.fallbackLogic || 'No rationale provided.')}</p>
+      </div>
+    `;
+  }
+
+  function buildBrainDataFromSnapshot() {
+    const norm = getNormalizedSnapshot()
+    const snap = (window.RuntimeManager && RuntimeManager.getState) ? RuntimeManager.getState() : window.runtimeSnapshot
+    const ms = (window.RuntimeManager && RuntimeManager.getMarketSnapshot)
+      ? (RuntimeManager.getMarketSnapshot() || {})
+      : ((snap && snap.market_snapshot) || {})
+    const exports = (snap && (snap.exports || snap.data)) || {}
+    const intel = (norm && norm.exports && norm.exports.intelligence)
+      || exports.intelligence
+      || ms.intelligence
+      || null
+    let data = normalizeBrainData(intel)
+    if (data && ms) {
+      if (ms.executive_summary && !data.executive_summary) data.executive_summary = ms.executive_summary
+      if (ms.action_plan && !data.action_plan) data.action_plan = ms.action_plan
+      if (ms.top_opportunities && !(data.top_opportunities || []).length) data.top_opportunities = ms.top_opportunities
+      if (ms.risk_list && !(data.risks_and_avoids || []).length) data.risks_and_avoids = ms.risk_list
+      if (ms.sector_rotation && !data.sector_rotation) data.sector_rotation = ms.sector_rotation
+    }
+    if (!data && norm && norm.brain) {
+      const b = norm.brain
+      data = {
+        executive_summary: b.summary,
+        action_plan: b.actionPlan,
+        self_calibration: b.selfCalibration,
+        market_mood: b.marketMood,
+        sector_rotation: b.sectorRotation,
+        top_opportunities: b.topOpportunities,
+        risks_and_avoids: b.risks,
+        government_impact: b.governmentImpact,
+        sources_total: b.sourcesTotal,
+        sources_used: b.sourcesUsed,
+      }
+    }
+    if (!data) {
+      data = normalizeBrainData(loadJson(files.intelligence))
+    }
+    return data
+  }
+
+  function brainHasRenderableContent(data) {
+    if (!data || typeof data !== 'object') return false
+    const mood = data.market_mood || {}
+    const summary = displayText(data.executive_summary, '')
+    const placeholder = summary === 'No intelligence available' || summary === 'Waiting for analysis...'
+    return !!(
+      (summary && !placeholder)
+      || (data.top_opportunities && data.top_opportunities.length)
+      || (data.risks_and_avoids && data.risks_and_avoids.length)
+      || displayText(data.action_plan, '')
+      || (displayText(mood.global_mood, '') && mood.global_mood !== 'Confidence building')
+      || (displayText(mood.india_outlook, '') && mood.india_outlook !== 'Confidence building')
+    )
+  }
+
+  // ============================================================
+  // TAB 1: BRAIN
+  // ============================================================
+  function loadBrain() {
+    const container = document.getElementById('tab-brain')
+    if (!container) return
+    const activeStore = loadJson(files.activePredictions)
+    let data = buildBrainDataFromSnapshot()
+    const brainBanner = panelStatusBannerHtml('brain', 'intelligence')
+    const staleTag = staleBadgeHtml()
+
+    const canonicalPlan = (window.RuntimeManager && RuntimeManager.getActionPlan)
+      ? RuntimeManager.getActionPlan()
+      : ((getNormalizedSnapshot() || {}).brain || {}).actionPlan || apiCache.actionPlan || ''
+    if (data && canonicalPlan) data.action_plan = canonicalPlan
+
+    if (!data) {
+      setPanelHtml(container, brainBanner, staleTag + staleIntelligenceFallbackHtml('brain'))
+      return
+    }
+
+    if (!brainHasRenderableContent(data)) {
+      setPanelHtml(container, brainBanner, staleTag + staleIntelligenceFallbackHtml('brain'))
+      return
+    }
+
+    data.top_opportunities = mergeLifecycleIntoOpportunities(data.top_opportunities || [], activeStore)
+    if (activeStore && Array.isArray(activeStore.predictions)) {
+      const activeCount = (activeStore.predictions || []).filter(
+        (p) => (p.state === 'ACTIVE' || p.state === 'PENDING') && p.category === 'opportunity'
+      ).length
+      data.lifecycle_active_count = activeStore.count || activeCount
+      data.active_predictions_updated = activeStore.updated_at
+    }
+
+    const govt = data.government_impact || {};
+    const rotation = data.sector_rotation || { bullish: [], bearish: [] };
+    const mood = data.market_mood || {};
+    const opps = data.top_opportunities || [];
+    const risks = data.risks_and_avoids || [];
+    const lcPanel = window.RuntimeManager ? RuntimeManager.getPanelState('lifecycle') : null;
+    const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
+    const activeMeta = data.active_predictions_updated
+      ? `Active predictions refreshed ${formatTime(data.active_predictions_updated) || data.active_predictions_updated.slice(0, 10)}`
+      : (data.lifecycle_active_count != null ? `${data.lifecycle_active_count} active lifecycle predictions` : '');
+
+    let sectorHtml = '';
+    (rotation.bullish || []).forEach(s => sectorHtml += `<span class="sector-tag bull">⬆ ${escapeHtml(s)}</span>`);
+    (rotation.bearish || []).forEach(s => sectorHtml += `<span class="sector-tag bear">⬇ ${escapeHtml(s)}</span>`);
+
+    let oppsHtml = '';
+    if (opps.length === 0) {
+      const ultra = getScannerHighConvictionSignals();
+      if (ultra.length > 0) {
+        oppsHtml = `<div class="calib-insufficient" style="margin-bottom:10px;">Watchlist candidates available — pending ML confirmation (&gt;72%).</div>`;
+        ultra.forEach((s) => {
+          const strengthLabel = String(s.direction || '').toUpperCase().includes('BEAR')
+            ? 'Strong bearish'
+            : 'Strong bullish';
+          oppsHtml += renderOpportunityCard({
+            symbol: s.ticker,
+            ticker: s.ticker,
+            action: 'WATCH',
+            confidence: 'MEDIUM',
+            logic: `Scanner ${strengthLabel} · vol ${Number(s.volume_ratio || 0).toFixed(1)}x · ${Number(s.change_percent || 0).toFixed(2)}%`,
+            display_tier: 'WATCH',
+          }, { fallbackLogic: 'Scanner signal — observation only, pending ML confirmation.' });
+        });
+      } else {
+        const emptyMsg = 'No high-conviction opportunities detected. Capital preservation mode active.';
+        oppsHtml = `<div class="calib-insufficient">${escapeHtml(emptyMsg)}</div>`;
+      }
+    } else {
+    opps.forEach(o => {
+      oppsHtml += renderOpportunityCard(o);
+    });
+    }
+
+    let risksHtml = '';
+    if (risks.length === 0) {
+      risksHtml = '<div class="glass-text" style="font-style:italic;">No risks identified yet</div>';
+    } else {
+    risks.forEach(r => {
+      const logicText = truncateRiskLogic(r.logic, 2) || 'No risk rationale provided.'
+      risksHtml += `
+        <div class="trade-item sell">
+          <div class="trade-header">
+            <h3>${escapeHtml(r.symbol || 'UNKNOWN')}</h3>
+            <span class="trade-badge sell">AVOID</span>
+          </div>
+          <p class="trade-logic">${brainHtml(logicText, 'No risk rationale provided.')}</p>
+        </div>
+      `;
+    });
+    }
+
+    let html = `
+      ${brainBanner}
+      ${runtimeTimestampHtml((globalExportAgeHtml('intelligence') || activeMeta || formatSourcesDisplay(data, runtimeSnap)) + staleTag)}
+      
+      <div class="brain-grid">
+        <div class="main-column">
+          <div class="glass-card">
+            <h2>Executive Summary</h2>
+            <div class="glass-text">${brainHtml(data.executive_summary, 'Waiting for analysis...')}</div>
+          </div>
+
+          <div class="glass-card">
+            <h2>Market Mood & Govt Intel</h2>
+            <div class="mood-grid">
+              <div class="mood-item"><span>Global</span><strong>${escapeHtml(displayText(mood.global_mood, 'Confidence building'))}</strong></div>
+              <div class="mood-item"><span>India</span><strong>${escapeHtml(displayText(mood.india_outlook, 'Confidence building'))}</strong></div>
+              <div class="mood-item"><span>Retail</span><strong>${escapeHtml(displayText(mood.retail_mood, 'Awaiting evaluation sample'))}</strong></div>
+              <div class="mood-item"><span>AI Confidence</span><strong>${escapeHtml(displayText(mood.confidence_level, 'N/A'))}</strong></div>
+            </div>
+            <div style="margin-top:14px; font-size:11px; color:#A3B3C8; background:rgba(0,0,0,0.2); padding:10px; border-radius:6px;">
+              <strong style="color:#ffaa00;">🏛️ Govt Impact:</strong> ${escapeHtml(displayText(govt.summary, 'No government impact data'))} 
+              <br><span style="color:#8B949E; font-size:9px;">(Confidence: ${escapeHtml(displayText(govt.confidence_score, 'N/A'))})</span>
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <h2>Action Plan & Self-Calibration</h2>
+            <div class="glass-text" style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+              <strong style="color:#00E676; display:block; margin-bottom:4px;">🚀 Action Plan:</strong> 
+              ${brainHtml(data.action_plan, 'Waiting for action plan...')}
+            </div>
+            <div class="glass-text" style="color:#A3B3C8;">
+              <strong style="color:#ffaa00; display:block; margin-bottom:4px;">🎯 Calibration (Past Logic):</strong> 
+              ${brainHtml(data.self_calibration, 'Waiting for calibration data...')}
+            </div>
+          </div>
+        </div>
+
+        <div class="action-column">
+          <div class="glass-card">
+            <h2>Sector Rotation</h2>
+            <div class="sector-tags">
+              ${sectorHtml || '<span class="sector-tag">No distinct rotation identified</span>'}
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <h2>Top Opportunities</h2>
+            ${oppsHtml || '<div class="glass-text" style="font-style:italic;">No prime setups identified today. Cash is a position.</div>'}
+          </div>
+
+          <div class="glass-card" style="border-color: rgba(255, 61, 0, 0.2);">
+            <h2 style="color: #FF3D00;">Risk / Avoid List</h2>
+            ${risksHtml || '<div class="glass-text" style="font-style:italic;">No specific major risks identified.</div>'}
+          </div>
+        </div>
+      </div>
+    `;
+    setPanelHtml(container, brainBanner, html);
+  }
+
+  // ============================================================
+  // TAB 2: GOVT
+  // ============================================================
+  function loadGovt() {
+    const data = loadJson(files.govt)
+    const container = document.getElementById('tab-govt')
+    const banner = panelStatusBannerHtml('govt', 'govt')
+    if (!data) {
+      const msg = (!apiCache.connected && window.RuntimeManager)
+        ? RuntimeManager.unavailableBanner()
+        : emptyStateHtml('No government intelligence', 'Awaiting next collector cycle.')
+      container.innerHTML = banner + msg + staleBadgeHtml()
+      return
+    }
+    
+    let leftHtml = '';
+    const high = data.high_impact_items || []
+    if (high.length > 0) {
+      high.slice(0, 8).forEach((item, idx) => {
+        const score = item.impact_score || 0
+        const direction = item.direction || 'NEUTRAL'
+        const dirClass = direction === 'BULLISH' ? 'bullish' : direction === 'BEARISH' ? 'bearish' : 'neutral'
+        const stocks = item.affected_stocks || []
+        const headline = item.english_headline || item.title || ''
+        const relevance = (item.market_relevance || '').toLowerCase()
+        const relClass = relevance.includes('high') ? 'high' : relevance.includes('medium') ? 'medium' : relevance.includes('none') ? 'none' : 'low'
+        const source = item.source || '?'
+        const link = item.link || ''
+        const linkId = `gl_${idx}_${Date.now()}`
+        
+        leftHtml += `
+          <div class="govt-item">
+            <div class="govt-item-header">
+              <div>
+                <span class="govt-score ${dirClass}">${score}/10 ${direction}</span>
+                ${item.market_relevance ? `<span class="govt-relevance ${relClass}">${escapeHtml(item.market_relevance)}</span>` : ''}
+              </div>
+              <span class="govt-source">${escapeHtml(source)}</span>
+            </div>
+            <div class="govt-headline">${escapeHtml(headline)}</div>
+            ${stocks.length > 0 ? `<div style="margin-top:6px;">${stocks.slice(0,8).map(s => `<span class="stock-mention">${s}</span>`).join('')}</div>` : ''}
+            ${link ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(link)}">📄 Open Original →</a>` : ''}
+          </div>
+        `
+      })
+    } else {
+      leftHtml = '<div class="glass-text">No major govt announcements detected today.</div>'
+    }
+
+    let rightHtml = `
+      <div style="margin-bottom:16px;font-size:11px;">
+        <span class="badge badge-red">🚨 ${data.high_impact_count || 0} HIGH</span>
+        <span class="badge badge-yellow">⚠️ ${data.medium_impact_count || 0} MED</span>
+        <span class="badge badge-green">📋 ${data.analyzed_items || 0} ANALYZED</span>
+      </div>
+    `;
+
+    const affected = data.affected_stocks || {}
+    if (Object.keys(affected).length > 0) {
+      rightHtml += '<h2 style="margin-top:20px; font-size:10px; color:#ffaa00;">📊 Stocks with Govt Exposure</h2><div>'
+      Object.entries(affected).slice(0, 15).forEach(([stock, count]) => {
+        rightHtml += `<span class="stock-mention">${stock} (${count})</span>`
+      })
+      rightHtml += '</div>'
+    }
+
+    let html = `
+      ${runtimeTimestampHtml()}${staleBadgeHtml()}
+      <div class="brain-grid">
+        <div class="main-column">
+          <div class="glass-card">
+            <h2>🚨 High-Impact Announcements</h2>
+            ${leftHtml}
+          </div>
+        </div>
+        <div class="action-column">
+          <div class="glass-card">
+            <h2>🏛️ Govt Intelligence Overview</h2>
+            ${rightHtml}
+          </div>
+        </div>
+      </div>
+    `;
+    
+    container.innerHTML = html;
+    container.querySelectorAll('.read-link').forEach(link => {
+      link.addEventListener('click', (e) => { e.preventDefault(); openInPanel(link.getAttribute('data-url')); })
+    })
+  }
+
+  // ============================================================
+  // TAB 3: SCANNER
+  // ============================================================
+  function loadScanner() {
+    const data = loadJson(files.scanner)
+    const container = document.getElementById('tab-scanner')
+    const banner = panelStatusBannerHtml('scanner', 'scanner')
+    if (!data) {
+      container.innerHTML = banner + emptyStateHtml('No scanner data', 'Awaiting next scan cycle.') + staleBadgeHtml()
+      return
+    }
+    
+    const summary = data.summary || {}
+    const topSignals = data.top_signals || []
+    
+    let leftHtml = '';
+    const highConvictionSignals = topSignals.filter((s) => {
+      const strength = String(s.strength || '').toUpperCase();
+      return strength === 'ULTRA' || strength.includes('HIGH CONVICTION') || strength.includes('VERY STRONG');
+    })
+    const strongSignals = topSignals.filter(s => s.strength === 'STRONG')
+    
+    if (highConvictionSignals.length > 0) {
+      leftHtml += '<h2 style="color:#cc88ff; font-size:10px; margin: 10px 0;">💎 HIGH CONVICTION SIGNALS</h2>'
+      highConvictionSignals.slice(0, 6).forEach(s => { leftHtml += renderSignalRow(s, 'ultra') })
+    }
+    if (strongSignals.length > 0) {
+      leftHtml += '<h2 style="color:#00E676; font-size:10px; margin: 16px 0 10px 0;">🔥 STRONG SIGNALS</h2>'
+      strongSignals.slice(0, 8).forEach(s => {
+        const cls = s.direction === 'BEARISH' ? 'bearish' : 'strong'
+        leftHtml += renderSignalRow(s, cls)
+      })
+    }
+    if (!leftHtml) leftHtml = '<div class="glass-text">No strong technical setups triggered today.</div>';
+
+    let rightHtml = `
+      <div class="scanner-stats">
+        <div class="scanner-stat-card"><div class="scanner-stat-label">Scanned</div><div class="scanner-stat-value">${data.total_scanned || 0}</div></div>
+        <div class="scanner-stat-card"><div class="scanner-stat-label">Signals</div><div class="scanner-stat-value">${data.total_signals || 0}</div></div>
+        <div class="scanner-stat-card"><div class="scanner-stat-label">Vol Spikes</div><div class="scanner-stat-value" style="color:#ffaa00;">${summary.VOLUME_SPIKE || 0}</div></div>
+      </div>
+      <div style="margin-bottom:20px;">
+        ${summary.BREAKOUT ? `<span class="badge badge-green">📈 ${summary.BREAKOUT} breakouts</span>` : ''}
+        ${summary.BREAKDOWN ? `<span class="badge badge-red">📉 ${summary.BREAKDOWN} breakdowns</span>` : ''}
+        ${summary.GAP_UP ? `<span class="badge badge-green">⬆ ${summary.GAP_UP} gap-up</span>` : ''}
+        ${summary.GAP_DOWN ? `<span class="badge badge-red">⬇ ${summary.GAP_DOWN} gap-down</span>` : ''}
+      </div>
+    `;
+
+    const rotation = data.sector_rotation || []
+    if (rotation.length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#A3B3C8; border-bottom:1px solid #333; padding-bottom:4px; margin-bottom:8px;">🌐 Sector Rotation</h2>'
+      rotation.slice(0, 8).forEach(r => {
+        const move = r.avg_change_percent || 0
+        const moveColor = move >= 0 ? 'green' : 'red'
+        const sign = move >= 0 ? '+' : ''
+        rightHtml += `
+          <div class="sector-row">
+            <div>
+              <div class="sector-name">${escapeHtml(r.sector || '?')}</div>
+              <div class="sector-meta">${r.stocks_analyzed || 0} stocks • vol ${(r.avg_volume_ratio || 0).toFixed(1)}x</div>
+            </div>
+            <div class="sector-stats ${moveColor}">${sign}${move.toFixed(2)}%</div>
+          </div>
+        `
+      })
+    }
+
+    let html = `
+      ${runtimeTimestampHtml(data.universe || 'NSE')}
+      <div class="brain-grid">
+        <div class="main-column">
+          <div class="glass-card">
+            <h2>📈 Technical Action</h2>
+            ${leftHtml}
+          </div>
+        </div>
+        <div class="action-column">
+          <div class="glass-card">
+            <h2>📊 Scanner Overview</h2>
+            ${rightHtml}
+          </div>
+        </div>
+      </div>
+    `;
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // TAB 4: MARKETS
+  // ============================================================
+  function renderSignalRow(s, cls) {
+    const ticker = s.ticker || '?'
+    const sector = s.sector || '?'
+    const strength = s.strength || '?'
+    const direction = s.direction || '?'
+    const change = s.change_percent || 0
+    const volRatio = s.volume_ratio || 0
+    const price = s.price || 0
+    const signals = s.signals || []
+    const sign = change >= 0 ? '+' : ''
+    const changeClass = change >= 0 ? 'up' : 'down'
+    const strengthCls = (cls === 'ultra') ? 'ultra' : (direction === 'BEARISH' ? 'bearish' : 'strong')
+    return `
+      <div class="signal-row ${cls}">
+        <div class="signal-header">
+          <div>
+            <span class="signal-ticker">${escapeHtml(ticker)}</span>
+            <span class="signal-sector">${escapeHtml(sector)}</span>
+          </div>
+          <span class="signal-strength-pill ${strengthCls}">${strength} • ${direction}</span>
+        </div>
+        <div class="signal-price-row">
+          <span class="signal-price">Rs.${price.toLocaleString('en-IN')}</span>
+          <span class="signal-change ${changeClass}">${sign}${change.toFixed(2)}%</span>
+          <span class="signal-volume">vol ${volRatio.toFixed(1)}x avg</span>
+        </div>
+        <div class="signal-tags">
+          ${signals.map(sig => {
+            let tagCls = ''
+            if (sig.includes('VOLUME')) tagCls = 'volume'
+            else if (sig === 'BREAKOUT') tagCls = 'breakout'
+            else if (sig === 'BREAKDOWN') tagCls = 'breakdown'
+            else if (sig.includes('GAP')) tagCls = 'gap'
+            return `<span class="signal-tag ${tagCls}">${sig}</span>`
+          }).join('')}
+        </div>
+      </div>
+    `
+  }
+
+  function renderCompactSignal(s, bearish = false) {
+    const ticker = s.ticker || '?'
+    const sector = s.sector || '?'
+    const change = s.change_percent || 0
+    const volRatio = s.volume_ratio || 0
+    const price = s.price || 0
+    const sign = change >= 0 ? '+' : ''
+    const changeClass = change >= 0 ? 'up' : 'down'
+    return `
+      <div class="sector-row ${bearish ? 'bearish' : (change >= 0 ? 'bullish' : 'bearish')}">
+        <div>
+          <div class="sector-name">${escapeHtml(ticker)} <span style="color:#8B949E;font-size:9px;font-weight:normal;">(${escapeHtml(sector)})</span></div>
+          <div class="sector-meta">Rs.${price.toLocaleString('en-IN')} • vol ${volRatio.toFixed(1)}x</div>
+        </div>
+        <div class="sector-stats">
+          <span class="sector-move ${changeClass === 'up' ? 'green' : 'red'}">${sign}${change.toFixed(2)}%</span>
+        </div>
+      </div>
+    `
+  }
+
+  const MARKETS_LOAD_TIMEOUT_MS = 15000
+
+  function normalizeMarketPayload(raw) {
+    if (!raw || typeof raw !== 'object' || raw.error) return null
+    if (raw.data !== undefined) return raw.data
+    return raw
+  }
+
+  function loadMarkets() {
+    const container = document.getElementById('tab-markets')
+    if (!container) return
+    const banner = panelStatusBannerHtml('markets', 'markets')
+    const startedAt = Date.now()
+    let settled = false
+
+    const finish = (innerHtml) => {
+      if (settled) return
+      settled = true
+      setPanelHtml(container, banner, innerHtml)
+    }
+
+    const timer = setTimeout(() => {
+      finish(
+        `${banner}<div class="panel-status-banner stale">Markets load timed out — showing last known state or empty view.</div>` +
+        emptyStateHtml('No market data available', 'Check API connection or run refresh.')
+      )
+    }, MARKETS_LOAD_TIMEOUT_MS)
+
+    try {
+      const norm = getNormalizedSnapshot()
+      let data = normalizeMarketPayload(loadJson(files.globalMarket))
+      let indiaData = normalizeMarketPayload(loadJson(files.indiaMarket))
+      if (!data && norm && norm.exports && norm.exports.markets) {
+        data = normalizeMarketPayload(norm.exports.markets)
+        console.log('[Hydration] markets using normalized snapshot export')
+      }
+      if (!indiaData && norm && norm.exports && norm.exports.india) {
+        indiaData = normalizeMarketPayload(norm.exports.india)
+      }
+      const apiDown = USE_API && apiCache && apiCache.connected === false && !(window.RuntimeManager && RuntimeManager.isUsingStaleCache && RuntimeManager.isUsingStaleCache())
+      const hasGlobal = !!(data && (data.sentiment || data.markets || data.flat_markets))
+      const hasIndia = !!(indiaData && (indiaData.prices || indiaData.indices))
+
+      if (!hasGlobal && !hasIndia) {
+        const errBanner = apiDown
+          ? '<div class="panel-status-banner stale">API offline — market feeds unavailable.</div>'
+          : (banner || '<div class="panel-status-banner idle">Market data not yet collected.</div>')
+        finish(`${errBanner}${emptyStateHtml('No market data', 'Awaiting next collector cycle.')}`)
+        clearTimeout(timer)
+        return
+      }
+
+      let leftHtml = ''
+      const sentiment = data && data.sentiment && typeof data.sentiment === 'object' ? data.sentiment : null
+      if (sentiment && Object.keys(sentiment).length) {
+        leftHtml += '<div class="glass-card"><h2>🌍 Regional Sentiment</h2><div class="market-grid">'
+        for (const [region, info] of Object.entries(sentiment)) {
+          const row = info && typeof info === 'object' ? info : {}
+          const mood = String(row.mood || 'NEUTRAL')
+          const moodColor = mood === 'BULLISH' || mood === 'POSITIVE' ? 'green' : mood === 'BEARISH' || mood === 'NEGATIVE' ? 'red' : 'yellow'
+          const avg = Number(row.average_change ?? row.expected_open ?? 0) || 0
+          leftHtml += `<div class="market-card"><div class="market-card-name">${escapeHtml(String(region).toUpperCase())}</div><div class="market-card-value ${moodColor}">${escapeHtml(mood)}</div><div class="market-card-change ${moodColor}">${avg >= 0 ? '+' : ''}${avg.toFixed(2)}%</div></div>`
+        }
+        leftHtml += '</div></div>'
+      }
+
+      const indiaPrices = indiaData && indiaData.prices && typeof indiaData.prices === 'object' ? indiaData.prices : null
+      if (indiaPrices && Object.keys(indiaPrices).length) {
+        leftHtml += '<div class="glass-card"><h2>🇮🇳 India Watchlist</h2><div class="market-grid">'
+        for (const [name, p] of Object.entries(indiaPrices)) {
+          const row = p && typeof p === 'object' ? p : {}
+          const ch = Number(row.change_percent ?? 0) || 0
+          const price = Number(row.price ?? 0) || 0
+          const isGreen = ch >= 0
+          leftHtml += `<div class="market-card"><div class="market-card-name">${escapeHtml(name)}</div><div class="market-card-value ${isGreen ? 'green' : 'red'}">₹${price.toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen ? 'green' : 'red'}">${isGreen ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%</div></div>`
+        }
+        leftHtml += '</div></div>'
+      }
+
+      let rightHtml = ''
+      const marketGroups = data && data.markets && typeof data.markets === 'object' ? data.markets : null
+      if (marketGroups) {
+        const showGroups = ['USA_INDICES', 'USA_RATES', 'ASIA_INDICES', 'GLOBAL_MACRO', 'EUROPE_INDICES']
+        for (const group of showGroups) {
+          const grp = marketGroups[group]
+          if (!grp || typeof grp !== 'object') continue
+          rightHtml += `<div class="glass-card"><h2>${escapeHtml(group.replace(/_/g, ' '))}</h2><div class="market-grid">`
+          for (const [name, p] of Object.entries(grp)) {
+            const row = p && typeof p === 'object' ? p : {}
+            const ch = Number(row.change_percent ?? 0) || 0
+            const price = Number(row.price ?? 0) || 0
+            const isGreen = ch >= 0
+            rightHtml += `<div class="market-card"><div class="market-card-name">${escapeHtml(name)}</div><div class="market-card-value ${isGreen ? 'green' : 'red'}">${price.toLocaleString('en-IN')}</div><div class="market-card-change ${isGreen ? 'green' : 'red'}">${isGreen ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%</div></div>`
+          }
+          rightHtml += '</div></div>'
+        }
+      }
+
+      if (!leftHtml && !rightHtml) {
+        finish(
+          `${banner}${emptyStateHtml('No quotable market rows', 'Market files present but empty — check collector exports.')}`
+        )
+        clearTimeout(timer)
+        return
+      }
+
+      const elapsed = Date.now() - startedAt
+      const slowNote = elapsed > 3000 ? '<div class="panel-status-banner aging">Slow market load — data may be partial.</div>' : ''
+      finish(`
+        ${runtimeTimestampHtml()}${staleBadgeHtml()}
+        ${slowNote}
+        <div class="brain-grid">
+          <div class="main-column">${leftHtml || '<div class="empty-state-panel"><p>No regional sentiment rows</p></div>'}</div>
+          <div class="action-column">${rightHtml || '<div class="empty-state-panel"><p>No index groups in export</p></div>'}</div>
+        </div>
+      `)
+      clearTimeout(timer)
+    } catch (e) {
+      clearTimeout(timer)
+      finish(
+        `${banner}${panelErrorCard('markets', e)}${emptyStateHtml('Unable to render market data', 'Panel degraded — other tabs continue.')}`
+      )
+    }
+  }
+
+  function loadGlobal() {
+    const container = document.getElementById('tab-global')
+    if (!container) return
+    const data = loadJson(files.globalMarket)
+    const norm = getNormalizedSnapshot()
+    const runtime = (window.RuntimeManager && RuntimeManager.getState()) || {}
+    const globalNorm = (norm && norm.global) || {}
+    const impact = globalNorm.overnightImpact || runtime.overnight_impact
+      || (runtime.data && runtime.data.overnight_impact) || {}
+    const report = globalNorm.indiaNextOpen || runtime.india_next_open
+      || (runtime.data && runtime.data.india_next_open) || impact.india_next_open || {}
+    const timeline = globalNorm.overnightTimeline || runtime.overnight_timeline
+      || (runtime.data && runtime.data.overnight_timeline) || {}
+    const banner = panelStatusBannerHtml('global', 'markets')
+    if (!data && !report.india_open_bias && !impact.india_open_bias) {
+      container.innerHTML = banner + emptyStateHtml('Awaiting overnight global scan', 'Overnight impact populates around 4:00 AM IST.') + staleBadgeHtml()
+      return
+    }
+
+    const moves = report.macro_moves || {}
+    const macroCards = [
+      ['Nasdaq', moves.nasdaq_pct], ['VIX', moves.vix_pct], ['Gold', moves.gold_pct],
+      ['Oil', moves.oil_pct], ['DXY', moves.dxy_pct], ['Nikkei', moves.nikkei_pct],
+    ].filter(([, v]) => v != null)
+
+    let html = `${banner}${runtimeTimestampHtml()}${staleBadgeHtml()}<div class="glass-card"><h2>🌙 OVERNIGHT GLOBAL IMPACT</h2>`
+    html += `<div style="margin-bottom:12px;"><span class="badge badge-green">${escapeHtml(report.india_open_bias || 'PENDING')}</span> `
+    html += `<span class="badge">${escapeHtml(report.india_outlook || '—')}</span>`
+    if (report.risk_score) html += ` <span class="badge badge-red">Risk ${escapeHtml(report.risk_score)}</span>`
+    html += `</div>`
+    const gap = report.gap_probability || {}
+    if (gap.gap_up_probability != null) {
+      html += `<p style="color:#8b949e;font-size:12px;">Gap probability: up ${Math.round(gap.gap_up_probability * 100)}% · down ${Math.round(gap.gap_down_probability * 100)}% (${escapeHtml(gap.gap_probability_label || '')})</p>`
+    }
+    const gs = report.global_snapshot || {}
+    if (gs.lines && gs.lines.length) {
+      html += '<div style="margin-top:8px;font-size:12px;color:#8b949e;">'
+      gs.lines.forEach(line => { html += `<div>${escapeHtml(line)}</div>` })
+      html += '</div>'
+    }
+    const indiaImpact = report.india_impact || {}
+    if (indiaImpact.bullish_sectors && indiaImpact.bullish_sectors.length) {
+      html += `<p style="color:#3fb950;margin-top:8px;">Bullish sectors: ${escapeHtml(indiaImpact.bullish_sectors.join(', '))}</p>`
+    }
+    if (indiaImpact.risk_sectors && indiaImpact.risk_sectors.length) {
+      html += `<p style="color:#ff6b6b;">Risk sectors: ${escapeHtml(indiaImpact.risk_sectors.join(', '))}</p>`
+    }
+    if (report.narrative) html += `<p style="color:#ccc;font-size:13px;line-height:1.5;margin-top:8px;">${escapeHtml(report.narrative)}</p>`
+
+    if (macroCards.length) {
+      html += '<div class="market-grid" style="margin-top:12px;">'
+      macroCards.forEach(([name, val]) => {
+        const green = Number(val) >= 0
+        html += `<div class="market-card"><div class="market-card-name">${escapeHtml(name)}</div><div class="market-card-change ${green?'green':'red'}">${Number(val)>=0?'+':''}${Number(val).toFixed(2)}%</div></div>`
+      })
+      html += '</div>'
+    }
+
+    if (report.sectors_at_risk && report.sectors_at_risk.length) {
+      html += `<p style="margin-top:12px;color:#ff6b6b;">🔴 At risk: ${escapeHtml(report.sectors_at_risk.join(', '))}</p>`
+    }
+    if (report.sectors_supported && report.sectors_supported.length) {
+      html += `<p style="color:#3fb950;">🟢 Supported: ${escapeHtml(report.sectors_supported.join(', '))}</p>`
+    }
+    if (report.macro_volatility_warnings && report.macro_volatility_warnings.length) {
+      html += '<ul style="color:#ffaa00;font-size:12px;margin-top:8px;">'
+      report.macro_volatility_warnings.forEach(w => { html += `<li>${escapeHtml(w)}</li>` })
+      html += '</ul>'
+    }
+    html += '</div>'
+
+    const geo = (data && (data.geopolitics || data.alerts)) || []
+    if (geo.length) {
+      html += '<div class="glass-card"><h2>🌐 Geopolitical Alerts</h2>'
+      geo.slice(0, 6).forEach(a => {
+        html += `<div class="news-item"><div class="news-title">${escapeHtml(a.message || '')}</div></div>`
+      })
+      html += '</div>'
+    }
+
+    const events = timeline.events || []
+    if (events.length) {
+      html += '<div class="glass-card"><h2>⏱ Overnight Timeline</h2>'
+      events.slice(-6).reverse().forEach(ev => {
+        html += `<div class="journal-runtime-line"><b>${escapeHtml(ev.stage || '')}</b> — ${escapeHtml(ev.detail || '')}</div>`
+      })
+      html += '</div>'
+    }
+    container.innerHTML = html
+  }
+
+  // ============================================================
+  // TAB 5: NEWS
+  // ============================================================
+  function loadNews() {
+    const newsData = loadJson(files.news)
+    const inshortsData = loadJson(files.inshorts)
+    const container = document.getElementById('tab-news')
+    const banner = panelStatusBannerHtml('news', 'news')
+    if (!newsData && !inshortsData) {
+      container.innerHTML = banner + emptyStateHtml('No news data', 'Awaiting next news collector cycle.') + staleBadgeHtml()
+      return
+    }
+    
+    let leftHtml = '';
+    if (inshortsData?.stories && inshortsData.stories.length > 0) {
+      leftHtml += `<div class="glass-card"><h2>📱 Inshorts (${inshortsData.total_stories})</h2>`
+      inshortsData.stories.slice(0, 10).forEach((story, idx) => {
+        const sent = story.sentiment || 'neutral'
+        const linkId = `il_${idx}_${Date.now()}`
+        leftHtml += `
+          <div class="news-item ${sent}">
+            <div style="display:flex; justify-content:space-between;">
+              <span class="news-source">${escapeHtml(story.category || 'INSHORTS')}</span>
+              ${story.source_url ? `<a class="read-link" id="${linkId}" data-url="${escapeHtml(story.source_url)}" style="margin:0; padding:0; border:none; background:none;">Read →</a>` : ''}
+            </div>
+            <div class="news-title">${escapeHtml(story.title || '')}</div>
+          </div>
+        `
+      })
+      leftHtml += '</div>'
+    }
+
+    let rightHtml = '<div class="glass-card"><h2>📊 Sentiment Overview</h2>';
+    const sent = newsData?.sentiment_distribution || {}
+    const isent = inshortsData?.sentiment_distribution || {}
+    rightHtml += `<div style="margin-bottom:16px;">
+      <span class="badge badge-green">+ ${(sent.positive||0) + (isent.positive||0)}</span>
+      <span class="badge badge-red">− ${(sent.negative||0) + (isent.negative||0)}</span>
+      <span class="badge badge-yellow">○ ${(sent.neutral||0) + (isent.neutral||0)}</span>
+    </div>`
+
+    if (newsData?.hot_stocks && newsData.hot_stocks.length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#ffaa00; margin-top:10px;">🔥 Hot Stocks</h2><div style="margin-bottom:16px;">'
+      newsData.hot_stocks.forEach(h => rightHtml += `<span class="stock-mention ${h.velocity === 'HIGH' ? 'hot' : ''}">${h.stock}</span>`)
+      rightHtml += '</div>'
+    }
+    if (newsData?.top_stocks) {
+      rightHtml += '<h2 style="font-size:10px; color:#8B949E;">📈 Most Mentioned</h2><div>'
+      Object.entries(newsData.top_stocks).slice(0, 12).forEach(([s, c]) => rightHtml += `<span class="stock-mention">${s} (${c})</span>`)
+      rightHtml += '</div>'
+    }
+    rightHtml += '</div>';
+
+    let html = `
+      ${runtimeTimestampHtml()}
+      <div class="brain-grid">
+        <div class="main-column">${leftHtml}</div>
+        <div class="action-column">${rightHtml}</div>
+      </div>
+    `;
+    container.innerHTML = html;
+    container.querySelectorAll('.read-link').forEach(link => {
+      link.addEventListener('click', (e) => { e.preventDefault(); openInPanel(link.getAttribute('data-url')); })
+    })
+  }
+
+  // ============================================================
+  // TAB 6: TV & YOUTUBE
+  // ============================================================
+  function loadTV() {
+    const data = loadJson(files.youtube)
+    const container = document.getElementById('tab-tv')
+    const banner = panelStatusBannerHtml('tv', 'youtube')
+    if (!data) {
+      container.innerHTML = banner + emptyStateHtml('No TV intelligence', 'Awaiting YouTube collector cycle.') + staleBadgeHtml()
+      return
+    }
+    
+    let leftHtml = '<div class="glass-card"><h2>🔴 Live & Recent TV</h2>';
+    if (data.live_now && data.live_now.length > 0) {
+      data.live_now.slice(0, 6).forEach(v => {
+        leftHtml += `<div class="tv-video live"><div class="tv-channel">${escapeHtml(v.channel)} <span class="live-tag">LIVE</span></div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
+      })
+    }
+    if (data.recent_videos && data.recent_videos.length > 0) {
+      data.recent_videos.slice(0, 8).forEach(v => {
+        leftHtml += `<div class="tv-video"><div class="tv-channel">${escapeHtml(v.channel)}</div><div class="tv-title">${escapeHtml(v.title)}</div></div>`
+      })
+    }
+    leftHtml += '</div>';
+
+    let rightHtml = '<div class="glass-card"><h2>⚡ TV Intelligence Overview</h2>';
+    rightHtml += `<div style="margin-bottom:16px;">
+      <span class="badge badge-red">🔴 ${data.live_streams || 0} LIVE</span>
+      <span class="badge badge-yellow">⏰ ${data.recent_videos_3h || 0} RECENT (3h)</span>
+    </div>`
+
+    if (data.cross_channel_buzz && data.cross_channel_buzz.length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#ffaa00;">⚡ Cross-Channel Buzz</h2><div style="margin-bottom:16px;">'
+      data.cross_channel_buzz.slice(0, 8).forEach(b => {
+        const badge = b.signal_strength === 'STRONG' ? 'badge-green' : 'badge-yellow'
+        rightHtml += `<div style="font-size:11px; margin-bottom:8px;"><span class="badge ${badge}">${b.signal_strength}</span><strong style="color:#00E676;">${b.stock}</strong> on ${b.channel_count} channels</div>`
+      })
+      rightHtml += '</div>'
+    }
+    if (data.stock_mentions && Object.keys(data.stock_mentions).length > 0) {
+      rightHtml += '<h2 style="font-size:10px; color:#8B949E;">📊 Stocks on TV</h2><div>'
+      Object.entries(data.stock_mentions).slice(0, 15).forEach(([stock, count]) => {
+        rightHtml += `<span class="stock-mention">${stock} (${count})</span>`
+      })
+      rightHtml += '</div>'
+    }
+    rightHtml += '</div>';
+
+    let html = `
+      ${runtimeTimestampHtml((data.total_videos || 0) + ' videos')}
+      <div class="brain-grid">
+        <div class="main-column">${leftHtml}</div>
+        <div class="action-column">${rightHtml}</div>
+      </div>
+    `;
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // TAB 7: REDDIT
+  // ============================================================
+  function loadReddit() {
+    const data = loadJson(files.reddit)
+    const container = document.getElementById('tab-reddit')
+    const banner = panelStatusBannerHtml('reddit', 'reddit')
+    if (!data) {
+      container.innerHTML = banner + emptyStateHtml('No Reddit data', 'Awaiting retail sentiment collector.') + staleBadgeHtml()
+      return
+    }
+
+    const mood = data.market_mood || {}
+    const moodSent = (mood.sentiment || 'neutral').toLowerCase()
+    const moodConf = mood.confidence || 0
+    const moodSummary = mood.summary || ''
+    
+    let leftHtml = '';
+    const trending = data.trending_tickers || []
+    if (trending.length > 0) {
+      leftHtml += '<div class="glass-card"><h2>🔥 Trending Retail Tickers</h2>'
+      trending.slice(0, 8).forEach((t, idx) => {
+        const ticker = t.ticker || '?'
+        const sent = (t.sentiment || 'neutral').toLowerCase()
+        const score = t.sentiment_score || 0.5
+        const topPost = t.top_post || {}
+        leftHtml += `
+          <div class="reddit-ticker ${sent}">
+            <div class="reddit-ticker-header">
+              <div><span class="reddit-ticker-name">${escapeHtml(ticker)}</span> <span class="reddit-ticker-mentions">• ${t.mentions || 0} mentions</span></div>
+              <span class="reddit-sent-pill ${sent}">${sent.toUpperCase()} ${score.toFixed(2)}</span>
+            </div>
+            ${topPost.title ? `<div class="reddit-top-post"><div>${escapeHtml(topPost.title)}</div><div class="reddit-top-post-meta">↑${topPost.score || 0} • 💬${topPost.comments || 0}</div></div>` : ''}
+          </div>
+        `
+      })
+      leftHtml += '</div>'
+    }
+
+    let rightHtml = `
+      <div class="glass-card">
+        <h2>📊 Retail Market Mood</h2>
+        <div class="mood-grid">
+          <div class="mood-item"><span>Sentiment</span><strong class="${moodSent === 'bullish'?'green':moodSent==='bearish'?'red':'yellow'}">${moodSent.toUpperCase()}</strong></div>
+          <div class="mood-item"><span>Confidence</span><strong>${moodConf}%</strong></div>
+        </div>
+        ${moodSummary ? `<div class="glass-text" style="margin-top:12px; font-style:italic;">"${escapeHtml(moodSummary)}"</div>` : ''}
+      </div>
+    `;
+
+    const hot = data.hot_discussions || []
+    if (hot.length > 0) {
+      rightHtml += '<div class="glass-card"><h2>💬 Hot Discussions</h2>'
+      hot.slice(0, 6).forEach((d) => {
+        const sent = (d.sentiment || 'neutral').toLowerCase()
+        rightHtml += `
+          <div class="reddit-discussion ${sent}">
+            <div class="reddit-discussion-title">${escapeHtml(d.title || '')}</div>
+            <div class="reddit-discussion-meta">
+              <span class="reddit-sub">r/${escapeHtml(d.subreddit || '')}</span>
+              <span class="reddit-stats">↑${d.score || 0} • 💬${d.comments || 0}</span>
+            </div>
+          </div>
+        `
+      })
+      rightHtml += '</div>'
+    }
+
+    let html = `
+      ${runtimeTimestampHtml((data.total_posts_analyzed || 0) + ' posts analyzed')}
+      <div class="brain-grid">
+        <div class="main-column">${leftHtml}</div>
+        <div class="action-column">${rightHtml}</div>
+      </div>
+    `;
+    container.innerHTML = html;
+  }
+
+  function pctClass(pct, invert) {
+    if (pct == null || pct === '—') return 'muted'
+    const v = Number(pct)
+    if (Number.isNaN(v)) return 'muted'
+    const good = invert ? v <= 35 : v >= 65
+    const mid = invert ? v <= 55 : v >= 45
+    return good ? 'good' : mid ? 'mid' : 'bad'
+  }
+
+  function calibRow(label, value, cls) {
+    return `<div class="calib-row"><span class="calib-row-label">${escapeHtml(label)}</span><span class="calib-row-value ${cls || 'muted'}">${escapeHtml(String(value))}</span></div>`
+  }
+
+  async function copyTextToClipboard(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text)
+      if (btn) { const o = btn.textContent; btn.textContent = '✓ Copied'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = o; btn.classList.remove('copied') }, 1600) }
+    } catch (e) { alert('Copy failed') }
+  }
+
+  // ============================================================
+  // TAB: AI CALIBRATION DASHBOARD (Stats evolution)
+  // ============================================================
+  function loadStats() {
+    const container = document.getElementById('tab-stats');
+    if (!container) return;
+    let data = loadJson(files.stats);
+    const calBanner = panelStatusBannerHtml('calibration', 'stats');
+    const lifecycle = window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Post-market evaluation at 15:45 IST populates calibration metrics.') : 'Post-market evaluation at 15:45 IST populates calibration metrics.';
+    const canonical = (window.RuntimeManager && RuntimeManager.getCanonicalMetrics)
+      ? RuntimeManager.getCanonicalMetrics()
+      : null;
+    if ((!data || !data.metrics_all_time) && canonical) {
+      data = {
+        ...(data || {}),
+        metrics_all_time: {
+          wins: canonical.wins,
+          losses: canonical.losses,
+          partials: canonical.partials,
+          resolved: canonical.resolved,
+          pending: canonical.pending,
+          evaluated: canonical.evaluated,
+          expired: canonical.expired,
+          neutralized: canonical.neutralized,
+          win_rate: canonical.win_rate,
+          win_rate_display: canonical.win_rate_display,
+          statistically_confident: canonical.statistically_confident,
+          source: canonical.source,
+        },
+      };
+    }
+    if (!data && !canonical) {
+      container.innerHTML = `${calBanner}<div class="empty-stats"><h4>📊 Calibration building...</h4><p>${escapeHtml(lifecycle)}</p></div>`;
+      return;
+    }
+
+    const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
+    const dbStats = (data && data.db_stats) || { total_predictions: 0 };
+    const metrics = (data && data.metrics_all_time) || { win_rate: 0, wins: 0, losses: 0, total_evaluated: 0 };
+    const sections = canonical && (canonical.sections || canonical.live_session) ? canonical : null;
+    const live = (sections && sections.live_session) || (canonical && canonical.live_session) || {};
+    const hist = (sections && sections.historical_calibration) || (canonical && canonical.historical_calibration) || {};
+    const archived = (sections && sections.archived) || (canonical && canonical.archived) || {};
+    const lcCal = (data && data.lifecycle_calibration) || ((data && data.calibration_dashboard) || {}).lifecycle_calibration || {};
+    const lcStatus = data.lifecycle_status || {};
+    const winRateLabel = formatWinRateDisplay(runtimeSnap, metrics, lcCal);
+    const winRateNumeric = hist.win_rate != null ? hist.win_rate
+      : ((runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.win_rate != null)
+      ? runtimeSnap.calibration_summary.win_rate
+      : (lcCal.win_rate != null ? lcCal.win_rate : (metrics.win_rate != null ? metrics.win_rate : null)));
+    const winRateConfident = hist.statistically_confident != null ? hist.statistically_confident
+      : !!(runtimeSnap && runtimeSnap.calibration_summary && runtimeSnap.calibration_summary.statistically_confident);
+    const lossRate = lcCal.loss_rate != null ? lcCal.loss_rate : (metrics.total_evaluated ? ((metrics.losses || 0) / metrics.total_evaluated * 100) : null);
+    const evaluated = hist.evaluated_sample != null ? hist.evaluated_sample : (lcCal.total_evaluated != null ? lcCal.total_evaluated : (metrics.total_evaluated || metrics.evaluated || 0));
+    const profitFactor = lcCal.profit_factor != null ? lcCal.profit_factor : (metrics.profit_factor || 0);
+    const cal = data.calibration_dashboard || {};
+    const schemaWarn = cal.status === 'degraded' ? (cal.reason || 'Calibration schema degraded — partial metrics only.') : '';
+
+    let html = calBanner;
+    if (schemaWarn) html += `<div class="panel-status-banner error">${escapeHtml(schemaWarn)}</div>`;
+    html += runtimeTimestampHtml((data.generation_time ? `Exported ${data.generation_time}` : ''));
+    
+    html += `
+      <div class="glass-card" style="padding: 20px;">
+        <h2 style="margin-bottom: 16px; font-size: 14px;">🎯 AI Calibration Dashboard</h2>
+        <div class="stats-grid-4">
+          <div class="stat-big-card">
+            <div class="stat-big-label">Live Session</div>
+            <div class="stat-big-value" style="color:#88ccff;">${live.active_predictions || live.pending || metrics.pending || 0}</div>
+            <div class="stat-big-sub">active · ${live.resolved_today || 0} resolved today</div>
+          </div>
+          <div class="stat-big-card">
+            <div class="stat-big-label">Historical Win Rate</div>
+            <div class="stat-big-value ${winRateConfident && winRateNumeric != null ? (winRateNumeric >= 60 ? 'green' : winRateNumeric >= 40 ? 'yellow' : 'red') : 'muted'}">${escapeHtml(winRateLabel)}</div>
+            <div class="stat-big-sub">${hist.wins || metrics.wins || 0}W / ${hist.losses || metrics.losses || 0}L · n=${evaluated}</div>
+          </div>
+          <div class="stat-big-card">
+            <div class="stat-big-label">Loss Rate</div>
+            <div class="stat-big-value ${lossRate != null && lossRate <= 35 ? 'green' : lossRate != null && lossRate <= 55 ? 'yellow' : lossRate != null ? 'red' : 'muted'}">${escapeHtml(formatPctSafe(lossRate, 'Awaiting statistical confidence'))}</div>
+            <div class="stat-big-sub">historical calibration</div>
+          </div>
+          <div class="stat-big-card">
+            <div class="stat-big-label">Archived</div>
+            <div class="stat-big-value muted">${archived.expired || metrics.expired || 0}</div>
+            <div class="stat-big-sub">expired · ${archived.neutralized || metrics.neutralized || 0} neutralized</div>
+          </div>
+        </div>
+        ${evaluated === 0 ? `<div class="calib-insufficient">⏳ ${escapeHtml(lcCal.message || lcStatus.calibration_message || (window.RuntimeManager ? RuntimeManager.lifecycleMessage('calibration', 'Calibration in progress — AI collecting outcome samples before adaptive tuning activates.') : 'Calibration in progress — AI collecting outcome samples before adaptive tuning activates.'))}</div>` : ''}
+        ${evaluated > 0 && evaluated < 20 ? `<div class="calib-insufficient">⚠ Calibration in progress — sample size ${evaluated}/20 for win-rate confidence.</div>` : ''}
+        ${evaluated >= 20 && evaluated < 50 ? `<div class="calib-insufficient">⚠ Collecting calibration samples (${evaluated}/50) before precision bands activate.</div>` : ''}
+      </div>
+    `;
+
+    if (lcCal.confidence_realism != null || lcCal.false_positive_rate != null) {
+      html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Lifecycle Calibration Snapshot</div>`;
+      html += calibRow('Confidence realism', lcCal.confidence_realism != null ? `${lcCal.confidence_realism}%` : '—', pctClass(lcCal.confidence_realism));
+      html += calibRow('False positive rate', lcCal.false_positive_rate != null ? `${lcCal.false_positive_rate}%` : '—', pctClass(lcCal.false_positive_rate, true));
+      html += calibRow('Pending / expired', `${live.pending || metrics.pending || 0} pending · ${archived.expired || 0} expired · ${archived.neutralized || 0} neutralized`, 'muted');
+      html += `</div>`;
+    }
+
+    const lcRegimes = (lcCal.regime_performance || {}).regimes || [];
+    const dayTypes = lcRegimes.length ? lcRegimes : ((cal.market_day_performance || {}).day_types || []);
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Regime / Day-Type Performance</div>`
+    if (dayTypes.length === 0) {
+      html += `<div class="calib-insufficient">Need ${(cal.market_day_performance || {}).min_samples_required || 4}+ evaluated signals per day type.</div>`
+    } else {
+      dayTypes.forEach(d => {
+        const label = d.regime || d.day_type || '?';
+        const acc = d.alert_precision_pct != null ? d.alert_precision_pct : d.signal_accuracy_pct;
+        const suffix = acc != null ? `${acc}% acc` : 'collecting';
+        html += calibRow(label, suffix + (d.samples != null ? ` (n=${d.samples})` : ''), pctClass(acc))
+      })
+    }
+    html += `</div>`
+
+    const conf = cal.confidence_calibration || {}
+    const numBuckets = conf.numeric_buckets || []
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Confidence Calibration</div>`
+    if (numBuckets.length === 0 || numBuckets.every(b => !b.statistically_meaningful)) {
+      html += `<div class="calib-insufficient">${escapeHtml(lcCal.message || 'Collecting confidence vs outcome samples...')}</div>`
+    } else {
+      numBuckets.forEach(b => {
+        const val = b.statistically_meaningful ? `${b.accuracy_pct}% accurate (n=${b.samples})` : `${b.bucket} — insufficient`
+        html += calibRow(b.bucket + ' confidence', val, b.statistically_meaningful ? pctClass(b.accuracy_pct) : 'muted')
+      })
+    }
+    html += `</div>`
+
+    const lcSigPerf = (lcCal.signal_type_performance || {}).categories || (lcCal.signal_type_performance || []);
+    const sigPerf = lcSigPerf.length ? lcSigPerf : ((cal.signal_type_performance || {}).categories || [])
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Signal-Type Performance</div>`
+    if (sigPerf.length === 0) {
+      html += `<div class="calib-insufficient">Signal categories appear after horizon evaluations.</div>`
+    } else {
+      sigPerf.slice(0, 8).forEach(s => {
+        const label = s.category || s.signal_type || '?';
+        const acc = s.accuracy_pct != null ? s.accuracy_pct : s.precision_pct;
+        html += calibRow(label, `${acc != null ? acc + '%' : '—'} · avg ${s.avg_move_pct >= 0 ? '+' : ''}${s.avg_move_pct || 0}%`, pctClass(acc))
+      })
+    }
+    html += `</div>`
+
+    const tg = cal.telegram_precision || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Telegram Precision</div>`
+    html += calibRow('Useful alerts', tg.useful_alerts_pct != null ? `${tg.useful_alerts_pct}%` : '—', pctClass(tg.useful_alerts_pct))
+    html += calibRow('Suppression effectiveness', tg.suppression_effectiveness_pct != null ? `${tg.suppression_effectiveness_pct}% blocked` : '—', 'muted')
+    html += calibRow('Duplicate prevention', tg.duplicate_prevention || 0, 'muted')
+    html += calibRow('Low-confidence filter', tg.low_confidence_filter || 0, 'muted')
+    html += calibRow('Spam avoided (est)', tg.spam_avoided_est || 0, 'good')
+    html += `</div>`
+
+    const health = cal.calibration_health || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">AI Calibration Health</div>`
+    html += `<div class="calib-health-grid">`
+    const healthItems = [
+      ['Confidence realism', health.confidence_realism_score],
+      ['Contradiction handling', health.contradiction_handling_score],
+      ['Sentiment preservation', health.sentiment_preservation_score],
+      ['Regime adaptation', health.regime_adaptation_score],
+    ]
+    healthItems.forEach(([lbl, val]) => {
+      html += `<div class="calib-health-chip"><div class="lbl">${escapeHtml(lbl)}</div><div class="val">${val != null ? val : '—'}</div></div>`
+    })
+    html += `</div>`
+    const iqTrend = health.reliability_iq_trend || []
+    if (iqTrend.length) {
+      html += calibRow('Reliability IQ trend', iqTrend.map(x => `${x.date.slice(5)}:${x.quality_iq}`).join(' · '), 'muted')
+    }
+    if (health.fallback_activations) html += calibRow('Fallback activations', health.fallback_activations, 'mid')
+    if (health.hallucination_detections) html += calibRow('Hallucination detections', health.hallucination_detections, 'bad')
+    html += `</div>`
+
+    const adaptive = cal.adaptive_calibration || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">Adaptive Calibration</div>`
+    if (!adaptive.learning_active && adaptive.status !== 'adapted' && adaptive.status !== 'stable') {
+      html += `<div class="calib-insufficient">${escapeHtml(adaptive.status_message || 'Collecting evaluation samples before adaptive tuning activates.')}</div>`
+    } else {
+      const realism = adaptive.confidence_realism || {}
+      html += calibRow('Confidence realism', realism.score != null ? `${realism.score}` : '—', pctClass(realism.score))
+      if (realism.inflation != null && realism.inflation > 0.05) {
+        html += calibRow('Inflation signal', `${(realism.inflation * 100).toFixed(1)}%`, 'mid')
+      }
+      const drift = adaptive.calibration_drift || adaptive.active_adjustments || []
+      if (drift.length) {
+        drift.slice(0, 5).forEach(d => {
+          html += calibRow(d.parameter, `${d.cumulative_delta_pct >= 0 ? '+' : ''}${d.cumulative_delta_pct}%`, 'muted')
+        })
+      } else {
+        html += calibRow('Threshold drift', 'none — within baseline', 'good')
+      }
+      const timeline = adaptive.timeline || []
+      if (timeline.length) {
+        const last = timeline[timeline.length - 1]
+        const cnt = (last.adjustments || []).length
+        html += calibRow('Last adaptation', `${last.date || '?'} · ${cnt} change(s)`, 'muted')
+      }
+      const obs = adaptive.observations || []
+      if (obs.length) obs.slice(0, 3).forEach(o => { html += `<div class="calib-insufficient" style="margin-top:6px;">${escapeHtml(o)}</div>` })
+    }
+    html += `</div>`
+
+    const rt = data.ai_runtime || {}
+    html += `<div class="glass-card calib-section" style="padding:16px;"><div class="calib-section-title">AI Runtime</div>`
+    if (rt.status === 'degraded' || rt.status === 'empty') {
+      html += `<div class="calib-insufficient">${escapeHtml(rt.reason || 'Runtime analytics building after first AI requests…')}</div>`
+    } else {
+      html += calibRow('AI uptime', rt.ai_uptime_pct != null ? `${rt.ai_uptime_pct}%` : '—', pctClass(rt.ai_uptime_pct))
+      html += calibRow('Degraded mode', escapeHtml(rt.degraded_mode || 'normal'), rt.degraded_mode && rt.degraded_mode !== 'normal' ? 'bad' : 'good')
+      html += calibRow('Cache hits today', rt.cache_hits_today != null ? rt.cache_hits_today : '—', 'good')
+      html += calibRow('TG throttle blocks', rt.throttle_blocks_today != null ? rt.throttle_blocks_today : '—', 'muted')
+      const provNames = ['gemini', 'groq', 'claude']
+      const provLabels = { gemini: 'Gemini', groq: 'Groq', claude: 'Claude' }
+      provNames.forEach(name => {
+        const p = (rt.providers || {})[name] || {}
+        const rel = (rt.provider_reliability || {})[name] || {}
+        const latS = p.avg_latency_ms ? (p.avg_latency_ms / 1000).toFixed(1) + 's' : '—'
+        const req = p.requests_today != null ? p.requests_today : 0
+        const line = name === 'claude'
+          ? `${rt.claude_strategic_runs || 0} strategic · avg ${latS}`
+          : `${req} req · ${p.failovers || 0} fail · avg ${latS} · uptime ${rel.uptime_score != null ? rel.uptime_score : '—'}%`
+        html += calibRow(provLabels[name], line, 'muted')
+      })
+      const conv = rt.conversational_load_pct || {}
+      if (Object.keys(conv).length) {
+        html += calibRow('Conversational load', Object.entries(conv).map(([k, v]) => `${k} ${v}%`).join(' · '), 'muted')
+      }
+      const fbTrend = rt.fallback_trends || []
+      if (fbTrend.length) {
+        const last = fbTrend[fbTrend.length - 1]
+        html += calibRow('Fallback trend', `${last.date || '?'}: ${last.total || 0} fallbacks`, 'mid')
+      }
+    }
+    html += `</div>`
+
+    container.innerHTML = html;
+  }
+
+  // ============================================================
+  // TAB 9: HISTORY (Uses shared loader + CSS)
+  // ============================================================
+  // loadHistory() uses existing CSS which I updated to match the dark glass feel (pred-card-history, etc.)
+  // It naturally fits into the new UI without a complete JS rewrite.
+
+  // INIT & REFRESH LOGIC
+  // ============================================================
+  // TAB 9: HISTORY & AI CHAT (Restored)
+  // ============================================================
+  const STORAGE_KEY = 'tradingcopilot_daily_review_period';
+
+  let activeDailyReviewTab = (function loadActiveDailyReviewTab() {
+    try {
+      return localStorage.getItem(STORAGE_KEY) || 'this_week';
+    } catch (e) {
+      return 'this_week';
+    }
+  })();
+  let currentPeriod = activeDailyReviewTab;
+  let customPeriodData = null;
+  let historyTimelinePinnedOpen = false;
+
+  function saveActiveDailyReviewTab(period) {
+    if (!period) return;
+    activeDailyReviewTab = period;
+    currentPeriod = period;
+    historyTimelinePinnedOpen = true;
+    try { localStorage.setItem(STORAGE_KEY, period); } catch (e) {}
+    if (window.UiState) UiState.setExpanded('journal-legacy-timeline', true);
+  }
+
+  function pinHistoryTimelineOpen() {
+    historyTimelinePinnedOpen = true;
+    if (window.UiState) UiState.setExpanded('journal-legacy-timeline', true);
+    const details = document.getElementById('historyTimelineDetails');
+    if (details) details.open = true;
+  }
+
+  function resolveHistoryPeriod(data) {
+    if (currentPeriod === 'custom' && customPeriodData) return customPeriodData;
+    return (data.periods && data.periods[currentPeriod]) || {
+      stats: {}, top_winners: [], top_losers: [], timeline: [], label: currentPeriod,
+    };
+  }
+
+  function buildHistoryTimelineBodyHtml(data) {
+    if (!data || !data.periods) {
+      return '<div class="calib-insufficient">Prediction history unavailable.</div>';
+    }
+    const period = resolveHistoryPeriod(data);
+    const stats = period.stats || {};
+    const runtimeSnap = window.RuntimeManager ? RuntimeManager.getState() : null;
+    const winRateLabel = formatWinRateDisplay(runtimeSnap, stats, stats);
+    const winRateNumeric = stats.win_rate || 0;
+    const winRateConfident = (Number(stats.wins || 0) + Number(stats.losses || 0)) >= 5;
+    let html = `
+      <div class="period-selector" style="margin-top:12px;">
+        <button type="button" class="period-btn ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
+        <button type="button" class="period-btn ${currentPeriod === 'yesterday' ? 'active' : ''}" data-period="yesterday">Yesterday</button>
+        <button type="button" class="period-btn ${currentPeriod === 'this_week' ? 'active' : ''}" data-period="this_week">This Week</button>
+        <button type="button" class="period-btn ${currentPeriod === 'last_week' ? 'active' : ''}" data-period="last_week">Last Week</button>
+        <button type="button" class="period-btn ${currentPeriod === '15d' ? 'active' : ''}" data-period="15d">15 Days</button>
+        <button type="button" class="period-btn ${currentPeriod === 'custom' ? 'active' : ''}" data-period="custom">📅 Custom</button>
+      </div>
+    `;
+    html += `
+      <div class="history-summary-card" id="historyTimelineSummary">
+        <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.5px;">${escapeHtml(period.label || currentPeriod)}</div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">TOTAL</div><div style="font-size:18px;font-weight:bold;color:#88ccff;">${stats.total || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WINS</div><div style="font-size:18px;font-weight:bold;color:#00E676;">${stats.wins || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">LOSSES</div><div style="font-size:18px;font-weight:bold;color:#FF3D00;">${stats.losses || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">PENDING</div><div style="font-size:18px;font-weight:bold;color:#ffaa00;">${stats.pending || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">EXPIRED</div><div style="font-size:18px;font-weight:bold;color:#8B949E;">${stats.expired || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:8px;color:#8B949E;">NEUTRALIZED</div><div style="font-size:18px;font-weight:bold;color:#B0BEC5;">${stats.neutralized || stats.neutral || 0}</div></div>
+          <div style="text-align:center;"><div style="font-size:9px;color:#8B949E;">WIN RATE</div><div style="font-size:18px;font-weight:bold;color:${winRateConfident ? (winRateNumeric >= 60 ? '#00E676' : winRateNumeric >= 40 ? '#ffaa00' : '#FF3D00') : '#8B949E'};">${escapeHtml(winRateLabel)}</div></div>
+        </div>
+      </div>
+    `;
+    const timeline = period.timeline || [];
+    if (timeline.length > 0) {
+      timeline.slice(0, 5).forEach(day => {
+        const dStats = day.stats || {};
+        html += `<div class="glass-card" style="padding:10px;margin-bottom:8px;"><div class="day-header"><div class="day-date">${formatDate(day.date)}</div><div class="day-stats">${dStats.total || 0} predictions</div></div></div>`;
+      });
+    }
+    return html;
+  }
+
+  function wireHistoryPeriodButtons(container, data) {
+    if (!container) return;
+    container.querySelectorAll('.period-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const period = btn.dataset.period;
+        if (period === 'custom') {
+          pinHistoryTimelineOpen();
+          openCustomDatePicker();
+          return;
+        }
+        saveActiveDailyReviewTab(period);
+        customPeriodData = null;
+        updateHistoryTimelinePanel(data);
+      });
+    });
+  }
+
+  function updateHistoryTimelinePanel(data) {
+    const body = document.getElementById('historyTimelineBody');
+    const details = document.getElementById('historyTimelineDetails');
+    if (!body) {
+      loadHistory();
+      return;
+    }
+    pinHistoryTimelineOpen();
+    body.innerHTML = buildHistoryTimelineBodyHtml(data);
+    wireHistoryPeriodButtons(details || document.getElementById('tab-history'), data);
+    if (details) details.open = true;
+  }
+
+  function bindJournalCopyButtons(container) {
+    if (!container) return;
+    container.querySelectorAll('.journal-copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyTextToClipboard(decodeURIComponent(btn.getAttribute('data-copy') || ''), btn);
+      });
+    });
+  }
+
+  function openCustomDatePicker() {
+    const modal = document.getElementById('customDateModal')
+    const overlay = document.getElementById('customDateOverlay')
+    const today = new Date()
+    const weekAgo = new Date(today)
+    weekAgo.setDate(today.getDate() - 7)
+    const fmt = d => d.toISOString().split('T')[0]
+    document.getElementById('customStartDate').value = fmt(weekAgo)
+    document.getElementById('customEndDate').value = fmt(today)
+    overlay.classList.add('active')
+    modal.classList.add('active')
+  }
+
+  function closeCustomDatePicker() {
+    document.getElementById('customDateModal').classList.remove('active')
+    document.getElementById('customDateOverlay').classList.remove('active')
+  }
+
+  async function applyCustomDateRange() {
+    const start = document.getElementById('customStartDate').value
+    const end = document.getElementById('customEndDate').value
+    if (!start || !end) { alert('Please select both dates'); return; }
+    if (start > end) { alert('Start date must be before end date'); return; }
+    const applyBtn = document.getElementById('customApplyBtn')
+    applyBtn.disabled = true
+    applyBtn.textContent = '⏳ Loading...'
+    try {
+      const response = await fetchWithTimeout(API_BASE + '/api/history/custom', {
+        method: 'POST', headers: apiHeaders(), body: JSON.stringify({ start_date: start, end_date: end })
+      })
+      const data = await response.json()
+      if (data.error) {
+        alert('Error: ' + data.error)
+        return
+      }
+      customPeriodData = data
+      saveActiveDailyReviewTab('custom')
+      closeCustomDatePicker()
+      updateHistoryTimelinePanel(loadJson(files.history))
+    } catch (e) {
+      console.error('[Hydration] custom date range failed:', e.message)
+      alert('Failed to fetch: ' + e.message)
+    } finally {
+      applyBtn.disabled = false
+      applyBtn.textContent = 'Apply'
+    }
+  }
+
+  function renderJournalCard(entry, idx) {
+    if (!entry || entry.status === 'degraded') {
+      return `<div class="journal-card"><div class="journal-date">${escapeHtml(entry.date || '?')}</div><div class="calib-insufficient">${escapeHtml(entry.reason || 'Review unavailable')}</div></div>`
+    }
+    const copyId = `journalCopy${idx}`
+    let html = `<div class="journal-card" data-date="${escapeHtml(entry.date || '')}">`
+    html += `<div class="journal-card-head"><div><div class="journal-date">${formatDate(entry.date)}</div></div>`
+    html += `<span class="journal-day-badge">${escapeHtml(journalDayBadge(entry))}</span></div>`
+    html += `<div class="journal-kv">`
+    html += `<span class="journal-k">Regime</span><span class="journal-v">${escapeHtml(entry.regime || '—')}</span>`
+    html += `<span class="journal-k">Best signal</span><span class="journal-v win">${escapeHtml(entry.best_signal || '—')}</span>`
+    if (entry.best_bearish) html += `<span class="journal-k">Best bearish</span><span class="journal-v loss">${escapeHtml(entry.best_bearish)}</span>`
+    if (entry.false_positive || entry.biggest_miss) html += `<span class="journal-k">False positive</span><span class="journal-v loss">${escapeHtml(entry.false_positive || entry.biggest_miss || '—')}</span>`
+    html += `<span class="journal-k">Quality IQ</span><span class="journal-v">${entry.quality_iq != null ? entry.quality_iq : '—'}</span>`
+    html += `<span class="journal-k">Telegram</span><span class="journal-v">${escapeHtml(entry.telegram_summary || '—')}</span>`
+    html += `</div>`
+    if (entry.observation) html += `<div class="journal-obs">${escapeHtml(entry.observation)}</div>`
+    const runtimeNotes = entry.runtime_notes || []
+    if (runtimeNotes.length) {
+      html += `<div class="journal-runtime"><div class="journal-k" style="margin-bottom:6px;">Daily AI Runtime Notes</div>`
+      runtimeNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
+      html += `</div>`
+    }
+    const adaptiveNotes = entry.adaptive_notes || []
+    if (adaptiveNotes.length) {
+      html += `<div class="journal-runtime" style="border-left-color:rgba(212,168,83,0.35);background:rgba(212,168,83,0.06);"><div class="journal-k" style="margin-bottom:6px;">Adaptive Observations</div>`
+      adaptiveNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
+      html += `</div>`
+    }
+    const lifecycleNotes = entry.lifecycle_notes || []
+    if (lifecycleNotes.length) {
+      html += `<div class="journal-runtime" style="border-left-color:rgba(126,184,255,0.35);background:rgba(126,184,255,0.06);"><div class="journal-k" style="margin-bottom:6px;">Prediction Lifecycle</div>`
+      lifecycleNotes.forEach(note => { html += `<div class="journal-runtime-line">• ${escapeHtml(note)}</div>` })
+      html += `</div>`
+    }
+    const timeline = entry.regime_timeline || []
+    const warnings = entry.warnings || []
+    const hl = entry.highlights || {}
+    if (timeline.length || warnings.length || hl.highest_confidence_winner || hl.strongest_contradiction) {
+      html += `<details class="journal-details" data-ui-section="journal-regime-warnings"><summary>Regime · warnings · wins/failures</summary>`
+      timeline.forEach(t => {
+        html += `<div class="journal-timeline-item"><strong>${escapeHtml(t.time || '—')}</strong> ${escapeHtml(t.transition || '')}${t.note ? `<br><span style="color:#8B949E;">${escapeHtml(t.note)}</span>` : ''}</div>`
+      })
+      if (hl.highest_confidence_winner) html += `<div class="journal-timeline-item">🏆 Highest-confidence winner: <span class="journal-v win">${escapeHtml(hl.highest_confidence_winner.label || '')}</span></div>`
+      if (hl.strongest_contradiction) html += `<div class="journal-timeline-item">⚡ Strongest contradiction: ${escapeHtml(hl.strongest_contradiction.summary || hl.strongest_contradiction.detail || '')}</div>`
+      warnings.forEach(w => { html += `<div class="journal-warn">⚠ ${escapeHtml(w.message || w.code || '')}</div>` })
+      html += `</details>`
+    }
+    html += `<button type="button" class="journal-copy-btn" id="${copyId}" data-copy="${encodeURIComponent(entry.copy_text || '')}">COPY DAILY REVIEW</button>`
+    html += `</div>`
+    return html
+  }
+
+  function refreshHistoryJournalEntries(data, journalMsg) {
+    const shell = document.getElementById('historyJournalShell')
+    if (!shell) return false
+    const entries = window.RuntimeManager && RuntimeManager.sortJournalEntries
+      ? RuntimeManager.sortJournalEntries((data.intelligence_journal || {}).entries || [])
+      : ((data.intelligence_journal || {}).entries || [])
+    if (entries.length === 0) {
+      shell.innerHTML = `<div class="calib-insufficient">${escapeHtml(journalMsg)}</div>`
+    } else {
+      shell.innerHTML = entries.map((entry, idx) => renderJournalCard(entry, idx)).join('')
+    }
+    bindJournalCopyButtons(document.getElementById('tab-history'))
+    return true
+  }
+
+  function loadHistory() {
+    const data = loadJson(files.history)
+    const container = document.getElementById('tab-history')
+    const journalBanner = panelStatusBannerHtml('journal', 'history')
+    const journalMsg = window.RuntimeManager
+      ? RuntimeManager.lifecycleMessage('journal', 'Daily review generates after post-market EOD cycle (15:45 IST).')
+      : 'Daily review generates after post-market EOD cycle (15:45 IST).'
+    if (!data) {
+      setPanelHtml(container, journalBanner, `<div class="empty-stats"><h4>📜 Intelligence journal building...</h4><p>${escapeHtml(journalMsg)}</p></div>`)
+      return
+    }
+
+    const timelineBody = document.getElementById('historyTimelineBody')
+    if (timelineBody) {
+      pinHistoryTimelineOpen()
+      refreshHistoryJournalEntries(data, journalMsg)
+      updateHistoryTimelinePanel(data)
+      patchPanelBanner(container, journalBanner)
+      return
+    }
+
+    const journal = data.intelligence_journal || {}
+    const entries = window.RuntimeManager && RuntimeManager.sortJournalEntries
+      ? RuntimeManager.sortJournalEntries(journal.entries || [])
+      : (journal.entries || [])
+    let html = ''
+    html += runtimeTimestampHtml(`${data.today_weekday || ''} ${data.today_date || ''}`.trim())
+    html += `<div class="glass-card" style="padding:14px;margin-bottom:12px;"><h2 style="font-size:14px;margin:0;">📓 Intelligence Journal</h2><div style="font-size:10px;color:#8B949E;margin-top:4px;">Daily strategic replay + AI review memory</div></div>`
+
+    html += `<div id="historyJournalShell">`
+    if (entries.length === 0) {
+      html += `<div class="calib-insufficient">${escapeHtml(journalMsg)}</div>`
+    } else {
+      entries.forEach((entry, idx) => { html += renderJournalCard(entry, idx) })
+    }
+    html += `</div>`
+
+    html += `<details id="historyTimelineDetails" class="journal-details" data-ui-section="journal-legacy-timeline" style="margin-top:16px;"><summary style="font-size:11px;color:#8B949E;">Legacy prediction timeline</summary><div id="historyTimelineBody">`
+    html += buildHistoryTimelineBodyHtml(data)
+    html += `</div></details>`
+
+    if (historyTimelinePinnedOpen && window.UiState) {
+      UiState.setExpanded('journal-legacy-timeline', true)
+    }
+
+    setPanelHtml(container, journalBanner, html)
+
+    bindJournalCopyButtons(container)
+    wireHistoryPeriodButtons(document.getElementById('historyTimelineDetails') || container, data)
+    pinHistoryTimelineOpen()
+  }
+
+  function showPredictionDetail(p) {
+    const overlay = document.getElementById('predDetailOverlay')
+    const modal = document.getElementById('predDetailModal')
+    const content = document.getElementById('predDetailContent')
+    const verdict = (p.verdict || 'PENDING').toUpperCase()
+    
+    let html = `
+      <div class="pred-detail-title">${escapeHtml(p.ticker || '?')}</div>
+      <div class="pred-detail-subtitle">
+        ${escapeHtml(p.sector || '?')} • ${escapeHtml(p.recommendation || '')} • ${p.confidence || 'MEDIUM'} conf
+        <span class="verdict-pill ${verdict.toLowerCase()}" style="margin-left:8px;">${verdict}</span>
+      </div>
+    `
+    if (p.entry_price || p.target_price || p.stop_loss) {
+      html += '<div class="pred-detail-section"><div class="pred-detail-label">📊 Targets</div><div class="pred-detail-grid">'
+      if (p.entry_price) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Entry</div><div class="pred-detail-cell-value">Rs.${p.entry_price}</div></div>`
+      if (p.target_price) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Target</div><div class="pred-detail-cell-value green">Rs.${p.target_price}</div></div>`
+      if (p.stop_loss) html += `<div class="pred-detail-cell"><div class="pred-detail-cell-label">Stop</div><div class="pred-detail-cell-value red">Rs.${p.stop_loss}</div></div>`
+      html += '</div></div>'
+    }
+    if (p.reasoning) html += `<div class="pred-detail-section"><div class="pred-detail-label">💡 AI Reasoning</div><div class="pred-detail-value">${escapeHtml(p.reasoning)}</div></div>`
+    
+    if (verdict !== 'PENDING' && p.id) {
+      html += `<button class="postmortem-btn" id="postmortemBtn" data-pred-id="${p.id}">🔬 AI Post-Mortem Analysis</button><div id="postmortemResult"></div>`
+    }
+    content.innerHTML = html
+    overlay.classList.add('active'); modal.classList.add('active');
+
+    const pmBtn = document.getElementById('postmortemBtn')
+    if (pmBtn) {
+      pmBtn.addEventListener('click', async () => {
+        const resultDiv = document.getElementById('postmortemResult')
+        pmBtn.disabled = true; pmBtn.textContent = '⏳ Analyzing...'; resultDiv.innerHTML = '<div class="loading">🤖 AI analyzing...</div>'
+        try {
+          const response = await fetch(API_BASE + '/api/postmortem', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ prediction_id: parseInt(p.id) }) })
+          const data = await response.json()
+          if (data.success) {
+            resultDiv.innerHTML = `<div class="postmortem-result">${formatPostMortem(data.analysis)}</div>`
+            pmBtn.textContent = '✅ Generated'
+          } else throw new Error(data.error || 'Failed')
+        } catch (e) {
+          resultDiv.innerHTML = `<div class="postmortem-result" style="color:#FF3D00;">❌ ${escapeHtml(e.message)}</div>`
+          pmBtn.disabled = false; pmBtn.textContent = '🔬 Try Again'
+        }
+      })
+    }
+  }
+
+  async function askClaude() {
+    const input = document.getElementById('askInput'), askBtn = document.getElementById('askBtn')
+    if (!input || !askBtn) return
+    const question = input.value.trim(); if (!question) return;
+    input.value = ''; askBtn.disabled = true; askBtn.innerText = '...'
+    
+    const aiModel = document.getElementById('aiModel')?.value || 'ask_basic'
+    const modelLabel = aiModel === 'ask_basic' ? 'Groq' : aiModel === 'ask_haiku' ? 'Groq Lite' : 'Claude'
+    const activeTab = document.querySelector('.tab.active')
+    const container = activeTab ? document.getElementById('tab-' + activeTab.dataset.tab) : null
+    if (!container) { askBtn.disabled = false; askBtn.innerText = 'Ask'; return }
+    const qid = 'q' + Date.now()
+    addChatMessage('user', question, modelLabel)
+    
+    container.insertAdjacentHTML('beforeend', `
+      <div class="chat-msg-user"><div class="chat-msg-meta">YOU [${modelLabel}]:</div><div class="chat-msg-content">${escapeHtml(question)}</div></div>
+      <div id="${qid}" class="chat-msg-ai"><div class="chat-msg-meta">⏳ Thinking...</div></div>
+    `)
+    container.scrollTop = container.scrollHeight
+    try {
+      const response = await fetchWithTimeout(API_BASE + '/api/ask', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ question: question, use_case: aiModel }),
+      })
+      const result = await response.json()
+      const responseEl = document.getElementById(qid)
+      if (!responseEl) return
+      const displayText = result.success
+        ? (result.response || 'No response')
+        : (result.user_message || ('Error: ' + (result.error || 'Unknown')))
+      addChatMessage('assistant', displayText, modelLabel)
+      responseEl.innerHTML = `<div class="chat-msg-meta">${modelLabel}:</div><div class="chat-msg-content">${escapeHtml(displayText).replace(/\n/g, '<br>')}</div>`
+      container.scrollTop = container.scrollHeight
+    } catch (err) {
+      console.error('[Hydration] ask failed:', err.message)
+      const responseEl = document.getElementById(qid)
+      if (responseEl) responseEl.innerHTML = `<div style="color:#FF3D00;">❌ ${escapeHtml(err.message)}</div>`
+    } finally {
+      askBtn.disabled = false
+      askBtn.innerText = 'Ask'
+    }
+  }
+
+  async function refreshAll() {
+    setGlobalLoading(true, '⏳ Refreshing snapshot…')
+    try {
+      if (USE_API && window.RuntimeManager) {
+        await RuntimeManager.refresh({ force: true })
+        renderAllTabs({ force: true })
+      } else if (USE_API) {
+        await fetchAllFromAPI()
+        renderAllTabs({ force: true })
+      } else {
+        renderAllTabs({ force: true })
+      }
+      if (debugOverlayOpen) await renderDebugOverlay()
+    } catch (e) {
+      console.error('[refreshAll]', e)
+      if (window.RuntimeManager && RuntimeManager.getState && RuntimeManager.getState()) {
+        renderAllTabs({ force: true })
+      } else {
+        renderUnavailableAllTabs(e.message || 'Refresh failed')
+      }
+    } finally {
+      setGlobalLoading(false)
+    }
+  }
+
+  let debugOverlayOpen = false
+
+  function toggleDebugOverlay(force) {
+    const el = document.getElementById('debugOverlay')
+    if (!el) return
+    debugOverlayOpen = typeof force === 'boolean' ? force : !debugOverlayOpen
+    el.classList.toggle('open', debugOverlayOpen)
+    el.setAttribute('aria-hidden', debugOverlayOpen ? 'false' : 'true')
+    if (debugOverlayOpen) renderDebugOverlay()
+  }
+
+  async function renderDebugOverlay() {
+    const box = document.getElementById('debugContent')
+    if (!box) return
+    const snap = (window.RuntimeManager && RuntimeManager.getState) ? (RuntimeManager.getState() || {}) : (window.runtimeSnapshot || {})
+    const ms = snap.market_snapshot || snap
+    const rs = ms.runtime_state || snap.runtime_state || {}
+    const lc = rs.lifecycle || ms.lifecycle || {}
+    const fresh = ms.freshness || rs.snapshot_freshness || snap.freshness_state || {}
+    const sched = rs.scheduler || {}
+    const alert = rs.alert_eligibility || {}
+    const tier = fresh.health_tier || (RuntimeManager && RuntimeManager.freshnessTierLabel
+      ? RuntimeManager.freshnessTierLabel(fresh.age_minutes) : '—')
+    const tierCls = tier === 'stale' ? 'dbg-stale' : (tier === 'aging' ? 'dbg-aging' : 'dbg-healthy')
+    const hydration = (window.RuntimeManager && RuntimeManager.getHydrationDebug)
+      ? RuntimeManager.getHydrationDebug() : {}
+    let supCount = alert.suppression_count
+    let debugExtra = null
+    if (USE_API) {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+      try {
+        const res = await fetch(API_BASE.replace(/\/$/, '') + '/api/runtime/debug', {
+          headers: apiHeaders(),
+          signal: controller.signal,
+        })
+        if (res.ok) {
+          debugExtra = await res.json()
+          supCount = (debugExtra.suppression || {}).suppression_count ?? supCount
+        }
+      } catch (e) {
+        console.warn('[debug] /api/runtime/debug failed:', e.message)
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+    const rows = [
+      ['Snapshot ID', hydration.snapshot_id || snap.snapshot_id || '—'],
+      ['Version', hydration.snapshot_version != null ? String(hydration.snapshot_version) : '—'],
+      ['Generated', hydration.generated_at || snap.generated_at || '—'],
+      ['Payload', hydration.payload_bytes != null ? `${hydration.payload_bytes} bytes` : '—'],
+      ['Hydration', hydration.hydration_ms != null ? `${hydration.hydration_ms}ms` : '—'],
+      ['Stale cache', hydration.stale_cache_active ? 'ACTIVE' : 'no'],
+      ['Status', hydration.status || snap.status || '—'],
+      ['Lifecycle', lc.lifecycle_state || '—'],
+      ['Session', (rs.session || {}).session_display || '—'],
+      ['Freshness', `${fresh.age_display || 'unavailable'} (${tier})`],
+      ['Scheduler', sched.phase || snap.panels?.orchestrator?.mode || '—'],
+      ['AI status', (rs.ai_state || {}).status || '—'],
+      ['Intel status', (rs.intelligence_status || {}).status || '—'],
+      ['Alert eligible', alert.eligible != null ? String(alert.eligible) : '—'],
+      ['Suppressions', supCount != null ? String(supCount) : '—'],
+    ]
+    box.innerHTML = rows.map(([label, val]) => {
+      const cls = label === 'Freshness' ? tierCls : ''
+      return `<div class="dbg-row"><span class="dbg-label">${escapeHtml(label)}:</span> <span class="${cls}">${escapeHtml(String(val))}</span></div>`
+    }).join('')
+      + (hydration.missing_fields && hydration.missing_fields.length
+        ? `<div class="dbg-row dbg-stale">Missing: ${escapeHtml(hydration.missing_fields.join(', '))}</div>` : '')
+      + (hydration.failed_widgets && hydration.failed_widgets.length
+        ? `<div class="dbg-row dbg-stale">Failed widgets: ${escapeHtml(hydration.failed_widgets.join(', '))}</div>` : '')
+      + (hydration.warnings && hydration.warnings.length
+        ? `<div class="dbg-row dbg-aging">Warnings: ${escapeHtml(hydration.warnings.join('; '))}</div>` : '')
+      + (hydration.last_error
+        ? `<div class="dbg-row dbg-stale">Fetch: ${escapeHtml(hydration.last_error)}</div>` : '')
+      + (Object.keys(panelHydrationState).length
+        ? `<div class="dbg-row">Panels: ${escapeHtml(Object.entries(panelHydrationState).map(([k, v]) => `${k}:${v.error ? 'err' : 'ok'}`).join(', '))}</div>` : '')
+      + (debugExtra && debugExtra.alert_block_reasons && debugExtra.alert_block_reasons.length
+        ? `<div class="dbg-row dbg-stale">Blocks: ${escapeHtml(debugExtra.alert_block_reasons.join(', '))}</div>` : '')
+  }
+
+
+  async function bootFrontend() {
+    console.log('[BOOT] hydration starting')
+    console.log('[GUI] app boot')
+    wireCoreUi()
+    renderShellImmediately()
+    try {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('debug') === '1') toggleDebugOverlay(true)
+      document.addEventListener('keydown', (ev) => {
+        if (ev.ctrlKey && ev.shiftKey && ev.key === 'D') {
+          ev.preventDefault()
+          toggleDebugOverlay()
+        }
+      })
+      if (window.RuntimeErrorBoundary) {
+        await RuntimeErrorBoundary.runSafeAsync('bootstrapApiConfig', () => bootstrapApiConfig())
+      } else {
+        await bootstrapApiConfig()
+      }
+      console.log('[Hydration] hydration start — rendering panels')
+      renderAllTabs({ force: true })
+      updateRuntimeDegradedBanner()
+      if (window.RuntimeManager) {
+        RuntimeManager.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+          cache: apiCache,
+          onConnectionChange: updateApiStatus,
+          onLoadingChange: (active, message) => setGlobalLoading(active, message || 'Initializing intelligence runtime…'),
+        })
+        RuntimeManager.subscribe((_snap, meta) => {
+          try {
+            if (meta && meta.hydrationComplete) {
+              console.log('[Hydration] hydration success', {
+                failed: !!(meta && meta.failed),
+                unchanged: !!(meta && meta.unchanged),
+                staleCache: !!(meta && meta.staleCache),
+                ms: meta && meta.hydrationMs,
+                error: meta && meta.error,
+              })
+            } else if (meta && meta.warmingBoot) {
+              console.log('[Hydration] warming shell active')
+            }
+            if (meta && meta.failed && !_snap && !(meta && meta.staleCache)) {
+              renderUnavailableAllTabs(meta.error || 'Data unavailable')
+            }
+            const anyPending = Object.keys(PANEL_TAB_MAP).some((id) => isPanelPending(id))
+            renderAllTabs({
+              force: anyPending || !!(meta && (meta.failed || meta.staleCache || !meta || !meta.unchanged)),
+            })
+            updateRuntimeDegradedBanner()
+            if (debugOverlayOpen) renderDebugOverlay()
+          } catch (e) {
+            console.error('[Hydration] renderAllTabs subscriber failed:', e)
+            renderAllTabs({ force: true })
+          } finally {
+            setGlobalLoading(false)
+            console.log('[Hydration] loading false (subscriber)')
+          }
+        })
+        try { RuntimeManager.start(30000) } catch (e) {
+          console.error('[Hydration] hydration fail — RuntimeManager.start', e)
+          renderUnavailableAllTabs(e.message || 'RuntimeManager failed to start')
+          renderAllTabs({ force: true })
+        }
+        setTimeout(() => {
+          const pending = Object.keys(PANEL_TAB_MAP).some((id) => isPanelPending(id))
+          if (pending || !(window.RuntimeManager && RuntimeManager.isHydrationFinished && RuntimeManager.isHydrationFinished())) {
+            console.warn('[Hydration] timeout — boot safety render')
+            if (window.RuntimeManager && RuntimeManager.forceFinishHydration) {
+              RuntimeManager.forceFinishHydration('Runtime delayed — using degraded intelligence cache')
+            }
+            renderAllTabs({ force: true })
+          }
+          updateRuntimeDegradedBanner()
+          setGlobalLoading(false)
+        }, 15000 + 500)
+      } else {
+        await refreshAll()
+        setInterval(refreshAll, 30000)
+      }
+      if (window.UiState) UiState.persistExpandedSections(document)
+      if (window.AIOpsPanel) {
+        AIOpsPanel.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+          getRuntimeState: () => (window.RuntimeManager ? RuntimeManager.getState() : null),
+          subscribeRuntime: (fn) => (window.RuntimeManager ? RuntimeManager.subscribe(fn) : () => {}),
+        })
+      }
+      if (window.DailyReviewPanel) {
+        DailyReviewPanel.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+          subscribeRuntime: (fn) => (window.RuntimeManager ? RuntimeManager.subscribe(fn) : () => {}),
+        })
+      }
+    } catch (e) {
+      console.error('[Hydration] hydration fail — bootFrontend', e)
+      if (window.RuntimeErrorBoundary) RuntimeErrorBoundary.showFallback(e.message || String(e))
+      try { renderAllTabs({ force: true }) } catch (e2) { console.error('[bootFrontend] fallback render failed:', e2) }
+      clearTabLoadingPlaceholders('Runtime delayed — using degraded intelligence cache')
+    } finally {
+      setGlobalLoading(false)
+      console.log('[Hydration] boot complete')
+    }
+  }
+
+  bootFrontend()
+
+  function renderSignalRow(s, cls) {
+    const ticker = s.ticker || '?', sector = s.sector || '?', strength = s.strength || '?', direction = s.direction || '?', change = s.change_percent || 0, volRatio = s.volume_ratio || 0, price = s.price || 0, signals = s.signals || [];
+    const sign = change >= 0 ? '+' : '';
+    const changeClass = change >= 0 ? 'up' : 'down';
+    const strengthCls = (cls === 'ultra') ? 'ultra' : (direction === 'BEARISH' ? 'bearish' : 'strong');
+    return `
+      <div class="signal-row ${cls}">
+        <div class="signal-header">
+          <div><span class="signal-ticker">${escapeHtml(ticker)}</span><span class="signal-sector">${escapeHtml(sector)}</span></div>
+          <span class="signal-strength-pill ${strengthCls}">${strength} • ${direction}</span>
+        </div>
+        <div class="signal-price-row">
+          <span class="signal-price">Rs.${price.toLocaleString('en-IN')}</span>
+          <span class="signal-change ${changeClass}">${sign}${change.toFixed(2)}%</span>
+          <span class="signal-volume">vol ${volRatio.toFixed(1)}x avg</span>
+        </div>
+        <div class="signal-tags">${signals.map(sig => `<span class="signal-tag">${sig}</span>`).join('')}</div>
+      </div>
+    `
+  }
+
+  function renderCompactSignal(s, bearish = false) {
+    const ticker = s.ticker || '?', sector = s.sector || '?', change = s.change_percent || 0, volRatio = s.volume_ratio || 0, price = s.price || 0;
+    const sign = change >= 0 ? '+' : '';
+    const changeClass = change >= 0 ? 'up' : 'down';
+    return `
+      <div class="sector-row ${bearish ? 'bearish' : (change >= 0 ? 'bullish' : 'bearish')}">
+        <div>
+          <div class="sector-name">${escapeHtml(ticker)} <span style="color:#8B949E;font-size:9px;font-weight:normal;">(${escapeHtml(sector)})</span></div>
+          <div class="sector-meta">Rs.${price.toLocaleString('en-IN')} • vol ${volRatio.toFixed(1)}x</div>
+        </div>
+        <div class="sector-stats">
+          <span class="sector-move ${changeClass === 'up' ? 'green' : 'red'}">${sign}${change.toFixed(2)}%</span>
+        </div>
+      </div>
+    `
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+{
+  "compression": {
+    "original_chars": 5152,
+    "compressed_bulk_chars": 5132,
+    "final_context_chars": 8219,
+    "preserved_block_chars": 2876,
+    "discarded_chars_estimate": 20,
+    "original_tokens": 1288,
+    "final_tokens": 2054,
+    "token_reduction_pct": -59.47,
+    "sections": {
+      "global": {
+        "original_chars": 880,
+        "compressed_chars": 876,
+        "discarded_chars": 4,
+        "protected": false,
+        "limit_chars": 4090
+      },
+      "india": {
+        "original_chars": 488,
+        "compressed_chars": 488,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 4090
+      },
+      "news": {
+        "original_chars": 1320,
+        "compressed_chars": 1320,
+        "discarded_chars": 0,
+        "protected": true,
+        "limit_chars": 5930
+      },
+      "inshorts": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "youtube": {
+        "original_chars": 11,
+        "compressed_chars": 11,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 4090
+      },
+      "govt": {
+        "original_chars": 967,
+        "compressed_chars": 908,
+        "discarded_chars": 59,
+        "protected": true,
+        "limit_chars": 5930
+      },
+      "reddit": {
+        "original_chars": 15,
+        "compressed_chars": 15,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 4090
+      },
+      "scanner": {
+        "original_chars": 16,
+        "compressed_chars": 16,
+        "discarded_chars": 0,
+        "protected": true,
+        "limit_chars": 5930
+      },
+      "twitter": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "nse": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "telegram": {
+        "original_chars": 0,
+        "compressed_chars": 0,
+        "discarded_chars": 0
+      },
+      "ranked_signals": {
+        "original_chars": 1379,
+        "compressed_chars": 1379,
+        "discarded_chars": 0,
+        "protected": false,
+        "limit_chars": 4090
+      }
+    },
+    "gemini": {
+      "used": false,
+      "skipped": true,
+      "passthrough": false,
+      "decision_reason": "Volatile/contradictory regime — Gemini skipped, token-truncated bulk",
+      "input_tokens": 1288,
+      "output_tokens": 1283
+    },
+    "sections_compressed": [
+      "global",
+      "govt"
+    ],
+    "sections_expanded": [
+      "news",
+      "govt",
+      "scanner"
+    ],
+    "preservation_reasoning": [
+      "Regime=regime_transition volatility=0.321 compression_mode=PRESERVE",
+      "Bypass: govt VEDL impact=6.5",
+      "Bypass: govt MACRO impact=5.5",
+      "Bypass: news NEWS impact=5.5",
+      "Bypass: news NEWS impact=5.5",
+      "Bypass: news NEWS impact=5.5",
+      "Bypass: news NEWS impact=5.5",
+      "Bypass: news NEWS impact=5.5",
+      "Bypass: news NEWS impact=5.5",
+      "Section 'news' expanded limit (5930 chars)",
+      "Section 'govt' expanded limit (5930 chars)",
+      "Section 'scanner' expanded limit (5930 chars)"
+    ]
+  },
+  "raw_blob_preview": "=== GLOBAL ===\n=== GLOBAL MARKETS ===\n  USA: NEUTRAL (-0.14%)\n  ASIA: BEARISH (-0.53%)\n  GLOBAL: BULLISH (+1.59%)\n[USA_INDICES]\n  S&P_500: 7,564 (+0.58%)\n  NASDAQ: 26,917 (+0.91%)\n  DOW_JONES: 50,669 (+0.05%)\n  VIX: 16 (-3.74%)\n  US_FUTURES_NQ: 30,325 (+0.92%)\n[USA_RATES]\n  US_10Y: 4 (-0.58%)\n  US_2Y: 4 (+0.14%)\n[ASIA_INDICES]\n  NIKKEI: 64,999 (+0.01%)\n  HANG_SENG: 25,328 (-1.06%)\n[GLOBAL_MACRO]\n  GOLD: 4,529 (+1.83%)\n  SILVER: 76 (+1.71%)\n  CRUDE_OIL: 89 (+0.87%)\n  NAT_GAS: 3 (+8.42%)\n  DXY: 99 (-0.19%)\n  ALERT: Gold rebounds after Iran and US reach outline ceasefire deal\n  ALERT: Dollar slips after U.S. and Iran said to have reached ceasefire extension deal\n  ALERT: Trump's face could appear on US $250 bill\n  ALERT: S&P, Nasdaq hit record highs after U.S.-Iran said to reach deal, pending Trump nod\n  ALERT: US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\n\n=== INDIA ===\n=== INDIA STOCKS ===\n  NIFTY 50: Rs.23,907.15 (-0.03%)\n  SENSEX: Rs.75,867.80 (-0.19%)\n  RELIANCE: Rs.1,350.50 (+0.00%)\n  TCS: Rs.2,284.20 (+0.00%)\n  HDFCBANK: Rs.758.65 (+0.00%)\n  INFY: Rs.1,159.90 (+0.00%)\n  ICICIBANK: Rs.1,272.70 (+0.00%)\n  SBIN: Rs.967.80 (+0.00%)\n  BHARTIARTL: Rs.1,852.20 (+0.00%)\n  ITC: Rs.291.95 (+0.00%)\n  LT: Rs.4,047.50 (+0.00%)\n  AXISBANK: Rs.1,304.10 (+0.00%)\n  KOTAKBANK: Rs.388.70 (+0.00%)\n  BAJAJFINSV: Rs.1,809.10 (+0.00%)\n  MARUTI: Rs.13,364.00 (+0.00%)\n\n=== NEWS ===\n=== NEWS ===\nArticles: 122\n  [NEU] Stocks To Watch Today: Asian Paints, BEML, NMDC, Coal India And IREDA\n  [NEU] US stocks today: S&amp;P 500 and Nasdaq hit record closing highs as US and Iran agree to extend ceas\n  [NEU] Anthropics valuation surges to $965 billion, surpassing OpenAI\n  [NEU] Gold rebounds after Iran and US reach outline ceasefire deal\n  [NEU] Dollar slips after U.S. and Iran said to have reached ceasefire extension deal\n  [NEU] Trump's face could appear on US $250 bill\n  [NEU] Victims of the Washington paper mill disaster included husbands and grandfathers\n  [NEU] FTC Chairman Ferguson Says Agency Probing Fertilizer Industry\n  [NEU] S&P, Nasdaq hit record highs after U.S.-Iran said to reach deal, pending Trump nod\n  [NEU] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\n  [NEU] Q4 Results Highlights: Ashok Leyland Profit Rises 14%; Bharat Dynamics Profit Falls 56%\n  [NEU] Mukesh Ambani draws no salary for sixth straight year; check out RIL chairman's dividend earnings\n  [NEU] Flights Impacted! IndiGo, Akasa Air, Delhi Airport Issue Advisory As Heavy Rains Disrupt Operations\n  [NEU] Wall Street pushes to more records as profits keep piling up for US companies\n  [NEU] Trade Setup For May 29: Nifty To Find Immediate Resistance At 24,000 Level Amid Oil Price Slide\n\n=== YOUTUBE ===\nTV: No data\n\n=== GOVT ===\n=== GOVT INTELLIGENCE ===\nHIGH: 10 | MED: 31\n  1. [6/10 NEUTRAL] Gold rebounds after Iran and US reach outline ceasefire deal\n     Affects: KALYAN, OIL INDIA, TITAN, GOLDBEES, RELIANCE\n  2. [5/10 BEARISH] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hike fears\n     Affects: VEDL, TITAN, GOLDBEES, KALYAN, SILVERBEES\n  3. [4/10 BULLISH] US stocks today: US stocks hold near records even as crude oil prices rise again\n     Affects: RELIANCE, ONGC, OIL INDIA, IOC\n  4. [4/10 BULLISH] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strikes raise worries\n     Affects: VEDL, OIL INDIA, ONGC, TITAN, GOLDBEES\n  5. [4/10 NEUTRAL] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming AGM, says report\n  6. [4/10 NEUTRAL] Stocks and bonds rally as hopes grow for end to West Asia conflict\n\n=== REDDIT ===\nREDDIT: No data\n\n=== SCANNER ===\nSCANNER: No data\n\n=== RANKED_SIGNALS ===\n=== RANKED SIGNALS ===\nGOVT [6] Gold rebounds after Iran and US reach outline ceasefire deal\nGOVT [5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hi\nGOVT [4] US stocks today: US stocks hold near records even as crude oil prices rise again\nGOVT [4] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strikes raise w\nGOVT [4] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming AGM, says r\nGOVT [4] Stocks and bonds rally as hopes grow for end to West Asia conflict\nNEWS [neu|nov=4.5] Victims of the Washington paper mill disaster included husbands and grandfathers\nNEWS [neu|nov=4.5] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\nNEWS [neu|nov=4.5] US Consumer Spending Edges Up As Inflation Accelerates\nNEWS [neu|nov=4.5] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls \nNEWS [neu|nov=4.5] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal\nNEWS [neu|nov=4.5] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha\nNEWS [neu|nov=4.5] SBI Chairman Setty Says Next Phase of Transformation Will Focus on Personalised Digital Ba\nNEWS [neu|nov=4.5] Crypto companies without EU licences face prosecution, French regulator warns",
+  "compressed_bulk_preview": "=== GLOBAL ===\n=== GLOBAL MARKETS ===\n  USA: NEUTRAL (-0.14%)\n  ASIA: BEARISH (-0.53%)\n  GLOBAL: BULLISH (+1.59%)\n[USA_INDICES]\n  S&P_500: 7,564 (+0.58%)\n  NASDAQ: 26,917 (+0.91%)\n  DOW_JONES: 50,669 (+0.05%)\n  VIX: 16 (-3.74%)\n  US_FUTURES_NQ: 30,325 (+0.92%)\n[USA_RATES]\n  US_10Y: 4 (-0.58%)\n  US_2Y: 4 (+0.14%)\n[ASIA_INDICES]\n  NIKKEI: 64,999 (+0.01%)\n  HANG_SENG: 25,328 (-1.06%)\n[GLOBAL_MACRO]\n  GOLD: 4,529 (+1.83%)\n  SILVER: 76 (+1.71%)\n  CRUDE_OIL: 89 (+0.87%)\n  NAT_GAS: 3 (+8.42%)\n  DXY: 99 (-0.19%)\n  ALERT: Gold rebounds after Iran and US reach outline ceasefire deal\n  ALERT: Dollar slips after U.S. and Iran said to have reached ceasefire extension deal\n  ALERT: Trump's face could appear on US $250 bill\n  ALERT: S&P, Nasdaq hit record highs after U.S.-Iran said to reach deal, pending Trump nod\n  ALERT: US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\n=== INDIA ===\n=== INDIA STOCKS ===\n  NIFTY 50: Rs.23,907.15 (-0.03%)\n  SENSEX: Rs.75,867.80 (-0.19%)\n  RELIANCE: Rs.1,350.50 (+0.00%)\n  TCS: Rs.2,284.20 (+0.00%)\n  HDFCBANK: Rs.758.65 (+0.00%)\n  INFY: Rs.1,159.90 (+0.00%)\n  ICICIBANK: Rs.1,272.70 (+0.00%)\n  SBIN: Rs.967.80 (+0.00%)\n  BHARTIARTL: Rs.1,852.20 (+0.00%)\n  ITC: Rs.291.95 (+0.00%)\n  LT: Rs.4,047.50 (+0.00%)\n  AXISBANK: Rs.1,304.10 (+0.00%)\n  KOTAKBANK: Rs.388.70 (+0.00%)\n  BAJAJFINSV: Rs.1,809.10 (+0.00%)\n  MARUTI: Rs.13,364.00 (+0.00%)\n=== NEWS ===\nArticles: 122\n  [NEU] Stocks To Watch Today: Asian Paints, BEML, NMDC, Coal India And IREDA\n  [NEU] US stocks today: S&amp;P 500 and Nasdaq hit record closing highs as US and Iran agree to extend ceas\n  [NEU] Anthropics valuation surges to $965 billion, surpassing OpenAI\n  [NEU] Gold rebounds after Iran and US reach outline ceasefire deal\n  [NEU] Dollar slips after U.S. and Iran said to have reached ceasefire extension deal\n  [NEU] Trump's face could appear on US $250 bill\n  [NEU] Victims of the Washington paper mill disaster included husbands and grandfathers\n  [NEU] FTC Chairman Ferguson Says Agency Probing Fertilizer Industry\n  [NEU] S&P, Nasdaq hit record highs after U.S.-Iran said to reach deal, pending Trump nod\n  [NEU] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\n  [NEU] Q4 Results Highlights: Ashok Leyland Profit Rises 14%; Bharat Dynamics Profit Falls 56%\n  [NEU] Mukesh Ambani draws no salary for sixth straight year; check out RIL chairman's dividend earnings\n  [NEU] Flights Impacted! IndiGo, Akasa Air, Delhi Airport Issue Advisory As Heavy Rains Disrupt Operations\n  [NEU] Wall Street pushes to more records as profits keep piling up for US companies\n  [NEU] Trade Setup For May 29: Nifty To Find Immediate Resistance At 24,000 Level Amid Oil Price Slide\n=== YOUTUBE ===\nTV: No data\n=== GOVT ===\n=== GOVT INTELLIGENCE ===\nHIGH: 10 | MED: 31\n  1. [6/10 NEUTRAL] Gold rebounds after Iran and US reach outline ceasefire deal\n     Affects: KALYAN, OIL INDIA, TITAN, GOLDBEES, RELIANCE\n  2. [5/10 BEARISH] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hike fears\n     Affects: VEDL, TITAN, GOLDBEES, KALYAN, SILVERBEES\n  3. [4/10 BULLISH] US stocks today: US stocks hold near records even as crude oil prices rise again\n     Affects: RELIANCE, ONGC, OIL INDIA, IOC\n  4. [4/10 BULLISH] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strikes raise worries\n     Affects: VEDL, OIL INDIA, ONGC, TITAN, GOLDBEES\n  5. [4/10 NEUTRAL] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming AGM, says report\n  6. [4/10 NEUTRAL] Stocks and bonds rally as hopes grow for end to West Asia conflict\n=== REDDIT ===\nREDDIT: No data\n=== SCANNER ===\nSCANNER: No data\n=== RANKED_SIGNALS ===\n=== RANKED SIGNALS ===\nGOVT [6] Gold rebounds after Iran and US reach outline ceasefire deal\nGOVT [5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hi\nGOVT [4] US stocks today: US stocks hold near records even as crude oil prices rise again\nGOVT [4] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strikes raise w\nGOVT [4] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming AGM, says r\nGOVT [4] Stocks and bonds rally as hopes grow for end to West Asia conflict\nNEWS [neu|nov=4.5] Victims of the Washington paper mill disaster included husbands and grandfathers\nNEWS [neu|nov=4.5] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\nNEWS [neu|nov=4.5] US Consumer Spending Edges Up As Inflation Accelerates\nNEWS [neu|nov=4.5] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls \nNEWS [neu|nov=4.5] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal\nNEWS [neu|nov=4.5] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha\nNEWS [neu|nov=4.5] SBI Chairman Setty Says Next Phase of Transformation Will Focus on Personalised Digital Ba\nNEWS [neu|nov=4.5] Crypto companies without EU licences face prosecution, French regulator warns",
+  "final_context_preview": "=== RAW HIGH-IMPACT EVIDENCE (UNTOUCHED — DO NOT IGNORE) ===\nGOVT ALERT | [6.0/10 NEUTRAL] Gold rebounds after Iran and US reach outline ceasefire deal | affects: KALYAN, OIL INDIA, TITAN, GOLDBEES, RELIANCE\nGOVT ALERT | [5.0/10 BEARISH] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hike fears | affects: VEDL, TITAN, GOLDBEES, KALYAN, SILVERBEES\nHEADLINE | [neutral] Victims of the Washington paper mill disaster included husbands and grandfathers | source=LiveMint (Companies)\nHEADLINE | [neutral] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas | source=NDTV Profit\n  [evidence_meta] novelty_avg=4.5 repetition_suppressed=47 diversity_suppressed=12\n\n=== CONTRADICTIONS (PRESERVE — DO NOT FLATTEN) ===\n  [institutional_policy_divergence] disagreement=0.67 | Govt policy mix: 3 bullish vs 2 bearish high-impact items\n\n=== MARKET REGIME ===\n  Primary: REGIME TRANSITION | volatility=0.32\n  Persistence: 55m in current regime\n  Compression mode: PRESERVE DETAIL (aggressiveness=0.25)\n  Signals: news_shock=0.38 sentiment_instability=0.85 scanner_anomaly=0.00\n\n=== SCORED SIGNALS (confidence metadata) ===\n  [GOVT 6.5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eas | conf=1.00 sources=5 agree=0.70 impact=6.5 [BYPASS]\n  [GOVT 6.0] Gold rebounds after Iran and US reach outline ceasefire deal | conf=1.00 sources=6 agree=0.70 impact=6.0\n  [GOVT 5.5] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming A | conf=0.77 sources=1 agree=0.70 impact=5.5 [BYPASS]\n  [neutral] Victims of the Washington paper mill disaster included husbands and grandfathers | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] US Consumer Spending Edges Up As Inflation Accelerates | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls  | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [neutral] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha | conf=0.70 sources=1 agree=0.50 impact=5.5 [BYPASS]\n  [GOVT 4.0] US stocks today: US stocks hold near records even as crude oil prices rise again | conf=1.00 sources=4 agree=0.70 impact=4.0\n  [GOVT 4.0] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strik | conf=1.00 sources=8 agree=0.70 impact=4.0\n  [GOVT 4.0] Stocks and bonds rally as hopes grow for end to West Asia conflict | conf=1.00 sources=6 agree=0.70 impact=4.0\n\n=== COMPRESSED MARKET CONTEXT (bulk sections) ===\n\n=== GLOBAL ===\n=== GLOBAL MARKETS ===\n  USA: NEUTRAL (-0.14%)\n  ASIA: BEARISH (-0.53%)\n  GLOBAL: BULLISH (+1.59%)\n[USA_INDICES]\n  S&P_500: 7,564 (+0.58%)\n  NASDAQ: 26,917 (+0.91%)\n  DOW_JONES: 50,669 (+0.05%)\n  VIX: 16 (-3.74%)\n  US_FUTURES_NQ: 30,325 (+0.92%)\n[USA_RATES]\n  US_10Y: 4 (-0.58%)\n  US_2Y: 4 (+0.14%)\n[ASIA_INDICES]\n  NIKKEI: 64,999 (+0.01%)\n  HANG_SENG: 25,328 (-1.06%)\n[GLOBAL_MACRO]\n  GOLD: 4,529 (+1.83%)\n  SILVER: 76 (+1.71%)\n  CRUDE_OIL: 89 (+0.87%)\n  NAT_GAS: 3 (+8.42%)\n  DXY: 99 (-0.19%)\n  ALERT: Gold rebounds after Iran and US reach outline ceasefire deal\n  ALERT: Dollar slips after U.S. and Iran said to have reached ceasefire extension deal\n  ALERT: Trump's face could appear on US $250 bill\n  ALERT: S&P, Nasdaq hit record highs after U.S.-Iran said to reach deal, pending Trump nod\n  ALERT: US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\n=== INDIA ===\n=== INDIA STOCKS ===\n  NIFTY 50: Rs.23,907.15 (-0.03%)\n  SENSEX: Rs.75,867.80 (-0.19%)\n  RELIANCE: Rs.1,350.50 (+0.00%)\n  TCS: Rs.2,284.20 (+0.00%)\n  HDFCBANK: Rs.758.65 (+0.00%)\n  INFY: Rs.1,159.90 (+0.00%)\n  ICICIBANK: Rs.1,272.70 (+0.00%)\n  SBIN: Rs.967.80 (+0.00%)\n  BHARTIARTL: Rs.1,852.20 (+0.00%)\n  ITC: Rs.291.95 (+0.00%)\n  LT: Rs.4,047.50 (+0.00%)\n  AXISBANK: Rs.1,304.10 (+0.00%)\n  KOTAKBANK: Rs.388.70 (+0.00%)\n  BAJAJFINSV: Rs.1,809.10 (+0.00%)\n  MARUTI: Rs.13,364.00 (+0.00%)\n=== NEWS ===\nArticles: 122\n  [NEU] Stocks To Watch Today: Asian Paints, BEML, NMDC, Coal India And IREDA\n  [NEU] US stocks today: S&amp;P 500 and Nasdaq hit record closing highs as US and Iran agree to extend ceas\n  [NEU] Anthropics valuation surges to $965 billion, surpassing OpenAI\n  [NEU] Gold rebounds after Iran and US reach outline ceasefire deal\n  [NEU] Dollar slips after U.S. and Iran said to have reached ceasefire extension deal\n  [NEU] Trump's face could appear on US $250 bill\n  [NEU] Victims of the Washington paper mill disaster included husbands and grandfathers\n  [NEU] FTC Chairman Ferguson Says Agency Probing Fertilizer Industry\n  [NEU] S&P, Nasdaq hit record highs after U.S.-Iran said to reach deal, pending Trump nod\n  [NEU] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\n  [NEU] Q4 Results Highlights: Ashok Leyland Profit Rises 14%; Bharat Dynamics Profit Falls 56%\n  [NEU] Mukesh Ambani draws no salary for sixth straight year; check out RIL chairman's dividend earnings\n  [NEU] Flights Impacted! IndiGo, Akasa Air, Delhi Airport Issue Advisory As Heavy Rains Disrupt Operations\n  [NEU] Wall Street pushes to more records as profits keep piling up for US companies\n  [NEU] Trade Setup For May 29: Nifty To Find Immediate Resistance At 24,000 Level Amid Oil Price Slide\n=== YOUTUBE ===\nTV: No data\n=== GOVT ===\n=== GOVT INTELLIGENCE ===\nHIGH: 10 | MED: 31\n  1. [6/10 NEUTRAL] Gold rebounds after Iran and US reach outline ceasefire deal\n     Affects: KALYAN, OIL INDIA, TITAN, GOLDBEES, RELIANCE\n  2. [5/10 BEARISH] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hike fears\n     Affects: VEDL, TITAN, GOLDBEES, KALYAN, SILVERBEES\n  3. [4/10 BULLISH] US stocks today: US stocks hold near records even as crude oil prices rise again\n     Affects: RELIANCE, ONGC, OIL INDIA, IOC\n  4. [4/10 BULLISH] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strikes raise worries\n     Affects: VEDL, OIL INDIA, ONGC, TITAN, GOLDBEES\n  5. [4/10 NEUTRAL] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming AGM, says report\n  6. [4/10 NEUTRAL] Stocks and bonds rally as hopes grow for end to West Asia conflict\n=== REDDIT ===\nREDDIT: No data\n=== SCANNER ===\nSCANNER: No data\n=== RANKED_SIGNALS ===\n=== RANKED SIGNALS ===\nGOVT [6] Gold rebounds after Iran and US reach outline ceasefire deal\nGOVT [5] Gold, silver rates today: Comex gold, silver recover from lows after US inflation data eases rate hi\nGOVT [4] US stocks today: US stocks hold near records even as crude oil prices rise again\nGOVT [4] Gold falls below Rs 1.54 lakh/10 grams, silver drops by Rs 4,600/kg as fresh US-Iran strikes raise w\nGOVT [4] Reliance Jio IPO soon? Mukesh Ambani to provide update on $4 bn public issue at upcoming AGM, says r\nGOVT [4] Stocks and bonds rally as hopes grow for end to West Asia conflict\nNEWS [neu|nov=4.5] Victims of the Washington paper mill disaster included husbands and grandfathers\nNEWS [neu|nov=4.5] US-Iran War News Updates: Iran Responds To US  Attack Near Bandar Abbas\nNEWS [neu|nov=4.5] US Consumer Spending Edges Up As Inflation Accelerates\nNEWS [neu|nov=4.5] US Warns Oman Amid Hormuz Blockade: Will Target Any Actors Involved In Facilitating Tolls \nNEWS [neu|nov=4.5] Policybazaar co-founders look to offload shares worth  ₹654 crore in block deal\nNEWS [neu|nov=4.5] Tata Motors PV Sees Consumer Shift Towards EVs Amid West Asia Crisis, Says MD Shailesh Cha\nNEWS [neu|nov=4.5] SBI Chairman Setty Says Next Phase of Transformation Will Focus on Personalised Digital Ba\nNEWS [neu|nov=4.5] Crypto com\n...[truncated for debug safety]..."
+}

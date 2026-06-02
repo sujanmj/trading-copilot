@@ -1,0 +1,77 @@
+{
+  "source_keys": [
+    "global_markets",
+    "govt",
+    "india_markets",
+    "inshorts",
+    "news",
+    "nse_filings",
+    "reddit",
+    "scanner",
+    "telegram",
+    "twitter",
+    "youtube"
+  ],
+  "source_hashes": {
+    "global_markets": "cc21fd87cb5e61883417",
+    "india_markets": "3d38597d53ed8aab4893",
+    "news": "dfb35dc23a34c348c891",
+    "youtube": "c62bc02869e89e09b30b",
+    "govt": "c43117687f13e9865fa1",
+    "inshorts": "c86684c84488a72997f2",
+    "reddit": "7bf826ac2b1c0eeecc87",
+    "telegram": "empty",
+    "scanner": "7f489985e5d2bc0a978a",
+    "twitter": "5eb3da342100132b8fc7",
+    "nse_filings": "aead8ecb9d79ac4c2da0",
+    "composite": "f7f9669c3e7d60944d4b"
+  },
+  "metrics": {
+    "india_avg_change": 0.199,
+    "news_count": 128,
+    "govt_high_impact": 14,
+    "scanner_signals": 161,
+    "top_scanner_tickers": [
+      "NEWGEN",
+      "BSOFT",
+      "ZENSARTECH",
+      "NHPC",
+      "MASTEK"
+    ],
+    "scanner_signature": [
+      "('NEWGEN', 'ULTRA', 15.5)",
+      "('BSOFT', 'ULTRA', 5.1)",
+      "('ZENSARTECH', 'ULTRA', 5.5)",
+      "('NHPC', 'ULTRA', -5.3)",
+      "('MASTEK', 'ULTRA', 4.4)"
+    ],
+    "top_news_titles": [
+      "newgen software technologies ltd leads gainers in 'a' group",
+      "protean egov gains on appointing ajay rajan as md & ceo; v easwaran steps down a",
+      "rbi likely to hold rates, raise inflation forecast: hsbc's pranjul bhandari",
+      "rbi may have sold gold to save foreign reserves, be report shows",
+      "stock market crash news today live updates: nifty sees resistance at 23,300 amid",
+      "us stock market:  treasury yields rise after strong us data, geopolitical risks"
+    ],
+    "reddit_sentiment": "bullish",
+    "reddit_confidence": 75,
+    "novelty_avg_score": 4.55,
+    "repetition_suppressed": 58
+  },
+  "india_markets_counts": {
+    "prices": 15
+  },
+  "news_counts": {
+    "articles": 128
+  },
+  "govt_counts": {
+    "high_impact_items": 14
+  },
+  "telegram_type": "NoneType",
+  "scanner_counts": {
+    "top_signals": 30
+  },
+  "twitter_counts": {
+    "tweets": 21
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "status": "ok",
+  "date": "2026-06-02",
+  "generated_at": "2026-06-02T01:43:08.500854",
+  "market_day_classification": {
+    "label": "PANIC VOLATILE",
+    "confidence": 0.95,
+    "reason": "High volatility with elevated contradictions",
+    "regime": "panic_volatile",
+    "drivers": {
+      "volatility": 1.0,
+      "contradiction_intensity": 0.72,
+      "scanner_dispersion": 28.3,
+      "breadth": 0.07,
+      "macro_pressure": 1.0,
+      "avg_volume_ratio": 10.42
+    }
+  },
+  "performance_summary": {
+    "signals_generated": 0,
+    "high_confidence_signals": 0,
+    "useful_signals": 0,
+    "failed_signals": 0,
+    "false_positives": 0,
+    "suppressed_alerts": 5,
+    "missed_opportunities": 0,
+    "telegram_precision_pct": null,
+    "evaluated_signals": 0,
+    "confidence_calibration_quality": "calibration_in_progress",
+    "confidence_calibration_display": "Calibration in progress"
+  },
+  "highlights": {
+    "best_bullish": null,
+    "best_bearish": null,
+    "biggest_miss": null,
+    "highest_confidence_winner": null,
+    "worst_false_positive": null,
+    "strongest_contradiction": {
+      "summary": "Elevated contradictions",
+      "detail": "Disagreement score 0.72"
+    }
+  },
+  "regime_analysis": {
+    "timeline": [
+      {
+        "time": "—",
+        "transition": "panic_volatile",
+        "note": "Stable regime through session (no intraday shift logged)"
+      },
+      {
+        "time": "—",
+        "transition": "regime shift",
+        "note": "Stable regime: panic_volatile"
+      }
+    ],
+    "final_regime": "panic_volatile",
+    "contradiction_intensity": 0.72,
+    "sentiment_diversity": 1.0
+  },
+  "warnings": [
+    {
+      "code": "hallucination_detections",
+      "message": "Symbol validation guard active (3 checks)",
+      "severity": "info",
+      "ui_tier": "info",
+      "diagnostic": true
+    },
+    {
+      "code": "low_cache_reuse",
+      "message": "Context refresh frequent — higher synthesis churn",
+      "severity": "info",
+      "ui_tier": "info",
+      "diagnostic": true
+    }
+  ],
+  "telegram": {
+    "alerts_sent": 0,
+    "alerts_suppressed": 5,
+    "duplicate_blocks": 0,
+    "low_confidence_skips": 0,
+    "cooldown_blocks": 0,
+    "emergency_alerts": 0,
+    "estimated_useful_alerts": null,
+    "telegram_precision_pct": null
+  },
+  "daily_summary": {
+    "regime": "panic_volatile",
+    "quality_iq": 0.7,
+    "day_type": "PANIC VOLATILE",
+    "best_signal": null,
+    "failed_signal": null,
+    "telegram_sent": 0,
+    "telegram_useful_est": null,
+    "warnings_count": 2
+  },
+  "observation": "AI correctly leaned cautious during elevated volatility and contradictions. Contradiction intensity rose — preservation layer likely prevented overconfidence.",
+  "copy_text": "DAILY INTELLIGENCE REVIEW — 2026-06-02\n\nDAY TYPE: PANIC VOLATILE\nREGIME: panic_volatile\nQUALITY IQ: 0.7\n\nPERFORMANCE\nSignals: 0 | Useful: 0 | False positives: 0 | Suppressed alerts: 5\nTelegram precision: —%\n\nHIGHLIGHTS\n\nTELEGRAM\nSent: 0 | Useful est: None\n\nWARNINGS\n- Symbol validation guard active (3 checks)\n- Context refresh frequent — higher synthesis churn\n\nOBSERVATION\nAI correctly leaned cautious during elevated volatility and contradictions. Contradiction intensity rose — preservation layer likely prevented overconfidence.",
+  "immutable": true
+}

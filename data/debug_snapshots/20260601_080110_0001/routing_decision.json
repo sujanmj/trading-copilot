@@ -1,0 +1,100 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3802,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-01",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-01T08:01:10.664495",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3802,
+      "force": true
+    },
+    {
+      "time": "2026-06-01T08:02:02.388589",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "7c1b7c7804b397309c06",
+    "delta_reasons": [
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": 0.071,
+      "news_count": 119,
+      "govt_high_impact": 17,
+      "scanner_signals": 113,
+      "top_scanner_tickers": [
+        "KPRMILL",
+        "NATCOPHARM",
+        "INOXWIND",
+        "WOCKPHARMA",
+        "AEGISLOG"
+      ],
+      "scanner_signature": [
+        "('KPRMILL', 'ULTRA', 3.8)",
+        "('NATCOPHARM', 'ULTRA', -7.3)",
+        "('INOXWIND', 'ULTRA', -8.3)",
+        "('WOCKPHARMA', 'ULTRA', 8.3)",
+        "('AEGISLOG', 'ULTRA', 2.7)"
+      ],
+      "top_news_titles": [
+        "bank credit to industry rises at faster 15.1% in april, notes rbi data",
+        "india open: nifty gains as banking strength offsets oil surge, rupee firms",
+        "indian firms line up for us tariff refunds amid looming legal challenge",
+        "inflation and input costs threaten earnings momentum going forward: dhananjay si",
+        "non-food bank credit gains around 16% on year",
+        "suzlon energy shares fall over 2% after sebi fines rs 29 crore for misleading fi"
+      ],
+      "reddit_sentiment": "bullish",
+      "reddit_confidence": 80,
+      "novelty_avg_score": 4.56,
+      "repetition_suppressed": 55
+    },
+    "source_hashes": {
+      "global_markets": "bb3989b8bb4d3a68b917",
+      "india_markets": "32742fd41da792ea1278",
+      "news": "46a4cececc8891e9cf71",
+      "youtube": "2478960643ac4a38b39e",
+      "govt": "8b2b67c6d26f25244414",
+      "inshorts": "246de93106941b1c094d",
+      "reddit": "7a65c90f203415746dd9",
+      "telegram": "empty",
+      "scanner": "498678f7dfb151ee1ed9",
+      "twitter": "5833b059eca7d515a9cc",
+      "nse_filings": "f0563e8787cdea520eb8",
+      "composite": "a7a7cf7c93ebec3876d3"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

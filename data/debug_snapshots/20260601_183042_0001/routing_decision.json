@@ -1,0 +1,100 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3781,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-01",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-01T18:30:43.172233",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3781,
+      "force": true
+    },
+    {
+      "time": "2026-06-01T18:31:36.166607",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "900017ae68a873fd6f5c",
+    "delta_reasons": [
+      "govt_change",
+      "scanner_count_change"
+    ],
+    "metrics": {
+      "india_avg_change": -0.092,
+      "news_count": 143,
+      "govt_high_impact": 6,
+      "scanner_signals": 159,
+      "top_scanner_tickers": [
+        "INOXWIND",
+        "KPRMILL",
+        "NATCOPHARM",
+        "ZEEL",
+        "AEGISLOG"
+      ],
+      "scanner_signature": [
+        "('INOXWIND', 'ULTRA', -9.9)",
+        "('KPRMILL', 'ULTRA', 2.6)",
+        "('NATCOPHARM', 'ULTRA', -8.1)",
+        "('ZEEL', 'ULTRA', 2.9)",
+        "('AEGISLOG', 'ULTRA', 3.5)"
+      ],
+      "top_news_titles": [
+        "cbi arrests rcom's former group md amitabh jhunjhunwala in sbi loan fraud case",
+        "indian firms line up for us tariff refunds amid looming legal challenge",
+        "inr slides further as renewed geopolitical tensions led to surge in crude oil pr",
+        "iran warns of choking bab el-mandeb: how this may cripple global trade, energy f",
+        "sebi approves state street global advisors' stake acquisition in groww amc",
+        "wise stock falls as belgian prosecutors probe money laundering"
+      ],
+      "reddit_sentiment": "neutral",
+      "reddit_confidence": 50,
+      "novelty_avg_score": 4.53,
+      "repetition_suppressed": 79
+    },
+    "source_hashes": {
+      "global_markets": "6904286f6d5c2bdbb4f0",
+      "india_markets": "9f6626e00abc70a37610",
+      "news": "3bb39e90918543667ac9",
+      "youtube": "9da71501201456f015fa",
+      "govt": "09d212c9b03b072bf854",
+      "inshorts": "ac73b235b33b34f5c1bf",
+      "reddit": "53e43ab3d294e9f4afa5",
+      "telegram": "empty",
+      "scanner": "1e7fe7316b203d204472",
+      "twitter": "f40135bb9c6ceb17082a",
+      "nse_filings": "22e35404fe6bbf5828ec",
+      "composite": "06e318f5d5bfd60e681c"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

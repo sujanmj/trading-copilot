@@ -1,0 +1,102 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3756,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-06-02",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-06-02T11:01:24.582253",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3756,
+      "force": true
+    },
+    {
+      "time": "2026-06-02T11:02:20.077414",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "ac019ca88341b353783c",
+    "delta_reasons": [
+      "market_move",
+      "news_delta",
+      "govt_change",
+      "scanner_count_change"
+    ],
+    "metrics": {
+      "india_avg_change": 0.231,
+      "news_count": 151,
+      "govt_high_impact": 5,
+      "scanner_signals": 167,
+      "top_scanner_tickers": [
+        "NEWGEN",
+        "NHPC",
+        "BSOFT",
+        "MASTEK",
+        "BALAMINES"
+      ],
+      "scanner_signature": [
+        "('NEWGEN', 'ULTRA', 17.7)",
+        "('NHPC', 'ULTRA', -6.5)",
+        "('BSOFT', 'ULTRA', 5.3)",
+        "('MASTEK', 'ULTRA', 4.7)",
+        "('BALAMINES', 'ULTRA', 14.8)"
+      ],
+      "top_news_titles": [
+        "rbi may have sold gold to save foreign reserves, be report shows",
+        "reliance and softbank-backed netradyne in advanced talks with top gccs",
+        "stock market news today live updates: nifty rebounds to reclaim 23,500, sensex s",
+        "symbotic (sym) reports revenue beat as software growth and automation expansion",
+        "volumes jump at newgen software technologies ltd counter",
+        "who is ritabrata banerjee? expelled mla in focus amid tmc turmoil, forged-signat"
+      ],
+      "reddit_sentiment": "bullish",
+      "reddit_confidence": 75,
+      "novelty_avg_score": 4.54,
+      "repetition_suppressed": 67
+    },
+    "source_hashes": {
+      "global_markets": "01697bda2b665ec5887e",
+      "india_markets": "b57c2c52f4eef4b0d016",
+      "news": "b8e671feff7b1ba59e87",
+      "youtube": "b5620eb72a7180211b45",
+      "govt": "1b6c82a9c8921dec5888",
+      "inshorts": "2fecb88779876e9d1ab0",
+      "reddit": "c98a0f47ad46d54af6c0",
+      "telegram": "empty",
+      "scanner": "4922306e4d2202c3f520",
+      "twitter": "3fc31048f8a1a2431a62",
+      "nse_filings": "7e6d1580a0098e843319",
+      "composite": "9474d747e8879a9a41d9"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}

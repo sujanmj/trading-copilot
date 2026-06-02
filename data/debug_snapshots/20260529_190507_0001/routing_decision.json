@@ -1,0 +1,102 @@
+{
+  "claude": {
+    "ran": true,
+    "skipped_reason": null,
+    "model": "claude-sonnet-4-5",
+    "provider": "anthropic",
+    "cache_hit": false,
+    "prompt_tokens": 3848,
+    "force": true,
+    "budget_at_call": {
+      "date": "2026-05-29",
+      "spent": 0.0,
+      "limit": 1.5,
+      "remaining": 1.5,
+      "low_cost_mode": false,
+      "claude_allowed": true
+    }
+  },
+  "routing_events": [
+    {
+      "time": "2026-05-29T19:05:08.136475",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "cache_miss",
+      "reason": "claude allowed — calling API",
+      "estimated_input_tokens": 3848,
+      "force": true
+    },
+    {
+      "time": "2026-05-29T19:05:58.978764",
+      "tier": "expensive",
+      "use_case": "final_synthesis",
+      "event": "api_call",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "success": true,
+      "estimated_cost": 0.0
+    }
+  ],
+  "decision": {
+    "force": true,
+    "hash_changed": true,
+    "semantic_changed": true,
+    "semantic_hash": "6fbc6861f00d3804ddce",
+    "delta_reasons": [
+      "news_delta",
+      "govt_change",
+      "scanner_count_change",
+      "scanner_opportunities_changed"
+    ],
+    "metrics": {
+      "india_avg_change": -0.196,
+      "news_count": 132,
+      "govt_high_impact": 7,
+      "scanner_signals": 262,
+      "top_scanner_tickers": [
+        "RELAXO",
+        "JAGRAN",
+        "AEGISLOG",
+        "TAJGVK",
+        "RVNL"
+      ],
+      "scanner_signature": [
+        "('RELAXO', 'ULTRA', 14.3)",
+        "('JAGRAN', 'ULTRA', 7.0)",
+        "('AEGISLOG', 'ULTRA', 4.8)",
+        "('TAJGVK', 'ULTRA', 7.8)",
+        "('RVNL', 'ULTRA', -2.7)"
+      ],
+      "top_news_titles": [
+        "cbi files first chargesheet in anil ambani-linked reliance communications loan f",
+        "nomura downgrades cummins india shares to neutral despite raising target price b",
+        "rs 7,00,00,000 gone? johnny depp reportedly duped in credit card fraud",
+        "sebi slaps rs 15.95 crore penalty on suzlon over alleged misstatement of financi",
+        "us judge halts trump's $1.8 billion anti-weaponisation' fund",
+        "us-iran war news live updates: trump says naval blockade to be lifted soon, call"
+      ],
+      "reddit_sentiment": "bearish",
+      "reddit_confidence": 16,
+      "novelty_avg_score": 4.52,
+      "repetition_suppressed": 52
+    },
+    "source_hashes": {
+      "global_markets": "fd22b4a122859b180ace",
+      "india_markets": "b78e840803850a03f7a4",
+      "news": "2fbbd118171346800d63",
+      "youtube": "empty",
+      "govt": "790eab60387ece46462f",
+      "inshorts": "729b2dcf508b17f12143",
+      "reddit": "38f50ddcd8b560f916e9",
+      "telegram": "empty",
+      "scanner": "1873fea760d21354eeec",
+      "twitter": "f6d88448c4bede59077e",
+      "nse_filings": "7de0690fd952fe58b6e5",
+      "composite": "62e1d0d957e4ecc48a3e"
+    },
+    "reuse_previous": false,
+    "skip_claude": false,
+    "meaningful_change": true
+  },
+  "reuse": false
+}
