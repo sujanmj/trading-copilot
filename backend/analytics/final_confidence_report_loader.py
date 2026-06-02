@@ -16,7 +16,7 @@ BACKEND_STAGE_44AX_FINAL_CONFIDENCE_ENDPOINT_STABLE = True
 
 FINAL_CONFIDENCE_REPORT_REL = 'data/final_confidence_report.json'
 FINAL_CONFIDENCE_REPORT_PATH = DATA_DIR / 'final_confidence_report.json'
-MISSING_MESSAGE = 'Run python scripts\\generate_final_confidence_report.py'
+MISSING_MESSAGE = 'Decision cache is warming. Try again in 1–2 minutes.'
 
 _SUMMARY_KEYS = (
     'checked',

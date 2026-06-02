@@ -74,8 +74,8 @@ def main() -> int:
         return _fail('telegram_analysis_bot missing AstraEdge help header')
 
     status_src = (PROJECT_ROOT / 'backend/telegram/response_format.py').read_text(encoding='utf-8')
-    if 'AstraEdge 46E' not in status_src:
-        return _fail('response_format missing AstraEdge 46E build line')
+    if 'AstraEdge 46F' not in status_src:
+        return _fail('response_format missing AstraEdge 46F build line')
 
     proc = subprocess.run(
         [sys.executable, 'scripts/test_railway_telegram_handler_selection.py'],

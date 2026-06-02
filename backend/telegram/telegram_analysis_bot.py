@@ -47,7 +47,6 @@ from backend.telegram.response_format import (
     format_aihub_menu,
     format_aihub_payload,
     format_status_text,
-    format_stock_decision_telegram,
     format_why_ticker,
     strip_stage_markers,
 )
@@ -80,6 +79,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 
 <b>Action:</b>
 /action plan — final action plan
+/bootstrap — rebuild cached reports (background)
 /today — today confluence pick
 /tomorrow — tomorrow confluence pick
 /why &lt;ticker&gt; — reason/risk/confirmation
@@ -308,6 +308,25 @@ def _handle_close() -> str:
     return build_close_brief_text()
 
 
+def _handle_stock_decision_command(mode: str) -> str:
+    from backend.analytics.railway_decision_bootstrap import (
+        decision_rebuilding_reply,
+        start_background_bootstrap_reports,
+    )
+    from backend.analytics.stock_decision_engine import build_stock_decision
+    from backend.telegram.response_format import (
+        format_stock_decision_payload,
+        stock_decision_payload_ready,
+    )
+
+    normalized = 'today' if mode == 'today' else 'tomorrow'
+    payload = build_stock_decision(mode=normalized)
+    if stock_decision_payload_ready(payload):
+        return format_stock_decision_payload(payload, normalized)
+    start_background_bootstrap_reports(force=True, railway_only=False)
+    return decision_rebuilding_reply(normalized)
+
+
 def handle_analysis_command(
     text: str,
     from_user: str = 'unknown',
@@ -361,10 +380,18 @@ def handle_analysis_command(
         response_text = run_without_ai(_handle_morning, command='morning').get('text') or _handle_morning()
     elif cmd == 'close':
         response_text = run_without_ai(_handle_close, command='close').get('text') or _handle_close()
+    elif cmd == 'bootstrap':
+        from backend.analytics.railway_decision_bootstrap import (
+            bootstrap_started_reply,
+            start_background_bootstrap_reports,
+        )
+
+        start_background_bootstrap_reports(force=True, railway_only=False)
+        response_text = bootstrap_started_reply()
     elif cmd == 'today':
-        response_text = format_stock_decision_telegram('today')
+        response_text = _handle_stock_decision_command('today')
     elif cmd == 'tomorrow':
-        response_text = format_stock_decision_telegram('tomorrow')
+        response_text = _handle_stock_decision_command('tomorrow')
     elif cmd == 'why':
         if not args.strip():
             response_text = 'Usage: /why &lt;ticker&gt;\nExample: /why TATASTEEL'

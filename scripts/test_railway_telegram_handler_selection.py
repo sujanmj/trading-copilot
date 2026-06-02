@@ -175,8 +175,8 @@ def test_status_includes_build() -> str | None:
     from backend.telegram.response_format import format_status_text, strip_stage_markers
 
     status = strip_stage_markers(format_status_text())
-    if 'Telegram build: AstraEdge 46E' not in status and 'AstraEdge 46E' not in status:
-        return 'format_status_text missing Telegram build: AstraEdge 46E'
+    if 'Telegram build: AstraEdge 46F' not in status and 'AstraEdge 46F' not in status:
+        return 'format_status_text missing Telegram build: AstraEdge 46F'
     return None
 
 
@@ -186,7 +186,8 @@ def test_build_info_payload() -> str | None:
         return 'build-info route missing in api_server.py'
     for fragment in (
         "'app': 'AstraEdge'",
-        "'stage': '46E'",
+        "'stage': '46F'",
+        "'decision_bootstrap': 'enabled'",
         "'telegram_handler': 'astraedge_analysis_bot'",
         'legacy_telegram_listener',
         'astraedge_telegram_started',

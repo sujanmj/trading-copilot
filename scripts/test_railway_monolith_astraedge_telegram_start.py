@@ -81,7 +81,8 @@ def test_api_server_astraedge_start() -> str | None:
         'LEGACY_TELEGRAM_LISTENER_DISABLED',
         '_legacy_telegram_listener_active',
         'astraedge_telegram_started',
-        "'stage': '46E'",
+        "'stage': '46F'",
+        "'decision_bootstrap': 'enabled'",
     ):
         if fragment not in api_src:
             return f'api_server missing: {fragment}'
@@ -254,8 +255,8 @@ def test_post_deploy_strict_flag() -> str | None:
     smoke_src = (PROJECT_ROOT / 'scripts/railway_post_deploy_smoke.py').read_text(encoding='utf-8')
     if '--strict-build-info' not in smoke_src:
         return 'railway_post_deploy_smoke missing --strict-build-info'
-    if '46E' not in smoke_src:
-        return 'railway_post_deploy_smoke missing stage 46E check'
+    if '_stage_at_least_46' not in smoke_src:
+        return 'railway_post_deploy_smoke missing stage 46+ check'
     return None
 
 

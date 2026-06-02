@@ -260,6 +260,18 @@ def run_memory_only() -> dict[str, Any]:
         for row in latest_outcomes[:3]:
             if isinstance(row, dict):
                 lines.append(format_memory_outcome_line(row))
+    elif outcomes == 0:
+        try:
+            from backend.config.local_safe_mode import is_railway_mode
+
+            if is_railway_mode():
+                lines.append(
+                    '• Cloud memory is collecting outcomes. Local historical memory may differ.'
+                )
+            else:
+                lines.append('• No recent outcomes in cache.')
+        except Exception:
+            lines.append('• No recent outcomes in cache.')
     else:
         lines.append('• No recent outcomes in cache.')
     return _runner_result('memory', text='\n'.join(lines), payload=dashboard)

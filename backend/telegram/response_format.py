@@ -542,17 +542,81 @@ def _load_actionable() -> dict[str, Any]:
     return _build_actionable_candidates(pack if isinstance(pack, dict) else {}, fc)
 
 
+def stock_decision_payload_ready(payload: dict[str, Any] | None) -> bool:
+    if not isinstance(payload, dict) or payload.get('ok') is not True:
+        return False
+    if payload.get('telegram_message'):
+        return True
+    top = payload.get('top_pick')
+    return isinstance(top, dict) and bool(top.get('ticker'))
+
+
+def format_stock_decision_payload(
+    payload: dict[str, Any],
+    mode: str,
+    *,
+    rebuilt: bool = False,
+) -> str:
+    from backend.analytics.railway_decision_bootstrap import (
+        format_watchlist_fallback_telegram,
+        rebuilt_cache_message,
+    )
+
+    normalized = 'today' if mode == 'today' else 'tomorrow'
+    label = 'Today' if normalized == 'today' else normalized.capitalize()
+
+    decision = payload.get('decision') or 'NO_CLEAN_CANDIDATE'
+    top = payload.get('top_pick')
+    if decision == 'NO_CLEAN_CANDIDATE' and not top:
+        return strip_stage_markers(format_watchlist_fallback_telegram(normalized, rebuilt=rebuilt))
+
+    body = strip_stage_markers(str(payload.get('telegram_message') or ''))
+    if rebuilt:
+        prefix = f'<b>📋 {label}</b>\n\n{rebuilt_cache_message()}'
+        if body.startswith('<b>AstraEdge'):
+            body = body.split('\n', 1)[-1].lstrip('\n')
+        return strip_stage_markers(f'{prefix}\n\n{body}')
+    return body
+
+
 def format_stock_decision_telegram(mode: str) -> str:
+    from backend.analytics.railway_decision_bootstrap import (
+        format_watchlist_fallback_telegram,
+        load_cached_stock_decision,
+        no_candidate_message,
+        repair_decision_for_telegram,
+    )
     from backend.analytics.stock_decision_engine import build_stock_decision
 
-    payload = build_stock_decision(mode=mode)
+    normalized = 'today' if mode == 'today' else 'tomorrow'
+    label = 'Today' if normalized == 'today' else normalized.capitalize()
+
+    cached = load_cached_stock_decision(normalized)
+    rebuilt = False
+    used_fallback = False
+    if cached:
+        payload = cached
+    else:
+        _, rebuilt, used_fallback = repair_decision_for_telegram(normalized)
+        if used_fallback:
+            return strip_stage_markers(format_watchlist_fallback_telegram(normalized, rebuilt=rebuilt))
+        payload = build_stock_decision(mode=normalized)
     if payload.get('ok') is not True:
-        label = 'Today' if mode == 'today' else mode.capitalize()
-        return (
-            f'<b>📋 {label}</b>\n'
-            f"No decision available — {payload.get('message') or payload.get('error') or 'refresh reports'}."
-        )
-    return strip_stage_markers(str(payload.get('telegram_message') or ''))
+        retry_cached = load_cached_stock_decision(normalized)
+        if retry_cached:
+            payload = retry_cached
+            rebuilt = True
+        else:
+            raw = str(payload.get('message') or payload.get('error') or '')
+            if 'final_confidence' in raw or 'warming' in raw.lower() or 'rebuilt' in raw.lower():
+                from backend.analytics.railway_decision_bootstrap import decision_rebuilding_reply
+
+                return f'<b>📋 {label}</b>\n{decision_rebuilding_reply(normalized)}'
+            if rebuilt:
+                return strip_stage_markers(format_watchlist_fallback_telegram(normalized, rebuilt=True))
+            return f'<b>📋 {label}</b>\n{no_candidate_message()}'
+
+    return format_stock_decision_payload(payload, normalized, rebuilt=rebuilt)
 
 
 def format_today_tomorrow(which: str) -> str:
@@ -612,6 +676,14 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
         f"{format_cache_age_label(int(payload.get('cache_age_seconds') or 0) // 60)}",
     ]
     if key == 'brain':
+        warn_tokens = {str(w) for w in (payload.get('warnings') or [])}
+        if 'Runtime snapshot missing; using report cache.' in warn_tokens:
+            lines.append('Runtime snapshot missing; using report cache.')
+        stock_sd = summary.get('stock_decision_today') or {}
+        top_pick = stock_sd.get('top_pick') if isinstance(stock_sd, dict) else None
+        if isinstance(top_pick, dict) and top_pick.get('ticker'):
+            action = str(top_pick.get('action') or '—').replace('_', ' ')
+            lines.append(f"Today pick (cache): {top_pick.get('ticker')} — {action}")
         bullets = _bullet_lines_from_rows(
             items,
             limit=5,
@@ -870,11 +942,23 @@ def format_action_plan_telegram() -> str:
         build_global_payload,
         build_market_payload,
     )
+    from backend.analytics.railway_decision_bootstrap import (
+        load_cached_stock_decision,
+        repair_decision_for_telegram,
+    )
     from backend.analytics.stock_decision_engine import build_stock_decision
     from backend.telegram.lazy_command_runner import DAILY_PACK_FILE, _load_json
 
-    today = build_stock_decision(mode='today')
-    tomorrow = build_stock_decision(mode='tomorrow')
+    today_payload, _, _ = repair_decision_for_telegram('today')
+    tomorrow_payload, _, _ = repair_decision_for_telegram('tomorrow')
+
+    today = today_payload if today_payload else load_cached_stock_decision('today')
+    if not today or today.get('ok') is not True:
+        today = build_stock_decision(mode='today')
+    tomorrow = tomorrow_payload if tomorrow_payload else load_cached_stock_decision('tomorrow')
+    if not tomorrow or tomorrow.get('ok') is not True:
+        tomorrow = build_stock_decision(mode='tomorrow')
+
     brain = build_brain_payload()
     market = build_market_payload(force=False)
     global_p = build_global_payload()
@@ -911,6 +995,17 @@ def format_action_plan_telegram() -> str:
 
     top = today.get('top_pick') if today.get('ok') else None
     decision = today.get('decision') if today.get('ok') else 'NO_CLEAN_CANDIDATE'
+
+    if (not top or not today.get('ok')) and pack:
+        actionable = (brain.get('summary') or {}).get('actionable_candidates') or {}
+        buy_rows = actionable.get('buy_candidate') or []
+        watch_rows = actionable.get('watch_for_entry') or actionable.get('watch') or []
+        if buy_rows and isinstance(buy_rows[0], dict):
+            top = buy_rows[0]
+            decision = 'BUY_CANDIDATE'
+        elif watch_rows and isinstance(watch_rows[0], dict):
+            top = watch_rows[0]
+            decision = 'WATCH_FOR_ENTRY'
 
     lines = [
         '<b>📌 AstraEdge Action Plan</b>',
@@ -1160,7 +1255,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 46E</code>')
+        lines.append('Telegram build: <code>AstraEdge 46F</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on

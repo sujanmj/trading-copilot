@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Railway web/API service entrypoint (Stage 46E monolith).
+Railway web/API service entrypoint (Stage 46F monolith).
 
 Usage:
   python scripts/run_railway_web.py
@@ -70,6 +70,10 @@ def main() -> int:
     legacy_disabled = is_legacy_telegram_listener_disabled()
 
     log_data_startup()
+
+    from backend.analytics.railway_decision_bootstrap import start_background_report_bootstrap
+
+    start_background_report_bootstrap()
 
     print('[RAILWAY_WEB] starting API service', flush=True)
     print(f'[RAILWAY_WEB] host={host} port={port}', flush=True)

@@ -832,6 +832,7 @@ def build_brain_payload() -> dict[str, Any]:
     warnings.extend(snap_warns)
     pack, pack_src, pack_warns = _load_report_pack_timed()
     warnings.extend(pack_warns)
+    snapshot_limited = 'runtime_snapshot_missing' in warnings
 
     intel = {}
     if snap:
@@ -856,7 +857,11 @@ def build_brain_payload() -> dict[str, Any]:
                 items.append({'kind': 'opportunity', **opp})
 
     fc_raw = pack.get('final_confidence') if pack else {}
-    fc = _normalize_final_confidence_for_summary(fc_raw, pack) if pack else {}
+    if snapshot_limited and not _pack_final_confidence_usable(fc_raw):
+        fc_file = _load_json(FINAL_CONFIDENCE_FILE)
+        if _pack_final_confidence_usable(fc_file):
+            fc_raw = fc_file
+    fc = _normalize_final_confidence_for_summary(fc_raw, pack) if pack or fc_raw else {}
     if _pack_final_confidence_usable(fc_raw):
         for ticker in fc_raw.get('top_tickers') or []:
             if ticker:
@@ -865,9 +870,38 @@ def build_brain_payload() -> dict[str, Any]:
             if isinstance(row, dict) and row.get('ticker'):
                 items.append({'kind': 'final_confidence_row', **row})
 
+    stock_today: dict[str, Any] = {}
+    if snapshot_limited:
+        stock_today = _load_json(DATA_DIR / 'stock_decision_today.json')
+        if stock_today.get('ok') is True:
+            top_pick = stock_today.get('top_pick')
+            if isinstance(top_pick, dict) and top_pick.get('ticker'):
+                items.append({'kind': 'stock_decision_top', **top_pick})
+        if not pack:
+            pack_reload, _, _ = _load_report_pack_timed()
+            if pack_reload:
+                pack = pack_reload
+        if not items:
+            for builder_name, builder in (
+                ('market', build_market_payload),
+                ('global', build_global_payload),
+                ('news', build_news_payload),
+            ):
+                try:
+                    tab_payload = builder() if builder_name != 'market' else builder(force=False)
+                except TypeError:
+                    tab_payload = builder()
+                except Exception:
+                    continue
+                tab_items = tab_payload.get('items') or []
+                for row in tab_items[:4]:
+                    if isinstance(row, dict):
+                        items.append({'kind': f'{builder_name}_fallback', **row})
+        warnings.append('Runtime snapshot missing; using report cache.')
+
     history = _load_json(HISTORY_FILE)
-    actionable = _build_actionable_candidates(pack, fc_raw) if pack else {}
-    failed_strong = _detect_failed_strong_warnings(history, pack, fc_raw) if pack else []
+    actionable = _build_actionable_candidates(pack, fc_raw) if pack or fc_raw else {}
+    failed_strong = _detect_failed_strong_warnings(history, pack, fc_raw) if pack or fc_raw else []
 
     source = snap_src if snap else pack_src
     cache_age = max(
@@ -877,6 +911,7 @@ def build_brain_payload() -> dict[str, Any]:
     summary = {
         'runtime_snapshot': snap if snap else {},
         'daily_report_pack': pack if pack else {},
+        'stock_decision_today': stock_today if stock_today.get('ok') else {},
         'final_confidence': fc,
         'final_confidence_source': (
             'daily-report-pack' if _pack_final_confidence_usable(fc_raw) and not fc_raw.get('generated_at')

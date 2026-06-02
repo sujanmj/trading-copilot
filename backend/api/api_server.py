@@ -879,7 +879,9 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '46E',
+        'stage': '46F',
+        'decision_bootstrap': 'enabled',
+        'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
         'legacy_telegram_listener': _legacy_telegram_listener_active(),
         'astraedge_telegram_started': is_astraedge_telegram_started(),

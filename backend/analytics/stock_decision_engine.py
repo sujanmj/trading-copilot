@@ -622,7 +622,7 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         return {
             'ok': False,
             'error': 'final_confidence_missing',
-            'message': 'Run python scripts\\generate_final_confidence_report.py',
+            'message': 'Decision cache is warming. Try again in 1–2 minutes.',
             'mode': normalized_mode,
             'stage_marker': 'STOCK_STAGE_45B_CONFLUENCE_DECISION_ENGINE',
         }
