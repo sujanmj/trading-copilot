@@ -312,6 +312,10 @@
       background: #2a2200; color: #ffcc66; padding: 8px 12px; font-size: 13px;
       border-bottom: 1px solid #ffaa00; text-align: center;
     }
+    .api-auth-missing-banner {
+      background: #4a1515; color: #ff8a8a; padding: 8px 12px; font-size: 13px;
+      border-bottom: 1px solid #ff6b6b; text-align: center;
+    }
     .runtime-error-boundary {
       background: #4a1515; color: #ff8a8a; padding: 8px 12px; font-size: 11px;
       border-bottom: 1px solid #ff6b6b; text-align: center;
@@ -1364,10 +1368,6 @@
     })();
   </script>
 
-  <script type="module">
-    window.__VITE_API_BASE_URL__ = import.meta.env.VITE_API_BASE_URL || '';
-  </script>
-
   <header class="app-header" id="appHeader">
     <div class="header-grid">
       <div class="brand-block">
@@ -1471,6 +1471,7 @@
         <div id="aiHubMarketChip" class="ai-hub-market-chip">Loading market mode...</div>
         <div id="aiHubLifecycleNote" class="ai-hub-lifecycle-note" style="display:none;" aria-live="polite"></div>
         <div id="runtimeDegradedBanner" style="display:none;"></div>
+        <div id="railwayAuthMissingBanner" style="display:none;"></div>
 
         <div class="tab-content active" id="tab-brain"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-govt"><div class="loading">⏳ Loading...</div></div>
@@ -1654,6 +1655,15 @@
   <script src="components/SourceFeedViewer.js"></script>
   <script src="components/WorkspaceManager.js"></script>
   <script>
+    window.__ASTRAEDGE_ENV__ = window.__ASTRAEDGE_ENV__ || {
+      VITE_API_BASE_URL: "%VITE_API_BASE_URL%",
+      VITE_ASTRAEDGE_API_KEY: "%VITE_ASTRAEDGE_API_KEY%",
+      VITE_API_KEY: "%VITE_API_KEY%"
+    };
+  </script>
+  <script type="module" src="./src/bootstrapApiTarget.js"></script>
+  <script type="module" src="./src/bootstrapApiAuth.js"></script>
+  <script>
   window.__startupErrors = window.__startupErrors || []
   if (window.RuntimeErrorBoundary) {
     RuntimeErrorBoundary.install()
@@ -1689,25 +1699,30 @@
   const ASTRA_RAILWAY_URL_STORAGE_KEY = 'ASTRAEDGE_API_BASE_URL'
   const USE_API = true
 
+  function readInjectedViteApiBaseUrl() {
+    const env = window.__ASTRAEDGE_ENV__ || {}
+    const raw = env.VITE_API_BASE_URL
+    const v = String(raw || '').trim().replace(/\/$/, '')
+    if (!v || v.indexOf('%VITE_API_BASE_URL%') !== -1) return ''
+    return v
+  }
+
   function readViteApiBaseUrl() {
-    try {
-      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) {
-        const viteVal = String(import.meta.env.VITE_API_BASE_URL).trim().replace(/\/$/, '')
-        if (viteVal) return viteVal
-      }
-    } catch (e) { /* ignore */ }
-    if (typeof window !== 'undefined' && window.__VITE_API_BASE_URL__) {
-      const injected = String(window.__VITE_API_BASE_URL__).trim().replace(/\/$/, '')
-      if (injected) return injected
-    }
-    return ''
+    return readInjectedViteApiBaseUrl()
   }
 
   function getStoredApiTarget() {
     try {
-      const target = (localStorage.getItem(ASTRA_API_TARGET_STORAGE_KEY) || '').trim().toLowerCase()
-      if (target === 'local' || target === 'railway') return target
+      const raw = localStorage.getItem(ASTRA_API_TARGET_STORAGE_KEY)
+      if (raw) {
+        const target = raw.trim().toLowerCase()
+        if (target === 'local' || target === 'railway') return target
+      }
     } catch (e) { /* ignore */ }
+    const injected = readInjectedViteApiBaseUrl()
+    if (injected && !isLocalApiBase(injected)) return 'railway'
+    const stored = getStoredRailwayApiUrl()
+    if (stored && !isLocalApiBase(stored)) return 'railway'
     return 'local'
   }
 
@@ -1717,7 +1732,21 @@
     } catch (e) { return '' }
   }
 
+  function getApiMode(base) {
+    const b = String(base || '').toLowerCase()
+    if (!b || b.includes('127.0.0.1') || b.includes('localhost')) return 'LOCAL'
+    if (b.includes('railway.app') || b.includes('up.railway.app') || b.includes('web-production')) return 'RAILWAY'
+    return 'RAILWAY'
+  }
+
   function resolveApiBase() {
+    if (window.AstraApiTarget && typeof window.AstraApiTarget.resolveApiBase === 'function') {
+      const electronBase = (window.electronAPI && window.electronAPI.env && window.electronAPI.env.API_BASE_URL) || ''
+      return window.AstraApiTarget.resolveApiBase({
+        isElectron: GUI_RUNTIME.isElectron,
+        electronApiBase: electronBase,
+      })
+    }
     const target = getStoredApiTarget()
     if (target === 'local') {
       if (GUI_RUNTIME.isElectron) {
@@ -1727,25 +1756,93 @@
       }
       return LOCAL_API_BASE
     }
-    const viteBase = readViteApiBaseUrl()
-    if (viteBase) return viteBase
     const storedRailway = getStoredRailwayApiUrl()
     if (storedRailway) return storedRailway
+    const viteBase = readInjectedViteApiBaseUrl()
+    if (viteBase) return viteBase
     return LOCAL_API_BASE
   }
 
   let API_BASE = resolveApiBase()
-  console.log('[LOCAL GUI] API base:', API_BASE, 'target:', getStoredApiTarget(), 'mode:', GUI_RUNTIME.mode)
-  const API_KEY = GUI_RUNTIME.isElectron
-    ? ((window.electronAPI && window.electronAPI.env && window.electronAPI.env.API_KEY) || '')
-    : ((typeof localStorage !== 'undefined' && localStorage.getItem('API_KEY')) || '')
+  console.log('[API_TARGET] resolved=' + API_BASE + ' mode=' + getApiMode(API_BASE))
+  const ASTRAEDGE_API_KEY_STORAGE_KEY = 'ASTRAEDGE_API_KEY'
   let localAuthBypass = isLocalApiBase(API_BASE)
+
+  function resolveApiKeyInline() {
+    if (window.AstraApiAuth && typeof window.AstraApiAuth.resolveApiKey === 'function') {
+      return window.AstraApiAuth.resolveApiKey()
+    }
+    try {
+      const ls = (localStorage.getItem(ASTRAEDGE_API_KEY_STORAGE_KEY) || '').trim()
+      if (ls) return ls
+    } catch (e) { /* ignore */ }
+    const env = window.__ASTRAEDGE_ENV__ || {}
+    for (const field of ['VITE_ASTRAEDGE_API_KEY', 'VITE_API_KEY']) {
+      const raw = String(env[field] || '').trim()
+      if (raw && raw.indexOf('%VITE_') === -1) return raw
+    }
+    return ''
+  }
+
+  function isApiAuthEnabledInline() {
+    return !!resolveApiKeyInline()
+  }
+
+  function logApiAuthInline() {
+    if (window.AstraApiAuth && typeof window.AstraApiAuth.logApiAuth === 'function') {
+      window.AstraApiAuth.logApiAuth()
+      return
+    }
+    console.log('[API_AUTH] enabled=' + (isApiAuthEnabledInline() ? 'true' : 'false'))
+  }
+  logApiAuthInline()
+
+  function isRailwayApiMissingAuth() {
+    return getApiMode(API_BASE) === 'RAILWAY' && !isApiAuthEnabledInline()
+  }
+
+  const RAILWAY_AUTH_MISSING_MSG = 'Railway API auth missing. Set ASTRAEDGE_API_KEY in browser localStorage or VITE_ASTRAEDGE_API_KEY in frontend/.env.local.'
+
+  function updateRailwayAuthMissingBanner() {
+    const el = document.getElementById('railwayAuthMissingBanner')
+    if (!el) return
+    if (isRailwayApiMissingAuth()) {
+      el.innerHTML = '<div class="api-auth-missing-banner">' + astraEscapeHtml(RAILWAY_AUTH_MISSING_MSG) + '</div>'
+      el.style.display = 'block'
+    } else {
+      el.innerHTML = ''
+      el.style.display = 'none'
+    }
+  }
+
+  function handleRailwayAuthMissingStartup() {
+    if (!isRailwayApiMissingAuth()) return false
+    updateRailwayAuthMissingBanner()
+    setGlobalLoading(false)
+    clearTabLoadingPlaceholders(RAILWAY_AUTH_MISSING_MSG)
+    renderUnavailableAllTabs(RAILWAY_AUTH_MISSING_MSG)
+    updateApiStatus(false)
+    return true
+  }
+
+  if (!window.setAstraEdgeApiKey) {
+    window.setAstraEdgeApiKey = function (key) {
+      try {
+        const v = String(key || '').trim()
+        if (v) localStorage.setItem(ASTRAEDGE_API_KEY_STORAGE_KEY, v)
+        else localStorage.removeItem(ASTRAEDGE_API_KEY_STORAGE_KEY)
+      } catch (e) { /* ignore */ }
+      window.location.reload()
+    }
+  }
 
   function refreshApiBaseFromStorage() {
     API_BASE = resolveApiBase()
     localAuthBypass = isLocalApiBase(API_BASE)
     applyApiTargetBadge()
-    console.log('[GUI] API base refreshed:', API_BASE, 'target:', getStoredApiTarget())
+    updateRailwayAuthMissingBanner()
+    logApiAuthInline()
+    console.log('[API_TARGET] resolved=' + API_BASE + ' mode=' + getApiMode(API_BASE))
   }
 
   function isLocalApiBase(base) {
@@ -1756,9 +1853,10 @@
   function applyApiTargetBadge() {
     const badge = document.getElementById('apiTargetBadge')
     if (!badge) return
-    const label = isLocalApiBase(API_BASE) ? 'API: LOCAL' : 'API: RAILWAY'
+    const mode = getApiMode(API_BASE)
+    const label = mode === 'LOCAL' ? 'API: LOCAL' : 'API: RAILWAY'
     badge.textContent = label
-    badge.className = 'gui-mode-badge api-target-badge ' + (isLocalApiBase(API_BASE) ? 'local' : 'railway')
+    badge.className = 'gui-mode-badge api-target-badge ' + (mode === 'LOCAL' ? 'local' : 'railway')
     badge.title = 'API base: ' + API_BASE
   }
 
@@ -1817,9 +1915,26 @@
   }
 
   function apiHeaders() {
-    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
-    if (API_KEY && !localAuthBypass) headers['X-API-Key'] = API_KEY
-    return headers
+    const base = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+    if (localAuthBypass) return base
+    if (window.AstraApiAuth && typeof window.AstraApiAuth.buildAuthHeaders === 'function') {
+      return window.AstraApiAuth.buildAuthHeaders(base)
+    }
+    const key = resolveApiKeyInline()
+    if (key) {
+      base['X-API-Key'] = key
+      base['Authorization'] = 'Bearer ' + key
+    }
+    return base
+  }
+
+  function mergeFetchOptions(options) {
+    const authHeaders = typeof apiHeaders === 'function' ? apiHeaders() : {}
+    const opts = options || {}
+    return {
+      ...opts,
+      headers: { ...authHeaders, ...(opts.headers || {}) },
+    }
   }
 
   const FETCH_TIMEOUT_MS = 15000
@@ -1844,6 +1959,7 @@
   }
 
   function fetchWithTimeout(url, options, timeoutMs) {
+    options = mergeFetchOptions(options)
     if (window.RuntimeManager && RuntimeManager.fetchWithTimeout) {
       return RuntimeManager.fetchWithTimeout(url, options, timeoutMs || FETCH_TIMEOUT_MS)
     }
@@ -1863,7 +1979,7 @@
 
   async function bootstrapApiConfig() {
     try {
-      const res = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/config', { method: 'GET' })
+      const res = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/config', { method: 'GET', headers: apiHeaders() })
       if (!res.ok) return
       const cfg = await res.json()
       if (cfg.local_auth_bypass) localAuthBypass = true
@@ -2678,12 +2794,18 @@
   function astraApiHeaders() {
     if (typeof apiHeaders === 'function') return apiHeaders()
     const headers = { Accept: 'application/json' }
+    if (window.AstraApiAuth && typeof window.AstraApiAuth.buildAuthHeaders === 'function') {
+      return window.AstraApiAuth.buildAuthHeaders(headers)
+    }
     const base = astraApiBase()
     const bypass = (typeof localAuthBypass !== 'undefined' && localAuthBypass)
       || base.includes('127.0.0.1')
       || base.includes('localhost')
-    const key = (typeof localStorage !== 'undefined' && localStorage.getItem('API_KEY')) || ''
-    if (key && !bypass) headers['X-API-Key'] = key
+    const key = resolveApiKeyInline()
+    if (key && !bypass) {
+      headers['X-API-Key'] = key
+      headers['Authorization'] = 'Bearer ' + key
+    }
     return headers
   }
 
@@ -9921,9 +10043,14 @@
     console.log('[GUI] app boot')
     applyGuiModeBadge()
     applyApiTargetBadge()
+    updateRailwayAuthMissingBanner()
     initApiTargetControls()
     wireCoreUi()
     renderShellImmediately()
+    if (handleRailwayAuthMissingStartup()) {
+      console.warn('[API_AUTH] Railway mode without API key — skipping hydration')
+      return
+    }
     try {
       const params = new URLSearchParams(window.location.search)
       if (params.get('debug') === '1') toggleDebugOverlay(true)

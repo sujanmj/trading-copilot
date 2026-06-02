@@ -37,9 +37,12 @@ def main() -> int:
     for fragment in (
         'Developer / Ops — API target',
         'localStorage.setItem(ASTRA_RAILWAY_URL_STORAGE_KEY',
+        '__ASTRAEDGE_ENV__',
         'applyApiTargetBadge',
         'initApiTargetControls',
         'isLocalApiBase',
+        'getApiMode',
+        '[API_TARGET]',
     ):
         if fragment not in src:
             return _fail(f'missing wiring: {fragment}')

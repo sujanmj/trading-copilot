@@ -641,8 +641,21 @@
   let runtimeRetryLoopActive = false;
   let staleCacheAppliedOnTimeout = false;
 
+  function mergeFetchAuthHeaders(options) {
+    const opts = options || {};
+    let headers = { ...(opts.headers || {}) };
+    if (config.getHeaders && typeof config.getHeaders === 'function') {
+      headers = { ...config.getHeaders(), ...headers };
+    }
+    if (global.AstraApiAuth && typeof global.AstraApiAuth.buildAuthHeaders === 'function') {
+      headers = global.AstraApiAuth.buildAuthHeaders(headers);
+    }
+    return { ...opts, headers };
+  }
+
   function fetchWithTimeout(url, options, timeoutMs) {
     const ms = timeoutMs || FETCH_TIMEOUT_MS;
+    const merged = mergeFetchAuthHeaders(options);
     console.log('[RuntimeManager] fetch start', { url, timeoutMs: ms });
     return new Promise((resolve, reject) => {
       const controller = new AbortController();
@@ -650,7 +663,7 @@
         controller.abort();
         reject(new Error(`Request timeout (${ms / 1000}s): ${url}`));
       }, ms);
-      fetch(url, { ...(options || {}), signal: controller.signal })
+      fetch(url, { ...merged, signal: controller.signal })
         .then((res) => {
           clearTimeout(timer);
           resolve(res);
