@@ -13,8 +13,8 @@ from __future__ import annotations
 import os
 
 STAGE_MARKER = 'LOCAL_STAGE_46C_SAFE_RAILWAY_CONTROL'
-RAILWAY_TELEGRAM_HANDLER_STAGE = 'RAILWAY_STAGE_46D_TELEGRAM_HANDLER'
-ASTRAEDGE_TELEGRAM_BUILD = 'AstraEdge 46D'
+RAILWAY_TELEGRAM_HANDLER_STAGE = 'RAILWAY_STAGE_46E_MONOLITH_TELEGRAM'
+ASTRAEDGE_TELEGRAM_BUILD = 'AstraEdge 46E'
 
 LOCAL_SAFE_DEFAULTS: dict[str, str] = {
     'DISABLE_TELEGRAM': '1',
@@ -83,6 +83,11 @@ def apply_railway_telegram_defaults() -> bool:
 def is_legacy_telegram_listener_disabled() -> bool:
     """True when telegram_listener.py (ML Elite) must not start."""
     return _env_truthy('DISABLE_LEGACY_TELEGRAM_LISTENER')
+
+
+def is_railway_telegram_start_dry_run() -> bool:
+    """True when Railway Telegram start tests must not poll/send (Stage 46E)."""
+    return _env_truthy('RAILWAY_TELEGRAM_START_DRY_RUN')
 
 
 def allow_local_telegram() -> bool:

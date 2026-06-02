@@ -39,6 +39,7 @@ def main() -> int:
         'localStorage.setItem(ASTRA_RAILWAY_URL_STORAGE_KEY',
         'applyApiTargetBadge',
         'initApiTargetControls',
+        'isLocalApiBase',
     ):
         if fragment not in src:
             return _fail(f'missing wiring: {fragment}')

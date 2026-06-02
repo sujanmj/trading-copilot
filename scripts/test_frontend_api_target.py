@@ -67,6 +67,7 @@ def main() -> int:
         'Save Railway API URL',
         'readViteApiBaseUrl',
         'resolveApiBase',
+        'isLocalApiBase',
         'astraApiBase',
         'aiOpsApiTarget',
     )

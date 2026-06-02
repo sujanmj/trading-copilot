@@ -562,12 +562,19 @@ def _run_local_scheduler_loop():
             time.sleep(5)
 
 
-def _legacy_telegram_listener_disabled() -> bool:
-    return DISABLE_TELEGRAM or DISABLE_TELEGRAM_LISTENER or DISABLE_LEGACY_TELEGRAM_LISTENER
+def _telegram_fully_disabled() -> bool:
+    return DISABLE_TELEGRAM or DISABLE_TELEGRAM_LISTENER
+
+
+def _legacy_telegram_listener_active() -> bool:
+    """True when legacy telegram_listener.py subprocess would start."""
+    if _telegram_fully_disabled():
+        return False
+    return not DISABLE_LEGACY_TELEGRAM_LISTENER
 
 
 def _telegram_listener_disabled() -> bool:
-    return _legacy_telegram_listener_disabled()
+    return _telegram_fully_disabled()
 
 
 def _log_telegram_disabled(component: str = 'listener') -> None:
@@ -686,18 +693,25 @@ def start_background_processes():
             pass
         print("[ORCHESTRATOR] API_ONLY — scheduler disabled", flush=True)
     
-    # Telegram listener thread
+    # Telegram — legacy subprocess or AstraEdge analysis bot (never both)
     if _telegram_listener_disabled():
         _log_telegram_disabled('subprocess listener')
+    elif DISABLE_LEGACY_TELEGRAM_LISTENER:
+        print('LEGACY_TELEGRAM_LISTENER_DISABLED', flush=True)
+        try:
+            from backend.telegram.telegram_analysis_bot import ensure_astraedge_telegram_started
+            ensure_astraedge_telegram_started()
+        except Exception as e:
+            print(f'[ASTRAEDGE_TELEGRAM] start failed: {e}', flush=True)
     else:
         telegram_thread = threading.Thread(
-            target=run_subprocess_loop, 
+            target=run_subprocess_loop,
             args=('telegram_listener.py', 'TelegramListener'),
-            daemon=True, 
-            name='TelegramListener'
+            daemon=True,
+            name='TelegramListener',
         )
         telegram_thread.start()
-        print(f"[INFO] Telegram listener thread started")
+        print('[INFO] Telegram listener thread started')
 
     watchdog_thread = threading.Thread(
         target=stale_data_watchdog,
@@ -856,20 +870,22 @@ def health():
 def api_debug_build_info():
     """Deployment build identity — handler selection and data root."""
     from backend.config.local_safe_mode import is_railway_mode
-    from backend.storage.data_paths import get_data_root
+    from backend.storage.data_paths import data_preserved, get_data_root
+    from backend.telegram.telegram_analysis_bot import is_astraedge_telegram_started
 
     app_mode = os.environ.get('APP_MODE', '').strip().lower()
     if not app_mode:
         app_mode = 'railway' if is_railway_mode() else 'local'
     data_root = get_data_root()
-    legacy_active = not _legacy_telegram_listener_disabled()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '46D',
+        'stage': '46E',
         'telegram_handler': 'astraedge_analysis_bot',
-        'legacy_telegram_listener': legacy_active,
+        'legacy_telegram_listener': _legacy_telegram_listener_active(),
+        'astraedge_telegram_started': is_astraedge_telegram_started(),
         'app_mode': app_mode,
         'data_root': str(data_root).replace('\\', '/'),
+        'data_preserved': data_preserved(),
     })
 
 

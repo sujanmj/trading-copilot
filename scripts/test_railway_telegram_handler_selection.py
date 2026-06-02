@@ -23,7 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(Path.cwd().resolve()) != str(PROJECT_ROOT.resolve()):
     os.chdir(PROJECT_ROOT)
 
-STAGE_MARKER = 'RAILWAY_STAGE_46D_TELEGRAM_HANDLER'
+STAGE_MARKER = 'RAILWAY_STAGE_46E_MONOLITH_TELEGRAM'
 LEGACY_HELP_MARKERS = (
     'Trading Copilot Commands',
     '/review',
@@ -110,11 +110,27 @@ def test_api_server_legacy_guard() -> str | None:
     for fragment in (
         'DISABLE_LEGACY_TELEGRAM_LISTENER',
         'LEGACY_TELEGRAM_LISTENER_DISABLED',
-        '_legacy_telegram_listener_disabled',
+        '_legacy_telegram_listener_active',
         'apply_railway_telegram_defaults',
+        'ensure_astraedge_telegram_started',
     ):
         if fragment not in api_src:
             return f'api_server missing legacy guard fragment: {fragment}'
+    return None
+
+
+def test_railway_web_monolith_astraedge() -> str | None:
+    web_src = (PROJECT_ROOT / 'scripts/run_railway_web.py').read_text(encoding='utf-8')
+    for fragment in (
+        'DISABLE_LEGACY_TELEGRAM_LISTENER',
+        'ensure_astraedge_telegram_started',
+        'log_data_startup',
+    ):
+        if fragment not in web_src:
+            return f'run_railway_web missing: {fragment}'
+    bot_src = (PROJECT_ROOT / 'backend/telegram/telegram_analysis_bot.py').read_text(encoding='utf-8')
+    if 'ASTRAEDGE_TELEGRAM_ANALYSIS_BOT_STARTED' not in bot_src:
+        return 'telegram_analysis_bot missing start marker print'
     return None
 
 
@@ -122,8 +138,8 @@ def test_railway_web_disables_legacy() -> str | None:
     web_src = (PROJECT_ROOT / 'scripts/run_railway_web.py').read_text(encoding='utf-8')
     if 'DISABLE_LEGACY_TELEGRAM_LISTENER' not in web_src:
         return 'run_railway_web missing DISABLE_LEGACY_TELEGRAM_LISTENER'
-    if 'legacy_telegram_listener_disabled' not in web_src:
-        return 'run_railway_web missing legacy_telegram_listener_disabled log'
+    if 'LEGACY_TELEGRAM_LISTENER_DISABLED' not in web_src:
+        return 'run_railway_web missing LEGACY_TELEGRAM_LISTENER_DISABLED log'
     return None
 
 
@@ -159,8 +175,8 @@ def test_status_includes_build() -> str | None:
     from backend.telegram.response_format import format_status_text, strip_stage_markers
 
     status = strip_stage_markers(format_status_text())
-    if 'Telegram build: AstraEdge 46D' not in status and 'AstraEdge 46D' not in status:
-        return 'format_status_text missing Telegram build: AstraEdge 46D'
+    if 'Telegram build: AstraEdge 46E' not in status and 'AstraEdge 46E' not in status:
+        return 'format_status_text missing Telegram build: AstraEdge 46E'
     return None
 
 
@@ -170,9 +186,11 @@ def test_build_info_payload() -> str | None:
         return 'build-info route missing in api_server.py'
     for fragment in (
         "'app': 'AstraEdge'",
-        "'stage': '46D'",
+        "'stage': '46E'",
         "'telegram_handler': 'astraedge_analysis_bot'",
         'legacy_telegram_listener',
+        'astraedge_telegram_started',
+        'data_preserved',
         'get_data_root',
     ):
         if fragment not in api_src:
@@ -210,6 +228,7 @@ def main() -> int:
         test_railway_defaults_legacy_off,
         test_railway_environment_defaults_legacy_off,
         test_api_server_legacy_guard,
+        test_railway_web_monolith_astraedge,
         test_railway_web_disables_legacy,
         test_railway_worker_uses_analysis_bot,
         test_new_help_not_legacy,

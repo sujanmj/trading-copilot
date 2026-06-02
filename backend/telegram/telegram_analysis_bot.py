@@ -55,6 +55,15 @@ from backend.utils.config import CONFIG_DIR, DATA_DIR
 
 load_dotenv(CONFIG_DIR / 'keys.env', override=False)
 
+def _refresh_telegram_credentials() -> tuple[str, str]:
+    """Reload token/chat from env (subprocess tests set vars after import)."""
+    global BOT_TOKEN, CHAT_ID, API_URL
+    BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
+    CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '').strip()
+    API_URL = f'https://api.telegram.org/bot{BOT_TOKEN}' if BOT_TOKEN else ''
+    return BOT_TOKEN, CHAT_ID
+
+
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '').strip()
 CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '').strip()
 API_URL = f'https://api.telegram.org/bot{BOT_TOKEN}' if BOT_TOKEN else ''
@@ -412,8 +421,13 @@ def get_updates(offset: int = 0) -> list[dict]:
 
 
 def listen_forever(*, on_command: Callable[[str, str], None] | None = None) -> None:
+    from backend.config.local_safe_mode import is_railway_telegram_start_dry_run
     from backend.utils.telegram_guard import is_telegram_listener_enabled
 
+    if is_railway_telegram_start_dry_run():
+        safe_print('[TG_ANALYSIS] dry-run — listener loop not started')
+        return
+    _refresh_telegram_credentials()
     if not is_telegram_listener_enabled():
         safe_print('[TG_ANALYSIS] listener disabled')
         return
@@ -466,3 +480,63 @@ def start_listener_thread() -> threading.Thread:
     thread = threading.Thread(target=listen_forever, name='telegram_analysis_bot', daemon=True)
     thread.start()
     return thread
+
+
+_astraedge_telegram_started = False
+_astraedge_telegram_lock = threading.Lock()
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def should_start_astraedge_telegram() -> bool:
+    """True when Railway monolith should run the AstraEdge analysis bot."""
+    from backend.config.local_safe_mode import is_legacy_telegram_listener_disabled, is_railway_mode
+
+    if not is_railway_mode():
+        return False
+    if not _env_truthy('TELEGRAM_COMMANDS_ENABLED'):
+        return False
+    if _env_truthy('DISABLE_TELEGRAM_LISTENER'):
+        return False
+    if not is_legacy_telegram_listener_disabled():
+        return False
+    return True
+
+
+def is_astraedge_telegram_started() -> bool:
+    return _astraedge_telegram_started
+
+
+def ensure_astraedge_telegram_started() -> bool:
+    """Start the analysis bot once; safe to call from multiple startup paths."""
+    global _astraedge_telegram_started
+    if not should_start_astraedge_telegram():
+        return False
+
+    from backend.config.local_safe_mode import is_railway_telegram_start_dry_run
+    from backend.utils.telegram_guard import is_telegram_listener_enabled
+
+    if is_railway_telegram_start_dry_run():
+        with _astraedge_telegram_lock:
+            if _astraedge_telegram_started:
+                return True
+            print('ASTRAEDGE_TELEGRAM_ANALYSIS_BOT_STARTED_DRY_RUN', flush=True)
+            _astraedge_telegram_started = True
+            return True
+
+    if not is_telegram_listener_enabled():
+        return False
+    token, chat_id = _refresh_telegram_credentials()
+    if not token or not chat_id:
+        safe_print('[TG_ANALYSIS] missing credentials — listener not started')
+        return False
+
+    with _astraedge_telegram_lock:
+        if _astraedge_telegram_started:
+            return True
+        start_listener_thread()
+        print('ASTRAEDGE_TELEGRAM_ANALYSIS_BOT_STARTED', flush=True)
+        _astraedge_telegram_started = True
+        return True

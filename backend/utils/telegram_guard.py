@@ -8,7 +8,18 @@ Local laptop dry-runs sends unless ALLOW_LOCAL_TELEGRAM_SENDS=1 (Stage 46C).
 
 from __future__ import annotations
 
+import os
+
 from backend.utils.config import DISABLE_TELEGRAM, DISABLE_TELEGRAM_LISTENER, DISABLE_TELEGRAM_SENDS
+
+
+def _railway_telegram_start_dry_run() -> bool:
+    return os.environ.get('RAILWAY_TELEGRAM_START_DRY_RUN', '').strip().lower() in (
+        '1',
+        'true',
+        'yes',
+        'on',
+    )
 
 TELEGRAM_DISABLED_SEND_RESULT = {
     'ok': False,
@@ -81,6 +92,8 @@ def guard_telegram_send(context: str = '') -> bool:
 
 def guard_telegram_poll(context: str = '') -> bool:
     """Return True to proceed with getUpdates / listener polling."""
+    if _railway_telegram_start_dry_run():
+        return False
     if is_telegram_listener_enabled():
         return True
     suffix = f' ({context})' if context else ''

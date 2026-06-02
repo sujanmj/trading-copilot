@@ -22,7 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(Path.cwd().resolve()) != str(PROJECT_ROOT.resolve()):
     os.chdir(PROJECT_ROOT)
 
-STAGE_MARKER = 'RAILWAY_STAGE_46D_TELEGRAM_HANDLER'
+STAGE_MARKER = 'RAILWAY_STAGE_46E_MONOLITH_TELEGRAM'
 
 REQUIRED_FILES = (
     'backend/config/local_safe_mode.py',
@@ -74,8 +74,8 @@ def main() -> int:
         return _fail('telegram_analysis_bot missing AstraEdge help header')
 
     status_src = (PROJECT_ROOT / 'backend/telegram/response_format.py').read_text(encoding='utf-8')
-    if 'AstraEdge 46D' not in status_src:
-        return _fail('response_format missing AstraEdge 46D build line')
+    if 'AstraEdge 46E' not in status_src:
+        return _fail('response_format missing AstraEdge 46E build line')
 
     proc = subprocess.run(
         [sys.executable, 'scripts/test_railway_telegram_handler_selection.py'],

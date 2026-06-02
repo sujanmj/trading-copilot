@@ -105,3 +105,7 @@ index_backup*.html
 *.log
 logs/
 recovery/*.zip
+
+recovery/*.zip
+
+recovery/*.zip

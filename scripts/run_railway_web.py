@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Railway web/API service entrypoint (Stage 46A).
+Railway web/API service entrypoint (Stage 46E monolith).
 
 Usage:
   python scripts/run_railway_web.py
 
-Binds HOST=0.0.0.0 and PORT from env. Starts FastAPI only.
-Telegram listener is disabled unless ENABLE_TELEGRAM_IN_WEB=1.
+Binds HOST=0.0.0.0 and PORT from env. Starts FastAPI + scheduler + AstraEdge Telegram
+when TELEGRAM_COMMANDS_ENABLED=1 and DISABLE_TELEGRAM_LISTENER=0.
 """
 
 from __future__ import annotations
@@ -23,13 +23,15 @@ _RAILWAY_WEB_DEFAULTS = {
     'PYTHONIOENCODING': 'utf-8',
     'PYTHONUTF8': '1',
     'DISABLE_LEGACY_TELEGRAM_LISTENER': '1',
+    'TELEGRAM_COMMANDS_ENABLED': '1',
+    'DISABLE_TELEGRAM_LISTENER': '0',
+    'DISABLE_TELEGRAM': '0',
+    'DISABLE_TELEGRAM_SENDS': '0',
+    'TELEGRAM_TRADE_COMMANDS_ENABLED': '0',
+    'DISABLE_TRADE_EXECUTION': '1',
 }
 for _key, _val in _RAILWAY_WEB_DEFAULTS.items():
     os.environ.setdefault(_key, _val)
-
-if not os.environ.get('ENABLE_TELEGRAM_IN_WEB', '').strip().lower() in ('1', 'true', 'yes', 'on'):
-    os.environ.setdefault('DISABLE_TELEGRAM_LISTENER', '1')
-    os.environ.setdefault('DISABLE_LEGACY_TELEGRAM_LISTENER', '1')
 
 try:
     sys.stdout.reconfigure(encoding='utf-8')
@@ -53,7 +55,8 @@ setup_project_path()
 def main() -> int:
     import uvicorn
     from backend.api.api_server import app
-    from backend.storage.data_paths import get_data_root
+    from backend.config.local_safe_mode import is_legacy_telegram_listener_disabled, is_railway_mode
+    from backend.storage.data_paths import get_data_root, log_data_startup
     from backend.telegram.response_format import TRADE_EXECUTION_PERMANENTLY_DISABLED
 
     host = os.environ.get('HOST', '0.0.0.0')
@@ -64,12 +67,9 @@ def main() -> int:
         'yes',
         'on',
     )
-    legacy_disabled = os.environ.get('DISABLE_LEGACY_TELEGRAM_LISTENER', '').strip().lower() in (
-        '1',
-        'true',
-        'yes',
-        'on',
-    )
+    legacy_disabled = is_legacy_telegram_listener_disabled()
+
+    log_data_startup()
 
     print('[RAILWAY_WEB] starting API service', flush=True)
     print(f'[RAILWAY_WEB] host={host} port={port}', flush=True)
@@ -77,6 +77,18 @@ def main() -> int:
     print(f'[RAILWAY_WEB] telegram_listener_disabled={listener_disabled}', flush=True)
     print(f'[RAILWAY_WEB] legacy_telegram_listener_disabled={legacy_disabled}', flush=True)
     print(f'[RAILWAY_WEB] trade_execution_disabled={TRADE_EXECUTION_PERMANENTLY_DISABLED}', flush=True)
+
+    if legacy_disabled and is_railway_mode():
+        print('LEGACY_TELEGRAM_LISTENER_DISABLED', flush=True)
+
+    from backend.telegram.telegram_analysis_bot import ensure_astraedge_telegram_started
+
+    astraedge_started = ensure_astraedge_telegram_started()
+    print(
+        f'[RAILWAY_WEB] astraedge_telegram_started={astraedge_started} '
+        f'legacy_telegram_started=False',
+        flush=True,
+    )
 
     uvicorn.run(
         app,

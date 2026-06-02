@@ -41,6 +41,40 @@ ENDPOINTS = (
 )
 
 
+def _stage_at_least_46e(stage: str) -> bool:
+    raw = str(stage or '').strip().upper()
+    if not raw.startswith('46'):
+        return False
+    suffix = raw[2:]
+    if not suffix:
+        return False
+    try:
+        letter_ord = ord(suffix[0])
+        if letter_ord >= ord('E'):
+            return True
+        return False
+    except (IndexError, TypeError):
+        return False
+
+
+def _validate_build_info(payload: dict) -> str | None:
+    if payload.get('app') != 'AstraEdge':
+        return f"app must be AstraEdge, got {payload.get('app')!r}"
+    stage = str(payload.get('stage') or '')
+    if not _stage_at_least_46e(stage):
+        return f'stage must be 46E or higher, got {stage!r}'
+    if payload.get('telegram_handler') != 'astraedge_analysis_bot':
+        return 'telegram_handler must be astraedge_analysis_bot'
+    if payload.get('legacy_telegram_listener') is not False:
+        return 'legacy_telegram_listener must be false'
+    data_root = str(payload.get('data_root') or '').replace('\\', '/')
+    if data_root != '/app/data':
+        return f'data_root must be /app/data, got {data_root!r}'
+    if payload.get('data_preserved') is not True:
+        return 'data_preserved must be true'
+    return None
+
+
 def _fail(msg: str) -> int:
     print(f'RAILWAY_POST_DEPLOY_SMOKE_FAIL: {msg}', file=sys.stderr)
     return 1
@@ -102,7 +136,7 @@ def _fetch_json(base_url: str, path: str, api_key: str) -> tuple[dict | None, in
         return None, None, str(exc)
 
 
-def run_smoke(base_url: str, api_key: str) -> str | None:
+def run_smoke(base_url: str, api_key: str, *, strict_build_info: bool = False) -> str | None:
     for label, path in ENDPOINTS:
         payload, status, err = _fetch_json(base_url, path, api_key)
         ok = err is None and status is not None and status != 500
@@ -113,6 +147,23 @@ def run_smoke(base_url: str, api_key: str) -> str | None:
             return f'{label}: {err}'
         if payload is None:
             return f'{label}: empty payload'
+
+    if strict_build_info:
+        payload, status, err = _fetch_json(base_url, '/api/debug/build-info', api_key)
+        print(f'[RAILWAY_POST_DEPLOY] build_info={"ok" if err is None else "fail"} status={status}')
+        if err:
+            return f'build-info: {err}'
+        if payload is None:
+            return 'build-info: empty payload'
+        build_err = _validate_build_info(payload)
+        if build_err:
+            return f'build-info: {build_err}'
+        print(
+            '[RAILWAY_POST_DEPLOY] build_info '
+            f'stage={payload.get("stage")} '
+            f'telegram_started={payload.get("astraedge_telegram_started")}'
+        )
+
     return None
 
 
@@ -128,6 +179,11 @@ def main() -> int:
         default=None,
         help='HTTP API key (optional; falls back to API_KEY env or keys.env locally)',
     )
+    parser.add_argument(
+        '--strict-build-info',
+        action='store_true',
+        help='Validate /api/debug/build-info stage 46E fields',
+    )
     args = parser.parse_args()
 
     base_url = _normalize_base_url(args.base_url)
@@ -135,8 +191,9 @@ def main() -> int:
 
     print(f'[RAILWAY_POST_DEPLOY] base_url={base_url}')
     print(f'[RAILWAY_POST_DEPLOY] auth={"yes" if api_key else "no"}')
+    print(f'[RAILWAY_POST_DEPLOY] strict_build_info={"yes" if args.strict_build_info else "no"}')
 
-    err = run_smoke(base_url, api_key)
+    err = run_smoke(base_url, api_key, strict_build_info=args.strict_build_info)
     if err:
         return _fail(err)
 

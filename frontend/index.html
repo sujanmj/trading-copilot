@@ -1739,22 +1739,26 @@
   const API_KEY = GUI_RUNTIME.isElectron
     ? ((window.electronAPI && window.electronAPI.env && window.electronAPI.env.API_KEY) || '')
     : ((typeof localStorage !== 'undefined' && localStorage.getItem('API_KEY')) || '')
-  let localAuthBypass = API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')
+  let localAuthBypass = isLocalApiBase(API_BASE)
 
   function refreshApiBaseFromStorage() {
     API_BASE = resolveApiBase()
-    localAuthBypass = API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')
+    localAuthBypass = isLocalApiBase(API_BASE)
     applyApiTargetBadge()
     console.log('[GUI] API base refreshed:', API_BASE, 'target:', getStoredApiTarget())
+  }
+
+  function isLocalApiBase(base) {
+    const b = String(base || '').toLowerCase()
+    return b.includes('127.0.0.1') || b.includes('localhost')
   }
 
   function applyApiTargetBadge() {
     const badge = document.getElementById('apiTargetBadge')
     if (!badge) return
-    const target = getStoredApiTarget()
-    const label = target === 'railway' ? 'API: RAILWAY' : 'API: LOCAL'
+    const label = isLocalApiBase(API_BASE) ? 'API: LOCAL' : 'API: RAILWAY'
     badge.textContent = label
-    badge.className = 'gui-mode-badge api-target-badge ' + (target === 'railway' ? 'railway' : 'local')
+    badge.className = 'gui-mode-badge api-target-badge ' + (isLocalApiBase(API_BASE) ? 'local' : 'railway')
     badge.title = 'API base: ' + API_BASE
   }
 
