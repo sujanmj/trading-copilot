@@ -14,6 +14,11 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Must set before any backend import (config reads LOCAL_* at import).
 _LOCAL_DEFAULTS = {
@@ -22,9 +27,6 @@ _LOCAL_DEFAULTS = {
     'HOST': '127.0.0.1',
     'PORT': '8080',
     'API_BASE_URL': 'http://127.0.0.1:8080',
-    'DISABLE_TELEGRAM': '1',
-    'DISABLE_TELEGRAM_LISTENER': '1',
-    'DISABLE_TELEGRAM_SENDS': '1',
     'DISABLE_RAILWAY_API': '1',
     'PYTHONIOENCODING': 'utf-8',
     'PYTHONUTF8': '1',
@@ -33,6 +35,10 @@ _LOCAL_DEFAULTS = {
 }
 for _key, _val in _LOCAL_DEFAULTS.items():
     os.environ.setdefault(_key, _val)
+
+from backend.config.local_safe_mode import apply_local_safe_mode_defaults
+
+apply_local_safe_mode_defaults()
 
 print('[LOCAL MODE] LOCAL_DEV_MODE=1 LOCAL_ONLY=1', flush=True)
 print('[LOCAL MODE] API http://127.0.0.1:8080 — Telegram disabled', flush=True)

@@ -1315,6 +1315,38 @@
       color: #cbd5e1;
       border: 1px solid rgba(148, 163, 184, 0.35);
     }
+    .gui-mode-badge.api-target-badge.local {
+      background: rgba(34, 197, 94, 0.15);
+      color: #86efac;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+    }
+    .gui-mode-badge.api-target-badge.railway {
+      background: rgba(59, 130, 246, 0.18);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+    }
+    .api-target-controls { display: flex; flex-direction: column; gap: 8px; font-size: 11px; }
+    .api-target-controls input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .api-target-controls .api-target-btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .api-target-controls button {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #aaa;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+    }
+    .api-target-controls button:hover { border-color: #00ff88; color: #00ff88; }
   </style>
 </head>
 <body>
@@ -1330,6 +1362,10 @@
         mode: isElectron ? 'desktop' : 'web',
       };
     })();
+  </script>
+
+  <script type="module">
+    window.__VITE_API_BASE_URL__ = import.meta.env.VITE_API_BASE_URL || '';
   </script>
 
   <header class="app-header" id="appHeader">
@@ -1371,6 +1407,7 @@
       <div class="header-status-line">
         <span class="live-badge">🔴 LIVE</span>
         <span class="gui-mode-badge web web-local-badge" id="guiModeBadge" title="Local GUI runtime mode">WEB LOCAL</span>
+        <span class="gui-mode-badge api-target-badge local" id="apiTargetBadge" title="API base">API: LOCAL</span>
         <button type="button" class="ai-ops-btn" id="aiOpsBtn" title="AI Ops / Logs">OPS</button>
         <span class="api-status" id="apiStatus">⏳</span>
         <button type="button" class="ai-review-btn review-btn" id="reviewBtn" title="Daily Intelligence Review">REVIEW</button>
@@ -1544,6 +1581,10 @@
         <summary>Watchdog / Health</summary>
         <div class="ai-ops-section-body" id="aiOpsHealth"></div>
       </details>
+      <details class="ai-ops-section" data-ui-section="aiops-api-target">
+        <summary>Developer / Ops — API target</summary>
+        <div class="ai-ops-section-body" id="aiOpsApiTarget"></div>
+      </details>
       <details class="ai-ops-section" data-ui-section="aiops-broker-dev">
         <summary>Developer / Ops — Broker collect</summary>
         <div class="ai-ops-section-body" id="aiOpsBrokerDev"></div>
@@ -1640,33 +1681,136 @@
   let path = null
 
   // ============================================================
-  // API CONFIG — local laptop default; override via keys.env / env vars
-  // Browser mode: localStorage override, default http://127.0.0.1:8080
+  // API CONFIG — local laptop default; Railway via explicit target
+  // Browser/Electron: localStorage ASTRAEDGE_* or VITE_API_BASE_URL
   // ============================================================
   const LOCAL_API_BASE = 'http://127.0.0.1:8080'
+  const ASTRA_API_TARGET_STORAGE_KEY = 'ASTRAEDGE_API_TARGET'
+  const ASTRA_RAILWAY_URL_STORAGE_KEY = 'ASTRAEDGE_API_BASE_URL'
   const USE_API = true
+
+  function readViteApiBaseUrl() {
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) {
+        const viteVal = String(import.meta.env.VITE_API_BASE_URL).trim().replace(/\/$/, '')
+        if (viteVal) return viteVal
+      }
+    } catch (e) { /* ignore */ }
+    if (typeof window !== 'undefined' && window.__VITE_API_BASE_URL__) {
+      const injected = String(window.__VITE_API_BASE_URL__).trim().replace(/\/$/, '')
+      if (injected) return injected
+    }
+    return ''
+  }
+
+  function getStoredApiTarget() {
+    try {
+      const target = (localStorage.getItem(ASTRA_API_TARGET_STORAGE_KEY) || '').trim().toLowerCase()
+      if (target === 'local' || target === 'railway') return target
+    } catch (e) { /* ignore */ }
+    return 'local'
+  }
+
+  function getStoredRailwayApiUrl() {
+    try {
+      return (localStorage.getItem(ASTRA_RAILWAY_URL_STORAGE_KEY) || '').trim().replace(/\/$/, '')
+    } catch (e) { return '' }
+  }
+
   function resolveApiBase() {
-    if (GUI_RUNTIME.isElectron) {
-      const envBase = (window.electronAPI && window.electronAPI.env && window.electronAPI.env.API_BASE_URL) || ''
-      const explicit = String(envBase).trim().replace(/\/$/, '')
-      if (explicit) return explicit
+    const target = getStoredApiTarget()
+    if (target === 'local') {
+      if (GUI_RUNTIME.isElectron) {
+        const envBase = (window.electronAPI && window.electronAPI.env && window.electronAPI.env.API_BASE_URL) || ''
+        const explicit = String(envBase).trim().replace(/\/$/, '')
+        if (explicit) return explicit
+      }
       return LOCAL_API_BASE
     }
-    try {
-      const stored = (localStorage.getItem('API_BASE_URL') || '').trim().replace(/\/$/, '')
-      if (stored) return stored
-    } catch (e) { /* ignore */ }
-    if (typeof window !== 'undefined' && window.API_BASE_URL) {
-      return String(window.API_BASE_URL).trim().replace(/\/$/, '')
-    }
+    const viteBase = readViteApiBaseUrl()
+    if (viteBase) return viteBase
+    const storedRailway = getStoredRailwayApiUrl()
+    if (storedRailway) return storedRailway
     return LOCAL_API_BASE
   }
-  const API_BASE = resolveApiBase()
-  console.log('[LOCAL GUI] API base:', API_BASE, 'mode:', GUI_RUNTIME.mode)
+
+  let API_BASE = resolveApiBase()
+  console.log('[LOCAL GUI] API base:', API_BASE, 'target:', getStoredApiTarget(), 'mode:', GUI_RUNTIME.mode)
   const API_KEY = GUI_RUNTIME.isElectron
     ? ((window.electronAPI && window.electronAPI.env && window.electronAPI.env.API_KEY) || '')
     : ((typeof localStorage !== 'undefined' && localStorage.getItem('API_KEY')) || '')
   let localAuthBypass = API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')
+
+  function refreshApiBaseFromStorage() {
+    API_BASE = resolveApiBase()
+    localAuthBypass = API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost')
+    applyApiTargetBadge()
+    console.log('[GUI] API base refreshed:', API_BASE, 'target:', getStoredApiTarget())
+  }
+
+  function applyApiTargetBadge() {
+    const badge = document.getElementById('apiTargetBadge')
+    if (!badge) return
+    const target = getStoredApiTarget()
+    const label = target === 'railway' ? 'API: RAILWAY' : 'API: LOCAL'
+    badge.textContent = label
+    badge.className = 'gui-mode-badge api-target-badge ' + (target === 'railway' ? 'railway' : 'local')
+    badge.title = 'API base: ' + API_BASE
+  }
+
+  function initApiTargetControls() {
+    const host = document.getElementById('aiOpsApiTarget')
+    if (!host || host.dataset.apiTargetInit === '1') return
+    host.dataset.apiTargetInit = '1'
+    const railwayUrl = getStoredRailwayApiUrl()
+    host.innerHTML = `<div class="api-target-controls">
+      <p class="bi-muted">Switch GUI between local backend (${LOCAL_API_BASE}) and Railway API. Railway URL is stored in localStorage only — never committed to source.</p>
+      <div class="api-target-btn-row">
+        <button type="button" id="apiTargetLocalBtn">Set API Local</button>
+        <button type="button" id="apiTargetRailwayBtn">Set API Railway</button>
+      </div>
+      <label for="apiTargetRailwayInput">Railway API URL</label>
+      <input type="text" id="apiTargetRailwayInput" placeholder="Paste Railway service URL" value="${astraEscapeHtml(railwayUrl)}" autocomplete="off" />
+      <div class="api-target-btn-row">
+        <button type="button" id="apiTargetSaveBtn">Save Railway API URL</button>
+      </div>
+      <p class="bi-muted" id="apiTargetStatus">Current: ${astraEscapeHtml(API_BASE)}</p>
+    </div>`
+    const localBtn = document.getElementById('apiTargetLocalBtn')
+    const railwayBtn = document.getElementById('apiTargetRailwayBtn')
+    const saveBtn = document.getElementById('apiTargetSaveBtn')
+    const input = document.getElementById('apiTargetRailwayInput')
+    const status = document.getElementById('apiTargetStatus')
+    function syncStatus() {
+      if (status) status.textContent = 'Current: ' + API_BASE
+    }
+    if (localBtn) {
+      localBtn.addEventListener('click', () => {
+        try { localStorage.setItem(ASTRA_API_TARGET_STORAGE_KEY, 'local') } catch (e) { /* ignore */ }
+        refreshApiBaseFromStorage()
+        syncStatus()
+      })
+    }
+    if (railwayBtn) {
+      railwayBtn.addEventListener('click', () => {
+        try { localStorage.setItem(ASTRA_API_TARGET_STORAGE_KEY, 'railway') } catch (e) { /* ignore */ }
+        refreshApiBaseFromStorage()
+        syncStatus()
+      })
+    }
+    if (saveBtn && input) {
+      saveBtn.addEventListener('click', () => {
+        const url = String(input.value || '').trim().replace(/\/$/, '')
+        try {
+          if (url) localStorage.setItem(ASTRA_RAILWAY_URL_STORAGE_KEY, url)
+          else localStorage.removeItem(ASTRA_RAILWAY_URL_STORAGE_KEY)
+          localStorage.setItem(ASTRA_API_TARGET_STORAGE_KEY, 'railway')
+        } catch (e) { /* ignore */ }
+        refreshApiBaseFromStorage()
+        syncStatus()
+      })
+    }
+  }
 
   function apiHeaders() {
     const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
@@ -2516,8 +2660,8 @@
   }
 
   function astraApiBase() {
-    if (typeof API_BASE !== 'undefined' && API_BASE) return String(API_BASE).replace(/\/$/, '')
-    return 'http://127.0.0.1:8080'
+    const base = (typeof API_BASE !== 'undefined' && API_BASE) ? API_BASE : resolveApiBase()
+    return String(base).replace(/\/$/, '')
   }
 
   function astraApiUrl(path) {
@@ -9772,6 +9916,8 @@
     console.log('[BOOT] hydration starting')
     console.log('[GUI] app boot')
     applyGuiModeBadge()
+    applyApiTargetBadge()
+    initApiTargetControls()
     wireCoreUi()
     renderShellImmediately()
     try {

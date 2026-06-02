@@ -165,7 +165,7 @@ def send_brief(slot: str, *, send_fn: Callable[[str], bool] | None = None) -> bo
     if send_fn is None:
         from backend.telegram.telegram_analysis_bot import send_analysis_message
 
-        return bool(send_analysis_message(text, command=f'brief_{slot}'))
+        return bool(send_analysis_message(text, command=f'brief_{slot}').get('sent'))
     return bool(send_fn(text))
 
 

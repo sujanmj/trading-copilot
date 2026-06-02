@@ -51,7 +51,15 @@ SENT_LOG_FILE = DATA_DIR / '_telegram_sent.json'
 
 def send_message_result(text, parse_mode='HTML', disable_preview=True) -> dict:
     """Send a message; returns structured result with sent/skipped flags."""
-    from backend.utils.telegram_guard import is_telegram_send_enabled, telegram_send_skipped
+    from backend.config.local_safe_mode import local_telegram_send_dry_run
+    from backend.utils.telegram_guard import (
+        is_telegram_send_enabled,
+        telegram_send_dry_run,
+        telegram_send_skipped,
+    )
+
+    if local_telegram_send_dry_run():
+        return telegram_send_dry_run('telegram_bot.send_message', text=str(text)[:120])
 
     if not is_telegram_send_enabled():
         return telegram_send_skipped('telegram_bot.send_message')

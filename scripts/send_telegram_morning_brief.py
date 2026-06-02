@@ -14,6 +14,10 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(Path.cwd().resolve()) != str(PROJECT_ROOT.resolve()):
     os.chdir(PROJECT_ROOT)
 
+from backend.config.local_safe_mode import apply_local_safe_mode_defaults
+
+apply_local_safe_mode_defaults()
+
 
 def main() -> int:
     from backend.telegram.telegram_brief_scheduler import build_morning_brief_text, send_brief

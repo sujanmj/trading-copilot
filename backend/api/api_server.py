@@ -714,11 +714,14 @@ def _local_browser_cors_origins() -> list[str]:
 
 
 def _cors_allow_origins() -> list[str]:
-    if IS_RAILWAY:
-        return ["*"]
-    if LOCAL_ONLY or IS_LOCAL_DEV:
-        return _local_browser_cors_origins()
-    return _local_browser_cors_origins()
+    origins = list(_local_browser_cors_origins())
+    extra = os.environ.get('ALLOWED_ORIGINS', '').strip()
+    if extra:
+        for part in extra.split(','):
+            part = part.strip()
+            if part and part not in origins:
+                origins.append(part)
+    return origins
 
 
 app.add_middleware(

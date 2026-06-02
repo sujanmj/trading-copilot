@@ -8,6 +8,7 @@ Usage:
 Environment:
   TELEGRAM_BRIEF_SCHEDULER=1  — enable IST scheduled briefs
   DISABLE_TELEGRAM_LISTENER=0 — required for polling
+  ALLOW_LOCAL_TELEGRAM=1      — required on local laptop (Railway is live)
 """
 
 from __future__ import annotations
@@ -23,6 +24,14 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(Path.cwd().resolve()) != str(PROJECT_ROOT.resolve()):
     os.chdir(PROJECT_ROOT)
 
+from backend.config.local_safe_mode import (
+    LOCAL_TELEGRAM_DISABLED_MSG,
+    apply_local_safe_mode_defaults,
+    local_telegram_runner_blocked,
+)
+
+apply_local_safe_mode_defaults()
+
 
 def _env_truthy(name: str) -> bool:
     return os.environ.get(name, '').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -33,6 +42,10 @@ def main() -> int:
     from backend.telegram.response_format import TRADE_EXECUTION_PERMANENTLY_DISABLED
     from backend.telegram.telegram_analysis_bot import listen_forever
     from backend.utils.telegram_guard import is_telegram_listener_enabled
+
+    if local_telegram_runner_blocked():
+        print(LOCAL_TELEGRAM_DISABLED_MSG, flush=True)
+        return 1
 
     print('[TG_ANALYSIS_RUNNER] starting Telegram Analysis Bot')
     print(f'[TG_ANALYSIS_RUNNER] stage_marker={STAGE_MARKER}')

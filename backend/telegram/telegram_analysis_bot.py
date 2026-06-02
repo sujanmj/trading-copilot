@@ -111,11 +111,21 @@ def send_analysis_message(
     if dry_run:
         return {'ok': True, 'sent': False, 'dry_run': True, 'text': message}
 
-    from backend.utils.telegram_guard import is_telegram_send_enabled, telegram_send_skipped
+    from backend.config.local_safe_mode import local_telegram_send_dry_run
+    from backend.utils.config import DISABLE_TELEGRAM, DISABLE_TELEGRAM_SENDS
+    from backend.utils.telegram_guard import (
+        is_telegram_send_enabled,
+        telegram_send_dry_run,
+        telegram_send_skipped,
+    )
 
-    if not is_telegram_send_enabled():
-        telegram_send_skipped('telegram_analysis_bot.send_analysis_message')
-        return {'ok': False, 'sent': False, 'skipped': True, 'text': message}
+    if local_telegram_send_dry_run():
+        return telegram_send_dry_run('telegram_analysis_bot.send_analysis_message', text=message)
+
+    if not is_telegram_send_enabled() or DISABLE_TELEGRAM or DISABLE_TELEGRAM_SENDS:
+        skipped = telegram_send_skipped('telegram_analysis_bot.send_analysis_message')
+        skipped['text'] = message
+        return skipped
 
     if not BOT_TOKEN or not CHAT_ID:
         safe_print('[TG_ANALYSIS] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID')
