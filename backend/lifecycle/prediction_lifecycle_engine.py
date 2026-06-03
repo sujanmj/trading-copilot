@@ -489,26 +489,36 @@ def get_pending_classification() -> dict:
 
 def generate_daily_resolution_summary(eod_stats: Optional[dict] = None) -> dict:
     """Post-EOD resolution rollup for review/Telegram."""
+    from backend.analytics.eod_outcome_scoring import compute_eod_outcome_summary, persist_eod_summary
+
     pending = get_pending_classification()
-    daily = get_daily_lifecycle_summary()
-    eod = eod_stats or {}
-    lifecycle = eod.get('lifecycle') or eod if isinstance(eod, dict) else {}
+    summary = compute_eod_outcome_summary()
+    persist_eod_summary(summary)
+    lifecycle = (eod_stats or {}).get('lifecycle') or {}
     return {
         'date': _today(),
-        'resolved_today': daily.get('resolved_today', 0),
-        'wins_today': daily.get('wins_today', 0),
-        'losses_today': daily.get('losses_today', 0),
-        'neutral_today': lifecycle.get('neutral', 0),
-        'expired_today': lifecycle.get('expired', 0),
+        'resolved_today': summary.get('resolved', 0),
+        'wins_today': summary.get('wins', 0),
+        'losses_today': summary.get('losses', 0),
+        'neutral_today': summary.get('neutrals', 0),
+        'partials_today': summary.get('partials', 0),
+        'expired_today': summary.get('expired', 0),
         'pending_active': pending.get('pending_active', 0),
         'pending_expired': pending.get('expired', 0),
         'pending_low_data': pending.get('low_data_pending', 0),
         'neutralized_today': pending.get('neutralized_today', 0),
+        'by_alert_type': summary.get('by_alert_type'),
+        'best': summary.get('best'),
+        'worst': summary.get('worst'),
+        'data_available': summary.get('data_available'),
         'summary_text': (
-            f"EOD resolved {daily.get('resolved_today', 0)} · "
-            f"W{daily.get('wins_today', 0)}/L{daily.get('losses_today', 0)} · "
+            f"EOD resolved {summary.get('resolved', 0)} · "
+            f"W{summary.get('wins', 0)}/L{summary.get('losses', 0)}/"
+            f"N{summary.get('neutrals', 0)}/P{summary.get('partials', 0)} · "
             f"pending active {pending.get('pending_active', 0)}"
         ),
+        'lifecycle_neutral': lifecycle.get('neutral', 0),
+        'lifecycle_expired': lifecycle.get('expired', 0),
     }
 
 
@@ -627,28 +637,30 @@ def build_calibration_snapshot() -> dict:
 
 def get_daily_lifecycle_summary() -> dict:
     """Summary block for daily review / journal enrichment."""
-    history = load_prediction_history(limit=50)
-    today = _today()
-    today_resolved = [h for h in history if str(h.get('resolved_at') or '').startswith(today)
-                      or str(h.get('prediction_date') or '') == today]
-    wins = [h for h in today_resolved if h.get('state') == 'WIN']
-    losses = [h for h in today_resolved if h.get('state') == 'LOSS']
-    partials = [h for h in today_resolved if h.get('state') == 'PARTIAL']
-    neutrals = [h for h in today_resolved if h.get('state') == 'NEUTRAL']
+    from backend.analytics.eod_outcome_scoring import compute_eod_outcome_summary
+
+    eod = compute_eod_outcome_summary()
     state = load_lifecycle_state()
     cal = _load_json(CALIBRATION_HISTORY_FILE, {}).get('latest') or {}
     pending = get_pending_classification()
 
+    best = (eod.get('best') or [None])[0] if eod.get('best') else None
+    worst = (eod.get('worst') or [None])[0] if eod.get('worst') else None
+
     return {
         'evaluation_complete': state.get('evaluation_cycle_complete'),
         'last_cycle_at': state.get('last_eod_cycle_at'),
-        'resolved_today': len(today_resolved),
-        'wins_today': len(wins),
-        'losses_today': len(losses),
-        'partials_today': len(partials),
-        'neutral_today': len(neutrals),
-        'best_prediction': wins[0] if wins else None,
-        'worst_prediction': losses[0] if losses else None,
+        'resolved_today': eod.get('resolved', 0),
+        'wins_today': eod.get('wins', 0),
+        'losses_today': eod.get('losses', 0),
+        'partials_today': eod.get('partials', 0),
+        'neutral_today': eod.get('neutrals', 0),
+        'expired_today': eod.get('expired', 0),
+        'best_prediction': best,
+        'worst_prediction': worst,
+        'best_predictions': eod.get('best') or [],
+        'worst_predictions': eod.get('worst') or [],
+        'eod_resolution': eod,
         'win_rate': cal.get('win_rate'),
         'confidence_realism': cal.get('confidence_realism'),
         'false_positive_rate': cal.get('false_positive_rate'),
@@ -656,6 +668,7 @@ def get_daily_lifecycle_summary() -> dict:
         'stale_invalidated': state.get('stale_invalidated', 0),
         'pending_classification': pending,
         'tomorrow_outlook': 'Fresh post-market intelligence generated' if state.get('brain_refresh_at') else 'Pending refresh',
+        'outcome_data_available': eod.get('data_available', False),
     }
 
 
@@ -693,55 +706,16 @@ def send_telegram_daily_review(review: dict, lifecycle_summary: dict) -> dict:
     except Exception as e:
         return {'sent': False, 'reason': str(e)}
 
-    perf = review.get('performance_summary') or {}
-    summary = review.get('daily_summary') or {}
     lc = lifecycle_summary or review.get('lifecycle_summary') or {}
     pending = lc.get('pending_classification') or get_pending_classification()
     eod_summary = lc.get('eod_resolution') or {}
 
-    wins = lc.get('wins_today', 0)
-    losses = lc.get('losses_today', 0)
-    partials = lc.get('partials_today', 0)
-    neutrals = lc.get('neutral_today', 0)
-    signals = perf.get('signals_generated') or lc.get('resolved_today') or 0
+    if not eod_summary:
+        from backend.analytics.eod_outcome_scoring import compute_eod_outcome_summary
+        eod_summary = compute_eod_outcome_summary()
 
-    highlights = review.get('highlights') or {}
-
-    best = highlights.get('best_bullish') or lc.get('best_prediction') or {}
-    worst = highlights.get('biggest_miss') or lc.get('worst_prediction') or {}
-
-    best_line = '—'
-    if isinstance(best, dict):
-        ticker = best.get('ticker') or best.get('label') or ''
-        pct = best.get('gain_loss_pct') or best.get('max_gain_pct') or best.get('change_1d_pct')
-        if ticker:
-            best_line = f"{ticker} {pct:+.1f}%" if pct is not None else ticker
-    elif best:
-        best_line = str(best)
-
-    worst_line = '—'
-    if isinstance(worst, dict):
-        ticker = worst.get('ticker') or worst.get('label') or ''
-        pct = worst.get('gain_loss_pct') or worst.get('max_loss_pct') or worst.get('change_1d_pct')
-        if ticker:
-            worst_line = f"{ticker} {pct:+.1f}%" if pct is not None else ticker
-
-    regime = summary.get('regime') or (review.get('regime_analysis') or {}).get('final_regime') or 'unknown'
-    tomorrow = lc.get('tomorrow_outlook') or review.get('observation') or 'Fresh scanner-led opportunities pending open.'
-
-    msg = (
-        f"<b>📘 DAILY REVIEW</b>\n\n"
-        f"<b>EOD Resolution</b>\n"
-        f"Resolved: {signals} · W{wins}/L{losses}/N{neutrals}\n"
-        f"Pending Active: {pending.get('pending_active', 0)} · "
-        f"Expired: {pending.get('expired', 0)} · "
-        f"Neutralized: {pending.get('neutralized_today', 0)}\n\n"
-        f"Partial: {partials}\n\n"
-        f"<b>Best:</b>\n{best_line}\n\n"
-        f"<b>Worst:</b>\n{worst_line}\n\n"
-        f"<b>Regime:</b>\n{regime}\n\n"
-        f"<b>Tomorrow:</b>\n{str(tomorrow)[:280]}"
-    )
+    from backend.analytics.eod_outcome_scoring import format_eod_telegram_message
+    msg = format_eod_telegram_message(eod_summary, pending_meta=pending)
     send_message(msg)
     return {'sent': True}
 

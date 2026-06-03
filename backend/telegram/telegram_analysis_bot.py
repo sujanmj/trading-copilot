@@ -73,6 +73,8 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 
 <b>Core:</b>
 /status — system status
+/health — runtime health
+/schedule — premarket + brief schedule
 /memory — market memory
 /broker — broker intelligence
 /qa — QA status
@@ -83,6 +85,13 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /today — today confluence pick
 /tomorrow — tomorrow confluence pick
 /why &lt;ticker&gt; — reason/risk/confirmation
+/premarket — premarket top setups
+/premarket full — full premarket brief
+
+<b>Refresh:</b>
+/refresh — quick scoped refresh
+/refresh quick — quick scoped refresh
+/refresh full — full closed-market refresh
 
 <b>AI Hub:</b>
 /aihub — tab menu
@@ -296,6 +305,71 @@ def _handle_ask(args: str) -> str:
     return f'{fallback}\n<i>Context attempted: {context_note}</i>'
 
 
+def _handle_premarket(full: bool = False) -> str:
+    from backend.analytics.premarket_conviction import format_premarket_telegram
+
+    return format_premarket_telegram(full=full)
+
+
+def _handle_refresh(scope: str) -> str:
+    from backend.telegram.lazy_command_runner import _scoped_refresh
+
+    scope_norm = (scope or 'quick').strip().lower()
+    if scope_norm in ('', 'refresh'):
+        scope_norm = 'quick'
+    if scope_norm == 'quick':
+        result = _scoped_refresh('runtime')
+        news = _scoped_refresh('news')
+        result['news'] = news.get('news', news.get('ok'))
+        lines = [
+            '<b>🔄 Quick refresh started</b>',
+            f"Runtime: {result.get('runtime', '—')}",
+            f"News: {news.get('news', '—')}",
+            '<i>Scoped refresh only — no restart or redeploy.</i>',
+        ]
+        return '\n'.join(lines)
+    if scope_norm == 'full':
+        result = _scoped_refresh('closed-market')
+        lines = [
+            '<b>🔄 Full refresh started</b>',
+            f"Status: {'ok' if result.get('ok') else 'partial'}",
+            f"Daily pack: {result.get('daily_pack', '—')}",
+            '<i>Background refresh — DB and /app/data preserved.</i>',
+        ]
+        return '\n'.join(lines)
+    result = _scoped_refresh(scope_norm)
+    return (
+        f"<b>🔄 Refresh ({scope_norm})</b>\n"
+        f"Status: {'ok' if result.get('ok') else 'partial'}\n"
+        f"<i>No restart or redeploy.</i>"
+    )
+
+
+def _handle_health() -> str:
+    lines = ['<b>🩺 Health</b>']
+    try:
+        from backend.storage.data_paths import data_preserved, get_data_root
+        from backend.utils.telegram_guard import is_telegram_listener_enabled, is_telegram_send_enabled
+
+        root = get_data_root()
+        lines.append(f"Data root: <code>{root.as_posix()}</code>")
+        lines.append(f"Data preserved: {'yes' if data_preserved() else 'check'}")
+        lines.append(
+            f"Telegram listener/sends: "
+            f"{'on' if is_telegram_listener_enabled() and is_telegram_send_enabled() else 'off'}"
+        )
+    except Exception as exc:
+        lines.append(f'Status: degraded ({str(exc)[:80]})')
+    lines.append('Telegram build: <code>AstraEdge 46G</code>')
+    return '\n'.join(lines)
+
+
+def _handle_schedule() -> str:
+    from backend.telegram.premarket_scheduler import format_schedule_text
+
+    return format_schedule_text()
+
+
 def _handle_morning() -> str:
     from backend.telegram.telegram_brief_scheduler import build_morning_brief_text
 
@@ -400,6 +474,15 @@ def handle_analysis_command(
     elif cmd == 'action' and (args or '').strip().lower() == 'plan':
         result = run_without_ai(run_action_plan_only, command='action_plan')
         response_text = result.get('text') or 'Action plan unavailable.'
+    elif cmd == 'premarket':
+        full = (args or '').strip().lower() == 'full'
+        response_text = run_without_ai(lambda: {'text': _handle_premarket(full=full)}, command='premarket').get('text') or _handle_premarket(full=full)
+    elif cmd == 'refresh':
+        response_text = run_without_ai(lambda: {'text': _handle_refresh(args or 'quick')}, command='refresh').get('text') or _handle_refresh(args or 'quick')
+    elif cmd == 'health':
+        response_text = run_without_ai(lambda: {'text': _handle_health()}, command='health').get('text') or _handle_health()
+    elif cmd == 'schedule':
+        response_text = run_without_ai(lambda: {'text': _handle_schedule()}, command='schedule').get('text') or _handle_schedule()
     else:
         response_text = f'Unknown command: <code>{cmd}</code>\nType /help for allowed commands.'
 
@@ -564,6 +647,11 @@ def ensure_astraedge_telegram_started() -> bool:
         if _astraedge_telegram_started:
             return True
         start_listener_thread()
+        try:
+            from backend.telegram.premarket_scheduler import start_premarket_scheduler
+            start_premarket_scheduler()
+        except Exception as exc:
+            safe_print(f'[TG_ANALYSIS] premarket scheduler failed: {exc}')
         print('ASTRAEDGE_TELEGRAM_ANALYSIS_BOT_STARTED', flush=True)
         _astraedge_telegram_started = True
         return True

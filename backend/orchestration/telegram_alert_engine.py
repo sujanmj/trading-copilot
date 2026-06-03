@@ -293,25 +293,11 @@ def try_pre_market() -> int:
 
 
 def format_opportunity(signal: dict, intel: dict, state: dict) -> str:
-    regime, vol, disagree = _regime_context(state)
-    ticker = signal.get('ticker', '?')
-    sector = signal.get('sector', '?')
-    direction = signal.get('direction', '?')
-    chg = float(signal.get('change_percent') or 0)
-    vol_r = float(signal.get('volume_ratio') or 0)
-    price = float(signal.get('price') or 0)
-    conf = _signal_confidence(signal, intel, state)
-    risk = 'Elevated volatility — size down' if vol > 0.6 else 'Standard risk controls'
-    if disagree > 0.45:
-        risk = 'Conflicting signals — wait for confirmation'
-
-    return f"""<b>🎯 OPEN SETUP</b> <code>{regime.replace('_', ' ').upper()}</code>
-<b>{ticker}</b> · {sector} · {direction}
-{chg:+.2f}% · vol {vol_r:.1f}x · Rs.{price:,.0f}
-<b>Confidence:</b> {conf:.0%}
-<b>Risk:</b> {risk}
-
-<i>High Conviction open opportunity filter</i>"""
+    regime, _, _ = _regime_context(state)
+    base_conf = _signal_confidence(signal, intel, state)
+    from backend.orchestration.alert_quality_filters import format_open_setup_alert
+    text, _, _ = format_open_setup_alert(signal, intel, state, base_conf, regime)
+    return text
 
 
 def try_open_opportunity() -> int:
@@ -341,7 +327,11 @@ def try_open_opportunity() -> int:
                 INTRADAY_OPPORTUNITY, 'unresolved_contradiction', signal.get('ticker', ''))
             continue
 
-        confidence = _signal_confidence(signal, intel, state)
+        base_conf = _signal_confidence(signal, intel, state)
+        from backend.orchestration.alert_quality_filters import adjust_open_setup_confidence
+        confidence, _, watch_only, _ = adjust_open_setup_confidence(signal, base_conf, intel, state)
+        if watch_only and confidence > 0.65:
+            confidence = 0.65
         ticker = str(signal.get('ticker', ''))
         dedupe = f"open_{ticker}_{signal.get('direction')}_{datetime.now().strftime('%Y-%m-%d')}"
         text = format_opportunity(signal, intel, state)
@@ -431,9 +421,14 @@ def try_intraday_events() -> int:
     if not events:
         return 0
 
-    sent = 0
-    batched = []
-    for ev in events[:4]:
+    from backend.orchestration.intraday_alert_state import (
+        filter_intraday_events,
+        format_intraday_batch,
+        record_intraday_sent,
+    )
+
+    eligible = []
+    for ev in events[:6]:
         ok, _ = should_send_alert(
             INTRADAY_EVENT, ev['confidence'],
             ticker=ev.get('ticker', ''),
@@ -441,24 +436,29 @@ def try_intraday_events() -> int:
             regime=regime, volatility=vol,
         )
         if ok:
-            batched.append(ev)
+            eligible.append(ev)
 
-    if not batched:
+    partition = filter_intraday_events(eligible, regime)
+    to_send = (partition.get('new') or []) + (partition.get('changed') or [])
+    if not to_send:
         return 0
 
-    if len(batched) == 1:
-        ev = batched[0]
+    sent = 0
+    if len(to_send) == 1 and not (partition.get('new') and partition.get('changed')):
+        ev = to_send[0]
         text = f"<b>⚡ INTRADAY EVENT</b> <code>{ev['type'].upper()}</code>\n{ev['detail']}\n<b>Conf:</b> {ev['confidence']:.0%}"
         if _dispatch(INTRADAY_EVENT, text, ev['confidence'], ev['detail'],
                      ticker=ev.get('ticker', ''), dedupe_key=ev.get('dedupe', ''),
                      regime=regime, volatility=vol):
+            record_intraday_sent(ev)
             sent += 1
     else:
-        lines = [f"• [{e['type']}] {e['detail'][:80]}" for e in batched[:3]]
-        conf = max(e['confidence'] for e in batched)
-        text = f"<b>⚡ INTRADAY BATCH</b> <code>{regime.replace('_', ' ').upper()}</code>\n" + '\n'.join(lines)
+        conf = max(e['confidence'] for e in to_send)
+        text = format_intraday_batch(partition, regime)
         dedupe = f"batch_{datetime.now().strftime('%Y-%m-%d-%H')}"
         if _dispatch(INTRADAY_EVENT, text, conf, 'intraday batch', dedupe_key=dedupe, regime=regime, volatility=vol):
+            for ev in to_send:
+                record_intraday_sent(ev)
             sent += 1
     return sent
 
@@ -577,6 +577,11 @@ def try_close_summary() -> int:
 
 def try_emergency_macro() -> tuple[int, int]:
     """Returns (sent, skipped). Emergency may be detected when skipped."""
+    from backend.orchestration.alert_quality_filters import (
+        evaluate_emergency_macro,
+        record_emergency_macro_sent,
+    )
+
     govt = _load(FILES['govt'])
     news = _load(FILES['news'])
     state = _load_analysis_state()
@@ -599,12 +604,18 @@ def try_emergency_macro() -> tuple[int, int]:
         return 0, 0
 
     candidates.sort(key=lambda x: x[0], reverse=True)
-    conf, headline, _ = candidates[0]
+    conf, headline, item = candidates[0]
+    should_send, skip_reason, theme = evaluate_emergency_macro(headline, conf, item=item)
+    if not should_send:
+        if skip_reason in ('duplicate_headline', 'theme_repeat'):
+            return 0, 1
+        return 0, 0
+
     dedupe = f"emergency_{headline[:50]}"
     text = f"""<b>🚨 Emergency Macro</b>
 {headline[:900]}
 <b>Confidence:</b> {conf:.0%}
-<i>High market impact detected</i>"""
+<i>Direct market impact · theme {theme.replace('_', ' ')}</i>"""
 
     ok, _ = should_send_alert(
         EMERGENCY_MACRO_ALERT, conf, dedupe_key=dedupe, regime=regime, volatility=vol,
@@ -626,6 +637,7 @@ def try_emergency_macro() -> tuple[int, int]:
         EMERGENCY_MACRO_ALERT, dedupe_key=dedupe,
         headline=headline, sentiment='NEUTRAL', confidence=conf,
     )
+    record_emergency_macro_sent(headline, conf, theme)
     get_observability().record_emergency(headline[:120])
     get_observability().record_sent(EMERGENCY_MACRO_ALERT, headline[:100], {'confidence': conf})
     return 1, 0
