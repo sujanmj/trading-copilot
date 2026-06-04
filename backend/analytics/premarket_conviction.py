@@ -1,5 +1,5 @@
 """
-Premarket conviction pipeline (Stage 46G).
+Premarket conviction pipeline (Stage 46H).
 
 Builds premarket_conviction_report.json and Telegram message formatters.
 Research-only wording — watch for entry, confirm after 9:15, no blind entry.
@@ -180,6 +180,102 @@ def _build_setup_candidates(
     return candidates[:limit]
 
 
+def _format_sentiment_value(value: Any) -> str:
+    """Render sentiment dict/list as clean lines — never raw Python dict."""
+    if value is None:
+        return '—'
+    if isinstance(value, str):
+        return value[:200]
+    if isinstance(value, dict):
+        lines = []
+        for key in ('summary', 'consensus', 'bias', 'mood', 'stance'):
+            if value.get(key):
+                lines.append(f"{key.replace('_', ' ').title()}: {value[key]}")
+        for key, val in value.items():
+            if key in ('summary', 'consensus', 'bias', 'mood', 'stance'):
+                continue
+            if isinstance(val, (str, int, float)):
+                lines.append(f"{str(key).replace('_', ' ').title()}: {val}")
+        return '\n'.join(lines[:6]) if lines else '—'
+    if isinstance(value, list):
+        return ', '.join(str(v) for v in value[:6]) or '—'
+    return str(value)[:200]
+
+
+def _ticker_vol_ratio(ticker: str, scanner: dict) -> float:
+    for sig in (scanner or {}).get('top_signals', []) or []:
+        if not isinstance(sig, dict):
+            continue
+        if str(sig.get('ticker', '')).upper() == ticker.upper():
+            return _safe_float(sig.get('volume_ratio'))
+    return 0.0
+
+
+def _has_catalyst(setup: dict, intel: dict) -> bool:
+    reasons = ' '.join(str(r) for r in (setup.get('reasons') or [])).lower()
+    catalyst_words = ('earnings', 'result', 'guidance', 'order', 'deal', 'upgrade', 'downgrade', 'catalyst')
+    if any(w in reasons for w in catalyst_words):
+        return True
+    ticker = str(setup.get('ticker', '')).upper()
+    for row in (intel or {}).get('top_opportunities') or []:
+        if isinstance(row, dict) and str(row.get('symbol', row.get('ticker', ''))).upper() == ticker:
+            logic = str(row.get('logic', '')).lower()
+            if any(w in logic for w in catalyst_words):
+                return True
+    return False
+
+
+def _apply_volume_caps(setups: list[dict], scanner: dict, intel: dict) -> list[dict]:
+    """Weak volume premarket caps — vol<0.5 not Top3 unless catalyst; vol<0.3 Watch Later."""
+    adjusted: list[dict] = []
+    for setup in setups:
+        ticker = str(setup.get('ticker', '')).upper()
+        vol_r = _ticker_vol_ratio(ticker, scanner)
+        row = dict(setup)
+        if vol_r < 0.3:
+            row['setup'] = 'Watch Later — weak volume'
+            row['score'] = min(int(row.get('score', 50)), 48)
+            row['tier_cap'] = 'not_top3'
+            row['watch_only'] = True
+        elif vol_r < 0.5:
+            if not _has_catalyst(row, intel):
+                row['setup'] = 'WATCH ONLY — weak participation'
+                row['score'] = min(int(row.get('score', 50)), 60)
+                row['tier_cap'] = 'not_top3'
+                row['watch_only'] = True
+        adjusted.append(row)
+    return adjusted
+
+
+def _apply_conflict_guard(setups: list[dict], avoids: list[dict]) -> list[dict]:
+    avoid_tickers = {str(a.get('ticker', '')).upper() for a in avoids if a.get('ticker')}
+    top_tickers = {str(s.get('ticker', '')).upper() for s in setups[:3]}
+    conflicted = top_tickers & avoid_tickers
+    if not conflicted:
+        return setups
+    out: list[dict] = []
+    for setup in setups:
+        ticker = str(setup.get('ticker', '')).upper()
+        if ticker in conflicted:
+            row = dict(setup)
+            row['setup'] = 'Conflict/Wait'
+            row['score'] = min(int(row.get('score', 50)), 55)
+            row['conflict'] = True
+            out.append(row)
+        else:
+            out.append(setup)
+    return out
+
+
+def _rank_top_setups(setups: list[dict], limit: int = 5) -> list[dict]:
+    """Top 3 excludes not_top3 unless catalyst cleared cap."""
+    eligible = [s for s in setups if s.get('tier_cap') != 'not_top3']
+    deferred = [s for s in setups if s.get('tier_cap') == 'not_top3']
+    ranked = sorted(eligible, key=lambda c: c.get('score', 0), reverse=True)
+    tail = sorted(deferred, key=lambda c: c.get('score', 0), reverse=True)
+    return (ranked + tail)[:limit]
+
+
 def _build_avoid_list(intel: dict, scanner: dict) -> list[dict]:
     avoids: list[dict] = []
     for row in (intel or {}).get('risks_and_avoids') or []:
@@ -232,12 +328,15 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
 
     bullish_sectors, bearish_sectors = _sector_cues(intel)
     setups = _build_setup_candidates(scanner, watchlist, final_conf, intel)
+    setups = _apply_volume_caps(setups, scanner, intel)
     avoids = _build_avoid_list(intel, scanner)
+    setups = _apply_conflict_guard(setups, avoids)
+    setups = _rank_top_setups(setups)
 
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '46G',
+        'stage': '46H',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': _market_mode_and_freshness(daily_pack, final_conf),
         'overnight_global': {
@@ -248,7 +347,9 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
         },
         'india_news_count': len((news or {}).get('articles') or []),
         'govt_high_impact': len((govt or {}).get('high_impact_items') or []),
-        'broker_sentiment': (broker or {}).get('summary') or (broker or {}).get('consensus'),
+        'broker_sentiment': _format_sentiment_value(
+            (broker or {}).get('summary') or (broker or {}).get('consensus') or broker
+        ),
         'sector_cues': {'bullish': bullish_sectors, 'bearish': bearish_sectors},
         'top_setups': setups,
         'avoid': avoids,
@@ -310,9 +411,10 @@ def format_premarket_telegram(*, full: bool = False, report: Optional[dict] = No
         og = data.get('overnight_global') or {}
         lines.extend([
             '',
-            '<b>Overnight / global</b>',
+            '<b>Overnight / global (US context only)</b>',
             f"• Sentiment: {og.get('sentiment') or '—'}",
             f"• US close: {str(og.get('us_close') or '—')[:120]}",
+            '<i>US/global cues for India open — not a US trading signal.</i>',
             '',
             '<b>Sectors</b>',
             f"↑ {', '.join(sectors.get('bullish') or []) or '—'}",
@@ -320,8 +422,10 @@ def format_premarket_telegram(*, full: bool = False, report: Optional[dict] = No
             '',
             f"<b>News articles:</b> {data.get('india_news_count', 0)} · "
             f"<b>Govt high impact:</b> {data.get('govt_high_impact', 0)}",
-            f"<b>Broker:</b> {str(data.get('broker_sentiment') or '—')[:100]}",
+            '<b>Broker sentiment</b>',
         ])
+        broker_lines = str(data.get('broker_sentiment') or '—').split('\n')
+        lines.extend(f'• {line}' for line in broker_lines[:5])
 
     lines.extend(['', '<b>Avoid:</b>'])
     if avoids:
@@ -350,9 +454,14 @@ def _enforce_wording(text: str) -> str:
 
 def send_scheduled_premarket(slot: str, *, send_fn: Optional[Callable[[str], bool]] = None) -> bool:
     """Send premarket alert for scheduler slot."""
+    from backend.orchestration.alert_freshness_gate import gate_alert_dispatch
+
+    allow, gate_msg = gate_alert_dispatch('PRE_MARKET')
     report = build_premarket_conviction_report(persist=True)
     full = slot in ('premarket_full', 'premarket_action', 'premarket_confirm')
     text = format_premarket_telegram(full=full, report=report)
+    if not allow and gate_msg:
+        text = f'{text}\n\n<i>{gate_msg}</i>'
     if send_fn:
         return bool(send_fn(text))
     try:

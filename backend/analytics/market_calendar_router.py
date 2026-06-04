@@ -35,9 +35,11 @@ VALID_HOLIDAY_TYPES = frozenset({'full_day', 'early_close', 'special_session'})
 USA_EARLY_CLOSE_DEFAULT = time(13, 0)
 
 # Session boundaries (local market time)
-INDIA_PREMARKET = (time(8, 0), time(9, 15))
+INDIA_PREMARKET = (time(7, 45), time(9, 0))
+INDIA_PREOPEN = (time(9, 0), time(9, 15))
 INDIA_REGULAR = (time(9, 15), time(15, 30))
-INDIA_POSTMARKET = (time(15, 30), time(17, 0))
+INDIA_POSTMARKET = (time(15, 30), time(16, 30))
+INDIA_AFTER_HOURS_END = time(23, 0)
 
 USA_PREMARKET = (time(4, 0), time(9, 30))
 USA_REGULAR = (time(9, 30), time(16, 0))
@@ -45,7 +47,9 @@ USA_POSTMARKET = (time(16, 0), time(20, 0))
 
 MODE_INDIA = 'INDIA_MODE'
 MODE_INDIA_PREMARKET = 'INDIA_PREMARKET_MODE'
+MODE_INDIA_PREOPEN = 'INDIA_PREOPEN_MODE'
 MODE_INDIA_POSTMARKET = 'INDIA_POSTMARKET_MODE'
+MODE_INDIA_AFTER_HOURS = 'INDIA_AFTER_HOURS_MODE'
 MODE_USA = 'USA_MODE'
 MODE_USA_PREMARKET = 'USA_PREMARKET_MODE'
 MODE_USA_POSTMARKET = 'USA_POSTMARKET_MODE'
@@ -59,7 +63,9 @@ SESSION_POSTMARKET = 'postmarket'
 _MODE_LABELS = {
     MODE_INDIA: 'India Regular Session',
     MODE_INDIA_PREMARKET: 'India Pre-Market',
+    MODE_INDIA_PREOPEN: 'India Pre-Open',
     MODE_INDIA_POSTMARKET: 'India Post-Market',
+    MODE_INDIA_AFTER_HOURS: 'India After Hours',
     MODE_USA: 'USA Regular Session',
     MODE_USA_PREMARKET: 'USA Pre-Market',
     MODE_USA_POSTMARKET: 'USA Post-Market',
@@ -69,7 +75,9 @@ _MODE_LABELS = {
 _FOCUS_BY_MODE = {
     MODE_INDIA: 'Prioritize India equities — NSE/BSE live session',
     MODE_INDIA_PREMARKET: 'India pre-open prep — gaps, news, and opening range',
+    MODE_INDIA_PREOPEN: 'India pre-open auction window — confirm setups only',
     MODE_INDIA_POSTMARKET: 'India post-close review — outcomes and next-day setup',
+    MODE_INDIA_AFTER_HOURS: 'India after-hours — light intel, no emergency spam',
     MODE_USA: 'Prioritize US equities — NYSE/NASDAQ live session',
     MODE_USA_PREMARKET: 'US pre-market movers — futures, earnings, and gap watch',
     MODE_USA_POSTMARKET: 'US after-hours digest — earnings reactions and global spillover',
@@ -398,11 +406,11 @@ def _session_for_market(
 
     if market == 'india':
         is_day = is_india_market_day(local_day)
-        pre, reg, post = INDIA_PREMARKET, INDIA_REGULAR, INDIA_POSTMARKET
+        pre, preopen, reg, post = INDIA_PREMARKET, INDIA_PREOPEN, INDIA_REGULAR, INDIA_POSTMARKET
         reg_end = reg[1]
     else:
         is_day = is_us_market_day(local_day)
-        pre, reg, post = USA_PREMARKET, USA_REGULAR, USA_POSTMARKET
+        pre, preopen, reg, post = USA_PREMARKET, (time(0, 0), time(0, 0)), USA_REGULAR, USA_POSTMARKET
         early_close = _early_close_time(market, local_day)
         reg_end = early_close if early_close is not None else reg[1]
 
@@ -424,6 +432,9 @@ def _session_for_market(
         elif _in_window(local_t, pre[0], pre[1]):
             session = SESSION_PREMARKET
             session_label = 'Pre-Market'
+        elif market == 'india' and _in_window(local_t, preopen[0], preopen[1]):
+            session = SESSION_PREMARKET
+            session_label = 'Pre-Open'
         elif _in_window(local_t, post[0], post[1]) and not early_close_today:
             session = SESSION_POSTMARKET
             session_label = 'Post-Market'
@@ -462,15 +473,49 @@ def _session_for_market(
     }
 
 
+def _india_after_hours(india: dict[str, Any]) -> bool:
+    if not india.get('is_market_day'):
+        return False
+    if india.get('session') != SESSION_CLOSED:
+        return False
+    label = str(india.get('session_label') or '')
+    if 'weekend' in label.lower() or 'holiday' in label.lower():
+        return False
+    try:
+        local_dt = datetime.fromisoformat(str(india.get('local_time', '')))
+        if local_dt.weekday() >= 5:
+            return False
+        local_t = local_dt.time().replace(microsecond=0)
+        return local_t >= INDIA_POSTMARKET[1] and local_t < INDIA_AFTER_HOURS_END
+    except (ValueError, TypeError):
+        return 'off-hours' in label.lower()
+
+
 def _resolve_active_mode(india: dict[str, Any], usa: dict[str, Any]) -> tuple[str, str]:
     """Return (active_mode, routing_reason)."""
+    india_local = ''
+    try:
+        india_local = datetime.fromisoformat(str(india.get('local_time', ''))).time().replace(microsecond=0)
+    except (ValueError, TypeError):
+        pass
+    india_preopen = (
+        india.get('session') == SESSION_PREMARKET
+        and india_local
+        and _in_window(india_local, INDIA_PREOPEN[0], INDIA_PREOPEN[1])
+    )
+    india_premarket = (
+        india.get('session') == SESSION_PREMARKET
+        and not india_preopen
+    )
     checks = (
         (india.get('session') == SESSION_REGULAR, MODE_INDIA, 'India regular session active'),
         (usa.get('session') == SESSION_REGULAR, MODE_USA, 'USA regular session active'),
         (india.get('session') == SESSION_POSTMARKET, MODE_INDIA_POSTMARKET, 'India post-market window'),
         (usa.get('session') == SESSION_POSTMARKET, MODE_USA_POSTMARKET, 'USA post-market window'),
-        (india.get('session') == SESSION_PREMARKET, MODE_INDIA_PREMARKET, 'India pre-market window'),
+        (india_preopen, MODE_INDIA_PREOPEN, 'India pre-open window'),
+        (india_premarket, MODE_INDIA_PREMARKET, 'India pre-market window'),
         (usa.get('session') == SESSION_PREMARKET, MODE_USA_PREMARKET, 'USA pre-market window'),
+        (_india_after_hours(india), MODE_INDIA_AFTER_HOURS, 'India after-hours window'),
     )
     for cond, mode, reason in checks:
         if cond:

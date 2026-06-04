@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for alert quality filters (Stage 46G)."""
+"""Unit tests for alert quality filters (Stage 46H)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ def main() -> int:
         adjust_open_setup_confidence,
         classify_emergency_theme,
         evaluate_emergency_macro,
+        has_india_market_relevance,
         is_clickbait_headline,
+        is_scheduled_rbi_mpc,
         normalize_headline,
         record_emergency_macro_sent,
     )
@@ -108,11 +110,27 @@ def main() -> int:
     if cat3 != 'changed':
         return _fail(f'material price move should change, got {cat3}')
 
+    rbi_cal = 'RBI MPC meeting on policy rates today — scheduled calendar'
+    if not is_scheduled_rbi_mpc(rbi_cal):
+        return _fail('scheduled RBI MPC should be detected')
+    ok_rbi, reason_rbi, _ = evaluate_emergency_macro(rbi_cal, 0.9)
+    if ok_rbi:
+        return _fail('scheduled RBI MPC should not emergency alert')
+
+    global_only = 'Wall Street closes higher as Dow Jones leads US rally'
+    if has_india_market_relevance(global_only):
+        return _fail('generic US headline should lack India relevance')
+    ok_g, reason_g, _ = evaluate_emergency_macro(global_only, 0.85)
+    if ok_g:
+        return _fail('generic global should be skipped')
+
     engine_src = (PROJECT_ROOT / 'backend/orchestration/telegram_alert_engine.py').read_text(encoding='utf-8')
     if 'alert_quality_filters' not in engine_src:
         return _fail('telegram_alert_engine not wired to alert_quality_filters')
     if 'intraday_alert_state' not in engine_src:
         return _fail('telegram_alert_engine not wired to intraday_alert_state')
+    if 'alert_freshness_gate' not in engine_src:
+        return _fail('telegram_alert_engine not wired to alert_freshness_gate')
 
     print('ALERT_QUALITY_FILTERS_TEST_OK')
     return 0

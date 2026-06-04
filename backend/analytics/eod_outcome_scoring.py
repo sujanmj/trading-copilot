@@ -1,5 +1,5 @@
 """
-EOD outcome scoring for Telegram daily review (Stage 46G).
+EOD outcome scoring for Telegram daily review (Stage 46H).
 
 Fixes W0/L0/N0 when resolved count > 0 by scoring predictions and telegram alerts.
 """
@@ -143,6 +143,34 @@ def _top_movers(rows: list[dict], verdict: str, limit: int = 3) -> list[dict]:
     return filtered[:limit]
 
 
+def _alerts_sent_meta(review_date: str) -> dict:
+    """Today's Telegram alerts from observability — for tracked/scorable/pending."""
+    try:
+        from backend.orchestration.alert_filters import get_observability
+        obs = get_observability()
+        if obs._data.get('date') != review_date:
+            return {'alerts_sent': 0, 'alerts_tracked': 0, 'alerts_scorable': 0, 'alerts_pending_score': 0}
+        sent = obs._data.get('sent_today') or []
+        tracked = len(sent)
+        scorable = sum(
+            1 for row in sent
+            if isinstance(row, dict)
+            and str(row.get('category', '')).upper() in (
+                'PRE_MARKET', 'INTRADAY_OPPORTUNITY', 'INTRADAY_EVENT',
+                'EMERGENCY_MACRO_ALERT', 'MARKET_CLOSE_SUMMARY',
+            )
+        )
+        return {
+            'alerts_sent': tracked,
+            'alerts_tracked': tracked,
+            'alerts_scorable': scorable,
+            'alerts_pending_score': max(0, scorable),
+        }
+    except Exception as exc:
+        _log(f'alerts_sent meta error: {exc}')
+        return {'alerts_sent': 0, 'alerts_tracked': 0, 'alerts_scorable': 0, 'alerts_pending_score': 0}
+
+
 def compute_eod_outcome_summary(review_date: Optional[str] = None) -> dict:
     """Compute EOD W/L/N/P resolution summary for daily review."""
     date = review_date or _today()
@@ -179,8 +207,14 @@ def compute_eod_outcome_summary(review_date: Optional[str] = None) -> dict:
     best = _top_movers(all_rows, 'WIN', 3)
     worst = _top_movers(all_rows, 'LOSS', 3)
 
+    alerts_meta = _alerts_sent_meta(date)
+
     return {
         'date': date,
+        'alerts_sent': alerts_meta.get('alerts_sent', 0),
+        'alerts_tracked': alerts_meta.get('alerts_tracked', 0),
+        'alerts_scorable': alerts_meta.get('alerts_scorable', 0),
+        'alerts_pending_score': alerts_meta.get('alerts_pending_score', 0),
         'resolved': resolved,
         'wins': wins,
         'losses': losses,
@@ -212,13 +246,22 @@ def format_outcome_line(row: dict) -> str:
 
 
 def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] = None) -> str:
-    """Format DAILY REVIEW Telegram message per Stage 46G spec."""
+    """Format DAILY REVIEW Telegram message per Stage 46H spec."""
     pending = pending_meta or {}
-    if not summary.get('data_available') and summary.get('resolved', 0) == 0:
+    alerts_sent = int(summary.get('alerts_sent') or summary.get('alerts_tracked') or 0)
+    resolved = int(summary.get('resolved') or 0)
+
+    if alerts_sent > 0 and resolved == 0:
+        outcome_line = (
+            f"Alerts tracked: {summary.get('alerts_tracked', alerts_sent)} · "
+            f"scorable: {summary.get('alerts_scorable', 0)} · "
+            f"pending: {summary.get('alerts_pending_score', summary.get('pending', 0))}"
+        )
+    elif not summary.get('data_available') and resolved == 0:
         outcome_line = 'Outcome pending — price data unavailable.'
     else:
         outcome_line = (
-            f"Resolved: {summary.get('resolved', 0)} · "
+            f"Resolved: {resolved} · "
             f"W{summary.get('wins', 0)}/L{summary.get('losses', 0)}/"
             f"N{summary.get('neutrals', 0)}/P{summary.get('partials', 0)}"
         )

@@ -1,5 +1,5 @@
 """
-Alert quality filters (Stage 46G).
+Alert quality filters (Stage 46H).
 
 Open setup confidence tightening, emergency macro dedupe, clickbait filtering.
 """
@@ -45,6 +45,20 @@ DIRECT_IMPACT_KEYWORDS = (
     'rbi', 'sebi', 'sector', 'index', 'broader market', 'banking', 'it sector',
 )
 
+INDIA_RELEVANCE_KEYWORDS = DIRECT_IMPACT_KEYWORDS + (
+    'india', 'indian', 'nse', 'bse', 'rupee', 'inr', 'mpc', 'repo rate',
+)
+
+GENERIC_GLOBAL_ONLY = (
+    'wall street', 'dow jones', 'nasdaq', 's&p 500', 'fed chair', 'us jobs',
+    'european markets', 'china markets', 'japan markets',
+)
+
+RBI_SURPRISE_KEYWORDS = (
+    'surprise', 'unexpected', 'hike', 'cut', 'emergency', 'out of turn',
+    'deviation', 'shock', 'unscheduled',
+)
+
 
 def _log(tag: str, msg: str) -> None:
     print(f'[{tag}] {msg}', flush=True)
@@ -88,6 +102,30 @@ def classify_emergency_theme(headline: str) -> str:
 def is_clickbait_headline(headline: str) -> bool:
     lower = str(headline or '').lower()
     return any(re.search(pat, lower) for pat in CLICKBAIT_PATTERNS)
+
+
+def is_scheduled_rbi_mpc(headline: str) -> bool:
+    lower = str(headline or '').lower()
+    if 'rbi' not in lower and 'mpc' not in lower and 'repo' not in lower:
+        return False
+    calendar_words = ('calendar', 'scheduled', 'meeting today', 'policy meet', 'mpc meet')
+    return any(w in lower for w in calendar_words) and not any(w in lower for w in RBI_SURPRISE_KEYWORDS)
+
+
+def has_india_market_relevance(headline: str, item: Optional[dict] = None) -> bool:
+    """India/Nifty/sector impact — blocks generic global-only headlines."""
+    lower = str(headline or '').lower()
+    if any(k in lower for k in INDIA_RELEVANCE_KEYWORDS):
+        return True
+    if has_direct_market_impact(headline, item):
+        return True
+    if item and (item.get('sectors') or item.get('affected_sectors')):
+        return True
+    if any(g in lower for g in GENERIC_GLOBAL_ONLY) and not any(
+        k in lower for k in ('nifty', 'sensex', 'india', 'rupee', 'fii', 'rbi', 'sebi')
+    ):
+        return False
+    return False
 
 
 def has_direct_market_impact(headline: str, item: Optional[dict] = None) -> bool:
@@ -230,6 +268,14 @@ def evaluate_emergency_macro(
     if is_clickbait_headline(headline) and not has_direct_market_impact(headline, item):
         _log('EMERGENCY_MACRO_SKIPPED', f'reason=clickbait theme={theme}')
         return False, 'clickbait', theme
+
+    if is_scheduled_rbi_mpc(headline):
+        _log('EMERGENCY_MACRO_SKIPPED', f'reason=rbi_mpc_calendar theme={theme}')
+        return False, 'rbi_mpc_calendar', theme
+
+    if not has_india_market_relevance(headline, item):
+        _log('EMERGENCY_MACRO_SKIPPED', f'reason=no_india_relevance theme={theme}')
+        return False, 'no_india_relevance', theme
 
     if not has_direct_market_impact(headline, item):
         _log('EMERGENCY_MACRO_SKIPPED', f'reason=no_direct_impact theme={theme}')

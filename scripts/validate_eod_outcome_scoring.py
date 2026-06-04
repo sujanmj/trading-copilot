@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate EOD outcome scoring pack (Stage 46G)."""
+"""Validate EOD outcome scoring pack (Stage 46H)."""
 
 from __future__ import annotations
 

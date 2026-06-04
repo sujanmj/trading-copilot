@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for Telegram refresh/schedule/health commands (Stage 46G)."""
+"""Unit tests for Telegram refresh/schedule/health commands (Stage 46H)."""
 
 from __future__ import annotations
 
@@ -63,12 +63,12 @@ def main() -> int:
         return _fail('/schedule missing 07:45')
 
     health = handle_analysis_command('/health', 'test', dry_run=True)
-    if 'AstraEdge 46G' not in str(health[0].get('text', '')):
-        return _fail('/health missing AstraEdge 46G')
+    if 'AstraEdge 46H' not in str(health[0].get('text', '')):
+        return _fail('/health missing AstraEdge 46H')
 
     status = handle_analysis_command('/status', 'test', dry_run=True)
-    if 'AstraEdge 46G' not in str(status[0].get('text', '')):
-        return _fail('/status missing AstraEdge 46G build line')
+    if 'AstraEdge 46H' not in str(status[0].get('text', '')):
+        return _fail('/status missing AstraEdge 46H build line')
 
     print('TELEGRAM_REFRESH_COMMANDS_TEST_OK')
     return 0

@@ -474,15 +474,11 @@ def ask_ai(
             pool_meta = raw.pop('_pool_meta', {}) or {}
             fallback_used = True
     elif tier == 'strategic' or provider == 'anthropic':
-        print(f"  [AI] Using CLAUDE ({model_name}) for: {use_case}")
-        raw = call_anthropic(model_name, prompt, max_tokens)
-        if not raw.get('success') and tier == 'strategic':
-            print('  [AI] Claude failed — Gemini synthesis fallback')
-            raw = call_gemini('gemini-2.0-flash', prompt, max_tokens, use_case=use_case)
-            pool_meta = raw.pop('_pool_meta', {}) or {}
-            fallback_used = True
-            if raw.get('success'):
-                raw['model'] = f"{raw.get('model', 'gemini')} (claude-fallback)"
+        from backend.ai.ai_provider_fallback import call_strategic_with_cascade
+        print(f'  [AI] Strategic provider cascade for: {use_case}')
+        raw = call_strategic_with_cascade(prompt, use_case=use_case, max_tokens=max_tokens)
+        pool_meta = raw.pop('_pool_meta', {}) or {}
+        fallback_used = bool(raw.get('fallback_final') or 'cascade' in str(raw.get('model', '')))
     elif provider == 'google':
         print(f"  [AI] Using GEMINI pool ({model_name}) for: {use_case}")
         raw = call_gemini(model_name, prompt, max_tokens, use_case=use_case)

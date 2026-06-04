@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for EOD outcome scoring (Stage 46G)."""
+"""Unit tests for EOD outcome scoring (Stage 46H)."""
 
 from __future__ import annotations
 
@@ -51,6 +51,26 @@ def main() -> int:
         return _fail('W/L should not be zero when resolved > 0')
     if 'W0/L0/N0' in format_eod_telegram_message(summary):
         return _fail('telegram message shows W0/L0/N0 incorrectly')
+
+    alerts_summary = {
+        'date': '2026-06-03',
+        'alerts_sent': 4,
+        'alerts_tracked': 4,
+        'alerts_scorable': 3,
+        'alerts_pending_score': 3,
+        'resolved': 0,
+        'wins': 0,
+        'losses': 0,
+        'data_available': False,
+        'by_alert_type': {},
+        'best': [],
+        'worst': [],
+    }
+    alerts_msg = format_eod_telegram_message(alerts_summary)
+    if 'Alerts tracked' not in alerts_msg:
+        return _fail('alerts sent today should show tracked line not Resolved 0')
+    if 'Resolved: 0' in alerts_msg:
+        return _fail('should not show Resolved: 0 when alerts were sent')
 
     msg = format_eod_telegram_message(summary, pending_meta={'pending_active': 2, 'expired': 1})
     for needle in ('DAILY REVIEW', 'EOD Resolution', 'Open setups', 'Intraday', 'Emergency macro'):

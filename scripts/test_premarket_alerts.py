@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for premarket alerts (Stage 46G)."""
+"""Unit tests for premarket alerts (Stage 46H)."""
 
 from __future__ import annotations
 
@@ -23,6 +23,9 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     from backend.analytics.premarket_conviction import (
+        _apply_conflict_guard,
+        _apply_volume_caps,
+        _format_sentiment_value,
         build_premarket_conviction_report,
         format_premarket_telegram,
     )
@@ -32,8 +35,8 @@ def main() -> int:
     report = build_premarket_conviction_report(persist=True)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
-    if report.get('stage') != '46G':
-        return _fail('report stage not 46G')
+    if report.get('stage') != '46H':
+        return _fail('report stage not 46H')
 
     text = format_premarket_telegram(full=False, report=report)
     lower = text.lower()
@@ -47,6 +50,29 @@ def main() -> int:
     full = format_premarket_telegram(full=True, report=report)
     if 'PREMARKET FULL' not in full:
         return _fail('full premarket format missing FULL marker')
+    if '{' in full and '}' in full and "'summary'" in full:
+        return _fail('premarket full must not contain raw dict')
+    if 'US context only' not in full:
+        return _fail('full premarket missing US context-only label')
+
+    sent = _format_sentiment_value({'summary': 'Neutral', 'bias': 'Cautious'})
+    if '{' in sent:
+        return _fail('sentiment formatter leaked dict')
+
+    capped = _apply_volume_caps(
+        [{'ticker': 'ABC', 'score': 80, 'setup': 'WATCH', 'reasons': []}],
+        {'top_signals': [{'ticker': 'ABC', 'volume_ratio': 0.25}]},
+        {},
+    )
+    if capped[0].get('tier_cap') != 'not_top3':
+        return _fail('vol<0.3 should cap top3')
+
+    conflicted = _apply_conflict_guard(
+        [{'ticker': 'XYZ', 'score': 70, 'setup': 'WATCH'}],
+        [{'ticker': 'XYZ', 'reason': 'weak'}],
+    )
+    if conflicted[0].get('setup') != 'Conflict/Wait':
+        return _fail('top watch + avoid should be Conflict/Wait')
 
     expected_times = {(7, 45), (8, 0), (8, 15), (8, 30), (8, 45), (9, 10), (9, 20), (9, 30)}
     slot_times = set(PREMARKET_SLOTS.values())

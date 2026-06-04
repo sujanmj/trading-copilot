@@ -154,6 +154,17 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
               volatility: float = 0.0, direction: str = 'NEUTRAL',
               disagreement_score: float = 0.0) -> bool:
     try:
+        from backend.orchestration.alert_freshness_gate import gate_alert_dispatch
+        allow, gate_msg = gate_alert_dispatch(category)
+        if not allow and gate_msg:
+            _log('ALERT SUPPRESSED', f'freshness gate: {gate_msg}')
+            get_observability().record_suppressed(category, 'stale_data', gate_msg)
+            text = f'{text}\n\n<i>{gate_msg}</i>'
+            confidence = min(confidence, 0.55)
+    except Exception as e:
+        _log('ALERT', f'freshness gate error: {e}')
+
+    try:
         from backend.intelligence.institutional_language import apply_institutional_tone
         text = apply_institutional_tone(text)
     except Exception:

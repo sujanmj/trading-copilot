@@ -265,9 +265,16 @@ def call_expensive(
             'use_case': use_case,
             'event': 'claude_failed',
             'reason': str(result.get('error', 'unknown')),
-            'fallback': 'gemini_synthesis',
+            'fallback': 'provider_cascade',
         })
-        _log('CLAUDE SKIPPED', f"failed: {result.get('error')} — Gemini fallback")
+        _log('CLAUDE SKIPPED', f"failed: {result.get('error')} — fallback cascade")
+        from backend.ai.ai_provider_fallback import call_strategic_with_cascade
+        cascade = call_strategic_with_cascade(prompt, use_case=use_case, max_tokens=max_tokens)
+        if cascade.get('success'):
+            cost = float(cascade.get('estimated_cost') or 0)
+            record_cost(cost, cascade.get('model', 'cascade'), use_case, cascade.get('provider', 'rules'))
+            set_cached(cache_key, cascade, use_case)
+            return cascade
         return call_cheap(prompt, use_case='gemini_synthesis', max_tokens=max_tokens)
 
     cost = float(result.get('estimated_cost') or 0)

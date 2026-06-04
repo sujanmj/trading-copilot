@@ -12,9 +12,12 @@ IST = pytz.timezone('Asia/Kolkata')
 # IST session boundaries — canonical lifecycle authority
 _MARKET_OPEN = time(9, 15)
 _MARKET_ACTIVE_END = time(15, 29)
-_POST_MARKET_START = time(15, 31)
-_AFTER_HOURS_START = time(17, 0)
-_PRE_MARKET_START = time(8, 30)
+_POST_MARKET_START = time(15, 30)
+_POST_MARKET_END = time(16, 30)
+_AFTER_HOURS_START = time(16, 30)
+_PRE_MARKET_START = time(7, 45)
+_PREOPEN_START = time(9, 0)
+_PREOPEN_END = time(9, 15)
 _NIGHT_START = time(23, 0)
 _EARLY_MORNING = time(6, 0)
 
@@ -36,7 +39,7 @@ def is_market_holiday(now: Optional[datetime] = None) -> bool:
 
 
 def get_market_period(now: Optional[datetime] = None) -> str:
-    """Return: market | pre_market | post_market | after_hours | night | weekend."""
+    """Return: market | preopen | pre_market | post_market | after_hours | night | weekend."""
     now = _now_ist(now)
     if is_market_holiday(now):
         return 'weekend'
@@ -47,11 +50,13 @@ def get_market_period(now: Optional[datetime] = None) -> str:
         return 'night'
     if _MARKET_OPEN <= t <= _MARKET_ACTIVE_END:
         return 'market'
-    if _POST_MARKET_START <= t < _AFTER_HOURS_START:
+    if _POST_MARKET_START <= t < _POST_MARKET_END:
         return 'post_market'
-    if t >= _AFTER_HOURS_START:
+    if t >= _AFTER_HOURS_START and t < _NIGHT_START:
         return 'after_hours'
-    if _PRE_MARKET_START <= t < _MARKET_OPEN:
+    if _PREOPEN_START <= t < _PREOPEN_END:
+        return 'preopen'
+    if _PRE_MARKET_START <= t < _PREOPEN_START:
         return 'pre_market'
     return 'night'
 
@@ -61,6 +66,7 @@ def get_watchdog_config(now: Optional[datetime] = None) -> Dict[str, object]:
     period = get_market_period(now)
     thresholds = {
         'market': WATCHDOG_STALE_MARKET,
+        'preopen': WATCHDOG_STALE_PRE_MARKET,
         'pre_market': WATCHDOG_STALE_PRE_MARKET,
         'post_market': WATCHDOG_STALE_AFTER_HOURS,
         'after_hours': WATCHDOG_STALE_AFTER_HOURS,
@@ -69,8 +75,9 @@ def get_watchdog_config(now: Optional[datetime] = None) -> Dict[str, object]:
     }
     mode_labels = {
         'market': 'MARKET_HOURS',
-        'pre_market': 'PRE_MARKET',
-        'post_market': 'POST_MARKET',
+        'preopen': 'PREOPEN',
+        'pre_market': 'INDIA_PREMARKET_MODE',
+        'post_market': 'POSTMARKET',
         'after_hours': 'AFTER_HOURS',
         'night': 'NIGHT',
         'weekend': 'WEEKEND',
@@ -116,6 +123,11 @@ def get_operational_status(now: Optional[datetime] = None) -> Dict[str, object]:
             'premarket_prep',
             'PRE-MARKET ANALYSIS',
             'Pre-market prep — scanner, news, and sector synthesis active',
+        ),
+        'preopen': (
+            'preopen_watch',
+            'PRE-OPEN',
+            'Pre-open auction — confirm setups only after 9:15',
         ),
         'post_market': (
             'postmarket_eval',

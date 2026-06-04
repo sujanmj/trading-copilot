@@ -330,9 +330,41 @@ def emit_operational_alert(
     meta: Optional[dict] = None,
 ) -> dict:
     """Route + optionally send Telegram. OPS always receives the event."""
+    try:
+        from backend.orchestration.watchdog_throttle import (
+            can_send_emergency_telegram,
+            can_send_stale_telegram,
+            record_emergency_telegram_sent,
+            record_stale_telegram_sent,
+        )
+        if code == 'watchdog_stale_unrecovered' and not can_send_stale_telegram():
+            record_operational_event(
+                code, severity, message, meta=meta, telegram_decision='watchdog_throttle_stale',
+            )
+            return {'telegram': False, 'reason': 'watchdog_throttle_stale', 'severity': severity, 'code': code}
+        if code == 'watchdog_emergency' and not can_send_emergency_telegram():
+            record_operational_event(
+                code, severity, message, meta=meta, telegram_decision='watchdog_throttle_emergency',
+            )
+            return {'telegram': False, 'reason': 'watchdog_throttle_emergency', 'severity': severity, 'code': code}
+    except Exception:
+        pass
+
     decision = route_operational_alert(code, severity, message, period=period, meta=meta)
     if decision.get('telegram'):
         send_result = send_operational_telegram(message, severity=severity, code=code)
+        if send_result.get('sent'):
+            try:
+                from backend.orchestration.watchdog_throttle import (
+                    record_emergency_telegram_sent,
+                    record_stale_telegram_sent,
+                )
+                if code == 'watchdog_stale_unrecovered':
+                    record_stale_telegram_sent()
+                elif code == 'watchdog_emergency':
+                    record_emergency_telegram_sent()
+            except Exception:
+                pass
         if send_result.get('skipped'):
             decision['telegram'] = False
             decision['reason'] = send_result.get('reason', 'telegram_disabled')
