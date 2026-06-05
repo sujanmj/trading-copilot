@@ -35,9 +35,11 @@ def main() -> int:
             road_headline = 'Govt announces ₹11,000 crore road project in Delhi'
             road_matches = tb.match_headline_to_themes(road_headline)
             road_ids = {m.get('theme_id') for m in road_matches}
-            for expected in ('infrastructure', 'roads_highways', 'cement_steel_paint'):
+            for expected in ('infrastructure', 'roads_highways'):
                 if expected not in road_ids:
                     return _fail(f'road headline missing theme {expected}, got {sorted(road_ids)}')
+            if 'cement_steel_paint' in road_ids:
+                return _fail('road headline should not weakly match cement_steel_paint under 47B relevance')
 
             temple_headline = 'Ram Mandir tourism boost expected to lift Ayodhya travel demand'
             temple_matches = tb.match_headline_to_themes(temple_headline)

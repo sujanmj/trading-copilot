@@ -376,7 +376,7 @@ def _handle_health() -> str:
         )
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append('Telegram build: <code>AstraEdge 47A</code>')
+    lines.append('Telegram build: <code>AstraEdge 47B</code>')
     return '\n'.join(lines)
 
 

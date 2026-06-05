@@ -41,20 +41,30 @@ ENDPOINTS = (
 )
 
 
-def _stage_at_least_46e(stage: str) -> bool:
+def _parse_build_stage(stage: str) -> tuple[int, int] | None:
+    """Parse build stage like 46E, 47A, 47B, 48A → (numeric, letter_ord)."""
+    import re
+
     raw = str(stage or '').strip().upper()
-    if not raw.startswith('46'):
+    match = re.match(r'^(\d+)([A-Z])$', raw)
+    if not match:
+        return None
+    return int(match.group(1)), ord(match.group(2))
+
+
+def _stage_at_least(min_stage: str, actual: str) -> bool:
+    """Compare stages: numeric part first, then letter (46E minimum)."""
+    min_parsed = _parse_build_stage(min_stage)
+    act_parsed = _parse_build_stage(actual)
+    if not min_parsed or not act_parsed:
         return False
-    suffix = raw[2:]
-    if not suffix:
-        return False
-    try:
-        letter_ord = ord(suffix[0])
-        if letter_ord >= ord('E'):
-            return True
-        return False
-    except (IndexError, TypeError):
-        return False
+    if act_parsed[0] != min_parsed[0]:
+        return act_parsed[0] > min_parsed[0]
+    return act_parsed[1] >= min_parsed[1]
+
+
+def _stage_at_least_46e(stage: str) -> bool:
+    return _stage_at_least('46E', stage)
 
 
 def _validate_build_info(payload: dict) -> str | None:
@@ -62,7 +72,7 @@ def _validate_build_info(payload: dict) -> str | None:
         return f"app must be AstraEdge, got {payload.get('app')!r}"
     stage = str(payload.get('stage') or '')
     if not _stage_at_least_46e(stage):
-        return f'stage must be 46E or higher, got {stage!r}'
+        return f'stage must be at least 46E, got {stage!r}'
     if payload.get('telegram_handler') != 'astraedge_analysis_bot':
         return 'telegram_handler must be astraedge_analysis_bot'
     if payload.get('legacy_telegram_listener') is not False:

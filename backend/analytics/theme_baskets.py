@@ -1,5 +1,5 @@
 """
-AstraEdge Theme Baskets — thematic intelligence engine (Stage 47A).
+AstraEdge Theme Baskets — thematic intelligence engine (Stage 47B).
 
 Maps news/govt/budget headlines to theme baskets, sectors, and beneficiary stocks.
 Research-only wording — watch/confirm, never buy now or guaranteed.
@@ -17,7 +17,103 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '47A'
+STAGE = '47B'
+NO_CATALYST_MESSAGE = 'No strong fresh catalyst found. Research basket only.'
+
+SKIP_KEYWORDS: tuple[str, ...] = (
+    'buyback',
+    'dividend',
+    'ex-date',
+    'ex-record',
+    'ex date',
+    'ex record',
+    'f&o',
+    'f & o',
+    'futures open interest',
+    'stake sale',
+    'ofs',
+    'block deal',
+    'currency defence',
+    'rupee defence',
+    'analyst says',
+    'flashing bullish signals',
+    'market crash',
+    'selloff',
+    'sell-off',
+)
+
+THEME_ANCHORS: dict[str, list[str]] = {
+    'infrastructure': [
+        'infrastructure',
+        'infra project',
+        'smart city',
+        'metro project',
+        'bridge',
+        'tunnel',
+        'construction capex',
+        'nhai project',
+        'epc contract',
+        'civil engineering',
+        'urban development',
+    ],
+    'roads_highways': [
+        'road project',
+        'highway project',
+        'expressway',
+        'bharatmala',
+        'nhai',
+        'toll road',
+        'national highway',
+        'nh-',
+        'nh ',
+    ],
+    'railways': [
+        'railway',
+        'rail project',
+        'railways',
+        'locomotive',
+        'vande bharat',
+        'railyard',
+        'metro rail',
+        'rolling stock',
+        'signalling',
+    ],
+    'defence': [
+        'defence order',
+        'defense order',
+        'military',
+        'army',
+        'navy',
+        'air force',
+        'ordnance',
+        'aerospace',
+        'shipbuilding',
+        'make in india defence',
+        'defence budget',
+        'defence contract',
+        'defence tender',
+    ],
+    'tourism_temple_culture': [
+        'tourism',
+        'temple',
+        'pilgrimage',
+        'ram mandir',
+        'heritage',
+        'ayodhya',
+        'travel demand',
+        'hotel',
+        'hospitality',
+        'cultural corridor',
+    ],
+    'budget': [
+        'union budget',
+        'budget allocation',
+        'budget capex',
+        'interim budget',
+        'fiscal deficit',
+        'budget announcement',
+    ],
+}
 BASKETS_FILE = get_data_path('theme_baskets.json')
 CATALYST_LOG_FILE = get_data_path('theme_catalyst_log.jsonl')
 
@@ -488,6 +584,87 @@ def _normalize_text(text: str) -> str:
     return re.sub(r'\s+', ' ', str(text or '').lower().strip())
 
 
+def _normalize_title(title: str) -> str:
+    return re.sub(r'[^a-z0-9]+', ' ', _normalize_text(title)).strip()
+
+
+def _contains_any(text: str, terms: tuple[str, ...] | list[str]) -> bool:
+    lower = _normalize_text(text)
+    for term in terms:
+        normalized = _normalize_text(term)
+        if len(normalized) >= 2 and normalized in lower:
+            return True
+    return False
+
+
+def _has_skip_signal(text: str) -> bool:
+    return _contains_any(text, SKIP_KEYWORDS)
+
+
+def _has_theme_anchor(headline: str, theme_id: str) -> bool:
+    if _contains_any(headline, THEME_ANCHORS.get(theme_id) or []):
+        return True
+    basket = get_basket_by_id(theme_id) or {}
+    sector_terms = list(basket.get('keywords') or []) + list(basket.get('trigger_keywords') or [])
+    return _contains_any(headline, sector_terms)
+
+
+def _has_strong_govt_order(headline: str, theme_id: str) -> bool:
+    lower = _normalize_text(headline)
+    govt = any(t in lower for t in ('govt', 'government', 'ministry', 'cabinet', 'nhai', 'union', 'budget'))
+    order = any(t in lower for t in ('tender', 'order', 'contract', 'award', 'project', 'allocation', 'capex'))
+    return govt and order and _has_theme_anchor(headline, theme_id)
+
+
+def is_theme_catalyst_relevant(
+    headline: str,
+    theme_id: str,
+    *,
+    item: Optional[dict] = None,
+) -> bool:
+    """Return True only when headline has real thematic tie — not amount/corporate noise."""
+    basket = get_basket_by_id(theme_id) or {}
+    text = headline
+    if item:
+        text = f'{headline} {item.get("description") or ""}'
+    lower = _normalize_text(text)
+
+    if theme_id == 'defence':
+        if 'currency defence' in lower or 'rupee defence' in lower:
+            military = any(
+                w in lower
+                for w in (
+                    'military',
+                    'army',
+                    'navy',
+                    'air force',
+                    'ordnance',
+                    'defence order',
+                    'defence contract',
+                    'defence tender',
+                )
+            )
+            if not military:
+                return False
+
+    has_anchor = _has_theme_anchor(text, theme_id)
+    has_stock = bool(_find_named_companies(text, basket))
+    has_govt_order = _has_strong_govt_order(text, theme_id)
+
+    if _has_skip_signal(text):
+        if has_stock and has_anchor:
+            return True
+        return False
+
+    if has_anchor or has_stock or has_govt_order:
+        return True
+
+    if _extract_crore_amount(text) > 0:
+        return False
+
+    return False
+
+
 def _extract_crore_amount(text: str) -> float:
     lower = _normalize_text(text)
     patterns = [
@@ -573,11 +750,15 @@ def score_theme_catalyst(
     *,
     item: Optional[dict] = None,
     seen_headlines: Optional[set[str]] = None,
-) -> dict[str, Any]:
+) -> Optional[dict[str, Any]]:
     """Compute Theme Catalyst Score components for a headline + theme."""
+    if not is_theme_catalyst_relevant(headline, theme_id, item=item):
+        return None
+
     basket = get_basket_by_id(theme_id) or {}
     lower = _normalize_text(headline)
     named = _find_named_companies(headline, basket)
+    has_anchor = _has_theme_anchor(headline, theme_id) or bool(named)
 
     crore = _extract_crore_amount(headline)
     event_size_score = min(10.0, 3.0 + (crore / 5000.0) * 7.0) if crore else 2.0
@@ -609,7 +790,7 @@ def score_theme_catalyst(
         market_confirmation_score = 5.0
 
     duplicate_penalty = 0.0
-    norm = re.sub(r'[^a-z0-9]+', ' ', lower).strip()
+    norm = _normalize_title(headline)
     if seen_headlines is not None:
         if norm in seen_headlines:
             duplicate_penalty = 4.0
@@ -645,19 +826,35 @@ def score_theme_catalyst(
     impact_10 = max(1, min(10, int(round(raw_total / 5.0))))
     catalyst_score = max(0, min(100, int(round(raw_total * 2.0))))
 
+    generic_policy_phrases = (
+        'may benefit',
+        'policy support',
+        'coming years',
+        'sector may',
+        'could benefit',
+        'likely to benefit',
+        'in focus',
+        'remains in focus',
+    )
     broad_policy = (
         not named
-        and crore <= 0
-        and order_tender_clarity_score < 5
-        and sector_specificity_score < 5
+        and not order_win
+        and not _has_strong_govt_order(headline, theme_id)
+        and any(p in lower for p in generic_policy_phrases)
     )
-    action = 'watch only'
-    if named and catalyst_score >= 60:
-        action = 'watch for confirmation'
-    elif catalyst_score >= 70 and order_tender_clarity_score >= 6:
-        action = 'watch for confirmation'
+    hide_from_top3 = False
+    if not has_anchor:
+        return None
     if broad_policy:
+        impact_10 = min(impact_10, 3)
+        hide_from_top3 = True
         action = 'watch only'
+    else:
+        action = 'watch only'
+        if named and catalyst_score >= 60:
+            action = 'watch for confirmation'
+        elif catalyst_score >= 70 and order_tender_clarity_score >= 6:
+            action = 'watch for confirmation'
 
     why_parts = []
     if govt_authority_score >= 6:
@@ -682,6 +879,8 @@ def score_theme_catalyst(
         'why': ' + '.join(why_parts),
         'named_companies': named,
         'broad_policy': broad_policy,
+        'hide_from_top3': hide_from_top3,
+        'relevant': True,
         'components': {
             'event_size_score': event_size_score,
             'govt_authority_score': govt_authority_score,
@@ -735,8 +934,11 @@ def match_headline_to_themes(headline: str, *, item: Optional[dict] = None) -> l
     seen: set[str] = set()
     results = []
     for tid in theme_ids:
+        if not is_theme_catalyst_relevant(headline, tid, item=item):
+            continue
         scored = score_theme_catalyst(headline, tid, item=item, seen_headlines=seen)
-        results.append(scored)
+        if scored:
+            results.append(scored)
     results.sort(key=lambda r: r.get('catalyst_score', 0), reverse=True)
     return results
 
@@ -757,7 +959,7 @@ def refresh_theme_catalyst_cache(*, persist: bool = True) -> dict[str, Any]:
             tid = match.get('theme_id')
             if not tid:
                 continue
-            norm = re.sub(r'[^a-z0-9]+', ' ', _normalize_text(headline)).strip()
+            norm = _normalize_title(headline)
             if norm in seen_global:
                 match['components']['duplicate_penalty'] = max(
                     match['components'].get('duplicate_penalty', 0), 4.0
@@ -799,7 +1001,37 @@ def refresh_theme_catalyst_cache(*, persist: bool = True) -> dict[str, Any]:
     }
 
 
-def get_theme_catalysts(theme_id: str, *, limit: int = 5) -> list[dict[str, Any]]:
+def _filter_relevant_catalysts(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int,
+    for_top_display: bool = False,
+) -> list[dict[str, Any]]:
+    """Dedupe by normalized title; drop irrelevant and optionally broad-policy top-3 hides."""
+    seen: set[str] = set()
+    filtered: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get('relevant') is False:
+            continue
+        norm = _normalize_title(str(row.get('headline') or ''))
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        if for_top_display and row.get('hide_from_top3'):
+            continue
+        filtered.append(row)
+    filtered.sort(key=lambda r: r.get('catalyst_score', 0), reverse=True)
+    return filtered[:limit]
+
+
+def get_theme_catalysts(
+    theme_id: str,
+    *,
+    limit: int = 5,
+    for_top_display: bool = False,
+) -> list[dict[str, Any]]:
     resolved = resolve_theme_id(theme_id)
     if not resolved or resolved == 'budget':
         return []
@@ -809,7 +1041,7 @@ def get_theme_catalysts(theme_id: str, *, limit: int = 5) -> list[dict[str, Any]
     if not rows:
         refresh_theme_catalyst_cache(persist=True)
         rows = (load_theme_baskets().get('catalyst_cache') or {}).get(resolved) or []
-    return rows[:limit]
+    return _filter_relevant_catalysts(rows, limit=limit, for_top_display=for_top_display)
 
 
 def _basket_is_stale(basket: dict) -> bool:
@@ -832,7 +1064,7 @@ def rank_theme_stocks(theme_id: str, *, limit: int = 5) -> list[dict[str, Any]]:
     basket = get_basket_by_id(theme_id)
     if not basket:
         return []
-    catalysts = get_theme_catalysts(theme_id, limit=3)
+    catalysts = get_theme_catalysts(theme_id, limit=3, for_top_display=True)
     top_catalyst_score = max((c.get('catalyst_score') or 0) for c in catalysts) if catalysts else 35
     named_in_news = set()
     for c in catalysts:
@@ -1021,7 +1253,7 @@ def format_theme_detail_telegram(theme_id: str) -> str:
     for sector in (basket.get('indirect_beneficiary_sectors') or [])[:5]:
         lines.append(f'• {sector}')
 
-    catalysts = get_theme_catalysts(str(basket.get('theme_id')), limit=3)
+    catalysts = get_theme_catalysts(str(basket.get('theme_id')), limit=3, for_top_display=True)
     lines.extend(['', '<b>Latest catalysts:</b>'])
     if catalysts:
         for idx, cat in enumerate(catalysts[:3], 1):
@@ -1030,7 +1262,7 @@ def format_theme_detail_telegram(theme_id: str) -> str:
             )
             lines.append(f"   Why: {cat.get('why', '—')}")
     else:
-        lines.append('• No fresh catalysts — research only until /theme refresh.')
+        lines.append(f'• {NO_CATALYST_MESSAGE}')
 
     ranked = rank_theme_stocks(str(basket.get('theme_id')), limit=3)
     lines.extend(['', '<b>Top watch:</b>'])
@@ -1064,10 +1296,10 @@ def format_theme_news_telegram(theme_id: str) -> str:
     if not basket:
         return f'Unknown theme: <code>{theme_id}</code>.'
     display = basket.get('display_name') or theme_id
-    catalysts = get_theme_catalysts(theme_id, limit=8)
+    catalysts = get_theme_catalysts(theme_id, limit=8, for_top_display=False)
     lines = [f'<b>📰 Theme News — {display}</b>', '']
     if not catalysts:
-        lines.append('No matched catalysts. Run <code>/theme refresh</code> for fresh scan.')
+        lines.append(NO_CATALYST_MESSAGE)
         lines.append('<i>Research only — watch for confirmation.</i>')
         return '\n'.join(lines)
     for idx, cat in enumerate(catalysts, 1):
