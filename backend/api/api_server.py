@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '46J',
+        'stage': '47A',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -1888,6 +1888,95 @@ def get_stats(): return load_json_file("stats_data.json")
 
 @app.get("/api/history", dependencies=[Depends(verify_api_key)])
 def get_history(): return load_json_file("history_data.json")
+
+
+@app.get("/api/theme-baskets", dependencies=[Depends(verify_api_key)])
+def api_theme_baskets_list():
+    from backend.analytics.theme_baskets import list_all_baskets, load_theme_baskets
+
+    data = load_theme_baskets()
+    return sanitize_json_value({
+        'ok': True,
+        'stage': data.get('stage', '47A'),
+        'generated_at': data.get('generated_at'),
+        'cache_refreshed_at': data.get('cache_refreshed_at'),
+        'baskets': list_all_baskets(),
+        'count': len(list_all_baskets()),
+    })
+
+
+@app.get("/api/theme-baskets/{theme_id}", dependencies=[Depends(verify_api_key)])
+def api_theme_basket_detail(theme_id: str):
+    from backend.analytics.theme_baskets import get_basket_by_id, resolve_theme_id
+
+    resolved = resolve_theme_id(theme_id)
+    basket = get_basket_by_id(theme_id)
+    if not basket:
+        raise HTTPException(status_code=404, detail=f"Theme not found: {theme_id}")
+    return sanitize_json_value({'ok': True, 'theme_id': resolved, 'basket': basket})
+
+
+@app.get("/api/theme-baskets/{theme_id}/news", dependencies=[Depends(verify_api_key)])
+def api_theme_basket_news(theme_id: str):
+    from backend.analytics.theme_baskets import get_basket_by_id, get_theme_catalysts, resolve_theme_id
+
+    resolved = resolve_theme_id(theme_id)
+    if not get_basket_by_id(theme_id):
+        raise HTTPException(status_code=404, detail=f"Theme not found: {theme_id}")
+    catalysts = get_theme_catalysts(theme_id, limit=12)
+    return sanitize_json_value({
+        'ok': True,
+        'theme_id': resolved,
+        'catalysts': catalysts,
+        'count': len(catalysts),
+    })
+
+
+@app.get("/api/theme-baskets/{theme_id}/scan", dependencies=[Depends(verify_api_key)])
+def api_theme_basket_scan(theme_id: str):
+    from backend.analytics.theme_baskets import get_basket_by_id, rank_theme_stocks, resolve_theme_id
+
+    resolved = resolve_theme_id(theme_id)
+    if not get_basket_by_id(theme_id):
+        raise HTTPException(status_code=404, detail=f"Theme not found: {theme_id}")
+    ranked = rank_theme_stocks(theme_id, limit=12)
+    return sanitize_json_value({
+        'ok': True,
+        'theme_id': resolved,
+        'stocks': ranked,
+        'count': len(ranked),
+    })
+
+
+@app.post("/api/theme-baskets/{theme_id}/add", dependencies=[Depends(verify_api_key)])
+def api_theme_basket_add(theme_id: str, payload: dict = Body(default={})):
+    from backend.analytics.theme_baskets import add_stock_to_basket
+
+    ticker = str(payload.get('ticker') or '').strip()
+    bucket = str(payload.get('bucket') or payload.get('type') or 'direct').strip()
+    result = add_stock_to_basket(theme_id, ticker, bucket)
+    if not result.get('ok'):
+        raise HTTPException(status_code=400, detail=result.get('error', 'add failed'))
+    return sanitize_json_value(result)
+
+
+@app.post("/api/theme-baskets/{theme_id}/remove", dependencies=[Depends(verify_api_key)])
+def api_theme_basket_remove(theme_id: str, payload: dict = Body(default={})):
+    from backend.analytics.theme_baskets import remove_stock_from_basket
+
+    ticker = str(payload.get('ticker') or '').strip()
+    result = remove_stock_from_basket(theme_id, ticker)
+    if not result.get('ok'):
+        raise HTTPException(status_code=400, detail=result.get('error', 'remove failed'))
+    return sanitize_json_value(result)
+
+
+@app.post("/api/theme-baskets/refresh", dependencies=[Depends(verify_api_key)])
+def api_theme_baskets_refresh():
+    from backend.analytics.theme_baskets import refresh_theme_catalyst_cache
+
+    result = refresh_theme_catalyst_cache(persist=True)
+    return sanitize_json_value(result)
 
 
 @app.get("/api/all", dependencies=[Depends(verify_api_key)])

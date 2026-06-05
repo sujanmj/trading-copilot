@@ -19,12 +19,12 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     api_src = (PROJECT_ROOT / 'backend/api/api_server.py').read_text(encoding='utf-8')
-    if "'stage': '46J'" not in api_src:
-        return _fail('build-info stage not 46J')
+    if "'stage': '47A'" not in api_src:
+        return _fail('build-info stage not 47A')
 
     safe_src = (PROJECT_ROOT / 'backend/config/local_safe_mode.py').read_text(encoding='utf-8')
-    if 'AstraEdge 46J' not in safe_src:
-        return _fail('local_safe_mode missing AstraEdge 46J')
+    if 'AstraEdge 47A' not in safe_src:
+        return _fail('local_safe_mode missing AstraEdge 47A')
 
     proc = subprocess.run([sys.executable, 'scripts/test_telegram_refresh_commands.py'], cwd=PROJECT_ROOT)
     if proc.returncode != 0:

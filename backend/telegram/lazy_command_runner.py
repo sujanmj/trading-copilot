@@ -450,3 +450,10 @@ def run_aihub_brain_full_only() -> dict[str, Any]:
         text=text,
         stage_marker=ACTION_PLAN_STAGE_MARKER,
     )
+
+
+def run_theme_only(args: str = '') -> dict[str, Any]:
+    from backend.analytics.theme_baskets import handle_theme_command
+
+    text = handle_theme_command(args)
+    return _runner_result('theme', text=text)

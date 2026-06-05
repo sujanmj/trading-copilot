@@ -63,12 +63,12 @@ def main() -> int:
         return _fail('/schedule missing 07:45')
 
     health = handle_analysis_command('/health', 'test', dry_run=True)
-    if 'AstraEdge 46J' not in str(health[0].get('text', '')):
-        return _fail('/health missing AstraEdge 46J')
+    if 'AstraEdge 47A' not in str(health[0].get('text', '')):
+        return _fail('/health missing AstraEdge 47A')
 
     status = handle_analysis_command('/status', 'test', dry_run=True)
-    if 'AstraEdge 46J' not in str(status[0].get('text', '')):
-        return _fail('/status missing AstraEdge 46J build line')
+    if 'AstraEdge 47A' not in str(status[0].get('text', '')):
+        return _fail('/status missing AstraEdge 47A build line')
 
     print('TELEGRAM_REFRESH_COMMANDS_TEST_OK')
     return 0
