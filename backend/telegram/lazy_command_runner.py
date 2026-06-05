@@ -243,37 +243,40 @@ def run_memory_only() -> dict[str, Any]:
     wins = int(overall.get('wins') or 0)
     losses = int(overall.get('losses') or 0)
     unresolved = int(overall.get('unresolved_predictions') or 0)
+    if unresolved <= 0 and predictions > outcomes:
+        unresolved = predictions - outcomes
     cache_age_txt = format_cache_age_label(
         _cache_age_minutes(MEMORY_CACHE_FILE),
         timestamp=file_timestamp_iso(MEMORY_CACHE_FILE),
     )
-    lines = [
-        '<b>🧠 Market memory</b>',
-        f'Predictions: {predictions} · Outcomes: {outcomes}',
-        f'Win rate: {format_memory_win_rate(overall)}',
-        f'W/L: {wins}/{losses} · Unresolved: {unresolved}',
-        f'Source: {source} · cache age: {cache_age_txt}',
-        '',
-        '<b>Latest outcomes:</b>',
-    ]
-    if latest_outcomes:
-        for row in latest_outcomes[:3]:
-            if isinstance(row, dict):
-                lines.append(format_memory_outcome_line(row))
-    elif outcomes == 0:
-        try:
-            from backend.config.local_safe_mode import is_railway_mode
-
-            if is_railway_mode():
-                lines.append(
-                    '• Cloud memory is collecting outcomes. Local historical memory may differ.'
-                )
-            else:
-                lines.append('• No recent outcomes in cache.')
-        except Exception:
-            lines.append('• No recent outcomes in cache.')
+    lines = ['<b>🧠 Market memory</b>']
+    if outcomes == 0:
+        lines.extend([
+            f'Predictions tracked: {predictions}',
+            'Outcomes resolved: 0',
+            f'Pending resolution: {unresolved if unresolved > 0 else predictions}',
+            'Reason: awaiting close-price/outcome resolver or next market session',
+            'Source: cloud/runtime cache',
+            f'Cache age: {cache_age_txt}',
+            '',
+            '<b>Latest outcomes:</b>',
+            '• None resolved yet — memory is tracking predictions for the next session.',
+        ])
     else:
-        lines.append('• No recent outcomes in cache.')
+        lines.extend([
+            f'Predictions: {predictions} · Outcomes: {outcomes}',
+            f'Win rate: {format_memory_win_rate(overall)}',
+            f'W/L: {wins}/{losses} · Unresolved: {unresolved}',
+            f'Source: {source} · cache age: {cache_age_txt}',
+            '',
+            '<b>Latest outcomes:</b>',
+        ])
+        if latest_outcomes:
+            for row in latest_outcomes[:3]:
+                if isinstance(row, dict):
+                    lines.append(format_memory_outcome_line(row))
+        else:
+            lines.append('• No recent outcomes in cache.')
     return _runner_result('memory', text='\n'.join(lines), payload=dashboard)
 
 

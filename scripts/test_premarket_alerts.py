@@ -35,27 +35,42 @@ def main() -> int:
     report = build_premarket_conviction_report(persist=True)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
-    if report.get('stage') != '46I':
-        return _fail('report stage not 46I')
+    if report.get('stage') != '46J':
+        return _fail('report stage not 46J')
 
+    from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
+    from backend.analytics.premarket_conviction import _is_after_open
+
+    weekend = is_weekend_holiday_research_telegram_mode(report.get('market_mode') or {})
     text = format_premarket_telegram(full=False, report=report)
     lower = text.lower()
-    for phrase in REQUIRED_ALWAYS:
-        if phrase not in lower:
-            return _fail(f'missing required phrase: {phrase}')
-    from backend.analytics.premarket_conviction import _is_after_open
-    if not _is_after_open() and 'confirm after 9:15' not in lower:
-        return _fail('missing confirm after 9:15 before market open')
+    if not weekend:
+        for phrase in REQUIRED_ALWAYS:
+            if phrase not in lower:
+                return _fail(f'missing required phrase: {phrase}')
+    else:
+        for phrase in REQUIRED_ALWAYS:
+            if phrase not in lower:
+                return _fail(f'weekend missing required phrase: {phrase}')
+    if not _is_after_open():
+        if weekend:
+            if 'confirm on next trading session after 9:15' not in lower:
+                return _fail('weekend missing next-session confirm wording')
+        elif 'confirm after 9:15' not in lower:
+            return _fail('missing confirm after 9:15 before market open')
     for bad in FORBIDDEN:
         if bad in lower:
             return _fail(f'forbidden phrase in message: {bad}')
 
     full = format_premarket_telegram(full=True, report=report)
-    if 'PREMARKET FULL' not in full:
+    if weekend:
+        if 'WEEKEND RESEARCH BRIEF' not in full:
+            return _fail('weekend full premarket missing research brief title')
+    elif 'PREMARKET FULL' not in full:
         return _fail('full premarket format missing FULL marker')
     if '{' in full and '}' in full and "'summary'" in full:
         return _fail('premarket full must not contain raw dict')
-    if 'US/global context only' not in full:
+    if not weekend and 'US/global context only' not in full:
         return _fail('full premarket missing US/global context-only label')
 
     sent = _format_sentiment_value({'summary': 'Neutral', 'bias': 'Cautious'})
@@ -97,7 +112,8 @@ def main() -> int:
         return _fail('/premarket full missing from help')
 
     results = handle_analysis_command('/premarket', 'test', dry_run=True)
-    if not results or 'PREMARKET' not in str(results[0].get('text', '')).upper():
+    result_upper = str(results[0].get('text', '')).upper() if results else ''
+    if not results or ('PREMARKET' not in result_upper and 'WEEKEND RESEARCH' not in result_upper):
         return _fail('/premarket command failed')
     results_full = handle_analysis_command('/premarket full', 'test', dry_run=True)
     if not results_full:

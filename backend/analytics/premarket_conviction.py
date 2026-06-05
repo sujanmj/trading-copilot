@@ -1,15 +1,16 @@
 """
-Premarket conviction pipeline (Stage 46I).
+Premarket conviction pipeline (Stage 46J).
 
 Builds premarket_conviction_report.json and Telegram message formatters.
 Research-only wording — watch for entry, confirm after 9:15 (before open), no blind entry.
+Weekend/holiday/research mode uses closed-market watchlist wording and manual refresh hints.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
@@ -22,7 +23,26 @@ REPORT_FILE = get_data_path('premarket_conviction_report.json')
 
 FORBIDDEN_WORDS = ('buy now', 'invest now', 'guaranteed')
 REQUIRED_PHRASES_PREOPEN = ('confirm after 9:15', 'no blind entry', 'watch for entry')
+REQUIRED_PHRASES_WEEKEND = (
+    'no live premarket signal',
+    'next trading session confirmation required',
+    'fresh scan required before market open',
+    'confirm on next trading session after 9:15',
+)
 REQUIRED_PHRASES_OPEN = ('no blind entry', 'watch for entry')
+
+WEEKEND_RESEARCH_TOP_TITLE = '🧪 WEEKEND RESEARCH WATCHLIST (NOT PREMARKET TOP SETUPS)'
+WEEKEND_RESEARCH_FULL_TITLE = '🧪 WEEKEND RESEARCH BRIEF'
+WEEKEND_SCORE_CAP = 65
+WEEKEND_CANDIDATE_LABELS = {
+    'final_confidence': 'Research only',
+    'watchlist': 'stale watchlist',
+    'scanner': 'next-session watch',
+    'intel': 'Research only',
+}
+MANUAL_REFRESH_SUGGESTION = 'Use /refresh full for fresh closed-market research.'
+CACHE_STALE_12H_MSG = 'Cache is stale — run /refresh full for updated research.'
+NEXT_SESSION_CONFIRM = 'Confirm on next trading session after 9:15'
 
 DATA_FILES = {
     'global': 'global_markets.json',
@@ -79,6 +99,100 @@ def _is_after_open(now: Optional[datetime] = None) -> bool:
 def _india_mode_info() -> dict:
     from backend.analytics.market_calendar_router import get_india_telegram_mode
     return get_india_telegram_mode()
+
+
+def _is_weekend_holiday_research(mode_info: dict) -> bool:
+    from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
+    return is_weekend_holiday_research_telegram_mode(mode_info)
+
+
+def _should_suggest_manual_refresh(mode_info: dict) -> bool:
+    from backend.analytics.market_calendar_router import is_manual_refresh_suggested_mode
+    return is_manual_refresh_suggested_mode(mode_info)
+
+
+def _parse_report_timestamp(value: Any, *, now: datetime) -> Optional[datetime]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=IST)
+        return parsed.astimezone(IST)
+    except (TypeError, ValueError):
+        return None
+
+
+def _report_cache_age_hours(
+    generated_at: Any,
+    *,
+    now: Optional[datetime] = None,
+) -> float:
+    now = now or datetime.now(IST)
+    parsed = _parse_report_timestamp(generated_at, now=now)
+    if parsed is None:
+        return 0.0
+    return max(0.0, (now - parsed).total_seconds() / 3600.0)
+
+
+def _cache_stale_state(
+    generated_at: Any,
+    *,
+    now: Optional[datetime] = None,
+) -> tuple[bool, bool, str]:
+    """Return (stale_12h, stale_24h, user_message)."""
+    age_h = _report_cache_age_hours(generated_at, now=now)
+    if age_h > 24:
+        return True, True, CACHE_STALE_12H_MSG
+    if age_h > 12:
+        return True, False, CACHE_STALE_12H_MSG
+    return False, False, ''
+
+
+def _format_cache_age_hours(age_hours: float) -> str:
+    if age_hours < 1:
+        return f'{int(age_hours * 60)}m'
+    return f'{age_hours:.1f}h'
+
+
+def _existing_report_cache_age_hours(*, now: Optional[datetime] = None) -> float:
+    now = now or datetime.now(IST)
+    if not REPORT_FILE.is_file():
+        return 0.0
+    try:
+        existing = json.loads(REPORT_FILE.read_text(encoding='utf-8'))
+        if isinstance(existing, dict):
+            return _report_cache_age_hours(existing.get('generated_at'), now=now)
+    except (OSError, json.JSONDecodeError):
+        pass
+    return 0.0
+
+
+def _apply_weekend_research_caps(
+    setups: list[dict],
+    *,
+    stale_24h: bool = False,
+) -> list[dict]:
+    capped: list[dict] = []
+    for setup in setups:
+        row = dict(setup)
+        row['score'] = min(int(row.get('score', 50)), WEEKEND_SCORE_CAP)
+        src = str(row.get('source') or 'intel')
+        row['research_label'] = WEEKEND_CANDIDATE_LABELS.get(src, 'Research only')
+        setup_text = str(row.get('setup', ''))
+        for token in ('ULTRA', 'STRONG', 'HIGH CONVICTION', 'high conviction'):
+            setup_text = setup_text.replace(token, 'watch')
+        row['setup'] = setup_text
+        if stale_24h:
+            row['conviction_disabled'] = True
+            row['score'] = min(int(row.get('score', 50)), WEEKEND_SCORE_CAP)
+        capped.append(row)
+    return capped
 
 
 def _market_bias(intel: dict, final_conf: dict, global_m: dict) -> str:
@@ -434,12 +548,26 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
         from backend.orchestration.alert_freshness_gate import cap_premarket_scores
         setups = cap_premarket_scores(setups)
 
+    prior_cache_age_h = _existing_report_cache_age_hours(now=now)
+    stale_12h = prior_cache_age_h > 12
+    stale_24h = prior_cache_age_h > 24
+    stale_cache_msg = CACHE_STALE_12H_MSG if stale_12h else ''
+
+    weekend_research = _is_weekend_holiday_research(india_mode)
+    if weekend_research or stale_24h:
+        setups = _apply_weekend_research_caps(setups, stale_24h=stale_24h)
+
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '46I',
+        'stage': '46J',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
+        'weekend_research_mode': weekend_research,
+        'cache_age_hours': round(prior_cache_age_h, 2),
+        'cache_stale_12h': stale_12h,
+        'cache_stale_24h': stale_24h,
+        'cache_stale_message': stale_cache_msg,
         'freshness_ok': fresh_ok,
         'freshness_header': fresh_header if not fresh_ok else '',
         'stale_keys': stale_keys,
@@ -497,9 +625,21 @@ def _title_for_slot(slot: str, now: Optional[datetime] = None) -> str:
     return '🌅 PREMARKET TOP SETUPS'
 
 
-def _action_wording(now: Optional[datetime] = None) -> list[str]:
+def _action_wording(
+    now: Optional[datetime] = None,
+    *,
+    weekend_research: bool = False,
+) -> list[str]:
     """Time-aware rule/footer lines — no confirm-after-9:15 after open."""
     now = now or datetime.now(IST)
+    if weekend_research:
+        return [
+            '<b>Rule:</b> Weekend/holiday research — no live premarket signal.',
+            'Next trading session confirmation required.',
+            'Fresh scan required before market open.',
+            f'{NEXT_SESSION_CONFIRM} with price strength + volume + sector support.',
+            '<i>Research only · no blind entry · watch for entry · next-session watch.</i>',
+        ]
     if _is_after_open(now):
         return [
             '<b>Rule:</b> Market open — use Confirmed / Rejected / Wait for volume.',
@@ -510,6 +650,104 @@ def _action_wording(now: Optional[datetime] = None) -> list[str]:
         'Confirm after 9:15 with price strength + volume + sector support.',
         '<i>No blind entry · confirm after 9:15 · watch for entry only.</i>',
     ]
+
+
+def _weekend_refresh_line(mode_info: dict) -> str:
+    if _should_suggest_manual_refresh(mode_info):
+        return f'<i>{MANUAL_REFRESH_SUGGESTION}</i>'
+    return ''
+
+
+def _required_monday_refresh_line(mode_info: dict) -> str:
+    label = str(mode_info.get('market_mode') or '').lower()
+    if 'weekend' in label:
+        return 'Run /refresh full before Monday India open.'
+    return 'Run /refresh full before next India session open.'
+
+
+def _format_weekend_research_telegram(
+    data: dict,
+    *,
+    full: bool,
+    now: datetime,
+    slot_label: str,
+) -> str:
+    """Weekend/holiday/research closed-market brief — no trade-like alert language."""
+    setups = data.get('top_setups') or []
+    avoids = data.get('avoid') or []
+    mode_info = data.get('market_mode') or {}
+    sectors = data.get('sector_cues') or {}
+    generated_at = data.get('generated_at') or now.isoformat()
+    cache_age_h = float(data.get('cache_age_hours') or 0)
+    stale_msg = str(data.get('cache_stale_message') or '')
+    if not stale_msg and cache_age_h > 12:
+        stale_msg = CACHE_STALE_12H_MSG
+
+    title = WEEKEND_RESEARCH_FULL_TITLE if full else WEEKEND_RESEARCH_TOP_TITLE
+    lines: list[str] = [
+        f'<b>{title} — {slot_label}</b>',
+        f"<b>Mode:</b> <code>{mode_info.get('market_mode', '—')}</code>",
+        'No live premarket signal.',
+        'Next trading session confirmation required.',
+        'Fresh scan required before market open.',
+    ]
+    if stale_msg:
+        lines.append(f'<i>{stale_msg}</i>')
+
+    if full:
+        lines.extend([
+            '',
+            f'<b>Last report:</b> {generated_at}',
+            f'<b>Cache age:</b> {_format_cache_age_hours(cache_age_h)}',
+            '',
+            '<b>Top research watchlist:</b>',
+        ])
+    else:
+        lines.extend(['', '<b>Top research watchlist:</b>'])
+
+    display_setups = setups[:5 if full else 3]
+    if display_setups:
+        for idx, setup in enumerate(display_setups, 1):
+            label = setup.get('research_label') or WEEKEND_CANDIDATE_LABELS.get(
+                str(setup.get('source') or 'intel'),
+                'Research only',
+            )
+            reasons = setup.get('reasons') or []
+            why = reasons[0] if reasons else 'Research context only'
+            lines.extend([
+                f"{idx}. <b>{setup.get('ticker')}</b> — {setup.get('setup')} · Score {setup.get('score', '—')}",
+                f"   Label: {label}",
+                f"   Context: {why}",
+                f"   {NEXT_SESSION_CONFIRM} with price strength + volume + sector support.",
+            ])
+    else:
+        lines.append('— Awaiting closed-market research data')
+
+    if full:
+        lines.extend(['', '<b>Risk themes:</b>'])
+        if avoids:
+            for row in avoids[:4]:
+                lines.append(f"• {row.get('ticker')} — {row.get('reason')}")
+        else:
+            lines.append('• No explicit risk themes flagged')
+
+        lines.extend([
+            '',
+            '<b>Sectors to monitor next session:</b>',
+            f"↑ {', '.join(sectors.get('bullish') or []) or '—'}",
+            f"↓ {', '.join(sectors.get('bearish') or []) or '—'}",
+            '',
+            '<b>Required Monday refresh:</b>',
+            _required_monday_refresh_line(mode_info),
+        ])
+
+    refresh_line = _weekend_refresh_line(mode_info)
+    if refresh_line:
+        lines.extend(['', refresh_line])
+
+    lines.append('')
+    lines.extend(_action_wording(now, weekend_research=True))
+    return _enforce_wording('\n'.join(lines), now=now, weekend_research=True)
 
 
 def format_premarket_telegram(
@@ -528,18 +766,32 @@ def format_premarket_telegram(
     mode_info = data.get('market_mode') or {}
     fresh_ok = data.get('freshness_ok', True)
     fresh_header = data.get('freshness_header') or ''
+    weekend_research = data.get('weekend_research_mode')
+    if weekend_research is None:
+        weekend_research = _is_weekend_holiday_research(mode_info)
+
+    slot_label = _slot_label(now)
+    if weekend_research:
+        return _format_weekend_research_telegram(data, full=full, now=now, slot_label=slot_label)
+
+    stale_msg = str(data.get('cache_stale_message') or '')
+    cache_age_h = float(data.get('cache_age_hours') or 0)
+    if not stale_msg and cache_age_h > 12:
+        stale_msg = CACHE_STALE_12H_MSG
 
     slot_key = slot or ('premarket_action' if full else 'premarket_top3')
     title = _title_for_slot(slot_key, now)
-    slot = _slot_label(now)
 
     lines: list[str] = []
     if not fresh_ok and fresh_header:
         lines.append(f'<b>{fresh_header}</b>')
         lines.append('<i>Watchlist preparation only — not conviction.</i>')
         lines.append('')
+    if stale_msg:
+        lines.append(f'<i>{stale_msg}</i>')
+        lines.append('')
     lines.extend([
-        f'<b>{title} — {slot}</b>',
+        f'<b>{title} — {slot_label}</b>',
         f'<b>Market bias:</b> {bias}',
         f"<b>Mode:</b> <code>{mode_info.get('market_mode', '—')}</code>",
         '',
@@ -605,6 +857,10 @@ def format_premarket_telegram(
     else:
         lines.append('• No explicit avoid flags')
 
+    refresh_line = _weekend_refresh_line(mode_info)
+    if refresh_line:
+        lines.extend(['', refresh_line])
+
     lines.append('')
     lines.extend(_action_wording(now))
 
@@ -612,11 +868,18 @@ def format_premarket_telegram(
     return _enforce_wording(text, now=now)
 
 
-def _enforce_wording(text: str, *, now: Optional[datetime] = None) -> str:
+def _enforce_wording(
+    text: str,
+    *,
+    now: Optional[datetime] = None,
+    weekend_research: bool = False,
+) -> str:
     lower = text.lower()
     for bad in FORBIDDEN_WORDS:
         if bad in lower:
             text = re.sub(re.escape(bad), 'watch for entry', text, flags=re.IGNORECASE)
+    if weekend_research:
+        return text
     if _is_after_open(now):
         text = re.sub(r'confirm after 9:15', 'Wait for volume confirmation', text, flags=re.IGNORECASE)
     return text

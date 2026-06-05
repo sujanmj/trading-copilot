@@ -626,9 +626,35 @@ def get_active_market_mode(now_utc: Optional[datetime] = None) -> dict[str, Any]
     }
 
 
+def is_weekend_holiday_research_telegram_mode(
+    mode_info: dict[str, Any] | None = None,
+    now_utc: Optional[datetime] = None,
+) -> bool:
+    """True when India Telegram mode is weekend, holiday, or closed-market research."""
+    info = mode_info if mode_info is not None else get_india_telegram_mode(now_utc)
+    code = str(info.get('mode_code') or '')
+    label = str(info.get('market_mode') or '').lower()
+    if code == MODE_RESEARCH:
+        return True
+    return any(token in label for token in ('weekend', 'holiday', 'research'))
+
+
+def is_manual_refresh_suggested_mode(
+    mode_info: dict[str, Any] | None = None,
+    now_utc: Optional[datetime] = None,
+) -> bool:
+    """Weekend/holiday/research or India after-hours — suggest /refresh full."""
+    info = mode_info if mode_info is not None else get_india_telegram_mode(now_utc)
+    if is_weekend_holiday_research_telegram_mode(info, now_utc):
+        return True
+    code = str(info.get('mode_code') or '')
+    label = str(info.get('market_mode') or '').lower()
+    return code == MODE_INDIA_AFTER_HOURS or 'after_hours' in label
+
+
 def get_india_telegram_mode(now_utc: Optional[datetime] = None) -> dict[str, Any]:
     """
-    India-centric mode label for Telegram display (Stage 46I).
+    India-centric mode label for Telegram display (Stage 46J).
 
     Main Mode always reflects India schedule — never USA_POSTMARKET during Indian morning.
     """

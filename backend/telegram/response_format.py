@@ -679,6 +679,14 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
         warn_tokens = {str(w) for w in (payload.get('warnings') or [])}
         if 'Runtime snapshot missing; using report cache.' in warn_tokens:
             lines.append('Runtime snapshot missing; using report cache.')
+        try:
+            from backend.analytics.market_calendar_router import is_manual_refresh_suggested_mode
+            from backend.analytics.premarket_conviction import MANUAL_REFRESH_SUGGESTION
+
+            if is_manual_refresh_suggested_mode():
+                lines.append(f'<i>{MANUAL_REFRESH_SUGGESTION}</i>')
+        except Exception:
+            pass
         stock_sd = summary.get('stock_decision_today') or {}
         top_pick = stock_sd.get('top_pick') if isinstance(stock_sd, dict) else None
         if isinstance(top_pick, dict) and top_pick.get('ticker'):
@@ -1120,6 +1128,15 @@ def format_aihub_brain_full() -> str:
     exec_summary = intel.get('executive_summary') or intel.get('summary') or ''
 
     lines = ['<b>🧠 AstraEdge Brain — Full</b>', '']
+    try:
+        from backend.analytics.market_calendar_router import is_manual_refresh_suggested_mode
+        from backend.analytics.premarket_conviction import MANUAL_REFRESH_SUGGESTION
+
+        if is_manual_refresh_suggested_mode():
+            lines.append(f'<i>{MANUAL_REFRESH_SUGGESTION}</i>')
+            lines.append('')
+    except Exception:
+        pass
 
     lines.extend(['<b>1. Market read</b>', f'• Mode: {mode} · {stale}', f'• Risk: {risk}'])
     if exec_summary:
@@ -1255,7 +1272,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 46I</code>')
+        lines.append('Telegram build: <code>AstraEdge 46J</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
