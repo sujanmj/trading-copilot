@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 os.chdir(PROJECT_ROOT)
 
 FORBIDDEN = ('buy now', 'invest now', 'guaranteed')
-REQUIRED = ('watch for entry', 'confirm after 9:15', 'no blind entry')
+REQUIRED_ALWAYS = ('no blind entry', 'watch for entry')
 
 
 def _fail(msg: str) -> int:
@@ -35,14 +35,17 @@ def main() -> int:
     report = build_premarket_conviction_report(persist=True)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
-    if report.get('stage') != '46H':
-        return _fail('report stage not 46H')
+    if report.get('stage') != '46I':
+        return _fail('report stage not 46I')
 
     text = format_premarket_telegram(full=False, report=report)
     lower = text.lower()
-    for phrase in REQUIRED:
+    for phrase in REQUIRED_ALWAYS:
         if phrase not in lower:
             return _fail(f'missing required phrase: {phrase}')
+    from backend.analytics.premarket_conviction import _is_after_open
+    if not _is_after_open() and 'confirm after 9:15' not in lower:
+        return _fail('missing confirm after 9:15 before market open')
     for bad in FORBIDDEN:
         if bad in lower:
             return _fail(f'forbidden phrase in message: {bad}')
@@ -52,20 +55,27 @@ def main() -> int:
         return _fail('full premarket format missing FULL marker')
     if '{' in full and '}' in full and "'summary'" in full:
         return _fail('premarket full must not contain raw dict')
-    if 'US context only' not in full:
-        return _fail('full premarket missing US context-only label')
+    if 'US/global context only' not in full:
+        return _fail('full premarket missing US/global context-only label')
 
     sent = _format_sentiment_value({'summary': 'Neutral', 'bias': 'Cautious'})
     if '{' in sent:
         return _fail('sentiment formatter leaked dict')
 
-    capped = _apply_volume_caps(
+    capped, deferred_low = _apply_volume_caps(
         [{'ticker': 'ABC', 'score': 80, 'setup': 'WATCH', 'reasons': []}],
         {'top_signals': [{'ticker': 'ABC', 'volume_ratio': 0.25}]},
         {},
     )
-    if capped[0].get('tier_cap') != 'not_top3':
-        return _fail('vol<0.3 should cap top3')
+    if not deferred_low and (not capped or capped[0].get('tier_cap') != 'not_top3'):
+        return _fail('vol<0.3 should cap top3 or defer')
+    _capped2, deferred = _apply_volume_caps(
+        [{'ticker': 'ABC', 'score': 80, 'setup': 'WATCH', 'reasons': []}],
+        {'top_signals': [{'ticker': 'ABC', 'volume_ratio': 0.25}]},
+        {},
+    )
+    if not deferred:
+        return _fail('vol<0.3 should defer from top watch')
 
     conflicted = _apply_conflict_guard(
         [{'ticker': 'XYZ', 'score': 70, 'setup': 'WATCH'}],

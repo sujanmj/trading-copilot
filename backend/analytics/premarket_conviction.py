@@ -1,15 +1,15 @@
 """
-Premarket conviction pipeline (Stage 46H).
+Premarket conviction pipeline (Stage 46I).
 
 Builds premarket_conviction_report.json and Telegram message formatters.
-Research-only wording — watch for entry, confirm after 9:15, no blind entry.
+Research-only wording — watch for entry, confirm after 9:15 (before open), no blind entry.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
@@ -21,7 +21,8 @@ IST = ZoneInfo('Asia/Kolkata')
 REPORT_FILE = get_data_path('premarket_conviction_report.json')
 
 FORBIDDEN_WORDS = ('buy now', 'invest now', 'guaranteed')
-REQUIRED_PHRASES = ('confirm after 9:15', 'no blind entry', 'watch for entry')
+REQUIRED_PHRASES_PREOPEN = ('confirm after 9:15', 'no blind entry', 'watch for entry')
+REQUIRED_PHRASES_OPEN = ('no blind entry', 'watch for entry')
 
 DATA_FILES = {
     'global': 'global_markets.json',
@@ -35,6 +36,16 @@ DATA_FILES = {
     'watchlist': 'tomorrow_watchlist_report.json',
     'market': 'latest_market_data.json',
     'daily_pack': 'daily_report_pack_latest.json',
+}
+
+SLOT_TITLES = {
+    'premarket_top3': '🌅 PREMARKET TOP SETUPS',
+    'premarket_action': '🌅 PREMARKET FULL BRIEF',
+    'premarket_full': '🌅 PREMARKET FULL BRIEF',
+    'preopen_watch': '🌅 PRE-OPEN WATCH',
+    'live_validation': '🌅 FIRST LIVE VALIDATION',
+    'open_confirmation': '🌅 OPEN CONFIRMATION / REJECTION',
+    'premarket_confirm': '🌅 OPEN CONFIRMATION / REJECTION',
 }
 
 
@@ -60,6 +71,16 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _is_after_open(now: Optional[datetime] = None) -> bool:
+    now = now or datetime.now(IST)
+    return now.time() >= time(9, 15)
+
+
+def _india_mode_info() -> dict:
+    from backend.analytics.market_calendar_router import get_india_telegram_mode
+    return get_india_telegram_mode()
+
+
 def _market_bias(intel: dict, final_conf: dict, global_m: dict) -> str:
     mood = (intel or {}).get('market_mood') or {}
     outlook = str(mood.get('india_outlook') or mood.get('global_mood') or '').lower()
@@ -77,6 +98,14 @@ def _sector_cues(intel: dict) -> tuple[list[str], list[str]]:
     bullish = [str(s) for s in (sectors.get('bullish') or [])[:4]]
     bearish = [str(s) for s in (sectors.get('bearish') or [])[:4]]
     return bullish, bearish
+
+
+def _negative_move_label(chg: float, direction: str) -> str:
+    if chg < -0.5 or direction == 'BEARISH':
+        return 'Bearish / short watch'
+    if chg < 0:
+        return 'Avoid — negative move'
+    return ''
 
 
 def _build_setup_candidates(
@@ -99,9 +128,15 @@ def _build_setup_candidates(
             continue
         seen.add(ticker)
         score = _safe_float(row.get('final_score') or row.get('score'), 50)
+        chg = _safe_float(row.get('change_percent'))
+        direction = str(row.get('direction') or 'NEUTRAL').upper()
+        neg_label = _negative_move_label(chg, direction)
+        setup = neg_label or str(row.get('decision') or row.get('label') or 'WATCH').replace('_', ' ')
+        if neg_label:
+            score = min(score, 52)
         candidates.append({
             'ticker': ticker,
-            'setup': str(row.get('decision') or row.get('label') or 'WATCH').replace('_', ' '),
+            'setup': setup,
             'score': round(score),
             'reasons': [
                 str(row.get('primary_reason') or row.get('logic') or 'Final confidence candidate')[:80],
@@ -109,6 +144,8 @@ def _build_setup_candidates(
             ],
             'sector': row.get('sector') or '?',
             'source': 'final_confidence',
+            'change_percent': chg,
+            'direction': direction,
         })
 
     wl_rows = (watchlist or {}).get('top_watchlist') or (watchlist or {}).get('watchlist') or []
@@ -120,9 +157,15 @@ def _build_setup_candidates(
             continue
         seen.add(ticker)
         score = _safe_float(row.get('score') or row.get('confidence_score'), 55)
+        chg = _safe_float(row.get('change_percent'))
+        direction = str(row.get('direction') or 'NEUTRAL').upper()
+        neg_label = _negative_move_label(chg, direction)
+        setup = neg_label or str(row.get('setup') or row.get('action') or 'WATCH').replace('_', ' ')
+        if neg_label:
+            score = min(score, 50)
         candidates.append({
             'ticker': ticker,
-            'setup': str(row.get('setup') or row.get('action') or 'WATCH').replace('_', ' '),
+            'setup': setup,
             'score': round(score),
             'reasons': [
                 str(row.get('why') or row.get('reason') or 'Watchlist candidate')[:80],
@@ -130,6 +173,8 @@ def _build_setup_candidates(
             ],
             'sector': row.get('sector') or '?',
             'source': 'watchlist',
+            'change_percent': chg,
+            'direction': direction,
         })
 
     for sig in (scanner or {}).get('top_signals', [])[:8]:
@@ -143,17 +188,31 @@ def _build_setup_candidates(
         seen.add(ticker)
         vol_r = _safe_float(sig.get('volume_ratio'))
         chg = _safe_float(sig.get('change_percent'))
-        score = min(95, 55 + abs(chg) * 2 + vol_r * 4)
+        direction = str(sig.get('direction', 'NEUTRAL')).upper()
+        neg_label = _negative_move_label(chg, direction)
+        if neg_label:
+            setup = neg_label
+            score = min(55, 45 + abs(chg))
+        else:
+            setup = f"{direction} scanner signal"
+            score = min(95, 55 + abs(chg) * 2 + vol_r * 4)
+        reason2 = (
+            'Wait for volume confirmation'
+            if _is_after_open()
+            else 'Watch for entry — confirm after 9:15 with volume'
+        )
         candidates.append({
             'ticker': ticker,
-            'setup': f"{sig.get('direction', 'NEUTRAL')} scanner signal",
+            'setup': setup,
             'score': round(score),
             'reasons': [
                 f"Overnight/scanner move {chg:+.1f}% · vol {vol_r:.1f}x",
-                'Watch for entry — confirm after 9:15 with volume',
+                reason2,
             ],
             'sector': sig.get('sector') or '?',
             'source': 'scanner',
+            'change_percent': chg,
+            'direction': direction,
         })
 
     opps = (intel or {}).get('top_opportunities') or []
@@ -164,10 +223,17 @@ def _build_setup_candidates(
         if not ticker or ticker in seen:
             continue
         seen.add(ticker)
+        action = str(row.get('action') or 'WATCH').upper()
+        if 'SELL' in action or 'AVOID' in action or 'SHORT' in action:
+            setup = 'Bearish / short watch'
+            score = 48
+        else:
+            setup = str(row.get('action') or 'WATCH')
+            score = 52
         candidates.append({
             'ticker': ticker,
-            'setup': str(row.get('action') or 'WATCH'),
-            'score': 52,
+            'setup': setup,
+            'score': score,
             'reasons': [
                 str(row.get('logic') or 'Intel opportunity')[:80],
                 'No blind entry before open',
@@ -187,6 +253,8 @@ def _format_sentiment_value(value: Any) -> str:
     if isinstance(value, str):
         return value[:200]
     if isinstance(value, dict):
+        if any(k in value for k in ('usa', 'asia', 'global')):
+            return _format_global_sentiment_dict(value)
         lines = []
         for key in ('summary', 'consensus', 'bias', 'mood', 'stance'):
             if value.get(key):
@@ -200,6 +268,30 @@ def _format_sentiment_value(value: Any) -> str:
     if isinstance(value, list):
         return ', '.join(str(v) for v in value[:6]) or '—'
     return str(value)[:200]
+
+
+def _mood_label(mood: str, change: float) -> str:
+    token = str(mood or 'NEUTRAL').upper()
+    if 'BULL' in token:
+        label = 'Bullish'
+    elif 'BEAR' in token:
+        label = 'Bearish'
+    else:
+        label = 'Neutral'
+    return f'{label} ({change:+.2f}%)'
+
+
+def _format_global_sentiment_dict(sentiment: dict) -> str:
+    """Format US/Asia/Global sentiment without raw dict."""
+    lines: list[str] = []
+    for region_key, display in (('usa', 'US'), ('asia', 'Asia'), ('global', 'Global')):
+        block = sentiment.get(region_key)
+        if not isinstance(block, dict):
+            continue
+        mood = block.get('mood') or block.get('sentiment') or 'NEUTRAL'
+        chg = _safe_float(block.get('average_change') or block.get('change_percent'))
+        lines.append(f'{display}: {_mood_label(str(mood), chg)}')
+    return '\n'.join(lines) if lines else '—'
 
 
 def _ticker_vol_ratio(ticker: str, scanner: dict) -> float:
@@ -225,26 +317,34 @@ def _has_catalyst(setup: dict, intel: dict) -> bool:
     return False
 
 
-def _apply_volume_caps(setups: list[dict], scanner: dict, intel: dict) -> list[dict]:
-    """Weak volume premarket caps — vol<0.5 not Top3 unless catalyst; vol<0.3 Watch Later."""
+def _apply_volume_caps(setups: list[dict], scanner: dict, intel: dict) -> tuple[list[dict], list[dict]]:
+    """Weak volume separation — vol<0.5 not Top3; vol<0.3 low confidence bucket."""
     adjusted: list[dict] = []
+    watch_later: list[dict] = []
+    low_confidence: list[dict] = []
+
     for setup in setups:
         ticker = str(setup.get('ticker', '')).upper()
         vol_r = _ticker_vol_ratio(ticker, scanner)
         row = dict(setup)
         if vol_r < 0.3:
-            row['setup'] = 'Watch Later — weak volume'
-            row['score'] = min(int(row.get('score', 50)), 48)
+            row['setup'] = 'Low confidence / ignore unless volume appears'
+            row['score'] = min(int(row.get('score', 50)), 42)
             row['tier_cap'] = 'not_top3'
             row['watch_only'] = True
+            low_confidence.append(row)
         elif vol_r < 0.5:
             if not _has_catalyst(row, intel):
-                row['setup'] = 'WATCH ONLY — weak participation'
-                row['score'] = min(int(row.get('score', 50)), 60)
+                row['setup'] = 'Watch later — weak participation'
+                row['score'] = min(int(row.get('score', 50)), 55)
                 row['tier_cap'] = 'not_top3'
                 row['watch_only'] = True
-        adjusted.append(row)
-    return adjusted
+                watch_later.append(row)
+            else:
+                adjusted.append(row)
+        else:
+            adjusted.append(row)
+    return adjusted, watch_later + low_confidence
 
 
 def _apply_conflict_guard(setups: list[dict], avoids: list[dict]) -> list[dict]:
@@ -261,6 +361,14 @@ def _apply_conflict_guard(setups: list[dict], avoids: list[dict]) -> list[dict]:
             row['setup'] = 'Conflict/Wait'
             row['score'] = min(int(row.get('score', 50)), 55)
             row['conflict'] = True
+            avoid_reason = next(
+                (a.get('reason', 'mixed signal') for a in avoids if str(a.get('ticker', '')).upper() == ticker),
+                'mixed signal',
+            )
+            row['reasons'] = [
+                str((setup.get('reasons') or ['Setup candidate'])[0]),
+                f'Conflict with avoid list — {avoid_reason}',
+            ]
             out.append(row)
         else:
             out.append(setup)
@@ -296,21 +404,6 @@ def _build_avoid_list(intel: dict, scanner: dict) -> list[dict]:
     return avoids[:4]
 
 
-def _market_mode_and_freshness(daily_pack: dict, final_conf: dict) -> dict:
-    mode = (
-        (daily_pack or {}).get('market_mode')
-        or ((daily_pack or {}).get('summary') or {}).get('market_mode')
-        or (final_conf or {}).get('active_mode')
-        or 'unknown'
-    )
-    generated = (
-        (daily_pack or {}).get('generated_at')
-        or (final_conf or {}).get('generated_at')
-        or ''
-    )
-    return {'market_mode': str(mode), 'latest_report_at': generated}
-
-
 def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     """Aggregate premarket inputs into conviction report."""
     now = datetime.now(IST)
@@ -324,23 +417,39 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     memory = _load_json(DATA_FILES['memory'])
     watchlist = _load_json(DATA_FILES['watchlist'])
     market = _load_json(DATA_FILES['market'])
-    daily_pack = _load_json(DATA_FILES['daily_pack'])
+    india_mode = _india_mode_info()
+
+    from backend.orchestration.alert_freshness_gate import premarket_freshness_state
+
+    fresh_ok, fresh_header, stale_keys = premarket_freshness_state(now=now, try_refresh=False)
 
     bullish_sectors, bearish_sectors = _sector_cues(intel)
     setups = _build_setup_candidates(scanner, watchlist, final_conf, intel)
-    setups = _apply_volume_caps(setups, scanner, intel)
+    setups, deferred_weak = _apply_volume_caps(setups, scanner, intel)
     avoids = _build_avoid_list(intel, scanner)
     setups = _apply_conflict_guard(setups, avoids)
     setups = _rank_top_setups(setups)
 
+    if not fresh_ok:
+        from backend.orchestration.alert_freshness_gate import cap_premarket_scores
+        setups = cap_premarket_scores(setups)
+
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '46H',
+        'stage': '46I',
         'market_bias': _market_bias(intel, final_conf, global_m),
-        'market_mode': _market_mode_and_freshness(daily_pack, final_conf),
+        'market_mode': india_mode,
+        'freshness_ok': fresh_ok,
+        'freshness_header': fresh_header if not fresh_ok else '',
+        'stale_keys': stale_keys,
         'overnight_global': {
             'sentiment': global_m.get('sentiment') or global_m.get('overall_sentiment'),
+            'sentiment_formatted': _format_global_sentiment_dict(
+                global_m.get('sentiment') or {}
+            ) if isinstance(global_m.get('sentiment'), dict) else _format_sentiment_value(
+                global_m.get('sentiment') or global_m.get('overall_sentiment')
+            ),
             'us_close': global_m.get('us_close_summary') or global_m.get('summary'),
             'commodities': global_m.get('commodities') or global_m.get('commodity_cues'),
             'inr_crude': global_m.get('inr_crude') or global_m.get('fx_commodity'),
@@ -352,6 +461,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
         ),
         'sector_cues': {'bullish': bullish_sectors, 'bearish': bearish_sectors},
         'top_setups': setups,
+        'deferred_weak_volume': deferred_weak,
         'avoid': avoids,
         'memory_snapshot': {
             'win_rate': ((memory or {}).get('learning') or {}).get('overall', {}).get('win_rate'),
@@ -359,14 +469,15 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
         },
         'market_data_fresh': bool(market.get('timestamp') or market.get('updated_at')),
         'wording_rules': {
-            'required': list(REQUIRED_PHRASES),
+            'required_preopen': list(REQUIRED_PHRASES_PREOPEN),
+            'required_open': list(REQUIRED_PHRASES_OPEN),
             'forbidden': list(FORBIDDEN_WORDS),
         },
     }
 
     if persist:
         atomic_write_json(REPORT_FILE, report)
-        _log(f'report written {REPORT_FILE.name} setups={len(setups)}')
+        _log(f'report written {REPORT_FILE.name} setups={len(setups)} fresh={fresh_ok}')
     return report
 
 
@@ -375,29 +486,77 @@ def _slot_label(now: Optional[datetime] = None) -> str:
     return now.strftime('%H:%M IST')
 
 
-def format_premarket_telegram(*, full: bool = False, report: Optional[dict] = None) -> str:
-    """Format premarket message for Telegram (/premarket or /premarket full)."""
+def _title_for_slot(slot: str, now: Optional[datetime] = None) -> str:
+    now = now or datetime.now(IST)
+    if slot in SLOT_TITLES:
+        return SLOT_TITLES[slot]
+    if _is_after_open(now):
+        if now.hour == 9 and now.minute >= 20:
+            return SLOT_TITLES['live_validation']
+        return SLOT_TITLES.get('premarket_top3', '🌅 PREMARKET TOP SETUPS')
+    return '🌅 PREMARKET TOP SETUPS'
+
+
+def _action_wording(now: Optional[datetime] = None) -> list[str]:
+    """Time-aware rule/footer lines — no confirm-after-9:15 after open."""
+    now = now or datetime.now(IST)
+    if _is_after_open(now):
+        return [
+            '<b>Rule:</b> Market open — use Confirmed / Rejected / Wait for volume.',
+            '<i>No blind entry · Confirmed / Rejected / Wait for volume.</i>',
+        ]
+    return [
+        '<b>Rule:</b> Watch for entry — no blind entry before open.',
+        'Confirm after 9:15 with price strength + volume + sector support.',
+        '<i>No blind entry · confirm after 9:15 · watch for entry only.</i>',
+    ]
+
+
+def format_premarket_telegram(
+    *,
+    full: bool = False,
+    report: Optional[dict] = None,
+    slot: str = '',
+) -> str:
+    """Format premarket message for Telegram (/premarket or scheduled slots)."""
     data = report or build_premarket_conviction_report(persist=not bool(report))
+    now = datetime.now(IST)
     bias = data.get('market_bias') or 'Neutral'
     setups = data.get('top_setups') or []
+    deferred = data.get('deferred_weak_volume') or []
     avoids = data.get('avoid') or []
     mode_info = data.get('market_mode') or {}
-    slot = _slot_label()
+    fresh_ok = data.get('freshness_ok', True)
+    fresh_header = data.get('freshness_header') or ''
 
-    title = '🌅 PREMARKET TOP SETUPS' if not full else '🌅 PREMARKET FULL BRIEF'
-    lines = [
+    slot_key = slot or ('premarket_action' if full else 'premarket_top3')
+    title = _title_for_slot(slot_key, now)
+    slot = _slot_label(now)
+
+    lines: list[str] = []
+    if not fresh_ok and fresh_header:
+        lines.append(f'<b>{fresh_header}</b>')
+        lines.append('<i>Watchlist preparation only — not conviction.</i>')
+        lines.append('')
+    lines.extend([
         f'<b>{title} — {slot}</b>',
         f'<b>Market bias:</b> {bias}',
         f"<b>Mode:</b> <code>{mode_info.get('market_mode', '—')}</code>",
         '',
         '<b>Top watch:</b>',
-    ]
+    ])
 
-    if setups:
-        for idx, setup in enumerate(setups[:3 if not full else 5], 1):
+    top3 = [s for s in setups if s.get('tier_cap') != 'not_top3'][:3 if not full else 5]
+    display_setups = top3 if top3 else setups[:3 if not full else 5]
+
+    if display_setups:
+        for idx, setup in enumerate(display_setups, 1):
             reasons = setup.get('reasons') or []
             why = reasons[0] if reasons else 'Setup candidate'
-            why2 = reasons[1] if len(reasons) > 1 else 'Confirm only if price strength + volume + sector support'
+            why2 = reasons[1] if len(reasons) > 1 else (
+                'Wait for volume confirmation' if _is_after_open(now)
+                else 'Confirm only if price strength + volume + sector support'
+            )
             lines.extend([
                 f"{idx}. <b>{setup.get('ticker')}</b> — {setup.get('setup')} · Score {setup.get('score', '—')}",
                 f"   Why: {why}",
@@ -406,13 +565,25 @@ def format_premarket_telegram(*, full: bool = False, report: Optional[dict] = No
     else:
         lines.append('— Awaiting scanner + watchlist data')
 
+    if deferred:
+        lines.extend(['', '<b>Watch later — weak participation:</b>'])
+        for row in deferred[:4]:
+            lines.append(
+                f"• {row.get('ticker')} — {row.get('setup')} · Score {row.get('score', '—')}"
+            )
+
     if full:
         sectors = data.get('sector_cues') or {}
         og = data.get('overnight_global') or {}
+        sentiment_text = og.get('sentiment_formatted') or _format_sentiment_value(og.get('sentiment'))
         lines.extend([
             '',
-            '<b>Overnight / global (US context only)</b>',
-            f"• Sentiment: {og.get('sentiment') or '—'}",
+            '<b>Overnight / global (US/global context only)</b>',
+        ])
+        for line in str(sentiment_text).split('\n'):
+            if line.strip():
+                lines.append(f'• {line.strip()}')
+        lines.extend([
             f"• US close: {str(og.get('us_close') or '—')[:120]}",
             '<i>US/global cues for India open — not a US trading signal.</i>',
             '',
@@ -434,39 +605,70 @@ def format_premarket_telegram(*, full: bool = False, report: Optional[dict] = No
     else:
         lines.append('• No explicit avoid flags')
 
-    lines.extend([
-        '',
-        '<b>Rule:</b> Watch for entry — no blind entry before open.',
-        'Confirm after 9:15 with price strength + volume + sector support.',
-        '<i>No blind entry · confirm after 9:15 · watch for entry only.</i>',
-    ])
+    lines.append('')
+    lines.extend(_action_wording(now))
+
     text = '\n'.join(lines)
-    return _enforce_wording(text)
+    return _enforce_wording(text, now=now)
 
 
-def _enforce_wording(text: str) -> str:
+def _enforce_wording(text: str, *, now: Optional[datetime] = None) -> str:
     lower = text.lower()
     for bad in FORBIDDEN_WORDS:
         if bad in lower:
             text = re.sub(re.escape(bad), 'watch for entry', text, flags=re.IGNORECASE)
+    if _is_after_open(now):
+        text = re.sub(r'confirm after 9:15', 'Wait for volume confirmation', text, flags=re.IGNORECASE)
     return text
 
 
 def send_scheduled_premarket(slot: str, *, send_fn: Optional[Callable[[str], bool]] = None) -> bool:
     """Send premarket alert for scheduler slot."""
-    from backend.orchestration.alert_freshness_gate import gate_alert_dispatch
+    from backend.orchestration.alert_freshness_gate import premarket_freshness_state
 
-    allow, gate_msg = gate_alert_dispatch('PRE_MARKET')
+    now = datetime.now(IST)
+    try_refresh = now.hour == 8 and now.minute == 30
+    fresh_ok, _header, _keys = premarket_freshness_state(now=now, try_refresh=try_refresh)
+
     report = build_premarket_conviction_report(persist=True)
-    full = slot in ('premarket_full', 'premarket_action', 'premarket_confirm')
-    text = format_premarket_telegram(full=full, report=report)
-    if not allow and gate_msg:
-        text = f'{text}\n\n<i>{gate_msg}</i>'
+    if not fresh_ok and try_refresh:
+        report = build_premarket_conviction_report(persist=True)
+
+    full = slot in ('premarket_full', 'premarket_action', 'premarket_confirm', 'open_confirmation')
+    mapped_slot = slot
+    if slot == 'premarket_top3':
+        mapped_slot = 'premarket_top3'
+    elif slot in ('premarket_full', 'premarket_action'):
+        mapped_slot = 'premarket_action'
+    elif slot == 'preopen_watch':
+        mapped_slot = 'preopen_watch'
+    elif slot == 'live_validation':
+        mapped_slot = 'live_validation'
+    elif slot in ('open_confirmation', 'premarket_confirm'):
+        mapped_slot = 'open_confirmation'
+
+    text = format_premarket_telegram(full=full, report=report, slot=mapped_slot)
     if send_fn:
-        return bool(send_fn(text))
-    try:
-        from backend.telegram.telegram_analysis_bot import send_analysis_message
-        return bool(send_analysis_message(text, command=f'premarket_{slot}').get('sent'))
-    except Exception as exc:
-        _log(f'send failed slot={slot}: {exc}')
-        return False
+        sent = bool(send_fn(text))
+    else:
+        try:
+            from backend.telegram.telegram_analysis_bot import send_analysis_message
+            sent = bool(send_analysis_message(text, command=f'premarket_{slot}').get('sent'))
+        except Exception as exc:
+            _log(f'send failed slot={slot}: {exc}')
+            sent = False
+
+    if sent:
+        try:
+            from backend.orchestration.alert_event_log import log_alert_event
+            tickers = [str(s.get('ticker', '')) for s in (report.get('top_setups') or [])[:5] if s.get('ticker')]
+            log_alert_event(
+                category='PRE_MARKET',
+                tickers=tickers,
+                direction=str(report.get('market_bias') or 'NEUTRAL'),
+                score=65.0 if not fresh_ok else None,
+                reason=f'premarket slot={slot}',
+            )
+        except Exception:
+            pass
+    return sent

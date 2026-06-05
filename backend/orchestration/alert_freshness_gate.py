@@ -21,6 +21,9 @@ PREMARKET_STALE_SEC = 30 * 60
 MAX_NEWS_AGE_SEC = 48 * 3600
 
 WATCH_ONLY_MESSAGE = 'Data refresh incomplete — watch only.'
+PREMARKET_INCOMPLETE_HEADER = '⚠️ DATA REFRESH INCOMPLETE — WATCH ONLY'
+PREMARKET_WATCHLIST_ONLY_NOTE = 'Watchlist preparation only — not conviction.'
+PREMARKET_SCORE_CAP = 65
 
 
 def _log(tag: str, msg: str) -> None:
@@ -186,3 +189,28 @@ def gate_alert_dispatch(category: str) -> Tuple[bool, str]:
     if ok:
         return True, ''
     return False, msg
+
+
+def premarket_freshness_state(*, now: Optional[datetime] = None, try_refresh: bool = False) -> Tuple[bool, str, list[str]]:
+    """
+    Premarket freshness check with optional safe refresh (Stage 46I).
+
+    Returns (ok, header_or_message, stale_keys).
+    """
+    if try_refresh:
+        attempt_safe_refresh()
+    ok, msg, keys = check_core_freshness(category='PRE_MARKET', now=now)
+    if ok:
+        return True, '', []
+    return False, PREMARKET_INCOMPLETE_HEADER, keys
+
+
+def cap_premarket_scores(setups: list[dict], *, cap: int = PREMARKET_SCORE_CAP) -> list[dict]:
+    """Cap top setup scores when freshness is incomplete."""
+    capped: list[dict] = []
+    for setup in setups:
+        row = dict(setup)
+        row['score'] = min(int(row.get('score', 50)), cap)
+        row['freshness_capped'] = True
+        capped.append(row)
+    return capped

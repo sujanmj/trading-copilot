@@ -1255,7 +1255,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 46H</code>')
+        lines.append('Telegram build: <code>AstraEdge 46I</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
@@ -1270,12 +1270,17 @@ def format_status_text() -> str:
         pack = _load_json(DAILY_PACK_FILE)
         if pack:
             summary = pack.get('summary') or {}
-            market_mode = (
-                pack.get('market_mode')
-                or summary.get('market_mode')
-                or (pack.get('final_confidence') or {}).get('active_mode')
-                or '—'
-            )
+            try:
+                from backend.analytics.market_calendar_router import get_india_telegram_mode
+                india_mode = get_india_telegram_mode()
+                market_mode = india_mode.get('market_mode') or '—'
+            except Exception:
+                market_mode = (
+                    pack.get('market_mode')
+                    or summary.get('market_mode')
+                    or (pack.get('final_confidence') or {}).get('active_mode')
+                    or '—'
+                )
             report_time = (
                 pack.get('generated_at')
                 or pack.get('package_generated_at')

@@ -59,6 +59,18 @@ RBI_SURPRISE_KEYWORDS = (
     'deviation', 'shock', 'unscheduled',
 )
 
+BROAD_MACRO_KEYWORDS = (
+    'nifty', 'sensex', 'bank nifty', 'broader market', 'market crash', 'indices',
+    'banking sector', 'it sector', 'sector-wide', 'sector wide', 'fii outflow',
+    'circuit', 'market halt', 'repo rate', 'mpc', 'rbi policy', 'rate hike', 'rate cut',
+)
+
+SINGLE_STOCK_MACRO_PATTERNS = (
+    r'\bsebi\b.*\b(warning|probe|fine|penalty|investigation)\b',
+    r'\b(shares?|stock)\s+(plunge|crash|tank|sink)\b',
+    r'\b(warning|probe|fine)\b.*\b(shares?|stock)\b',
+)
+
 
 def _log(tag: str, msg: str) -> None:
     print(f'[{tag}] {msg}', flush=True)
@@ -247,6 +259,48 @@ def format_open_setup_alert(
     return text, conf, watch_only
 
 
+def is_broad_macro_emergency(headline: str, item: Optional[dict] = None) -> bool:
+    """True when headline affects index/sector broadly — not a single-stock warning."""
+    lower = str(headline or '').lower()
+    if any(k in lower for k in BROAD_MACRO_KEYWORDS):
+        return True
+    if has_direct_market_impact(headline, item):
+        sectors = (item or {}).get('sectors') or (item or {}).get('affected_sectors') or []
+        if len(sectors) >= 2:
+            return True
+    return False
+
+
+def is_stock_specific_risk(headline: str, item: Optional[dict] = None) -> bool:
+    """Single-stock regulatory or company warning — downgrade from Emergency Macro."""
+    lower = str(headline or '').lower()
+    if any(re.search(pat, lower) for pat in SINGLE_STOCK_MACRO_PATTERNS):
+        if not is_broad_macro_emergency(headline, item):
+            return True
+    tickers = (item or {}).get('tickers') or (item or {}).get('symbols') or []
+    if isinstance(tickers, list) and len(tickers) == 1 and not is_broad_macro_emergency(headline, item):
+        return True
+    company_only = (
+        any(w in lower for w in ('shares plunge', 'stock crashes', 'shares tank', 'sebi warning'))
+        and not any(k in lower for k in ('nifty', 'sensex', 'sector', 'banking sector', 'broader'))
+    )
+    return company_only
+
+
+def classify_macro_severity(headline: str, item: Optional[dict] = None) -> str:
+    """
+    Returns severity class: emergency_macro | stock_specific | generic_skip.
+    """
+    if is_stock_specific_risk(headline, item):
+        return 'stock_specific'
+    if is_broad_macro_emergency(headline, item):
+        return 'emergency_macro'
+    lower = str(headline or '').lower()
+    if 'rbi' in lower or 'mpc' in lower or 'repo rate' in lower:
+        return 'emergency_macro'
+    return 'generic_skip'
+
+
 def evaluate_emergency_macro(
     headline: str,
     confidence: float,
@@ -260,6 +314,15 @@ def evaluate_emergency_macro(
     theme = classify_emergency_theme(headline)
     norm = normalize_headline(headline)
     conf = float(confidence)
+    severity = classify_macro_severity(headline, item)
+
+    if severity == 'stock_specific':
+        _log('EMERGENCY_MACRO_SKIPPED', f'reason=stock_specific_risk theme={theme}')
+        return False, 'stock_specific', theme
+
+    if severity == 'generic_skip' and not is_broad_macro_emergency(headline, item):
+        _log('EMERGENCY_MACRO_SKIPPED', f'reason=generic_headline_downgrade theme={theme}')
+        return False, 'generic_downgrade', theme
 
     if conf < EMERGENCY_MIN_CONFIDENCE:
         _log('EMERGENCY_MACRO_SKIPPED', f'reason=low_confidence theme={theme} conf={conf:.2f}')

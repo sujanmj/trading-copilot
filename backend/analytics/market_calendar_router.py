@@ -46,6 +46,7 @@ USA_REGULAR = (time(9, 30), time(16, 0))
 USA_POSTMARKET = (time(16, 0), time(20, 0))
 
 MODE_INDIA = 'INDIA_MODE'
+MODE_INDIA_MARKET_HOURS = 'INDIA_MARKET_HOURS'
 MODE_INDIA_PREMARKET = 'INDIA_PREMARKET_MODE'
 MODE_INDIA_PREOPEN = 'INDIA_PREOPEN_MODE'
 MODE_INDIA_POSTMARKET = 'INDIA_POSTMARKET_MODE'
@@ -62,6 +63,7 @@ SESSION_POSTMARKET = 'postmarket'
 
 _MODE_LABELS = {
     MODE_INDIA: 'India Regular Session',
+    MODE_INDIA_MARKET_HOURS: 'India Market Hours',
     MODE_INDIA_PREMARKET: 'India Pre-Market',
     MODE_INDIA_PREOPEN: 'India Pre-Open',
     MODE_INDIA_POSTMARKET: 'India Post-Market',
@@ -621,6 +623,52 @@ def get_active_market_mode(now_utc: Optional[datetime] = None) -> dict[str, Any]
         'next_india_open': get_next_market_open('india', now),
         'next_usa_open': get_next_market_open('usa', now),
         'warnings': status.get('warnings') or [],
+    }
+
+
+def get_india_telegram_mode(now_utc: Optional[datetime] = None) -> dict[str, Any]:
+    """
+    India-centric mode label for Telegram display (Stage 46I).
+
+    Main Mode always reflects India schedule — never USA_POSTMARKET during Indian morning.
+    """
+    now = _now_utc(now_utc)
+    local_dt = _to_local(now, IST_TZ_NAME)
+    local_t = local_dt.time().replace(microsecond=0)
+    local_day = local_dt.date()
+
+    if local_day.weekday() >= 5:
+        mode = MODE_RESEARCH
+        label = 'Weekend — Research'
+    elif not is_india_market_day(local_day):
+        holiday = _holiday_name('india', local_day)
+        mode = MODE_RESEARCH
+        label = f'Holiday — {holiday or "India closed"}'
+    elif _in_window(local_t, INDIA_PREMARKET[0], INDIA_PREMARKET[1]):
+        mode = MODE_INDIA_PREMARKET
+        label = 'INDIA_PREMARKET_MODE'
+    elif _in_window(local_t, INDIA_PREOPEN[0], INDIA_PREOPEN[1]):
+        mode = MODE_INDIA_PREOPEN
+        label = 'INDIA_PREOPEN_MODE'
+    elif _in_window(local_t, INDIA_REGULAR[0], INDIA_REGULAR[1]):
+        mode = MODE_INDIA_MARKET_HOURS
+        label = 'INDIA_MARKET_HOURS'
+    elif _in_window(local_t, INDIA_POSTMARKET[0], INDIA_POSTMARKET[1]):
+        mode = MODE_INDIA_POSTMARKET
+        label = 'INDIA_POSTMARKET_MODE'
+    elif local_t >= INDIA_POSTMARKET[1] and local_t < INDIA_AFTER_HOURS_END:
+        mode = MODE_INDIA_AFTER_HOURS
+        label = 'INDIA_AFTER_HOURS'
+    else:
+        mode = MODE_RESEARCH
+        label = 'RESEARCH_MODE'
+
+    return {
+        'market_mode': label,
+        'mode_code': mode,
+        'local_time': local_dt.isoformat(),
+        'local_date': local_day.isoformat(),
+        'is_india_market_day': is_india_market_day(local_day),
     }
 
 

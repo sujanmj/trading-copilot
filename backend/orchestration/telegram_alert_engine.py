@@ -207,6 +207,28 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
     )
     get_observability().record_sent(category, detail, {'confidence': round(confidence, 2)})
     try:
+        from backend.orchestration.alert_event_log import log_alert_event
+        signal_price = None
+        signal_vol = None
+        if ticker:
+            scanner = _load(FILES['scanner']) or {}
+            for sig in scanner.get('top_signals', []) or []:
+                if isinstance(sig, dict) and str(sig.get('ticker', '')).upper() == ticker.upper():
+                    signal_price = float(sig.get('price') or 0) or None
+                    signal_vol = float(sig.get('volume_ratio') or 0) or None
+                    break
+        log_alert_event(
+            category=category,
+            tickers=ticker or '',
+            direction=direction,
+            score=confidence,
+            price_at_alert=signal_price,
+            volume_at_alert=signal_vol,
+            reason=detail,
+        )
+    except Exception:
+        pass
+    try:
         from backend.logs.alert_suppression import log_alert_sent
         log_alert_sent(category=category, ticker=ticker, detail=detail, confidence=confidence)
     except Exception:
@@ -651,6 +673,17 @@ def try_emergency_macro() -> tuple[int, int]:
     record_emergency_macro_sent(headline, conf, theme)
     get_observability().record_emergency(headline[:120])
     get_observability().record_sent(EMERGENCY_MACRO_ALERT, headline[:100], {'confidence': conf})
+    try:
+        from backend.orchestration.alert_event_log import log_alert_event
+        log_alert_event(
+            category=EMERGENCY_MACRO_ALERT,
+            tickers=[],
+            direction='NEUTRAL',
+            score=conf,
+            reason=headline,
+        )
+    except Exception:
+        pass
     return 1, 0
 
 

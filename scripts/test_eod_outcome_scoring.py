@@ -67,8 +67,8 @@ def main() -> int:
         'worst': [],
     }
     alerts_msg = format_eod_telegram_message(alerts_summary)
-    if 'Alerts tracked' not in alerts_msg:
-        return _fail('alerts sent today should show tracked line not Resolved 0')
+    if 'Alerts sent' not in alerts_msg:
+        return _fail('alerts sent today should show Alerts sent line not Resolved 0')
     if 'Resolved: 0' in alerts_msg:
         return _fail('should not show Resolved: 0 when alerts were sent')
 

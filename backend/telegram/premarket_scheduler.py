@@ -92,8 +92,7 @@ def run_premarket_slot(slot: str, *, send_fn: Optional[Callable[[str], bool]] = 
         return True
 
     if slot in send_slots:
-        mapped = 'premarket_full' if slot in ('premarket_action', 'open_confirmation') else slot
-        ok = send_scheduled_premarket(mapped, send_fn=send_fn)
+        ok = send_scheduled_premarket(slot, send_fn=send_fn)
         print(f'[PREMARKET_SCHED] sent slot={slot} ok={ok}', flush=True)
         return ok
 

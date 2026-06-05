@@ -144,7 +144,21 @@ def _top_movers(rows: list[dict], verdict: str, limit: int = 3) -> list[dict]:
 
 
 def _alerts_sent_meta(review_date: str) -> dict:
-    """Today's Telegram alerts from observability — for tracked/scorable/pending."""
+    """Today's Telegram alerts — prefer alert_event_log.jsonl (Stage 46I)."""
+    try:
+        from backend.orchestration.alert_event_log import summarize_alert_events_for_date
+        log_meta = summarize_alert_events_for_date(review_date)
+        if log_meta.get('alerts_sent', 0) > 0:
+            return {
+                'alerts_sent': log_meta.get('alerts_sent', 0),
+                'alerts_tracked': log_meta.get('alerts_tracked', 0),
+                'alerts_scorable': log_meta.get('alerts_scorable', 0),
+                'alerts_pending_score': log_meta.get('alerts_pending_score', 0),
+                'source': 'alert_event_log',
+            }
+    except Exception as exc:
+        _log(f'alert_event_log meta error: {exc}')
+
     try:
         from backend.orchestration.alert_filters import get_observability
         obs = get_observability()
@@ -165,6 +179,7 @@ def _alerts_sent_meta(review_date: str) -> dict:
             'alerts_tracked': tracked,
             'alerts_scorable': scorable,
             'alerts_pending_score': max(0, scorable),
+            'source': 'observability',
         }
     except Exception as exc:
         _log(f'alerts_sent meta error: {exc}')
@@ -252,10 +267,11 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
     resolved = int(summary.get('resolved') or 0)
 
     if alerts_sent > 0 and resolved == 0:
+        pending_price = summary.get('alerts_pending_score', summary.get('pending', alerts_sent))
         outcome_line = (
-            f"Alerts tracked: {summary.get('alerts_tracked', alerts_sent)} · "
-            f"scorable: {summary.get('alerts_scorable', 0)} · "
-            f"pending: {summary.get('alerts_pending_score', summary.get('pending', 0))}"
+            f"Alerts sent: {alerts_sent} · "
+            f"Scorable: {summary.get('alerts_scorable', 0)} · "
+            f"Pending price data: {pending_price}"
         )
     elif not summary.get('data_available') and resolved == 0:
         outcome_line = 'Outcome pending — price data unavailable.'
