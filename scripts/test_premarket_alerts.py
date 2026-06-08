@@ -36,7 +36,7 @@ def main() -> int:
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
     if report.get('stage') != '48A':
-        return _fail('report stage not 48A')
+        return _fail('report stage not 48C')
 
     from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
     from backend.analytics.premarket_conviction import _is_after_open

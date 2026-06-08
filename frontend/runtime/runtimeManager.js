@@ -34,8 +34,8 @@
   const STALE_CACHE_KEY = 'trading_copilot_runtime_snapshot_v1';
   const STALE_CACHE_META_KEY = 'trading_copilot_runtime_snapshot_meta_v1';
   const HYDRATION_WATCHDOG_MS = 15000;
-  const SNAPSHOT_RETRY_MS = 3000;
-  const MAX_SNAPSHOT_RETRIES = 5;
+  const SNAPSHOT_RETRY_MS = 1500;
+  const MAX_SNAPSHOT_RETRIES = 2;
   const HYDRATION_BOOTING = 'BOOTING';
   const HYDRATION_INITIALIZING = 'INITIALIZING';
   const HYDRATION_WARMING_UP = 'WARMING_UP';
@@ -675,9 +675,13 @@
     });
   }
 
+  function snapshotRetryDelay(attempt) {
+    return SNAPSHOT_RETRY_MS * Math.pow(2, Math.max(0, attempt - 1));
+  }
+
   async function fetchSnapshot() {
     const base = config.getApiBase().replace(/\/$/, '');
-    const url = `${base}${SNAPSHOT_ENDPOINT}?_ts=${Date.now()}`;
+    const url = `${base}${SNAPSHOT_ENDPOINT}?lite=1&_ts=${Date.now()}`;
     const started = Date.now();
     try {
       const res = await fetchWithTimeout(url, {
@@ -705,9 +709,13 @@
       });
       return payload;
     } catch (e) {
-      lastFetchError = e.name === 'AbortError' || String(e.message || '').includes('timeout')
-        ? `${SNAPSHOT_ENDPOINT} timeout (${SNAPSHOT_FETCH_TIMEOUT_MS / 1000}s)`
-        : `${SNAPSHOT_ENDPOINT}: ${e.message || 'fetch failed'}`;
+      const msg = String(e.message || e || '');
+      const chunkFail = /chunked|Failed to fetch|network/i.test(msg);
+      lastFetchError = chunkFail
+        ? 'Runtime snapshot unavailable — using cached shell.'
+        : (e.name === 'AbortError' || msg.includes('timeout')
+          ? `${SNAPSHOT_ENDPOINT} timeout (${SNAPSHOT_FETCH_TIMEOUT_MS / 1000}s)`
+          : `${SNAPSHOT_ENDPOINT}: ${msg || 'fetch failed'}`);
       console.error('[RuntimeManager] fetchSnapshot failed:', lastFetchError);
       throw e;
     }
@@ -725,7 +733,7 @@
         console.warn('[Hydration] snapshot missing — retry', attempt, 'of', MAX_SNAPSHOT_RETRIES);
         setHydrationPhase(HYDRATION_WARMING_UP);
         setLoading(true, 'Initializing intelligence runtime...');
-        await delay(SNAPSHOT_RETRY_MS);
+        await delay(snapshotRetryDelay(attempt));
       }
       try {
         const snapshot = await fetchSnapshot();

@@ -1,0 +1,2321 @@
+{
+  "ok": true,
+  "tab": "govt",
+  "generated_at": "2026-06-08T09:34:52+00:00",
+  "market_mode": "USA_MODE",
+  "source": "runtime",
+  "cache_age_seconds": 510752,
+  "items": [
+    {
+      "kind": "brain_govt",
+      "title": "HIGH BEARISH IMPACT (9/10): Government explicitly warns of fresh inflation risks from fuel prices and monsoon squeeze on household budgets, affecting OMCs (RELIANCE, IOC, HPCL, BPCL). RBI policy review Friday likely to hold rates but raise inflation forecast per HSBC. Rupee weakness (95.06/-7 paise) adds import cost pressure. Iran war uncertainty keeps precious metals and oil volatile.",
+      "confidence_score": "8.5/10",
+      "source": "brain_intelligence",
+      "classification": "govt_impact"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "rise"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "surged"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    },
+    {
+      "classification": "market_context",
+      "ticker": null,
+      "market": "INDIA",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Business Standard Markets",
+      "title": "Sensex drops 265 pts; media shares decline",
+      "reason": "index_or_market_headline",
+      "matched_keywords": [
+        "drops"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "RBI may have sold gold to save foreign reserves, BE report shows",
+      "reason": "macro_headline",
+      "matched_keywords": [],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Investing.com (Global Macro)",
+      "title": "Bitcoin slides to $70k on Strategy sale, Iran uncertainty",
+      "reason": "macro_headline",
+      "matched_keywords": [],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    },
+    {
+      "classification": "market_context",
+      "ticker": null,
+      "market": "INDIA",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "NDTV Profit",
+      "title": "Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expiry, Sensex Falls 200 Points; NHPC Declines 7%",
+      "reason": "index_or_market_headline",
+      "matched_keywords": [
+        "crash",
+        "falls"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "fallen"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "crashed"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only",
+      "kind": "macro"
+    }
+  ],
+  "summary": {
+    "govt": {
+      "timestamp": "2026-06-02T11:42:19.684660",
+      "collection_time": "2026-06-02 11:42:19",
+      "total_raw": 146,
+      "total_translated": 0,
+      "noise_filtered": 22,
+      "analyzed_items": 124,
+      "high_impact_count": 3,
+      "medium_impact_count": 25,
+      "high_impact_items": [
+        {
+          "source": "LiveMint Economy",
+          "title": "Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget",
+          "title_original": "Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget",
+          "was_translated": false,
+          "description": "The finance ministry's report comes just days ahead of RBI\u2019s Monetary Policy decision scheduled to be announced next week.",
+          "description_original": "The finance ministry's report comes just days ahead of RBI\u2019s Monetary Policy decision scheduled to be announced next week.",
+          "link": "https://www.livemint.com/economy/govt-warns-of-fresh-inflation-risks-fuel-prices-monsoon-to-further-squeeze-your-household-budget-11780191774249.html",
+          "original_hindi_link": "https://www.livemint.com/economy/govt-warns-of-fresh-inflation-risks-fuel-prices-monsoon-to-further-squeeze-your-household-budget-11780191774249.html",
+          "published": "2026-05-31T02:37:37",
+          "published_str": "2026-05-31 02:37",
+          "keywords": {
+            "petroleum_en": [
+              "fuel price"
+            ],
+            "rate_action": [
+              "monetary policy"
+            ],
+            "budget": [
+              "budget"
+            ],
+            "war_en": [
+              "war"
+            ]
+          },
+          "affected_stocks": [
+            "IOC",
+            "RELIANCE",
+            "BPCL",
+            "HPCL"
+          ],
+          "impact_score": 9,
+          "impact_reasons": [
+            "Rate policy",
+            "Energy impact",
+            "Geopolitical",
+            "Action: budget"
+          ],
+          "direction": "BEARISH",
+          "body": "",
+          "body_was_translated": false
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+          "title_original": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+          "was_translated": false,
+          "description": "European shares climbed Tuesday, led by technology stocks boosted by strong forecasts from STMicroelectronics amid AI demand. Investors await key inflation data for insights into the Mideast conflict's economic impact. A partial ceasefire in Lebanon and easing crude prices also supported market sentiment.",
+          "description_original": "European shares climbed Tuesday, led by technology stocks boosted by strong forecasts from STMicroelectronics amid AI demand. Investors await key inflation data for insights into the Mideast conflict's economic impact. A partial ceasefire in Lebanon and easing crude prices also supported market sentiment.",
+          "link": "https://economictimes.indiatimes.com/markets/us-stocks/news/global-markets-european-stocks-rise-as-stmicroelectronics-forecasts-lift-tech-stocks/articleshow/131458571.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/us-stocks/news/global-markets-european-stocks-rise-as-stmicroelectronics-forecasts-lift-tech-stocks/articleshow/131458571.cms",
+          "published": "2026-06-02T07:42:12",
+          "published_str": "2026-06-02 07:42",
+          "keywords": {
+            "petroleum_en": [
+              "crude"
+            ],
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 4,
+          "impact_reasons": [
+            "Energy impact",
+            "Action: ban"
+          ],
+          "direction": "BULLISH",
+          "body": "",
+          "body_was_translated": false
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Asian markets today: Air China, China Southern Airlines to Cathay Pacific Airways \u2014 why are aviation stocks falling?",
+          "title_original": "Asian markets today: Air China, China Southern Airlines to Cathay Pacific Airways \u2014 why are aviation stocks falling?",
+          "was_translated": false,
+          "description": "Asian aviation stocks fell after Russia announced a temporary ban on aviation fuel exports, raising concerns about fuel supply stability and airline operating costs. Major airlines in China and Hong Kong experienced significant declines.",
+          "description_original": "Asian aviation stocks fell after Russia announced a temporary ban on aviation fuel exports, raising concerns about fuel supply stability and airline operating costs. Major airlines in China and Hong Kong experienced significant declines.",
+          "link": "https://www.livemint.com/market/stock-market-news/asian-markets-today-air-china-china-southern-airlines-to-cathay-pacific-airways-why-are-aviation-stocks-falling-11780376535715.html",
+          "original_hindi_link": "https://www.livemint.com/market/stock-market-news/asian-markets-today-air-china-china-southern-airlines-to-cathay-pacific-airways-why-are-aviation-stocks-falling-11780376535715.html",
+          "published": "2026-06-02T05:35:35",
+          "published_str": "2026-06-02 05:35",
+          "keywords": {
+            "war_en": [
+              "russia"
+            ],
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 4,
+          "impact_reasons": [
+            "Energy impact",
+            "Action: ban"
+          ],
+          "direction": "BEARISH",
+          "body": "",
+          "body_was_translated": false
+        }
+      ],
+      "medium_impact_items": [
+        {
+          "source": "Economic Times Markets",
+          "title": "TCS shares soar 7%, up nearly 10% in just two sessions! What are technical charts indicating?",
+          "title_original": "TCS shares soar 7%, up nearly 10% in just two sessions! What are technical charts indicating?",
+          "was_translated": false,
+          "description": "TCS shares jumped as much as 7% on Tuesday, extending their two-day gain to nearly 9% as investors snapped up the stock after months of underperformance. The rally was driven by optimism around AI-related opportunities and attractive valuations following a sharp sector-wide selloff. Analysts at Nuvama believe the IT sector is poised for a comeback rather than a collapse, helping boost sentiment toward large-cap IT stocks.",
+          "description_original": "TCS shares jumped as much as 7% on Tuesday, extending their two-day gain to nearly 9% as investors snapped up the stock after months of underperformance. The rally was driven by optimism around AI-related opportunities and attractive valuations following a sharp sector-wide selloff. Analysts at Nuvama believe the IT sector is poised for a comeback rather than a collapse, helping boost sentiment toward large-cap IT stocks.",
+          "link": "https://economictimes.indiatimes.com/markets/stocks/news/tcs-shares-soar-7-up-nearly-10-in-just-two-sessions-what-are-technical-charts-indicating/articleshow/131460701.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/stocks/news/tcs-shares-soar-7-up-nearly-10-in-just-two-sessions-what-are-technical-charts-indicating/articleshow/131460701.cms",
+          "published": "2026-06-02T09:49:05",
+          "published_str": "2026-06-02 09:49",
+          "keywords": {
+            "war_en": [
+              "war"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Geopolitical"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "2 top stock recommendations by Vinay Rajani",
+          "title_original": "2 top stock recommendations by Vinay Rajani",
+          "was_translated": false,
+          "description": "Indian stock markets are cautious.  The Nifty is losing support levels, indicating a bearish trend.  Midcap and smallcap stocks are also seeing profit booking.  IT and metals sectors show relative strength.  Analysts suggest selective long opportunities in IT, like LTIMindtree, and shorting PSU banks such as Bank of India.",
+          "description_original": "Indian stock markets are cautious.  The Nifty is losing support levels, indicating a bearish trend.  Midcap and smallcap stocks are also seeing profit booking.  IT and metals sectors show relative strength.  Analysts suggest selective long opportunities in IT, like LTIMindtree, and shorting PSU banks such as Bank of India.",
+          "link": "https://economictimes.indiatimes.com/markets/expert-view/2-top-stock-recommendations-by-vinay-rajani/articleshow/131459763.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/expert-view/2-top-stock-recommendations-by-vinay-rajani/articleshow/131459763.cms",
+          "published": "2026-06-02T08:53:21",
+          "published_str": "2026-06-02 08:53",
+          "keywords": {
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Action: ban"
+          ],
+          "direction": "NEUTRAL"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Metals rally largely priced in, limited upside seen after strong cyclical run: Sandip Sabharwal",
+          "title_original": "Metals rally largely priced in, limited upside seen after strong cyclical run: Sandip Sabharwal",
+          "was_translated": false,
+          "description": "Market expert Sandip Sabharwal advises caution, seeing stock-specific chances but limited broad market conviction. He notes Wockhardt's approval offers innovation value but is largely priced in. IT stocks are trading plays with potential rebounds, while autos show resilience. Metals face limited upside, and macro risks loom over largecaps like ICICI Bank and L&amp;T.",
+          "description_original": "Market expert Sandip Sabharwal advises caution, seeing stock-specific chances but limited broad market conviction. He notes Wockhardt's approval offers innovation value but is largely priced in. IT stocks are trading plays with potential rebounds, while autos show resilience. Metals face limited upside, and macro risks loom over largecaps like ICICI Bank and L&amp;T.",
+          "link": "https://economictimes.indiatimes.com/markets/expert-view/metals-rally-largely-priced-in-limited-upside-seen-after-strong-cyclical-run-sandip-sabharwal/articleshow/131459625.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/expert-view/metals-rally-largely-priced-in-limited-upside-seen-after-strong-cyclical-run-sandip-sabharwal/articleshow/131459625.cms",
+          "published": "2026-06-02T08:44:19",
+          "published_str": "2026-06-02 08:44",
+          "keywords": {
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Action: ban"
+          ],
+          "direction": "BEARISH"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "AI bubble or boom? Warren Buffett's Berkshire Hathaway invests another $10 billion in Google's parent, Alphabet",
+          "title_original": "AI bubble or boom? Warren Buffett's Berkshire Hathaway invests another $10 billion in Google's parent, Alphabet",
+          "was_translated": false,
+          "description": "Berkshire Hathaway has agreed to invest $10 billion in Alphabet through a private placement as part of the Google parent\u2019s $80 billion fundraising plan focused on AI expansion. The move deepens Berkshire\u2019s exposure to artificial intelligence and signals confidence in Alphabet\u2019s long-term growth despite ongoing debates over AI valuations.",
+          "description_original": "Berkshire Hathaway has agreed to invest $10 billion in Alphabet through a private placement as part of the Google parent\u2019s $80 billion fundraising plan focused on AI expansion. The move deepens Berkshire\u2019s exposure to artificial intelligence and signals confidence in Alphabet\u2019s long-term growth despite ongoing debates over AI valuations.",
+          "link": "https://economictimes.indiatimes.com/markets/stocks/news/ai-bubble-or-boom-warren-buffetts-berkshire-hathaway-invests-another-10-billion-in-googles-parent-alphabet/articleshow/131458769.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/stocks/news/ai-bubble-or-boom-warren-buffetts-berkshire-hathaway-invests-another-10-billion-in-googles-parent-alphabet/articleshow/131458769.cms",
+          "published": "2026-06-02T07:54:43",
+          "published_str": "2026-06-02 07:54",
+          "keywords": {
+            "war_en": [
+              "war"
+            ]
+          },
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Geopolitical"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+          "title_original": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+          "was_translated": false,
+          "description": "South Korean stocks hit a record high Tuesday, driven by tech giants like Samsung Electronics and Naver, fueled by hopes of AI collaboration with Nvidia. Despite a volatile trading session, the KOSPI closed higher. Meanwhile, consumer inflation surged to a two-year peak, potentially prompting monetary tightening. Foreign investors continued their selling spree.",
+          "description_original": "South Korean stocks hit a record high Tuesday, driven by tech giants like Samsung Electronics and Naver, fueled by hopes of AI collaboration with Nvidia. Despite a volatile trading session, the KOSPI closed higher. Meanwhile, consumer inflation surged to a two-year peak, potentially prompting monetary tightening. Foreign investors continued their selling spree.",
+          "link": "https://economictimes.indiatimes.com/markets/us-stocks/news/global-markets-south-korean-shares-post-record-high-close-as-nvidia-hopes-lift-tech-stocks/articleshow/131458266.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/us-stocks/news/global-markets-south-korean-shares-post-record-high-close-as-nvidia-hopes-lift-tech-stocks/articleshow/131458266.cms",
+          "published": "2026-06-02T07:26:50",
+          "published_str": "2026-06-02 07:26",
+          "keywords": {},
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Energy impact"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "RBI may have sold gold to save foreign reserves, BE report shows",
+          "title_original": "RBI may have sold gold to save foreign reserves, BE report shows",
+          "was_translated": false,
+          "description": "The RBI may have sold about $12 billion worth of gold reserves in the two weeks through May 22 to protect its foreign-currency assets amid capital outflows and rising oil prices, according to Bloomberg Economics. The move suggests policymakers are prioritising liquid forex reserves as Middle East tensions pressure the rupee.",
+          "description_original": "The RBI may have sold about $12 billion worth of gold reserves in the two weeks through May 22 to protect its foreign-currency assets amid capital outflows and rising oil prices, according to Bloomberg Economics. The move suggests policymakers are prioritising liquid forex reserves as Middle East tensions pressure the rupee.",
+          "link": "https://economictimes.indiatimes.com/markets/forex/forex-news/rbi-may-have-sold-gold-to-save-foreign-reserves-be-report-shows/articleshow/131458066.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/forex/forex-news/rbi-may-have-sold-gold-to-save-foreign-reserves-be-report-shows/articleshow/131458066.cms",
+          "published": "2026-06-02T07:17:25",
+          "published_str": "2026-06-02 07:17",
+          "keywords": {
+            "petroleum_en": [
+              "oil price"
+            ],
+            "gold_silver_en": [
+              "gold"
+            ]
+          },
+          "affected_stocks": [
+            "GOLDBEES",
+            "KALYAN",
+            "TITAN"
+          ],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Precious metals"
+          ],
+          "direction": "NEUTRAL"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+          "title_original": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+          "was_translated": false,
+          "description": "Foreign investors' cumulative net equity investments in India have fallen to their lowest level since 2016 after sustained selling, underscoring weakening appeal for the country's $4.9 trillion stock market. Net FPI investments stood at Rs 7.3 lakh crore as of June 1. Rising oil prices, concerns over economic growth, and a global shift toward AI-linked markets have weighed on sentiment.",
+          "description_original": "Foreign investors' cumulative net equity investments in India have fallen to their lowest level since 2016 after sustained selling, underscoring weakening appeal for the country's $4.9 trillion stock market. Net FPI investments stood at Rs 7.3 lakh crore as of June 1. Rising oil prices, concerns over economic growth, and a global shift toward AI-linked markets have weighed on sentiment.",
+          "link": "https://economictimes.indiatimes.com/markets/stocks/news/foreign-investors-erase-10-years-of-india-equity-inflows/articleshow/131456637.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/stocks/news/foreign-investors-erase-10-years-of-india-equity-inflows/articleshow/131456637.cms",
+          "published": "2026-06-02T06:30:17",
+          "published_str": "2026-06-02 06:30",
+          "keywords": {
+            "petroleum_en": [
+              "oil price"
+            ],
+            "war_en": [
+              "war"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Geopolitical"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+          "title_original": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+          "was_translated": false,
+          "description": "Bitcoin prices crashed to near the $70,000 mark, hitting a seven-week low as escalating US-Iran tensions triggered risk-off sentiment across global markets. More than $744 million in crypto positions were liquidated in 24 hours, while ETF outflows and weakening market sentiment added pressure on the world's largest cryptocurrency.",
+          "description_original": "Bitcoin prices crashed to near the $70,000 mark, hitting a seven-week low as escalating US-Iran tensions triggered risk-off sentiment across global markets. More than $744 million in crypto positions were liquidated in 24 hours, while ETF outflows and weakening market sentiment added pressure on the world's largest cryptocurrency.",
+          "link": "https://economictimes.indiatimes.com/markets/cryptocurrency/crypto-news/bitcoin-hits-7-week-low-near-70k-amid-escalating-us-iran-tensions-early-744-million-liquidated-in-24-hours/articleshow/131456443.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/cryptocurrency/crypto-news/bitcoin-hits-7-week-low-near-70k-amid-escalating-us-iran-tensions-early-744-million-liquidated-in-24-hours/articleshow/131456443.cms",
+          "published": "2026-06-02T06:20:19",
+          "published_str": "2026-06-02 06:20",
+          "keywords": {
+            "war_en": [
+              "iran"
+            ]
+          },
+          "affected_stocks": [
+            "ONGC",
+            "OIL INDIA",
+            "RELIANCE"
+          ],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Geopolitical"
+          ],
+          "direction": "NEUTRAL"
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "India\u2019s domestic growth story still strong despite global headwinds: Rajeev Agrawal",
+          "title_original": "India\u2019s domestic growth story still strong despite global headwinds: Rajeev Agrawal",
+          "was_translated": false,
+          "description": "Global markets face uncertainty. Rajeev Agrawal from DoorDarshi India Fund sees India's economy as resilient. He focuses on domestic businesses less affected by global shocks. Real estate, banking, and renewable energy are highlighted as attractive sectors. Foreign investment remains a challenge, but long-term optimism persists due to strong domestic demand and demographics.",
+          "description_original": "Global markets face uncertainty. Rajeev Agrawal from DoorDarshi India Fund sees India's economy as resilient. He focuses on domestic businesses less affected by global shocks. Real estate, banking, and renewable energy are highlighted as attractive sectors. Foreign investment remains a challenge, but long-term optimism persists due to strong domestic demand and demographics.",
+          "link": "https://economictimes.indiatimes.com/markets/expert-view/indias-domestic-growth-story-still-strong-despite-global-headwinds-rajeev-agrawal/articleshow/131456264.cms",
+          "original_hindi_link": "https://economictimes.indiatimes.com/markets/expert-view/indias-domestic-growth-story-still-strong-despite-global-headwinds-rajeev-agrawal/articleshow/131456264.cms",
+          "published": "2026-06-02T06:16:35",
+          "published_str": "2026-06-02 06:16",
+          "keywords": {
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Action: ban"
+          ],
+          "direction": "BULLISH"
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Intellect Design Arena climbs after launching AI digital banking platform in Europe",
+          "title_original": "Intellect Design Arena climbs after launching AI digital banking platform in Europe",
+          "was_translated": false,
+          "description": "Intellect Design Arena jumped 2.63% to Rs 746.75 after the company launched AI Digital Banking platform tailored for challenger banks and digital-native financial institutions across the UK and Europe.",
+          "description_original": "Intellect Design Arena jumped 2.63% to Rs 746.75 after the company launched AI Digital Banking platform tailored for challenger banks and digital-native financial institutions across the UK and Europe.",
+          "link": "https://www.business-standard.com/markets/capital-market-news/intellect-design-arena-climbs-after-launching-ai-digital-banking-platform-in-europe-126060200673_1.html",
+          "original_hindi_link": "https://www.business-standard.com/markets/capital-market-news/intellect-design-arena-climbs-after-launching-ai-digital-banking-platform-in-europe-126060200673_1.html",
+          "published": "2026-06-02T09:46:12",
+          "published_str": "2026-06-02 09:46",
+          "keywords": {
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Action: ban"
+          ],
+          "direction": "NEUTRAL"
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Man Industries gains after Crisil uprades ratings to 'A+' with 'stable' outlook",
+          "title_original": "Man Industries gains after Crisil uprades ratings to 'A+' with 'stable' outlook",
+          "was_translated": false,
+          "description": "Man Industries India (MIIL) added 2.08% to Rs 497.60 after the company said that Crisil Ratings has upgraded its rating on the long-term bank loan facilities of the company to 'Crisil A+/Stable' from 'Crisil A/Stable'.",
+          "description_original": "Man Industries India (MIIL) added 2.08% to Rs 497.60 after the company said that Crisil Ratings has upgraded its rating on the long-term bank loan facilities of the company to 'Crisil A+/Stable' from 'Crisil A/Stable'.",
+          "link": "https://www.business-standard.com/markets/capital-market-news/man-industries-gains-after-crisil-uprades-ratings-to-a-with-stable-outlook-126060200651_1.html",
+          "original_hindi_link": "https://www.business-standard.com/markets/capital-market-news/man-industries-gains-after-crisil-uprades-ratings-to-a-with-stable-outlook-126060200651_1.html",
+          "published": "2026-06-02T09:34:10",
+          "published_str": "2026-06-02 09:34",
+          "keywords": {
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Action: ban"
+          ],
+          "direction": "BEARISH"
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Volumes jump at Newgen Software Technologies Ltd counter",
+          "title_original": "Volumes jump at Newgen Software Technologies Ltd counter",
+          "was_translated": false,
+          "description": "Newgen Software Technologies Ltd clocked volume of 261.27 lakh shares by 14:14 IST on NSE, a 41.35 times surge over two-week average daily volume of 6.32 lakh shares",
+          "description_original": "Newgen Software Technologies Ltd clocked volume of 261.27 lakh shares by 14:14 IST on NSE, a 41.35 times surge over two-week average daily volume of 6.32 lakh shares",
+          "link": "https://www.business-standard.com/markets/capital-market-news/volumes-jump-at-newgen-software-technologies-ltd-counter-126060200620_1.html",
+          "original_hindi_link": "https://www.business-standard.com/markets/capital-market-news/volumes-jump-at-newgen-software-technologies-ltd-counter-126060200620_1.html",
+          "published": "2026-06-02T09:20:13",
+          "published_str": "2026-06-02 09:20",
+          "keywords": {
+            "war_en": [
+              "war"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Geopolitical"
+          ],
+          "direction": "BEARISH"
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "TACC to collaborate with NUS I-FIM for next-gen advanced materials technologies",
+          "title_original": "TACC to collaborate with NUS I-FIM for next-gen advanced materials technologies",
+          "was_translated": false,
+          "description": "TACC, an LNJ Bhilwara Group company and wholly owned subsidiary of HEG, has signed a Memorandum of Understanding (MOU) with the Institute for Functional intelligent Materials (I-FIM) at the National University of Singapore (NUS) to collaborate in the fields of advanced materials science, nanotechnology, and related disciplines.",
+          "description_original": "TACC, an LNJ Bhilwara Group company and wholly owned subsidiary of HEG, has signed a Memorandum of Understanding (MOU) with the Institute for Functional intelligent Materials (I-FIM) at the National University of Singapore (NUS) to collaborate in the fields of advanced materials science, nanotechnology, and related disciplines.",
+          "link": "https://www.business-standard.com/markets/capital-market-news/tacc-to-collaborate-with-nus-i-fim-for-next-gen-advanced-materials-technologies-126060200619_1.html",
+          "original_hindi_link": "https://www.business-standard.com/markets/capital-market-news/tacc-to-collaborate-with-nus-i-fim-for-next-gen-advanced-materials-technologies-126060200619_1.html",
+          "published": "2026-06-02T09:20:02",
+          "published_str": "2026-06-02 09:20",
+          "keywords": {
+            "war_en": [
+              "war"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Geopolitical"
+          ],
+          "direction": "BEARISH"
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "ICICI Bank Ltd down for fifth straight session",
+          "title_original": "ICICI Bank Ltd down for fifth straight session",
+          "was_translated": false,
+          "description": "ICICI Bank Ltd is quoting at Rs 1234.9, down 0.39% on the day as on 13:19 IST on the NSE. The stock tumbled 14.12% in last one year as compared to a 4.38% slide in NIFTY and a 3.23% fall  in the Nifty Bank index.",
+          "description_original": "ICICI Bank Ltd is quoting at Rs 1234.9, down 0.39% on the day as on 13:19 IST on the NSE. The stock tumbled 14.12% in last one year as compared to a 4.38% slide in NIFTY and a 3.23% fall  in the Nifty Bank index.",
+          "link": "https://www.business-standard.com/markets/capital-market-news/icici-bank-ltd-down-for-fifth-straight-session-126060200542_1.html",
+          "original_hindi_link": "https://www.business-standard.com/markets/capital-market-news/icici-bank-ltd-down-for-fifth-straight-session-126060200542_1.html",
+          "published": "2026-06-02T08:34:58",
+          "published_str": "2026-06-02 08:34",
+          "keywords": {
+            "major_action_en": [
+              "ban"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Action: ban"
+          ],
+          "direction": "BEARISH"
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "India GDP growth likely slowed to 7.3% in Q4 FY26: Mint poll",
+          "title_original": "India GDP growth likely slowed to 7.3% in Q4 FY26: Mint poll",
+          "was_translated": false,
+          "description": "Domestic demand and government spending likely kept growth resilient in the January-March quarter despite headwinds from the West Asia war.",
+          "description_original": "Domestic demand and government spending likely kept growth resilient in the January-March quarter despite headwinds from the West Asia war.",
+          "link": "https://www.livemint.com/economy/india-gdp-growth-q4-fy26-mint-poll-economy-expansion-7-3-percent-11780299823551.html",
+          "original_hindi_link": "https://www.livemint.com/economy/india-gdp-growth-q4-fy26-mint-poll-economy-expansion-7-3-percent-11780299823551.html",
+          "published": "2026-06-02T00:30:32",
+          "published_str": "2026-06-02 00:30",
+          "keywords": {
+            "war_en": [
+              "war"
+            ]
+          },
+          "affected_stocks": [],
+          "impact_score": 2,
+          "impact_reasons": [
+            "Geopolitical"
+          ],
+          "direction": "NEUTRAL"
+        }
+      ],
+      "affected_stocks": {
+        "ACC": 8,
+        "AMBUJA": 8,
+        "ULTRACEMCO": 8,
+        "RELIANCE": 5,
+        "ONGC": 4,
+        "IOC": 3,
+        "OIL INDIA": 2,
+        "BPCL": 2,
+        "HPCL": 2,
+        "GOLDBEES": 1,
+        "KALYAN": 1,
+        "TITAN": 1,
+        "SBIN": 1,
+        "HDFCBANK": 1,
+        "ICICIBANK": 1
+      },
+      "top_keywords": {
+        "ban": 12,
+        "war": 10,
+        "crude": 2,
+        "oil price": 2,
+        "iran": 2,
+        "gold": 1,
+        "gst": 1,
+        "fuel price": 1,
+        "monetary policy": 1,
+        "budget": 1,
+        "petrol": 1,
+        "diesel": 1,
+        "russia": 1
+      },
+      "all_filtered_items": [
+        {
+          "source": "SEBI Press Releases",
+          "title": "Order in the matter of Victory Investment Fund",
+          "title_original": "Order in the matter of Victory Investment Fund",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Order in the matter of Rudrabhishek Infrastructure Trust",
+          "title_original": "Order in the matter of Rudrabhishek Infrastructure Trust",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Order in the matter of Prime Realty Capital",
+          "title_original": "Order in the matter of Prime Realty Capital",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Niveshak Shivir to be held on June 05, 2026 in the city of Bhopal, Madhya Pradesh",
+          "title_original": "Niveshak Shivir to be held on June 05, 2026 in the city of Bhopal, Madhya Pradesh",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Order in the matter of Florintree India Flexi Advantage Trust",
+          "title_original": "Order in the matter of Florintree India Flexi Advantage Trust",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Order in the matter of Exponential Innovation Fund",
+          "title_original": "Order in the matter of Exponential Innovation Fund",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Order in the matter of M/s Veerkrupa Jewellers Limited.",
+          "title_original": "Order in the matter of M/s Veerkrupa Jewellers Limited.",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Adjudication Order in the matter of New Delhi Television Limited",
+          "title_original": "Adjudication Order in the matter of New Delhi Television Limited",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Adjudication Order in respect of Saachi Overseas in the matter of Illiquid Stock Options on BSE",
+          "title_original": "Adjudication Order in respect of Saachi Overseas in the matter of Illiquid Stock Options on BSE",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Order under Section 15I-3 of the SEBI Act and Section 23I-3 of the SCRA in the matter of Suzlon Energy Limited",
+          "title_original": "Order under Section 15I-3 of the SEBI Act and Section 23I-3 of the SCRA in the matter of Suzlon Energy Limited",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Final Order in respect of Rajendra Pathak in the matter of K Lifestyle and Industries Limited.",
+          "title_original": "Final Order in respect of Rajendra Pathak in the matter of K Lifestyle and Industries Limited.",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "SEBI Press Releases",
+          "title": "Final Order in the matter of inspection of Mr. Amit Guruh Sachdeva, Research Analyst",
+          "title_original": "Final Order in the matter of inspection of Mr. Amit Guruh Sachdeva, Research Analyst",
+          "was_translated": false,
+          "published": "unknown",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "BSE Announcements",
+          "title": "CORPORATE ACTION IN SLB SECURITIES",
+          "title_original": "CORPORATE ACTION IN SLB SECURITIES",
+          "was_translated": false,
+          "published": "2026-06-02 10:31",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "BSE Announcements",
+          "title": "Adjustment of Futures and Options contracts in the security HDFC Asset Management Company Ltd in Equity Derivative Segment",
+          "title_original": "Adjustment of Futures and Options contracts in the security HDFC Asset Management Company Ltd in Equity Derivative Segment",
+          "was_translated": false,
+          "published": "2026-06-02 10:10",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "BSE Announcements",
+          "title": "Demat Auction 641",
+          "title_original": "Demat Auction 641",
+          "was_translated": false,
+          "published": "2026-06-02 08:28",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "BSE Announcements",
+          "title": "Application for surrender of Membership - PAWANKUMAR CHAUDHARY Member no. 740",
+          "title_original": "Application for surrender of Membership - PAWANKUMAR CHAUDHARY Member no. 740",
+          "was_translated": false,
+          "published": "2026-06-02 06:51",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "BSE Announcements",
+          "title": "Change in Group of Equity Shares of YAASHVI JEWELLERS LIMITED",
+          "title_original": "Change in Group of Equity Shares of YAASHVI JEWELLERS LIMITED",
+          "was_translated": false,
+          "published": "2026-06-02 05:37",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "BSE Announcements",
+          "title": "Change in Group of Equity Shares of Harikanta Overseas Limited",
+          "title_original": "Change in Group of Equity Shares of Harikanta Overseas Limited",
+          "was_translated": false,
+          "published": "2026-06-02 05:10",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "BSE Announcements",
+          "title": "Non-Competitive Bidding for Auction of GoI dated Securities (G-secs) on June 05, 2026",
+          "title_original": "Non-Competitive Bidding for Auction of GoI dated Securities (G-secs) on June 05, 2026",
+          "was_translated": false,
+          "published": "2026-06-02 04:54",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "AI will expand opportunities for Indian IT; luxury housing demand remains strong: BofA Securities",
+          "title_original": "AI will expand opportunities for Indian IT; luxury housing demand remains strong: BofA Securities",
+          "was_translated": false,
+          "published": "2026-06-02 10:17",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Market wrap: Sensex rises 383 points, Nifty closes near 23,500 as IT stocks shine",
+          "title_original": "Market wrap: Sensex rises 383 points, Nifty closes near 23,500 as IT stocks shine",
+          "was_translated": false,
+          "published": "2026-06-02 10:13",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "ET Alpha Wealth Summit: Decoding market cycles and India's next wealth creators",
+          "title_original": "ET Alpha Wealth Summit: Decoding market cycles and India's next wealth creators",
+          "was_translated": false,
+          "published": "2026-06-02 09:52",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "TCS shares soar 7%, up nearly 10% in just two sessions! What are technical charts indicating?",
+          "title_original": "TCS shares soar 7%, up nearly 10% in just two sessions! What are technical charts indicating?",
+          "was_translated": false,
+          "published": "2026-06-02 09:49",
+          "impact_score": 2,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Vodafone Idea share price: Citi removes \u2018High Risk\u2019 rating, sees up to 22% upside potential; here\u2019s why",
+          "title_original": "Vodafone Idea share price: Citi removes \u2018High Risk\u2019 rating, sees up to 22% upside potential; here\u2019s why",
+          "was_translated": false,
+          "published": "2026-06-02 09:45",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Infosys shares jump 6%, rally 10% in 3 days as IT stocks shine. More upside ahead?",
+          "title_original": "Infosys shares jump 6%, rally 10% in 3 days as IT stocks shine. More upside ahead?",
+          "was_translated": false,
+          "published": "2026-06-02 09:24",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Why Trideep Bhattacharya is betting on financials and energy despite global uncertainty",
+          "title_original": "Why Trideep Bhattacharya is betting on financials and energy despite global uncertainty",
+          "was_translated": false,
+          "published": "2026-06-02 09:00",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "2 top stock recommendations by Vinay Rajani",
+          "title_original": "2 top stock recommendations by Vinay Rajani",
+          "was_translated": false,
+          "published": "2026-06-02 08:53",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Metals rally largely priced in, limited upside seen after strong cyclical run: Sandip Sabharwal",
+          "title_original": "Metals rally largely priced in, limited upside seen after strong cyclical run: Sandip Sabharwal",
+          "was_translated": false,
+          "published": "2026-06-02 08:44",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Explained: Why Indian stock market has fallen prey to South Korea, Taiwan\u2019s AI prowess",
+          "title_original": "Explained: Why Indian stock market has fallen prey to South Korea, Taiwan\u2019s AI prowess",
+          "was_translated": false,
+          "published": "2026-06-02 08:34",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "KRN Heat Exchanger and Refrigeration raises Rs 350 crore via QIP",
+          "title_original": "KRN Heat Exchanger and Refrigeration raises Rs 350 crore via QIP",
+          "was_translated": false,
+          "published": "2026-06-02 08:27",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Japan's Nikkei retreats from record peak as market gauges fragile Mideast peace talks",
+          "title_original": "Japan's Nikkei retreats from record peak as market gauges fragile Mideast peace talks",
+          "was_translated": false,
+          "published": "2026-06-02 07:57",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "AI bubble or boom? Warren Buffett's Berkshire Hathaway invests another $10 billion in Google's parent, Alphabet",
+          "title_original": "AI bubble or boom? Warren Buffett's Berkshire Hathaway invests another $10 billion in Google's parent, Alphabet",
+          "was_translated": false,
+          "published": "2026-06-02 07:54",
+          "impact_score": 2,
+          "direction": "BULLISH",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+          "title_original": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+          "was_translated": false,
+          "published": "2026-06-02 07:42",
+          "impact_score": 4,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Nifty at 25,900 by March 2027? Nomura cites key catalysts to watch out for",
+          "title_original": "Nifty at 25,900 by March 2027? Nomura cites key catalysts to watch out for",
+          "was_translated": false,
+          "published": "2026-06-02 07:39",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+          "title_original": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+          "was_translated": false,
+          "published": "2026-06-02 07:26",
+          "impact_score": 2,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "RBI may have sold gold to save foreign reserves, BE report shows",
+          "title_original": "RBI may have sold gold to save foreign reserves, BE report shows",
+          "was_translated": false,
+          "published": "2026-06-02 07:17",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "GOLDBEES",
+            "KALYAN",
+            "TITAN"
+          ]
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "10 stocks with over 10% mutual funds ownership and strong QoQ stake growth",
+          "title_original": "10 stocks with over 10% mutual funds ownership and strong QoQ stake growth",
+          "was_translated": false,
+          "published": "2026-06-02 07:01",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Vedanta shares fall after media reports of ED searches at Mumbai, Delhi office",
+          "title_original": "Vedanta shares fall after media reports of ED searches at Mumbai, Delhi office",
+          "was_translated": false,
+          "published": "2026-06-02 06:55",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "AI disruption in Indian IT front-loaded, but long-term demand intact: Sushovan Nayak",
+          "title_original": "AI disruption in Indian IT front-loaded, but long-term demand intact: Sushovan Nayak",
+          "was_translated": false,
+          "published": "2026-06-02 06:47",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "IndiQube Spaces eyes Rs 52 cr revenue from lease of 700 desks in Bengaluru",
+          "title_original": "IndiQube Spaces eyes Rs 52 cr revenue from lease of 700 desks in Bengaluru",
+          "was_translated": false,
+          "published": "2026-06-02 06:44",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "\u200bThe $80 billion AI gamble: Decoding Alphabet's mega fundraise",
+          "title_original": "\u200bThe $80 billion AI gamble: Decoding Alphabet's mega fundraise",
+          "was_translated": false,
+          "published": "2026-06-02 06:30",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+          "title_original": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+          "was_translated": false,
+          "published": "2026-06-02 06:30",
+          "impact_score": 2,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Nomura names GE Vernova, CG Power, 4 others among top plays on India\u2019s decadal data centre opportunity",
+          "title_original": "Nomura names GE Vernova, CG Power, 4 others among top plays on India\u2019s decadal data centre opportunity",
+          "was_translated": false,
+          "published": "2026-06-02 06:26",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+          "title_original": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+          "was_translated": false,
+          "published": "2026-06-02 06:20",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "ONGC",
+            "OIL INDIA",
+            "RELIANCE"
+          ]
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "India\u2019s domestic growth story still strong despite global headwinds: Rajeev Agrawal",
+          "title_original": "India\u2019s domestic growth story still strong despite global headwinds: Rajeev Agrawal",
+          "was_translated": false,
+          "published": "2026-06-02 06:16",
+          "impact_score": 2,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Chinese humanoids are one step closer to IPOs",
+          "title_original": "Chinese humanoids are one step closer to IPOs",
+          "was_translated": false,
+          "published": "2026-06-02 06:04",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "NHPC shares tumble 5% as govt\u2019s OFS worth up to Rs 4,300 crore opens at 8% discount. Check details",
+          "title_original": "NHPC shares tumble 5% as govt\u2019s OFS worth up to Rs 4,300 crore opens at 8% discount. Check details",
+          "was_translated": false,
+          "published": "2026-06-02 06:01",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Groww, Lenskart, 9 other stocks among Motilal\u2019s non-Nifty ideas. Check full list",
+          "title_original": "Groww, Lenskart, 9 other stocks among Motilal\u2019s non-Nifty ideas. Check full list",
+          "was_translated": false,
+          "published": "2026-06-02 05:44",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Economic Times Markets",
+          "title": "Wockhardt shares pause massive 36% rally in 5 sessions; slip 7%. What\u2019s behind the selloff?",
+          "title_original": "Wockhardt shares pause massive 36% rally in 5 sessions; slip 7%. What\u2019s behind the selloff?",
+          "was_translated": false,
+          "published": "2026-06-02 05:40",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Infosys climbs on launch of AI-driven editorial platform with Handelsblatt",
+          "title_original": "Infosys climbs on launch of AI-driven editorial platform with Handelsblatt",
+          "was_translated": false,
+          "published": "2026-06-02 10:20",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Goyal Associates reports standalone net loss of Rs 0.39 crore in the March 2026 quarter",
+          "title_original": "Goyal Associates reports standalone net loss of Rs 0.39 crore in the March 2026 quarter",
+          "was_translated": false,
+          "published": "2026-06-02 10:01",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Intellect Design Arena climbs after launching AI digital banking platform in Europe",
+          "title_original": "Intellect Design Arena climbs after launching AI digital banking platform in Europe",
+          "was_translated": false,
+          "published": "2026-06-02 09:46",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Supriya Lifescience Ltd leads losers in 'A' group",
+          "title_original": "Supriya Lifescience Ltd leads losers in 'A' group",
+          "was_translated": false,
+          "published": "2026-06-02 09:46",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "IndiQube Spaces signs Rs 52-cr workspace deal in North Bengaluru",
+          "title_original": "IndiQube Spaces signs Rs 52-cr workspace deal in North Bengaluru",
+          "was_translated": false,
+          "published": "2026-06-02 09:34",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Man Industries gains after Crisil uprades ratings to 'A+' with 'stable' outlook",
+          "title_original": "Man Industries gains after Crisil uprades ratings to 'A+' with 'stable' outlook",
+          "was_translated": false,
+          "published": "2026-06-02 09:34",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Worth Peripherals Ltd leads losers in 'B' group",
+          "title_original": "Worth Peripherals Ltd leads losers in 'B' group",
+          "was_translated": false,
+          "published": "2026-06-02 09:34",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "CMR Green Tech IPO to end mainboard dry spell; is it worth your money?",
+          "title_original": "CMR Green Tech IPO to end mainboard dry spell; is it worth your money?",
+          "was_translated": false,
+          "published": "2026-06-02 09:26",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Balaji Amines soars 19% on huge volumes; stock up 128% in 3 months",
+          "title_original": "Balaji Amines soars 19% on huge volumes; stock up 128% in 3 months",
+          "was_translated": false,
+          "published": "2026-06-02 09:24",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Sensex, Nifty advance strongly; IT shares shine",
+          "title_original": "Sensex, Nifty advance strongly; IT shares shine",
+          "was_translated": false,
+          "published": "2026-06-02 09:20",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Wockhardt corrects after blockbuster run on antibiotic approval",
+          "title_original": "Wockhardt corrects after blockbuster run on antibiotic approval",
+          "was_translated": false,
+          "published": "2026-06-02 09:20",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "SBC Exports secures Rs 18-cr export order from Dubai-based company",
+          "title_original": "SBC Exports secures Rs 18-cr export order from Dubai-based company",
+          "was_translated": false,
+          "published": "2026-06-02 09:20",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Volumes jump at Newgen Software Technologies Ltd counter",
+          "title_original": "Volumes jump at Newgen Software Technologies Ltd counter",
+          "was_translated": false,
+          "published": "2026-06-02 09:20",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "TACC to collaborate with NUS I-FIM for next-gen advanced materials technologies",
+          "title_original": "TACC to collaborate with NUS I-FIM for next-gen advanced materials technologies",
+          "was_translated": false,
+          "published": "2026-06-02 09:20",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Sensex jumps 1,047 pts from day's low; Nifty above 23,550: Key reasons",
+          "title_original": "Sensex jumps 1,047 pts from day's low; Nifty above 23,550: Key reasons",
+          "was_translated": false,
+          "published": "2026-06-02 09:09",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "India-Oman CEPA to Boost Exports, Jobs, Farmers' Welfare and Shared Prosperity, Says Piyush Goyal",
+          "title_original": "India-Oman CEPA to Boost Exports, Jobs, Farmers' Welfare and Shared Prosperity, Says Piyush Goyal",
+          "was_translated": false,
+          "published": "2026-06-02 08:46",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Magellanic Cloud gains as arm bags Rs 10-cr railway surveillance order from East Coast Railway",
+          "title_original": "Magellanic Cloud gains as arm bags Rs 10-cr railway surveillance order from East Coast Railway",
+          "was_translated": false,
+          "published": "2026-06-02 08:46",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Coforge climbs on launch of insurance-focused AI platform",
+          "title_original": "Coforge climbs on launch of insurance-focused AI platform",
+          "was_translated": false,
+          "published": "2026-06-02 08:36",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "India Ratings affirms ratings of Kross at 'A/A1' with 'stable' outlook",
+          "title_original": "India Ratings affirms ratings of Kross at 'A/A1' with 'stable' outlook",
+          "was_translated": false,
+          "published": "2026-06-02 08:36",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Piramal Pharma Ltd drops for fifth straight session",
+          "title_original": "Piramal Pharma Ltd drops for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:36",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Dr Reddys Laboratories Ltd slips for fifth straight session",
+          "title_original": "Dr Reddys Laboratories Ltd slips for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:36",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "APL Apollo Tubes Ltd down for fifth straight session",
+          "title_original": "APL Apollo Tubes Ltd down for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:36",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Emami Ltd drops for fifth straight session",
+          "title_original": "Emami Ltd drops for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:36",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "SBI Cards & Payment Services Ltd eases for fifth straight session",
+          "title_original": "SBI Cards & Payment Services Ltd eases for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:35",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Power Finance Corporation Ltd slips for fifth straight session",
+          "title_original": "Power Finance Corporation Ltd slips for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:35",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Max Financial Services Ltd eases for fifth straight session",
+          "title_original": "Max Financial Services Ltd eases for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:35",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "HDFC Life Insurance Company Ltd slips for fifth straight session",
+          "title_original": "HDFC Life Insurance Company Ltd slips for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:35",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Inox Wind Ltd drops for fifth straight session",
+          "title_original": "Inox Wind Ltd drops for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:35",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "Petronet LNG Ltd slips for fifth straight session",
+          "title_original": "Petronet LNG Ltd slips for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:35",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "Business Standard Markets",
+          "title": "ICICI Bank Ltd down for fifth straight session",
+          "title_original": "ICICI Bank Ltd down for fifth straight session",
+          "was_translated": false,
+          "published": "2026-06-02 08:34",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Centre\u2019s domestic financing nearly doubles to  \u20b93.6 trillion in April, easing capital spending pressure",
+          "title_original": "Centre\u2019s domestic financing nearly doubles to  \u20b93.6 trillion in April, easing capital spending pressure",
+          "was_translated": false,
+          "published": "2026-06-02 09:37",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Why India's fertility problem may be worse than what headline figures suggest",
+          "title_original": "Why India's fertility problem may be worse than what headline figures suggest",
+          "was_translated": false,
+          "published": "2026-06-02 04:22",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "India GDP growth likely slowed to 7.3% in Q4 FY26: Mint poll",
+          "title_original": "India GDP growth likely slowed to 7.3% in Q4 FY26: Mint poll",
+          "was_translated": false,
+          "published": "2026-06-02 00:30",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Govt trims fertilizer demand estimate after IMD downgrades monsoon forecast",
+          "title_original": "Govt trims fertilizer demand estimate after IMD downgrades monsoon forecast",
+          "was_translated": false,
+          "published": "2026-06-01 17:51",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Industrial output grows 4.9% in April as India shifts to new IIP series with 2022-23 base",
+          "title_original": "Industrial output grows 4.9% in April as India shifts to new IIP series with 2022-23 base",
+          "was_translated": false,
+          "published": "2026-06-01 11:34",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "India\u2019s manufacturing PMI climbs to 55.0 in May as output hits three-month high",
+          "title_original": "India\u2019s manufacturing PMI climbs to 55.0 in May as output hits three-month high",
+          "was_translated": false,
+          "published": "2026-06-01 07:40",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "GST collections rise 3.2% to  \u20b91.94 trillion in May",
+          "title_original": "GST collections rise 3.2% to  \u20b91.94 trillion in May",
+          "was_translated": false,
+          "published": "2026-06-01 07:32",
+          "impact_score": 2,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Powell says Fed will lose credibility if president removes officials over policy differences",
+          "title_original": "Powell says Fed will lose credibility if president removes officials over policy differences",
+          "was_translated": false,
+          "published": "2026-06-01 01:16",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Govt to help 150,000 farmers access machinery, curb stubble burning",
+          "title_original": "Govt to help 150,000 farmers access machinery, curb stubble burning",
+          "was_translated": false,
+          "published": "2026-05-31 13:04",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Rain, thunderstorm seen in many parts, conditions favour monsoon progress: IMD",
+          "title_original": "Rain, thunderstorm seen in many parts, conditions favour monsoon progress: IMD",
+          "was_translated": false,
+          "published": "2026-05-31 12:50",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Mint Explainer | Is 2026 heading for its driest monsoon since 2015?",
+          "title_original": "Mint Explainer | Is 2026 heading for its driest monsoon since 2015?",
+          "was_translated": false,
+          "published": "2026-05-31 10:11",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "How the stress is building in real estate globally, explained in five charts",
+          "title_original": "How the stress is building in real estate globally, explained in five charts",
+          "was_translated": false,
+          "published": "2026-05-31 05:00",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": [
+            "ONGC",
+            "OIL INDIA",
+            "RELIANCE"
+          ]
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget",
+          "title_original": "Govt warns of fresh inflation risks: Fuel prices, monsoon to further squeeze your household budget",
+          "was_translated": false,
+          "published": "2026-05-31 02:37",
+          "impact_score": 9,
+          "direction": "BEARISH",
+          "affected_stocks": [
+            "IOC",
+            "RELIANCE",
+            "BPCL",
+            "HPCL"
+          ]
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "India eases fuel export levies, lowers duties on petrol, diesel and ATF starting June 1",
+          "title_original": "India eases fuel export levies, lowers duties on petrol, diesel and ATF starting June 1",
+          "was_translated": false,
+          "published": "2026-05-31 01:38",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "HPCL",
+            "RELIANCE",
+            "IOC",
+            "ONGC",
+            "BPCL"
+          ]
+        },
+        {
+          "source": "LiveMint Economy",
+          "title": "Will AI put economists out of business? Fed\u2019s John Williams says 'I\u2019m not a believer that...'",
+          "title_original": "Will AI put economists out of business? Fed\u2019s John Williams says 'I\u2019m not a believer that...'",
+          "was_translated": false,
+          "published": "2026-05-30 14:44",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Can the stockmarket swallow Anthropic, SpaceX and OpenAI?",
+          "title_original": "Can the stockmarket swallow Anthropic, SpaceX and OpenAI?",
+          "was_translated": false,
+          "published": "2026-06-02 10:37",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Small-caps defy market selloff: Is this the next big opportunity?",
+          "title_original": "Small-caps defy market selloff: Is this the next big opportunity?",
+          "was_translated": false,
+          "published": "2026-06-02 10:21",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Top Gainers &amp; Losers on June 2: Newgen Software Tech, Concord Biotech, TCS, HFCL, NMDC among top gainers",
+          "title_original": "Top Gainers &amp; Losers on June 2: Newgen Software Tech, Concord Biotech, TCS, HFCL, NMDC among top gainers",
+          "was_translated": false,
+          "published": "2026-06-02 10:15",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Metal stock Rajputana Stainless trades green after strong FY26 business update",
+          "title_original": "Metal stock Rajputana Stainless trades green after strong FY26 business update",
+          "was_translated": false,
+          "published": "2026-06-02 10:07",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Sensex jumps 380 points, snaps 4-day losing run: 10 key takeaways from Indian stock market today",
+          "title_original": "Sensex jumps 380 points, snaps 4-day losing run: 10 key takeaways from Indian stock market today",
+          "was_translated": false,
+          "published": "2026-06-02 10:06",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Energy stock Fujiyama Power Systems hits upper circuit following stock market rebound",
+          "title_original": "Energy stock Fujiyama Power Systems hits upper circuit following stock market rebound",
+          "was_translated": false,
+          "published": "2026-06-02 09:38",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Rail Vikas Nigam shares extend losing streak to fifth session, drop over 3.5% to 2-year low",
+          "title_original": "Rail Vikas Nigam shares extend losing streak to fifth session, drop over 3.5% to 2-year low",
+          "was_translated": false,
+          "published": "2026-06-02 09:23",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Oracle layoffs: 30,000 job cuts likely by June 15 despite booming cloud, AI growth and strong earnings",
+          "title_original": "Oracle layoffs: 30,000 job cuts likely by June 15 despite booming cloud, AI growth and strong earnings",
+          "was_translated": false,
+          "published": "2026-06-02 09:20",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Infosys share price jumps 5% in trade today; here's why",
+          "title_original": "Infosys share price jumps 5% in trade today; here's why",
+          "was_translated": false,
+          "published": "2026-06-02 09:05",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Anthropic IPO: AI giant's $965 billion valuation faces market test; experts decode",
+          "title_original": "Anthropic IPO: AI giant's $965 billion valuation faces market test; experts decode",
+          "was_translated": false,
+          "published": "2026-06-02 08:42",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Banking sector Q4 results: NIMs likely bottomed out, business momentum improves; Axis Bank, DCB Bank among top picks",
+          "title_original": "Banking sector Q4 results: NIMs likely bottomed out, business momentum improves; Axis Bank, DCB Bank among top picks",
+          "was_translated": false,
+          "published": "2026-06-02 08:22",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "SBIN",
+            "HDFCBANK",
+            "ICICIBANK"
+          ]
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Vadodara eyes India\u2019s first public blue municipal bond issue, plans  \u20b9200 crore fundraising",
+          "title_original": "Vadodara eyes India\u2019s first public blue municipal bond issue, plans  \u20b9200 crore fundraising",
+          "was_translated": false,
+          "published": "2026-06-02 08:19",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Patanjali Foods: Street\u2019s optimism in assigning high FMCG valuation multiples was misplaced",
+          "title_original": "Patanjali Foods: Street\u2019s optimism in assigning high FMCG valuation multiples was misplaced",
+          "was_translated": false,
+          "published": "2026-06-02 07:57",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Hexagon Nutrition IPO: 10 key risks investors should know before subscribing; check latest GMP",
+          "title_original": "Hexagon Nutrition IPO: 10 key risks investors should know before subscribing; check latest GMP",
+          "was_translated": false,
+          "published": "2026-06-02 07:53",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "GMR Airports faces West Asia headwinds, but analysts see a growth runway",
+          "title_original": "GMR Airports faces West Asia headwinds, but analysts see a growth runway",
+          "was_translated": false,
+          "published": "2026-06-02 07:42",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Vedanta shares crash over 4% from day's high after ED raids premises; details here",
+          "title_original": "Vedanta shares crash over 4% from day's high after ED raids premises; details here",
+          "was_translated": false,
+          "published": "2026-06-02 07:24",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Zydus Lifesciences share buyback to open on 4 June: Should you participate or not?",
+          "title_original": "Zydus Lifesciences share buyback to open on 4 June: Should you participate or not?",
+          "was_translated": false,
+          "published": "2026-06-02 07:22",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "NSE SME stock close to 52-week high despite muted trends in Indian stock market",
+          "title_original": "NSE SME stock close to 52-week high despite muted trends in Indian stock market",
+          "was_translated": false,
+          "published": "2026-06-02 06:55",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "NHPC share price tanks around 6% after fundraise move through the OFS; check floor price and other details",
+          "title_original": "NHPC share price tanks around 6% after fundraise move through the OFS; check floor price and other details",
+          "was_translated": false,
+          "published": "2026-06-02 06:50",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Small-cap stocks to buy: Chalet Hotels, Minda Corp, Navin Fluorine among Axis Securities\u2019 top stock picks for June",
+          "title_original": "Small-cap stocks to buy: Chalet Hotels, Minda Corp, Navin Fluorine among Axis Securities\u2019 top stock picks for June",
+          "was_translated": false,
+          "published": "2026-06-02 06:45",
+          "impact_score": 2,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "IPO GMPs: CMR Green Technologies IPO to Hexagon Nutrition IPO; here's what GMP hints ahead of opening",
+          "title_original": "IPO GMPs: CMR Green Technologies IPO to Hexagon Nutrition IPO; here's what GMP hints ahead of opening",
+          "was_translated": false,
+          "published": "2026-06-02 06:27",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Nifty 50 has ended June higher in 6 of the last 10 years. Will history repeat itself?",
+          "title_original": "Nifty 50 has ended June higher in 6 of the last 10 years. Will history repeat itself?",
+          "was_translated": false,
+          "published": "2026-06-02 06:14",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": [
+            "IOC",
+            "ONGC",
+            "RELIANCE"
+          ]
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "ED searches against Vedanta Group in FEMA case",
+          "title_original": "ED searches against Vedanta Group in FEMA case",
+          "was_translated": false,
+          "published": "2026-06-02 06:11",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Small-cap stock under  \u20b950 jumps despite weak trends on Dalal Street",
+          "title_original": "Small-cap stock under  \u20b950 jumps despite weak trends on Dalal Street",
+          "was_translated": false,
+          "published": "2026-06-02 05:59",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Coca-Cola mulls IPO of its India bottling unit in 2027: Report",
+          "title_original": "Coca-Cola mulls IPO of its India bottling unit in 2027: Report",
+          "was_translated": false,
+          "published": "2026-06-02 05:40",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Nifty 50 Scorecard: The winners and losers of Q4 results season",
+          "title_original": "Nifty 50 Scorecard: The winners and losers of Q4 results season",
+          "was_translated": false,
+          "published": "2026-06-02 05:35",
+          "impact_score": 2,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Asian markets today: Air China, China Southern Airlines to Cathay Pacific Airways \u2014 why are aviation stocks falling?",
+          "title_original": "Asian markets today: Air China, China Southern Airlines to Cathay Pacific Airways \u2014 why are aviation stocks falling?",
+          "was_translated": false,
+          "published": "2026-06-02 05:35",
+          "impact_score": 4,
+          "direction": "BEARISH",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "Lacklustre debut! Yaashvi Jewellers shares list at IPO price of  \u20b983 on BSE SME",
+          "title_original": "Lacklustre debut! Yaashvi Jewellers shares list at IPO price of  \u20b983 on BSE SME",
+          "was_translated": false,
+          "published": "2026-06-02 04:50",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "KRN Heat Exchanger share price recovers 8% from day's low after firm raises  \u20b9350 crore through QIP",
+          "title_original": "KRN Heat Exchanger share price recovers 8% from day's low after firm raises  \u20b9350 crore through QIP",
+          "was_translated": false,
+          "published": "2026-06-02 04:49",
+          "impact_score": 0,
+          "direction": "NEUTRAL",
+          "affected_stocks": []
+        },
+        {
+          "source": "LiveMint Markets",
+          "title": "ACME Solar share price jumps 3% as firm launches QIP at  \u20b9294.13 floor price",
+          "title_original": "ACME Solar share price jumps 3% as firm launches QIP at  \u20b9294.13 floor price",
+          "was_translated": false,
+          "published": "2026-06-02 04:42",
+          "impact_score": 0,
+          "direction": "BULLISH",
+          "affected_stocks": [
+            "ACC",
+            "AMBUJA",
+            "ULTRACEMCO"
+          ]
+        }
+      ]
+    },
+    "external_evidence": {
+      "ok": true,
+      "accepted": 127,
+      "broker_prediction_candidate": 21,
+      "stock_news_evidence": 40,
+      "market_context": 24,
+      "macro_context": 42,
+      "rejected": 155,
+      "top_evidence_items": [
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "COFORGE",
+          "direction": "WATCH",
+          "title": "Buy, Sell Or Hold: Tata Tech, Physicswallah, Force Motors, MRPL, Cummins, Coforge, And More  \u2014 Ask Profit",
+          "source": "NDTV Profit"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "NIFTY50",
+          "direction": "WATCH",
+          "title": "Groww, Lenskart, 9 other stocks among Motilal\u2019s non-Nifty ideas. Check full list",
+          "source": "Economic Times (Markets)"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "NIFTY50",
+          "direction": "BEARISH",
+          "title": "FIIs build aggressive Nifty shorts; sell 76k Lots in 4 trading days",
+          "source": "Business Standard Markets"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "TCS",
+          "direction": "BEARISH",
+          "title": "IT rally rages on! Infosys, TCS, other stocks jump up to 4% despite overall market weakness",
+          "source": "Economic Times (Markets)"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "BAJFINANCE",
+          "direction": "BULLISH",
+          "title": "Top 15 Stocks To Buy This June: Eternal, Bajaj Finance, Nestle, LG Electronics Among Axis Securities Bet \u2014 Full List Ins",
+          "source": "NDTV Profit"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "WIPRO",
+          "direction": "BULLISH",
+          "title": "Wipro to buy additional 20% stake in Aggne Global in a $28.5 million deal",
+          "source": "LiveMint (Companies)"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "NDTV",
+          "direction": "BULLISH",
+          "title": "Share Bazaar LIVE | Top Stocks To Buy | NDTV Profit Ask Profit | Stock Market LIVE News",
+          "source": "NDTV Profit"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "POLICYBZR",
+          "direction": "BULLISH",
+          "title": "PB Fintech sees Rs 665 crore block deal as founders pare stake; Goldman among other top funds buy",
+          "source": "Economic Times (Markets)"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "RELIANCE",
+          "direction": "WATCH",
+          "title": "Moody's upgrades Reliance Industries rating to Baa1, now 2 notches above India's sovereign rating",
+          "source": "Economic Times (Markets)"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "HFCL",
+          "direction": "WATCH",
+          "title": "HFCL shares soar 17% in two days, rally 170% in 2026. Should you buy, sell or hold?",
+          "source": "Economic Times (Markets Alt)"
+        },
+        {
+          "classification": "broker_prediction_candidate",
+          "ticker": "MCX",
+          "direction": "BEARISH",
+          "title": "MCX Crashes After UBS Downgrade: What Triggered the Sharp Fall?",
+          "source": "Zee Business"
+        },
+        {
+          "classification": "stock_news_evidence",
+          "ticker": "NIFTY50",
+          "direction": "WATCH",
+          "title": "Nifty at 25,900 by March 2027? Nomura cites key catalysts to watch out for",
+          "source": "Economic Times (Markets)"
+        }
+      ],
+      "disclaimer": "External evidence is read-only and not trade execution.",
+      "adapter_summary": {
+        "ok": true,
+        "generated_at": "2026-06-02T07:50:48.859860+00:00",
+        "total_raw": 282,
+        "accepted": 71,
+        "rejected": 155,
+        "broker_prediction_candidate": 11,
+        "stock_news_evidence": 20,
+        "market_context": 20,
+        "macro_context": 20,
+        "direction_counts": {
+          "positive": 4,
+          "negative": 3,
+          "watch": 15,
+          "neutral": 49
+        },
+        "unique_tickers": 16,
+        "sources": [
+          "Agile Market Angler",
+          "Business Standard Markets",
+          "Business Today",
+          "CNBC-TV18",
+          "ET Now Swadesh",
+          "Economic Times (Markets Alt)",
+          "Economic Times (Markets)",
+          "Investing.com (Global Macro)",
+          "LiveMint (Companies)",
+          "Market Breakout Live",
+          "Moneycontrol",
+          "NDTV Profit",
+          "Option Trading Only",
+          "Shanky's Trading",
+          "TRADING FLOOR \u0c24\u0c46\u0c32\u0c41\u0c17\u0c41",
+          "Trade With Radheshyam",
+          "Trade with Ankur",
+          "Traderz Hut - SEBi Registered",
+          "Zee Business"
+        ],
+        "disclaimer": "External evidence is read-only and not trade execution."
+      },
+      "market_context_count": 20,
+      "macro_context_count": 20,
+      "top_stock_evidence": [
+        {
+          "ticker": "NIFTY50",
+          "direction": "WATCH",
+          "title": "Nifty at 25,900 by March 2027? Nomura cites key catalysts to watch out for",
+          "source": "Economic Times (Markets)"
+        },
+        {
+          "ticker": "OLAELEC",
+          "direction": "NEUTRAL",
+          "title": "Ola Electric slips as company launches QIP, sets floor price at Rs 37.74",
+          "source": "Business Standard Markets"
+        },
+        {
+          "ticker": "TCS",
+          "direction": "NEUTRAL",
+          "title": "Newgen Software Technologies Ltd leads gainers in 'A' group",
+          "source": "Business Standard Markets"
+        },
+        {
+          "ticker": "WIPRO",
+          "direction": "NEUTRAL",
+          "title": "Wipro Consumer Care Ventures eyes fund bets to widen startup reach in India and Southeast Asia",
+          "source": "LiveMint (Companies)"
+        },
+        {
+          "ticker": "OLAELEC",
+          "direction": "WATCH",
+          "title": "Ola Electric shares drop 4% as company launches QIP to raise funds",
+          "source": "Business Standard Markets"
+        },
+        {
+          "ticker": "NMDC",
+          "direction": "WATCH",
+          "title": "NMDC shares rise 5% after Q4; Brokerages bullish but flag rich valuations",
+          "source": "Business Standard Markets"
+        },
+        {
+          "ticker": "COFORGE",
+          "direction": "WATCH",
+          "title": "The Nvidia Effect? Why Infosys, TCS, Coforge And Other IT Stocks Are Surging",
+          "source": "NDTV Profit"
+        },
+        {
+          "ticker": "WOCKPHARMA",
+          "direction": "WATCH",
+          "title": "Wockhardt shares pause massive 36% rally in 5 sessions; slip 7%. What\u2019s behind the selloff?",
+          "source": "Economic Times (Markets)"
+        }
+      ],
+      "context_items": [
+        {
+          "classification": "macro_context",
+          "ticker": null,
+          "market": "GLOBAL",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "Economic Times (Markets)",
+          "title": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+          "reason": "macro_headline",
+          "matched_keywords": [
+            "rise"
+          ],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        },
+        {
+          "classification": "macro_context",
+          "ticker": null,
+          "market": "GLOBAL",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "Economic Times (Markets)",
+          "title": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+          "reason": "macro_headline",
+          "matched_keywords": [
+            "surged"
+          ],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        },
+        {
+          "classification": "market_context",
+          "ticker": null,
+          "market": "INDIA",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "Business Standard Markets",
+          "title": "Sensex drops 265 pts; media shares decline",
+          "reason": "index_or_market_headline",
+          "matched_keywords": [
+            "drops"
+          ],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        },
+        {
+          "classification": "macro_context",
+          "ticker": null,
+          "market": "GLOBAL",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "Economic Times (Markets)",
+          "title": "RBI may have sold gold to save foreign reserves, BE report shows",
+          "reason": "macro_headline",
+          "matched_keywords": [],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        },
+        {
+          "classification": "macro_context",
+          "ticker": null,
+          "market": "GLOBAL",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "Investing.com (Global Macro)",
+          "title": "Bitcoin slides to $70k on Strategy sale, Iran uncertainty",
+          "reason": "macro_headline",
+          "matched_keywords": [],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        },
+        {
+          "classification": "market_context",
+          "ticker": null,
+          "market": "INDIA",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "NDTV Profit",
+          "title": "Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expiry, Sensex Falls 200 Points; NHPC Declines 7%",
+          "reason": "index_or_market_headline",
+          "matched_keywords": [
+            "crash",
+            "falls"
+          ],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        },
+        {
+          "classification": "macro_context",
+          "ticker": null,
+          "market": "GLOBAL",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "Economic Times (Markets)",
+          "title": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+          "reason": "macro_headline",
+          "matched_keywords": [
+            "fallen"
+          ],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        },
+        {
+          "classification": "macro_context",
+          "ticker": null,
+          "market": "GLOBAL",
+          "direction": "NEUTRAL",
+          "direction_confidence": "context_only",
+          "evidence_strength": "medium",
+          "source": "Economic Times (Markets)",
+          "title": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+          "reason": "macro_headline",
+          "matched_keywords": [
+            "crashed"
+          ],
+          "matched_ticker": null,
+          "matched_alias": null,
+          "match_method": "context",
+          "match_confidence": "context_only"
+        }
+      ],
+      "direction_counts": {
+        "positive": 4,
+        "negative": 3,
+        "watch": 15,
+        "neutral": 49
+      }
+    },
+    "empty_message": null,
+    "brain_govt_impact": {
+      "summary": "HIGH BEARISH IMPACT (9/10): Government explicitly warns of fresh inflation risks from fuel prices and monsoon squeeze on household budgets, affecting OMCs (RELIANCE, IOC, HPCL, BPCL). RBI policy review Friday likely to hold rates but raise inflation forecast per HSBC. Rupee weakness (95.06/-7 paise) adds import cost pressure. Iran war uncertainty keeps precious metals and oil volatile.",
+      "confidence_score": "8.5/10"
+    }
+  },
+  "warnings": []
+}

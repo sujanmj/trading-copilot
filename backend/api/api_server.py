@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '48A',
+        'stage': '48E',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -1584,6 +1584,53 @@ def _wrap_runtime_snapshot_for_frontend(
     return wrap_runtime_snapshot_for_frontend(payload, cache_path=cache_path)
 
 
+def _runtime_snapshot_cache_missing_response() -> dict:
+    """Lightweight JSON when runtime snapshot cache is unavailable (Stage 48C)."""
+    ts = datetime.now().isoformat()
+    return {
+        'ok': True,
+        'cache_missing': True,
+        'stale': True,
+        'status': 'cache_missing',
+        'message': 'runtime snapshot unavailable',
+        'snapshot_id': 'cache_missing',
+        'generated_at': ts,
+        'intelligence': {},
+        'action_plan': '',
+        'freshness': {'age_hours': None, 'stale': True, 'source': 'runtime_snapshot'},
+        'data': {},
+        'exports': {},
+        'panels': {},
+    }
+
+
+def _compact_runtime_snapshot_lite(wrapped: dict) -> dict:
+    """Trim snapshot for GUI boot — avoid huge payloads / chunked encoding issues."""
+    exports = wrapped.get('exports') if isinstance(wrapped.get('exports'), dict) else {}
+    intel = wrapped.get('intelligence') or exports.get('intelligence') or {}
+    if not isinstance(intel, dict):
+        intel = {}
+    summary = str(intel.get('summary') or intel.get('executive_summary') or '')[:500]
+    mood = intel.get('market_mood') if isinstance(intel.get('market_mood'), dict) else {}
+    compact_intel = {'summary': summary, 'executive_summary': summary, 'market_mood': mood}
+    return {
+        'ok': wrapped.get('ok', True),
+        'lite': True,
+        'cache_missing': bool(wrapped.get('cache_missing')),
+        'snapshot_id': wrapped.get('snapshot_id') or wrapped.get('active_snapshot_id'),
+        'generated_at': wrapped.get('generated_at'),
+        'status': wrapped.get('status') or 'ready',
+        'message': wrapped.get('message'),
+        'stale': bool((wrapped.get('freshness') or {}).get('stale')),
+        'freshness': wrapped.get('freshness') or {'stale': True, 'source': 'runtime_snapshot'},
+        'intelligence': compact_intel,
+        'action_plan': str(wrapped.get('action_plan') or '')[:400],
+        'exports': {'intelligence': compact_intel},
+        'data': {'intelligence': compact_intel},
+        'panels': wrapped.get('panels') if isinstance(wrapped.get('panels'), dict) else {},
+    }
+
+
 def _runtime_snapshot_warming_up_response() -> dict:
     """503 payload when data/cache/runtime_snapshot.json is not yet available."""
     ts = datetime.now().isoformat()
@@ -1601,58 +1648,33 @@ def _runtime_snapshot_warming_up_response() -> dict:
 
 
 @app.get("/api/runtime/snapshot", dependencies=[Depends(verify_api_key)])
-def api_market_snapshot():
-    """Canonical GUI snapshot — fast cache read, then live build fallback."""
-    if not RUNTIME_SNAPSHOT_CACHE.is_file():
-        return JSONResponse(
-            status_code=503,
-            content=_runtime_snapshot_warming_up_response(),
-        )
-
+def api_market_snapshot(lite: int = Query(0)):
+    """Cache-first GUI snapshot — GET never runs heavy synthesis (Stage 48C)."""
     try:
+        if not RUNTIME_SNAPSHOT_CACHE.is_file():
+            payload = _runtime_snapshot_cache_missing_response()
+            return sanitize_json_value(_compact_runtime_snapshot_lite(payload) if lite else payload)
+
         cached = _load_runtime_snapshot_cache()
-        if cached:
-            wrapped = _wrap_runtime_snapshot_for_frontend(
-                cached,
-                cache_path=RUNTIME_SNAPSHOT_CACHE,
-            )
-            return sanitize_json_value(wrapped)
+        if not cached:
+            payload = _runtime_snapshot_cache_missing_response()
+            return sanitize_json_value(_compact_runtime_snapshot_lite(payload) if lite else payload)
+
+        wrapped = _wrap_runtime_snapshot_for_frontend(
+            cached,
+            cache_path=RUNTIME_SNAPSHOT_CACHE,
+        )
+        wrapped['ok'] = True
+        if lite:
+            wrapped = _compact_runtime_snapshot_lite(wrapped)
+        return sanitize_json_value(wrapped)
     except Exception as exc:
         backend_log.warning('runtime snapshot cache read failed: %s', exc)
-
-    from backend.runtime.global_job_locks import DEFAULT_TIMEOUT_SEC, run_with_timeout
-
-    try:
-        payload = run_with_timeout(
-            _build_gui_snapshot,
-            job='aggregation',
-            timeout=DEFAULT_TIMEOUT_SEC,
-            owner='api_runtime_snapshot',
-        )
-        _write_runtime_snapshot_cache(payload)
-        wrapped = _wrap_runtime_snapshot_for_frontend(
-            payload,
-            cache_path=RUNTIME_SNAPSHOT_CACHE,
-        )
-        return sanitize_json_value(wrapped)
-    except TimeoutError as exc:
-        payload = _build_gui_snapshot_cached_fallback(str(exc))
-        _write_runtime_snapshot_cache(payload)
-        wrapped = _wrap_runtime_snapshot_for_frontend(
-            payload,
-            cache_path=RUNTIME_SNAPSHOT_CACHE,
-        )
-        return sanitize_json_value(wrapped)
-    except Exception as exc:
-        backend_log.error('runtime snapshot build failed: %s', exc)
-        return JSONResponse(
-            status_code=503,
-            content={
-                **_runtime_snapshot_warming_up_response(),
-                'message': 'snapshot unavailable',
-                'error': str(exc)[:200],
-            },
-        )
+        payload = {
+            **_runtime_snapshot_cache_missing_response(),
+            'error': str(exc)[:200],
+        }
+        return sanitize_json_value(_compact_runtime_snapshot_lite(payload) if lite else payload)
 
 
 def _boot_runtime_snapshot_payload() -> dict:
@@ -1980,17 +2002,19 @@ def api_theme_baskets_refresh():
 
 
 @app.get("/api/budget/overview", dependencies=[Depends(verify_api_key)])
-def api_budget_overview():
+def api_budget_overview(cache_only: int = Query(0), lite: int = Query(0)):
     from backend.analytics.budget_impact import get_budget_overview
 
-    return sanitize_json_value(get_budget_overview())
+    return sanitize_json_value(
+        get_budget_overview(cache_only=bool(cache_only), lite=bool(lite)),
+    )
 
 
 @app.get("/api/budget/themes", dependencies=[Depends(verify_api_key)])
-def api_budget_themes():
+def api_budget_themes(lite: int = Query(0)):
     from backend.analytics.budget_impact import get_budget_themes
 
-    return sanitize_json_value(get_budget_themes())
+    return sanitize_json_value(get_budget_themes(lite=bool(lite)))
 
 
 @app.get("/api/budget/theme/{theme_id}", dependencies=[Depends(verify_api_key)])
@@ -2041,6 +2065,29 @@ def api_budget_refresh():
     from backend.analytics.budget_impact import refresh_budget_intel
 
     return sanitize_json_value(refresh_budget_intel(persist=True))
+
+
+@app.get("/api/brokers/overview", dependencies=[Depends(verify_api_key)])
+def api_brokers_overview(cache_only: int = Query(0), lite: int = Query(0)):
+    from backend.analytics.broker_overview_cache import get_broker_overview
+
+    return sanitize_json_value(
+        get_broker_overview(cache_only=bool(cache_only), lite=bool(lite)),
+    )
+
+
+@app.get("/api/brokers/status", dependencies=[Depends(verify_api_key)])
+def api_brokers_status(lite: int = Query(0)):
+    from backend.analytics.broker_overview_cache import get_broker_status
+
+    return sanitize_json_value(get_broker_status(lite=bool(lite)))
+
+
+@app.post("/api/brokers/refresh", dependencies=[Depends(verify_api_key)])
+def api_brokers_refresh():
+    from backend.analytics.broker_overview_cache import refresh_broker_intel
+
+    return sanitize_json_value(refresh_broker_intel(persist=True))
 
 
 @app.get("/api/all", dependencies=[Depends(verify_api_key)])
@@ -2796,21 +2843,45 @@ def api_debug_aihub_tab_freshness():
 
 @app.get("/api/debug/aihub-tab/{tab}", dependencies=[Depends(verify_api_key)])
 def api_debug_aihub_tab(tab: str, refresh: int = Query(0), force: int = Query(0)):
-    """Aggregated AI Hub tab payload (Stage 44AQ) — one response per tab."""
+    """Cache-first AI Hub tab payload — GET never runs heavy refresh (Stage 48C)."""
     try:
         from backend.analytics.aihub_tab_payloads import build_aihub_tab_payload
 
         return sanitize_json_value(
-            build_aihub_tab_payload(tab, force_refresh=bool(force or refresh)),
+            build_aihub_tab_payload(tab, force_refresh=False, cache_only=True),
+        )
+    except Exception as e:
+        return sanitize_json_value({
+            'ok': True,
+            'tab': tab,
+            'cache_missing': True,
+            'items': [],
+            'summary': {},
+            'message': 'AI Hub cache unavailable. Tap Refresh.',
+            'warnings': ['api_error'],
+            'error': str(e)[:200],
+        })
+
+
+@app.post("/api/debug/aihub-tab/{tab}/refresh", dependencies=[Depends(verify_api_key)])
+@app.get("/api/debug/aihub-tab/{tab}/refresh", dependencies=[Depends(verify_api_key)])
+def api_debug_aihub_tab_refresh(tab: str):
+    """Explicit heavy refresh for one AI Hub tab (GET+POST compat, Stage 48D)."""
+    try:
+        from backend.analytics.aihub_tab_payloads import build_aihub_tab_payload
+
+        return sanitize_json_value(
+            build_aihub_tab_payload(tab, force_refresh=True, cache_only=False),
         )
     except Exception as e:
         return sanitize_json_value({
             'ok': False,
             'tab': tab,
-            'error': str(e),
             'items': [],
             'summary': {},
-            'warnings': ['api_error'],
+            'warnings': ['refresh_failed'],
+            'error': str(e)[:200],
+            'message': 'AI Hub refresh route unavailable.',
         })
 
 

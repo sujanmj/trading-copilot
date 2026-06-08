@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for Budget frontend tab (Stage 48A)."""
+"""Unit tests for Budget frontend tab (Stage 48A/48B)."""
 
 from __future__ import annotations
 
@@ -41,6 +41,9 @@ def main() -> int:
         'Budget API returned non-JSON',
         'Refresh Budget Intel',
         'Budget event simulator',
+        'Budget request timed out or was cancelled',
+        'fetchBudgetJsonWithRetry',
+        'Loading Budget Impact Intelligence',
     ):
         if needle not in panel_js:
             return _fail(f'BudgetImpactPanel.js missing {needle!r}')
@@ -49,8 +52,13 @@ def main() -> int:
         if needle not in ws_js:
             return _fail(f'WorkspaceManager.js missing {needle!r}')
 
-    if 'id="memoryNavBtn"' not in index_html or index_html.index('budgetNavBtn') < index_html.index('brokersNavBtn'):
-        pass  # budget near memory — order check optional
+    header_start = index_html.find('<header class="app-header"')
+    header_end = index_html.find('</header>', header_start)
+    main_line = index_html[header_start:header_end]
+    ai_pos = main_line.find('header-nav-group')
+    brokers_pos = main_line.find('id="brokerSourceRow"')
+    if ai_pos < 0 or brokers_pos < 0 or ai_pos > brokers_pos:
+        return _fail('AI nav must appear before BROKERS in header')
 
     print('BUDGET_FRONTEND_TAB_TEST_OK')
     return 0

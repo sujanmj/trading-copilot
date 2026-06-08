@@ -1,0 +1,1321 @@
+{
+  "ok": true,
+  "tab": "global",
+  "generated_at": "2026-06-08T09:34:52+00:00",
+  "market_mode": "USA_MODE",
+  "source": "runtime",
+  "cache_age_seconds": 510754,
+  "items": [
+    {
+      "kind": "global_snapshot",
+      "payload": {
+        "last_updated": "2026-06-02T10:42:18.464571+00:00",
+        "generated_at": "2026-06-02 11:42:18",
+        "market_period": "post_market",
+        "sentiment": {
+          "usa": {
+            "mood": "NEUTRAL",
+            "average_change": 0.31,
+            "expected_open": 0.2,
+            "sample_size": 8
+          },
+          "asia": {
+            "mood": "BULLISH",
+            "average_change": 0.88,
+            "expected_open": 0.57,
+            "sample_size": 3
+          },
+          "global": {
+            "mood": "NEUTRAL",
+            "average_change": -0.22,
+            "expected_open": -0.14,
+            "sample_size": 7
+          }
+        },
+        "markets": {
+          "USA_INDICES": {
+            "S&P_500": {
+              "ticker": "^GSPC",
+              "price": 7599.96,
+              "change_percent": 0.26,
+              "change_pct": 0.26,
+              "latest_price": 7599.96,
+              "source": "yfinance:^GSPC"
+            },
+            "NASDAQ": {
+              "ticker": "^IXIC",
+              "price": 27086.81,
+              "change_percent": 0.42,
+              "change_pct": 0.42,
+              "latest_price": 27086.81,
+              "source": "yfinance:^IXIC"
+            },
+            "DOW_JONES": {
+              "ticker": "^DJI",
+              "price": 51078.88,
+              "change_percent": 0.09,
+              "change_pct": 0.09,
+              "latest_price": 51078.88,
+              "source": "yfinance:^DJI"
+            },
+            "VIX": {
+              "ticker": "^VIX",
+              "price": 16.13,
+              "change_percent": 0.5,
+              "change_pct": 0.5,
+              "latest_price": 16.13,
+              "source": "yfinance:^VIX"
+            },
+            "US_FUTURES_NQ": {
+              "ticker": "NQ=F",
+              "price": 30553.75,
+              "change_percent": -0.04,
+              "change_pct": -0.04,
+              "latest_price": 30553.75,
+              "source": "yfinance:NQ=F"
+            },
+            "US_FUTURES_ES": {
+              "ticker": "ES=F",
+              "price": 7602.25,
+              "change_percent": -0.14,
+              "change_pct": -0.14,
+              "latest_price": 7602.25,
+              "source": "yfinance:ES=F"
+            }
+          },
+          "USA_RATES": {
+            "US_10Y": {
+              "ticker": "^TNX",
+              "price": 4.47,
+              "change_percent": 0.49,
+              "change_pct": 0.49,
+              "latest_price": 4.47,
+              "source": "yfinance:^TNX"
+            },
+            "US_2Y": {
+              "ticker": "^IRX",
+              "price": 3.62,
+              "change_percent": 0.89,
+              "change_pct": 0.89,
+              "latest_price": 3.62,
+              "source": "yfinance:^IRX"
+            }
+          },
+          "ASIA_INDICES": {
+            "NIKKEI": {
+              "ticker": "^N225",
+              "price": 66734.24,
+              "change_percent": -0.3,
+              "change_pct": -0.3,
+              "latest_price": 66734.24,
+              "source": "yfinance:^N225"
+            },
+            "HANG_SENG": {
+              "ticker": "^HSI",
+              "price": 26038.32,
+              "change_percent": 2.52,
+              "change_pct": 2.52,
+              "latest_price": 26038.32,
+              "source": "yfinance:^HSI"
+            },
+            "SHANGHAI": {
+              "ticker": "000001.SS",
+              "price": 4075.1,
+              "change_percent": 0.43,
+              "change_pct": 0.43,
+              "latest_price": 4075.1,
+              "source": "yfinance:000001.SS"
+            }
+          },
+          "GLOBAL_MACRO": {
+            "GOLD": {
+              "ticker": "GC=F",
+              "price": 4557.8,
+              "change_percent": 1.85,
+              "change_pct": 1.85,
+              "latest_price": 4557.8,
+              "source": "yfinance:GC=F"
+            },
+            "SILVER": {
+              "ticker": "SI=F",
+              "price": 76.57,
+              "change_percent": 2.08,
+              "change_pct": 2.08,
+              "latest_price": 76.57,
+              "source": "yfinance:SI=F"
+            },
+            "CRUDE_OIL": {
+              "ticker": "CL=F",
+              "price": 91.12,
+              "change_percent": -1.13,
+              "change_pct": -1.13,
+              "latest_price": 91.12,
+              "source": "yfinance:CL=F"
+            },
+            "NAT_GAS": {
+              "ticker": "NG=F",
+              "price": 3.18,
+              "change_percent": -0.06,
+              "change_pct": -0.06,
+              "latest_price": 3.18,
+              "source": "yfinance:NG=F"
+            },
+            "DXY": {
+              "ticker": "DX-Y.NYB",
+              "price": 99.13,
+              "change_percent": -0.07,
+              "change_pct": -0.07,
+              "latest_price": 99.13,
+              "source": "yfinance:DX-Y.NYB"
+            },
+            "BTC": {
+              "ticker": "BTC-USD",
+              "price": 69366.67,
+              "change_percent": -2.74,
+              "change_pct": -2.74,
+              "latest_price": 69366.67,
+              "source": "yfinance:BTC-USD"
+            },
+            "ETH": {
+              "ticker": "ETH-USD",
+              "price": 1973.35,
+              "change_percent": -1.49,
+              "change_pct": -1.49,
+              "latest_price": 1973.35,
+              "source": "yfinance:ETH-USD"
+            }
+          }
+        },
+        "flat_markets": {
+          "S&P_500": {
+            "ticker": "^GSPC",
+            "price": 7599.96,
+            "change_percent": 0.26,
+            "change_pct": 0.26,
+            "latest_price": 7599.96,
+            "source": "yfinance:^GSPC"
+          },
+          "NASDAQ": {
+            "ticker": "^IXIC",
+            "price": 27086.81,
+            "change_percent": 0.42,
+            "change_pct": 0.42,
+            "latest_price": 27086.81,
+            "source": "yfinance:^IXIC"
+          },
+          "DOW_JONES": {
+            "ticker": "^DJI",
+            "price": 51078.88,
+            "change_percent": 0.09,
+            "change_pct": 0.09,
+            "latest_price": 51078.88,
+            "source": "yfinance:^DJI"
+          },
+          "VIX": {
+            "ticker": "^VIX",
+            "price": 16.13,
+            "change_percent": 0.5,
+            "change_pct": 0.5,
+            "latest_price": 16.13,
+            "source": "yfinance:^VIX"
+          },
+          "US_FUTURES_NQ": {
+            "ticker": "NQ=F",
+            "price": 30553.75,
+            "change_percent": -0.04,
+            "change_pct": -0.04,
+            "latest_price": 30553.75,
+            "source": "yfinance:NQ=F"
+          },
+          "US_FUTURES_ES": {
+            "ticker": "ES=F",
+            "price": 7602.25,
+            "change_percent": -0.14,
+            "change_pct": -0.14,
+            "latest_price": 7602.25,
+            "source": "yfinance:ES=F"
+          },
+          "US_10Y": {
+            "ticker": "^TNX",
+            "price": 4.47,
+            "change_percent": 0.49,
+            "change_pct": 0.49,
+            "latest_price": 4.47,
+            "source": "yfinance:^TNX"
+          },
+          "US_2Y": {
+            "ticker": "^IRX",
+            "price": 3.62,
+            "change_percent": 0.89,
+            "change_pct": 0.89,
+            "latest_price": 3.62,
+            "source": "yfinance:^IRX"
+          },
+          "NIKKEI": {
+            "ticker": "^N225",
+            "price": 66734.24,
+            "change_percent": -0.3,
+            "change_pct": -0.3,
+            "latest_price": 66734.24,
+            "source": "yfinance:^N225"
+          },
+          "HANG_SENG": {
+            "ticker": "^HSI",
+            "price": 26038.32,
+            "change_percent": 2.52,
+            "change_pct": 2.52,
+            "latest_price": 26038.32,
+            "source": "yfinance:^HSI"
+          },
+          "SHANGHAI": {
+            "ticker": "000001.SS",
+            "price": 4075.1,
+            "change_percent": 0.43,
+            "change_pct": 0.43,
+            "latest_price": 4075.1,
+            "source": "yfinance:000001.SS"
+          },
+          "GOLD": {
+            "ticker": "GC=F",
+            "price": 4557.8,
+            "change_percent": 1.85,
+            "change_pct": 1.85,
+            "latest_price": 4557.8,
+            "source": "yfinance:GC=F"
+          },
+          "SILVER": {
+            "ticker": "SI=F",
+            "price": 76.57,
+            "change_percent": 2.08,
+            "change_pct": 2.08,
+            "latest_price": 76.57,
+            "source": "yfinance:SI=F"
+          },
+          "CRUDE_OIL": {
+            "ticker": "CL=F",
+            "price": 91.12,
+            "change_percent": -1.13,
+            "change_pct": -1.13,
+            "latest_price": 91.12,
+            "source": "yfinance:CL=F"
+          },
+          "NAT_GAS": {
+            "ticker": "NG=F",
+            "price": 3.18,
+            "change_percent": -0.06,
+            "change_pct": -0.06,
+            "latest_price": 3.18,
+            "source": "yfinance:NG=F"
+          },
+          "DXY": {
+            "ticker": "DX-Y.NYB",
+            "price": 99.13,
+            "change_percent": -0.07,
+            "change_pct": -0.07,
+            "latest_price": 99.13,
+            "source": "yfinance:DX-Y.NYB"
+          },
+          "BTC": {
+            "ticker": "BTC-USD",
+            "price": 69366.67,
+            "change_percent": -2.74,
+            "change_pct": -2.74,
+            "latest_price": 69366.67,
+            "source": "yfinance:BTC-USD"
+          },
+          "ETH": {
+            "ticker": "ETH-USD",
+            "price": 1973.35,
+            "change_percent": -1.49,
+            "change_pct": -1.49,
+            "latest_price": 1973.35,
+            "source": "yfinance:ETH-USD"
+          }
+        },
+        "geopolitics": [
+          {
+            "message": "Oil prices dip amid mixed messaging on status of U.S.-Iran peace talks",
+            "keywords": [
+              "iran"
+            ],
+            "source": "news_feed",
+            "severity": "HIGH"
+          },
+          {
+            "message": "Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate",
+            "keywords": [
+              "war"
+            ],
+            "source": "news_feed",
+            "severity": "HIGH"
+          },
+          {
+            "message": "Stocks bounce as AI optimism offsets Middle East anxiety",
+            "keywords": [
+              "middle east"
+            ],
+            "source": "news_feed",
+            "severity": "MEDIUM"
+          },
+          {
+            "message": "Markets Cautious as Iran Diplomacy Remains Unclear; HPE Surges on AI-Fueled Results: Dow Jones, S&P, Nasdaq, Wall Street Futures",
+            "keywords": [
+              "iran"
+            ],
+            "source": "news_feed",
+            "severity": "HIGH"
+          },
+          {
+            "message": "Hindware ruling may reshape India's \u20b91-lakh cr ad market: Report | Paid search drives 40-45% of marketing spend | Inshorts",
+            "keywords": [
+              "war"
+            ],
+            "source": "inshorts_feed",
+            "severity": "HIGH"
+          },
+          {
+            "message": "China plans futures market for trading AI tokens: Report | 'AI token market in early stages of development' | Inshorts",
+            "keywords": [
+              "china"
+            ],
+            "source": "inshorts_feed",
+            "severity": "MEDIUM"
+          },
+          {
+            "message": "Such things happen: SEBI head as Taiwan overtakes India in market size | Taiwan's GDP just 23% of India's GDP in 2026 | Inshorts",
+            "keywords": [
+              "taiwan"
+            ],
+            "source": "inshorts_feed",
+            "severity": "MEDIUM"
+          },
+          {
+            "message": "Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 Points From Day's Low; Newgen Software Surges 15%",
+            "keywords": [
+              "war"
+            ],
+            "source": "inshorts_feed",
+            "severity": "HIGH"
+          },
+          {
+            "message": "After Taiwan, South Korea overtakes India to become world\u2019s sixth largest stock market; here\u2019s why",
+            "keywords": [
+              "taiwan"
+            ],
+            "source": "inshorts_feed",
+            "severity": "MEDIUM"
+          },
+          {
+            "message": "Explained: Why Indian stock market has fallen prey to South Korea, Taiwan\u2019s AI prowess",
+            "keywords": [
+              "taiwan"
+            ],
+            "source": "inshorts_feed",
+            "severity": "MEDIUM"
+          },
+          {
+            "message": "From Gift Nifty, US-Iran talks, gold rates to oil prices: 10 key things that changed for Indian stock market overnight",
+            "keywords": [
+              "iran"
+            ],
+            "source": "inshorts_feed",
+            "severity": "HIGH"
+          }
+        ],
+        "alerts": [
+          {
+            "message": "Oil prices dip amid mixed messaging on status of U.S.-Iran peace talks",
+            "severity": "HIGH",
+            "keywords": [
+              "iran"
+            ]
+          },
+          {
+            "message": "Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate",
+            "severity": "HIGH",
+            "keywords": [
+              "war"
+            ]
+          },
+          {
+            "message": "Stocks bounce as AI optimism offsets Middle East anxiety",
+            "severity": "MEDIUM",
+            "keywords": [
+              "middle east"
+            ]
+          },
+          {
+            "message": "Markets Cautious as Iran Diplomacy Remains Unclear; HPE Surges on AI-Fueled Results: Dow Jones, S&P, Nasdaq, Wall Street Futures",
+            "severity": "HIGH",
+            "keywords": [
+              "iran"
+            ]
+          },
+          {
+            "message": "Hindware ruling may reshape India's \u20b91-lakh cr ad market: Report | Paid search drives 40-45% of marketing spend | Inshorts",
+            "severity": "HIGH",
+            "keywords": [
+              "war"
+            ]
+          },
+          {
+            "message": "China plans futures market for trading AI tokens: Report | 'AI token market in early stages of development' | Inshorts",
+            "severity": "MEDIUM",
+            "keywords": [
+              "china"
+            ]
+          },
+          {
+            "message": "Such things happen: SEBI head as Taiwan overtakes India in market size | Taiwan's GDP just 23% of India's GDP in 2026 | Inshorts",
+            "severity": "MEDIUM",
+            "keywords": [
+              "taiwan"
+            ]
+          },
+          {
+            "message": "Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 Points From Day's Low; Newgen Software Surges 15%",
+            "severity": "HIGH",
+            "keywords": [
+              "war"
+            ]
+          }
+        ],
+        "validation": {
+          "validated": 18,
+          "rejected": 0,
+          "preserved_previous": 0,
+          "degraded": false,
+          "reject_reasons": []
+        },
+        "coverage": {
+          "usa": 8,
+          "asia": 3,
+          "macro": 7,
+          "geopolitics_alerts": 11
+        }
+      }
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "rise"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "surged"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    },
+    {
+      "classification": "market_context",
+      "ticker": null,
+      "market": "INDIA",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Business Standard Markets",
+      "title": "Sensex drops 265 pts; media shares decline",
+      "reason": "index_or_market_headline",
+      "matched_keywords": [
+        "drops"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "RBI may have sold gold to save foreign reserves, BE report shows",
+      "reason": "macro_headline",
+      "matched_keywords": [],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Investing.com (Global Macro)",
+      "title": "Bitcoin slides to $70k on Strategy sale, Iran uncertainty",
+      "reason": "macro_headline",
+      "matched_keywords": [],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    },
+    {
+      "classification": "market_context",
+      "ticker": null,
+      "market": "INDIA",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "NDTV Profit",
+      "title": "Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expiry, Sensex Falls 200 Points; NHPC Declines 7%",
+      "reason": "index_or_market_headline",
+      "matched_keywords": [
+        "crash",
+        "falls"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "fallen"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    },
+    {
+      "classification": "macro_context",
+      "ticker": null,
+      "market": "GLOBAL",
+      "direction": "NEUTRAL",
+      "direction_confidence": "context_only",
+      "evidence_strength": "medium",
+      "source": "Economic Times (Markets)",
+      "title": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+      "reason": "macro_headline",
+      "matched_keywords": [
+        "crashed"
+      ],
+      "matched_ticker": null,
+      "matched_alias": null,
+      "match_method": "context",
+      "match_confidence": "context_only"
+    }
+  ],
+  "summary": {
+    "global_markets": {
+      "last_updated": "2026-06-02T10:42:18.464571+00:00",
+      "generated_at": "2026-06-02 11:42:18",
+      "market_period": "post_market",
+      "sentiment": {
+        "usa": {
+          "mood": "NEUTRAL",
+          "average_change": 0.31,
+          "expected_open": 0.2,
+          "sample_size": 8
+        },
+        "asia": {
+          "mood": "BULLISH",
+          "average_change": 0.88,
+          "expected_open": 0.57,
+          "sample_size": 3
+        },
+        "global": {
+          "mood": "NEUTRAL",
+          "average_change": -0.22,
+          "expected_open": -0.14,
+          "sample_size": 7
+        }
+      },
+      "markets": {
+        "USA_INDICES": {
+          "S&P_500": {
+            "ticker": "^GSPC",
+            "price": 7599.96,
+            "change_percent": 0.26,
+            "change_pct": 0.26,
+            "latest_price": 7599.96,
+            "source": "yfinance:^GSPC"
+          },
+          "NASDAQ": {
+            "ticker": "^IXIC",
+            "price": 27086.81,
+            "change_percent": 0.42,
+            "change_pct": 0.42,
+            "latest_price": 27086.81,
+            "source": "yfinance:^IXIC"
+          },
+          "DOW_JONES": {
+            "ticker": "^DJI",
+            "price": 51078.88,
+            "change_percent": 0.09,
+            "change_pct": 0.09,
+            "latest_price": 51078.88,
+            "source": "yfinance:^DJI"
+          },
+          "VIX": {
+            "ticker": "^VIX",
+            "price": 16.13,
+            "change_percent": 0.5,
+            "change_pct": 0.5,
+            "latest_price": 16.13,
+            "source": "yfinance:^VIX"
+          },
+          "US_FUTURES_NQ": {
+            "ticker": "NQ=F",
+            "price": 30553.75,
+            "change_percent": -0.04,
+            "change_pct": -0.04,
+            "latest_price": 30553.75,
+            "source": "yfinance:NQ=F"
+          },
+          "US_FUTURES_ES": {
+            "ticker": "ES=F",
+            "price": 7602.25,
+            "change_percent": -0.14,
+            "change_pct": -0.14,
+            "latest_price": 7602.25,
+            "source": "yfinance:ES=F"
+          }
+        },
+        "USA_RATES": {
+          "US_10Y": {
+            "ticker": "^TNX",
+            "price": 4.47,
+            "change_percent": 0.49,
+            "change_pct": 0.49,
+            "latest_price": 4.47,
+            "source": "yfinance:^TNX"
+          },
+          "US_2Y": {
+            "ticker": "^IRX",
+            "price": 3.62,
+            "change_percent": 0.89,
+            "change_pct": 0.89,
+            "latest_price": 3.62,
+            "source": "yfinance:^IRX"
+          }
+        },
+        "ASIA_INDICES": {
+          "NIKKEI": {
+            "ticker": "^N225",
+            "price": 66734.24,
+            "change_percent": -0.3,
+            "change_pct": -0.3,
+            "latest_price": 66734.24,
+            "source": "yfinance:^N225"
+          },
+          "HANG_SENG": {
+            "ticker": "^HSI",
+            "price": 26038.32,
+            "change_percent": 2.52,
+            "change_pct": 2.52,
+            "latest_price": 26038.32,
+            "source": "yfinance:^HSI"
+          },
+          "SHANGHAI": {
+            "ticker": "000001.SS",
+            "price": 4075.1,
+            "change_percent": 0.43,
+            "change_pct": 0.43,
+            "latest_price": 4075.1,
+            "source": "yfinance:000001.SS"
+          }
+        },
+        "GLOBAL_MACRO": {
+          "GOLD": {
+            "ticker": "GC=F",
+            "price": 4557.8,
+            "change_percent": 1.85,
+            "change_pct": 1.85,
+            "latest_price": 4557.8,
+            "source": "yfinance:GC=F"
+          },
+          "SILVER": {
+            "ticker": "SI=F",
+            "price": 76.57,
+            "change_percent": 2.08,
+            "change_pct": 2.08,
+            "latest_price": 76.57,
+            "source": "yfinance:SI=F"
+          },
+          "CRUDE_OIL": {
+            "ticker": "CL=F",
+            "price": 91.12,
+            "change_percent": -1.13,
+            "change_pct": -1.13,
+            "latest_price": 91.12,
+            "source": "yfinance:CL=F"
+          },
+          "NAT_GAS": {
+            "ticker": "NG=F",
+            "price": 3.18,
+            "change_percent": -0.06,
+            "change_pct": -0.06,
+            "latest_price": 3.18,
+            "source": "yfinance:NG=F"
+          },
+          "DXY": {
+            "ticker": "DX-Y.NYB",
+            "price": 99.13,
+            "change_percent": -0.07,
+            "change_pct": -0.07,
+            "latest_price": 99.13,
+            "source": "yfinance:DX-Y.NYB"
+          },
+          "BTC": {
+            "ticker": "BTC-USD",
+            "price": 69366.67,
+            "change_percent": -2.74,
+            "change_pct": -2.74,
+            "latest_price": 69366.67,
+            "source": "yfinance:BTC-USD"
+          },
+          "ETH": {
+            "ticker": "ETH-USD",
+            "price": 1973.35,
+            "change_percent": -1.49,
+            "change_pct": -1.49,
+            "latest_price": 1973.35,
+            "source": "yfinance:ETH-USD"
+          }
+        }
+      },
+      "flat_markets": {
+        "S&P_500": {
+          "ticker": "^GSPC",
+          "price": 7599.96,
+          "change_percent": 0.26,
+          "change_pct": 0.26,
+          "latest_price": 7599.96,
+          "source": "yfinance:^GSPC"
+        },
+        "NASDAQ": {
+          "ticker": "^IXIC",
+          "price": 27086.81,
+          "change_percent": 0.42,
+          "change_pct": 0.42,
+          "latest_price": 27086.81,
+          "source": "yfinance:^IXIC"
+        },
+        "DOW_JONES": {
+          "ticker": "^DJI",
+          "price": 51078.88,
+          "change_percent": 0.09,
+          "change_pct": 0.09,
+          "latest_price": 51078.88,
+          "source": "yfinance:^DJI"
+        },
+        "VIX": {
+          "ticker": "^VIX",
+          "price": 16.13,
+          "change_percent": 0.5,
+          "change_pct": 0.5,
+          "latest_price": 16.13,
+          "source": "yfinance:^VIX"
+        },
+        "US_FUTURES_NQ": {
+          "ticker": "NQ=F",
+          "price": 30553.75,
+          "change_percent": -0.04,
+          "change_pct": -0.04,
+          "latest_price": 30553.75,
+          "source": "yfinance:NQ=F"
+        },
+        "US_FUTURES_ES": {
+          "ticker": "ES=F",
+          "price": 7602.25,
+          "change_percent": -0.14,
+          "change_pct": -0.14,
+          "latest_price": 7602.25,
+          "source": "yfinance:ES=F"
+        },
+        "US_10Y": {
+          "ticker": "^TNX",
+          "price": 4.47,
+          "change_percent": 0.49,
+          "change_pct": 0.49,
+          "latest_price": 4.47,
+          "source": "yfinance:^TNX"
+        },
+        "US_2Y": {
+          "ticker": "^IRX",
+          "price": 3.62,
+          "change_percent": 0.89,
+          "change_pct": 0.89,
+          "latest_price": 3.62,
+          "source": "yfinance:^IRX"
+        },
+        "NIKKEI": {
+          "ticker": "^N225",
+          "price": 66734.24,
+          "change_percent": -0.3,
+          "change_pct": -0.3,
+          "latest_price": 66734.24,
+          "source": "yfinance:^N225"
+        },
+        "HANG_SENG": {
+          "ticker": "^HSI",
+          "price": 26038.32,
+          "change_percent": 2.52,
+          "change_pct": 2.52,
+          "latest_price": 26038.32,
+          "source": "yfinance:^HSI"
+        },
+        "SHANGHAI": {
+          "ticker": "000001.SS",
+          "price": 4075.1,
+          "change_percent": 0.43,
+          "change_pct": 0.43,
+          "latest_price": 4075.1,
+          "source": "yfinance:000001.SS"
+        },
+        "GOLD": {
+          "ticker": "GC=F",
+          "price": 4557.8,
+          "change_percent": 1.85,
+          "change_pct": 1.85,
+          "latest_price": 4557.8,
+          "source": "yfinance:GC=F"
+        },
+        "SILVER": {
+          "ticker": "SI=F",
+          "price": 76.57,
+          "change_percent": 2.08,
+          "change_pct": 2.08,
+          "latest_price": 76.57,
+          "source": "yfinance:SI=F"
+        },
+        "CRUDE_OIL": {
+          "ticker": "CL=F",
+          "price": 91.12,
+          "change_percent": -1.13,
+          "change_pct": -1.13,
+          "latest_price": 91.12,
+          "source": "yfinance:CL=F"
+        },
+        "NAT_GAS": {
+          "ticker": "NG=F",
+          "price": 3.18,
+          "change_percent": -0.06,
+          "change_pct": -0.06,
+          "latest_price": 3.18,
+          "source": "yfinance:NG=F"
+        },
+        "DXY": {
+          "ticker": "DX-Y.NYB",
+          "price": 99.13,
+          "change_percent": -0.07,
+          "change_pct": -0.07,
+          "latest_price": 99.13,
+          "source": "yfinance:DX-Y.NYB"
+        },
+        "BTC": {
+          "ticker": "BTC-USD",
+          "price": 69366.67,
+          "change_percent": -2.74,
+          "change_pct": -2.74,
+          "latest_price": 69366.67,
+          "source": "yfinance:BTC-USD"
+        },
+        "ETH": {
+          "ticker": "ETH-USD",
+          "price": 1973.35,
+          "change_percent": -1.49,
+          "change_pct": -1.49,
+          "latest_price": 1973.35,
+          "source": "yfinance:ETH-USD"
+        }
+      },
+      "geopolitics": [
+        {
+          "message": "Oil prices dip amid mixed messaging on status of U.S.-Iran peace talks",
+          "keywords": [
+            "iran"
+          ],
+          "source": "news_feed",
+          "severity": "HIGH"
+        },
+        {
+          "message": "Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate",
+          "keywords": [
+            "war"
+          ],
+          "source": "news_feed",
+          "severity": "HIGH"
+        },
+        {
+          "message": "Stocks bounce as AI optimism offsets Middle East anxiety",
+          "keywords": [
+            "middle east"
+          ],
+          "source": "news_feed",
+          "severity": "MEDIUM"
+        },
+        {
+          "message": "Markets Cautious as Iran Diplomacy Remains Unclear; HPE Surges on AI-Fueled Results: Dow Jones, S&P, Nasdaq, Wall Street Futures",
+          "keywords": [
+            "iran"
+          ],
+          "source": "news_feed",
+          "severity": "HIGH"
+        },
+        {
+          "message": "Hindware ruling may reshape India's \u20b91-lakh cr ad market: Report | Paid search drives 40-45% of marketing spend | Inshorts",
+          "keywords": [
+            "war"
+          ],
+          "source": "inshorts_feed",
+          "severity": "HIGH"
+        },
+        {
+          "message": "China plans futures market for trading AI tokens: Report | 'AI token market in early stages of development' | Inshorts",
+          "keywords": [
+            "china"
+          ],
+          "source": "inshorts_feed",
+          "severity": "MEDIUM"
+        },
+        {
+          "message": "Such things happen: SEBI head as Taiwan overtakes India in market size | Taiwan's GDP just 23% of India's GDP in 2026 | Inshorts",
+          "keywords": [
+            "taiwan"
+          ],
+          "source": "inshorts_feed",
+          "severity": "MEDIUM"
+        },
+        {
+          "message": "Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 Points From Day's Low; Newgen Software Surges 15%",
+          "keywords": [
+            "war"
+          ],
+          "source": "inshorts_feed",
+          "severity": "HIGH"
+        },
+        {
+          "message": "After Taiwan, South Korea overtakes India to become world\u2019s sixth largest stock market; here\u2019s why",
+          "keywords": [
+            "taiwan"
+          ],
+          "source": "inshorts_feed",
+          "severity": "MEDIUM"
+        },
+        {
+          "message": "Explained: Why Indian stock market has fallen prey to South Korea, Taiwan\u2019s AI prowess",
+          "keywords": [
+            "taiwan"
+          ],
+          "source": "inshorts_feed",
+          "severity": "MEDIUM"
+        },
+        {
+          "message": "From Gift Nifty, US-Iran talks, gold rates to oil prices: 10 key things that changed for Indian stock market overnight",
+          "keywords": [
+            "iran"
+          ],
+          "source": "inshorts_feed",
+          "severity": "HIGH"
+        }
+      ],
+      "alerts": [
+        {
+          "message": "Oil prices dip amid mixed messaging on status of U.S.-Iran peace talks",
+          "severity": "HIGH",
+          "keywords": [
+            "iran"
+          ]
+        },
+        {
+          "message": "Symbotic (SYM) Reports Revenue Beat as Software Growth and Automation Expansion Accelerate",
+          "severity": "HIGH",
+          "keywords": [
+            "war"
+          ]
+        },
+        {
+          "message": "Stocks bounce as AI optimism offsets Middle East anxiety",
+          "severity": "MEDIUM",
+          "keywords": [
+            "middle east"
+          ]
+        },
+        {
+          "message": "Markets Cautious as Iran Diplomacy Remains Unclear; HPE Surges on AI-Fueled Results: Dow Jones, S&P, Nasdaq, Wall Street Futures",
+          "severity": "HIGH",
+          "keywords": [
+            "iran"
+          ]
+        },
+        {
+          "message": "Hindware ruling may reshape India's \u20b91-lakh cr ad market: Report | Paid search drives 40-45% of marketing spend | Inshorts",
+          "severity": "HIGH",
+          "keywords": [
+            "war"
+          ]
+        },
+        {
+          "message": "China plans futures market for trading AI tokens: Report | 'AI token market in early stages of development' | Inshorts",
+          "severity": "MEDIUM",
+          "keywords": [
+            "china"
+          ]
+        },
+        {
+          "message": "Such things happen: SEBI head as Taiwan overtakes India in market size | Taiwan's GDP just 23% of India's GDP in 2026 | Inshorts",
+          "severity": "MEDIUM",
+          "keywords": [
+            "taiwan"
+          ]
+        },
+        {
+          "message": "Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 Points From Day's Low; Newgen Software Surges 15%",
+          "severity": "HIGH",
+          "keywords": [
+            "war"
+          ]
+        }
+      ],
+      "validation": {
+        "validated": 18,
+        "rejected": 0,
+        "preserved_previous": 0,
+        "degraded": false,
+        "reject_reasons": []
+      },
+      "coverage": {
+        "usa": 8,
+        "asia": 3,
+        "macro": 7,
+        "geopolitics_alerts": 11
+      }
+    },
+    "external_coverage": {
+      "ok": true,
+      "cache_exists": true,
+      "as_of": "2026-06-02T07:50:48.912919+00:00",
+      "collected_items": 11,
+      "normalized_items": 11,
+      "rejected_items": 4,
+      "source_count": 6,
+      "sources": [
+        "Business Standard Markets",
+        "Economic Times (Markets Alt)",
+        "Economic Times (Markets)",
+        "LiveMint (Companies)",
+        "NDTV Profit",
+        "Zee Business"
+      ],
+      "latest_sources": [
+        "Business Standard Markets",
+        "Economic Times (Markets Alt)",
+        "Economic Times (Markets)",
+        "LiveMint (Companies)",
+        "NDTV Profit",
+        "Zee Business"
+      ],
+      "unique_tickers": 10,
+      "tickers": [
+        "BAJFINANCE",
+        "COFORGE",
+        "HFCL",
+        "MCX",
+        "NDTV",
+        "NIFTY50",
+        "POLICYBZR",
+        "RELIANCE",
+        "TCS",
+        "WIPRO"
+      ],
+      "broker_db_pick_count": 2,
+      "source_counts": {
+        "NDTV Profit": 3,
+        "Economic Times (Markets)": 4,
+        "Business Standard Markets": 1,
+        "LiveMint (Companies)": 1,
+        "Economic Times (Markets Alt)": 1,
+        "Zee Business": 1
+      },
+      "direction_counts": {
+        "bullish": 4,
+        "bearish": 3,
+        "watch": 4,
+        "neutral": 0
+      },
+      "fake_predictions": 0,
+      "channels_used": [
+        "news",
+        "tv",
+        "manual"
+      ],
+      "external_evidence": {
+        "accepted": 127,
+        "broker_prediction_candidate": 21,
+        "stock_news_evidence": 40,
+        "market_context": 24,
+        "macro_context": 42,
+        "rejected": 155,
+        "unique_tickers": 16
+      },
+      "warnings": [],
+      "disclaimer": "External evidence is separated from our final prediction.",
+      "broker_write_review": {
+        "ok": true,
+        "generated_at": "2026-05-31T15:59:57+00:00",
+        "write_safe": 1,
+        "review_only": 0,
+        "rejected": 0,
+        "duplicates": 0,
+        "disclaimer": "Only write-safe items can enter broker prediction memory."
+      }
+    },
+    "daily_report_pack": {
+      "generated_at": "2026-06-02T18:41:59+00:00"
+    },
+    "sector_mapping": {
+      "at_risk_sectors": [
+        "ENERGY_OIL",
+        "HOTELS_TRAVEL",
+        "FMCG"
+      ],
+      "supported_sectors": [
+        "METALS_MINING",
+        "POWER",
+        "PHARMA",
+        "TELECOM"
+      ],
+      "commodity_impacts": [
+        {
+          "commodity": "Gold",
+          "symbols": [
+            "GOLDBEES"
+          ],
+          "stance": "WATCH"
+        },
+        {
+          "commodity": "Silver",
+          "symbols": [
+            "SILVERBEES"
+          ],
+          "stance": "WATCH"
+        },
+        {
+          "commodity": "Oil",
+          "symbols": [
+            "ONGC",
+            "OIL",
+            "GAIL",
+            "RELIANCE"
+          ],
+          "stance": "REVIEW"
+        },
+        {
+          "commodity": "VIX",
+          "symbols": [],
+          "stance": "REVIEW"
+        },
+        {
+          "commodity": "USD",
+          "symbols": [
+            "INDIGO"
+          ],
+          "stance": "REVIEW"
+        },
+        {
+          "commodity": "Nasdaq/S&P",
+          "symbols": [
+            "ASIANPAINT",
+            "BERGEPAINT",
+            "TATASTEEL",
+            "JSWSTEEL"
+          ],
+          "stance": "WATCH"
+        }
+      ]
+    },
+    "global_risk": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+    "commodity_impacts": [
+      {
+        "commodity": "Gold",
+        "symbols": [
+          "GOLDBEES"
+        ],
+        "stance": "WATCH"
+      },
+      {
+        "commodity": "Silver",
+        "symbols": [
+          "SILVERBEES"
+        ],
+        "stance": "WATCH"
+      },
+      {
+        "commodity": "Oil",
+        "symbols": [
+          "ONGC",
+          "OIL",
+          "GAIL",
+          "RELIANCE"
+        ],
+        "stance": "REVIEW"
+      },
+      {
+        "commodity": "VIX",
+        "symbols": [],
+        "stance": "REVIEW"
+      },
+      {
+        "commodity": "USD",
+        "symbols": [
+          "INDIGO"
+        ],
+        "stance": "REVIEW"
+      },
+      {
+        "commodity": "Nasdaq/S&P",
+        "symbols": [
+          "ASIANPAINT",
+          "BERGEPAINT",
+          "TATASTEEL",
+          "JSWSTEEL"
+        ],
+        "stance": "WATCH"
+      }
+    ]
+  },
+  "warnings": []
+}

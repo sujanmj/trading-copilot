@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "tab": "reddit",
+  "generated_at": "2026-06-08T09:34:52+00:00",
+  "market_mode": "RESEARCH_MODE",
+  "source": "fallback",
+  "cache_age_seconds": 514337,
+  "items": [],
+  "summary": {
+    "empty_message": "No Reddit cache yet",
+    "source_url": "https://www.reddit.com/r/IndianStockMarket/",
+    "reddit_file": {
+      "last_updated": "2026-06-02T10:42:35.771176+00:00"
+    }
+  },
+  "warnings": [
+    "no_reddit_cache"
+  ]
+}

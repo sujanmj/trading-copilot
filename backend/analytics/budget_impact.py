@@ -17,7 +17,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48A'
+STAGE = '48E'
 ENGINE_NAME = 'Budget Impact Intelligence'
 
 CACHE_FILE = get_data_path('budget_impact_cache.json')
@@ -433,7 +433,72 @@ def build_impact_map(theme_id: str) -> dict[str, Any]:
     }
 
 
-def get_budget_overview() -> dict[str, Any]:
+def get_budget_overview(*, cache_only: bool = False, lite: bool = False) -> dict[str, Any]:
+    if cache_only and lite:
+        cached = _load_cache()
+        if cached and cached.get('ok'):
+            return {
+                'ok': True,
+                'lite': True,
+                'from_cache': True,
+                'stage': STAGE,
+                'engine': ENGINE_NAME,
+                'generated_at': cached.get('generated_at') or cached.get('refreshed_at'),
+                'freshness': {'status': 'cached', 'lite': True},
+                'top_themes': (cached.get('top_themes') or [])[:8],
+                'top_catalysts': (cached.get('top_catalysts') or [])[:5],
+                'beneficiary_map': cached.get('beneficiary_map') or {},
+                'risk_map': cached.get('risk_map') or {},
+                'stock_rankings': (cached.get('stock_rankings') or [])[:10],
+                'source_counts': cached.get('source_counts') or {},
+                'disclaimer': cached.get('disclaimer') or 'Research only — watch/confirm. No blind entry.',
+            }
+        return {
+            'ok': True,
+            'lite': True,
+            'cache_missing': True,
+            'stale': True,
+            'stage': STAGE,
+            'engine': ENGINE_NAME,
+            'generated_at': _now_iso(),
+            'message': 'Budget cache unavailable. Tap Refresh Budget Intel.',
+            'freshness': {'status': 'cache_missing', 'lite': True, 'stale': True},
+            'top_themes': [],
+            'top_catalysts': [],
+            'beneficiary_map': {},
+            'risk_map': {},
+            'stock_rankings': [],
+            'source_counts': {'themes': 0, 'budget_themes': 0, 'catalysts': 0},
+            'disclaimer': 'Research only — watch/confirm. No blind entry.',
+        }
+
+    if cache_only:
+        cached = _load_cache()
+        if cached and cached.get('ok'):
+            cached = dict(cached)
+            cached['from_cache'] = True
+            cached.setdefault('stage', STAGE)
+            cached.setdefault('engine', ENGINE_NAME)
+            if 'freshness' not in cached:
+                cached['freshness'] = compute_freshness_panel()
+            return cached
+        return {
+            'ok': True,
+            'cache_missing': True,
+            'stage': STAGE,
+            'engine': ENGINE_NAME,
+            'generated_at': _now_iso(),
+            'message': 'Budget cache unavailable. Tap Refresh Budget Intel.',
+            'freshness': compute_freshness_panel(),
+            'top_themes': [],
+            'top_catalysts': [],
+            'beneficiary_map': {},
+            'risk_map': {},
+            'stock_rankings': [],
+            'source_counts': {'themes': 0, 'budget_themes': 0, 'catalysts': 0},
+            'disclaimer': 'Research only — watch/confirm. No blind entry.',
+        }
+
     from backend.analytics.theme_baskets import (
         BUDGET_THEME_IDS,
         get_basket_by_id,
@@ -503,9 +568,11 @@ def get_budget_overview() -> dict[str, Any]:
     return payload
 
 
-def get_budget_themes() -> dict[str, Any]:
-    from backend.analytics.theme_baskets import THEME_CATEGORIES, get_basket_by_id
+def get_budget_themes(*, lite: bool = False) -> dict[str, Any]:
+    from backend.analytics.theme_baskets import THEME_CATEGORIES, get_basket_by_id, load_theme_baskets
 
+    if lite:
+        load_theme_baskets()
     grouped: dict[str, list[dict[str, Any]]] = {}
     for category, ids in THEME_CATEGORIES.items():
         rows = []
@@ -521,6 +588,7 @@ def get_budget_themes() -> dict[str, Any]:
     return {
         'ok': True,
         'stage': STAGE,
+        'lite': bool(lite),
         'categories': grouped,
         'count': sum(len(v) for v in grouped.values()),
     }

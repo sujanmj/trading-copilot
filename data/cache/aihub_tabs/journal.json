@@ -1,0 +1,2337 @@
+{
+  "ok": true,
+  "tab": "journal",
+  "generated_at": "2026-06-08T09:34:52+00:00",
+  "market_mode": "USA_MODE",
+  "source": "runtime",
+  "cache_age_seconds": 514311,
+  "items": [
+    {
+      "kind": "top_watch",
+      "ticker": "SILVERBEES",
+      "decision": "WATCH",
+      "score": 46.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+      "line": "SILVERBEES \u2014 WATCH \u2014 46 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "RELIANCE",
+      "decision": "WATCH",
+      "score": 45.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "line": "RELIANCE \u2014 WATCH \u2014 45 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "SUNTECK",
+      "decision": "WATCH",
+      "score": 45.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "line": "SUNTECK \u2014 WATCH \u2014 45 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "TATASTEEL",
+      "decision": "WATCH",
+      "score": 45.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "line": "TATASTEEL \u2014 WATCH \u2014 45 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "AWL",
+      "decision": "WATCH",
+      "score": 44.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "line": "AWL \u2014 WATCH \u2014 44 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "DMART",
+      "decision": "WATCH",
+      "score": 44.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "line": "DMART \u2014 WATCH \u2014 44 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "RVNL",
+      "decision": "WATCH",
+      "score": 44.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "line": "RVNL \u2014 WATCH \u2014 44 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "GOLDBEES",
+      "decision": "WATCH",
+      "score": 43.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+      "line": "GOLDBEES \u2014 WATCH \u2014 43 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "NCC",
+      "decision": "WATCH",
+      "score": 43.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "line": "NCC \u2014 WATCH \u2014 43 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+    },
+    {
+      "kind": "top_watch",
+      "ticker": "RAYMOND",
+      "decision": "WATCH",
+      "score": 43.0,
+      "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "line": "RAYMOND \u2014 WATCH \u2014 43 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+    }
+  ],
+  "summary": {
+    "history": {
+      "count": 0
+    },
+    "final_confidence": {
+      "ok": true,
+      "active_mode": "USA_MODE",
+      "checked": 50,
+      "buy_candidate": 0,
+      "watch": 18,
+      "avoid": 24,
+      "no_decision": 8,
+      "calibration_recs": [],
+      "sim_predictions": null,
+      "top_candidates": [],
+      "source": "daily-report-pack"
+    },
+    "daily_report_pack": {
+      "ok": true,
+      "generated_at": "2026-06-02T18:41:59+00:00",
+      "shadow_mode": true,
+      "market_mode": "USA_MODE",
+      "market_router": {
+        "ok": true,
+        "checked_at": "2026-06-02T18:41:56.179326+00:00",
+        "now_utc": "2026-06-02T18:41:56.179326+00:00",
+        "active_mode": "USA_MODE",
+        "active_mode_label": "USA Regular Session",
+        "recommended_focus": "Prioritize US equities \u2014 NYSE/NASDAQ live session",
+        "routing_reason": "USA regular session active",
+        "india_session": "closed",
+        "india_session_label": "Closed (off-hours)",
+        "usa_session": "regular",
+        "usa_session_label": "Regular Session",
+        "india": {
+          "market": "india",
+          "timezone": "Asia/Kolkata",
+          "local_time": "2026-06-03T00:11:56.175076+05:30",
+          "local_date": "2026-06-03",
+          "is_market_day": true,
+          "session": "closed",
+          "session_label": "Closed (off-hours)",
+          "is_open": false,
+          "holiday_name": null,
+          "special_session": null,
+          "early_close_today": false,
+          "early_close_time": null
+        },
+        "usa": {
+          "market": "usa",
+          "timezone": "America/New_York",
+          "local_time": "2026-06-02T14:41:56.175076-04:00",
+          "local_date": "2026-06-02",
+          "is_market_day": true,
+          "session": "regular",
+          "session_label": "Regular Session",
+          "is_open": true,
+          "holiday_name": null,
+          "special_session": null,
+          "early_close_today": false,
+          "early_close_time": null
+        },
+        "next_india_open": {
+          "ok": true,
+          "market": "india",
+          "next_open_utc": "2026-06-03T03:45:00+00:00",
+          "next_open_local": "2026-06-03T09:15:00+05:30",
+          "next_open_date": "2026-06-03",
+          "days_until": 0,
+          "timezone": "Asia/Kolkata"
+        },
+        "next_usa_open": {
+          "ok": true,
+          "market": "usa",
+          "next_open_utc": "2026-06-03T13:30:00+00:00",
+          "next_open_local": "2026-06-03T09:30:00-04:00",
+          "next_open_date": "2026-06-03",
+          "days_until": 1,
+          "timezone": "America/New_York"
+        },
+        "session_status": {
+          "ok": true,
+          "checked_at": "2026-06-02T18:41:56.175076+00:00",
+          "now_utc": "2026-06-02T18:41:56.175076+00:00",
+          "india": {
+            "market": "india",
+            "timezone": "Asia/Kolkata",
+            "local_time": "2026-06-03T00:11:56.175076+05:30",
+            "local_date": "2026-06-03",
+            "is_market_day": true,
+            "session": "closed",
+            "session_label": "Closed (off-hours)",
+            "is_open": false,
+            "holiday_name": null,
+            "special_session": null,
+            "early_close_today": false,
+            "early_close_time": null
+          },
+          "usa": {
+            "market": "usa",
+            "timezone": "America/New_York",
+            "local_time": "2026-06-02T14:41:56.175076-04:00",
+            "local_date": "2026-06-02",
+            "is_market_day": true,
+            "session": "regular",
+            "session_label": "Regular Session",
+            "is_open": true,
+            "holiday_name": null,
+            "special_session": null,
+            "early_close_today": false,
+            "early_close_time": null
+          },
+          "holiday_files": {
+            "india": "data\\market_holidays_india.json",
+            "usa": "data\\market_holidays_usa.json"
+          },
+          "holiday_calendar": {
+            "ok": true,
+            "calendar_ok": true,
+            "holiday_calendar_status": "OK",
+            "warnings": [],
+            "india": {
+              "year": 2026,
+              "holidays": 15,
+              "special_sessions": 1,
+              "next_holiday": {
+                "date": "2026-06-26",
+                "name": "Muharram",
+                "type": "full_day",
+                "days_until": 24
+              }
+            },
+            "usa": {
+              "year": 2026,
+              "holidays": 10,
+              "early_closes": 2,
+              "next_holiday": {
+                "date": "2026-06-19",
+                "name": "Juneteenth National Independence Day",
+                "type": "full_day",
+                "days_until": 17
+              },
+              "next_early_close": {
+                "date": "2026-11-27",
+                "name": "Day after Thanksgiving",
+                "close_time": "13:00",
+                "days_until": 178
+              }
+            }
+          },
+          "warnings": []
+        },
+        "active_market_mode": {
+          "ok": true,
+          "checked_at": "2026-06-02T18:41:56.179326+00:00",
+          "now_utc": "2026-06-02T18:41:56.179326+00:00",
+          "active_mode": "USA_MODE",
+          "active_mode_label": "USA Regular Session",
+          "recommended_focus": "Prioritize US equities \u2014 NYSE/NASDAQ live session",
+          "routing_reason": "USA regular session active",
+          "india_session": "closed",
+          "india_session_label": "Closed (off-hours)",
+          "usa_session": "regular",
+          "usa_session_label": "Regular Session",
+          "india": {
+            "market": "india",
+            "timezone": "Asia/Kolkata",
+            "local_time": "2026-06-03T00:11:56.179326+05:30",
+            "local_date": "2026-06-03",
+            "is_market_day": true,
+            "session": "closed",
+            "session_label": "Closed (off-hours)",
+            "is_open": false,
+            "holiday_name": null,
+            "special_session": null,
+            "early_close_today": false,
+            "early_close_time": null
+          },
+          "usa": {
+            "market": "usa",
+            "timezone": "America/New_York",
+            "local_time": "2026-06-02T14:41:56.179326-04:00",
+            "local_date": "2026-06-02",
+            "is_market_day": true,
+            "session": "regular",
+            "session_label": "Regular Session",
+            "is_open": true,
+            "holiday_name": null,
+            "special_session": null,
+            "early_close_today": false,
+            "early_close_time": null
+          },
+          "next_india_open": {
+            "ok": true,
+            "market": "india",
+            "next_open_utc": "2026-06-03T03:45:00+00:00",
+            "next_open_local": "2026-06-03T09:15:00+05:30",
+            "next_open_date": "2026-06-03",
+            "days_until": 0,
+            "timezone": "Asia/Kolkata"
+          },
+          "next_usa_open": {
+            "ok": true,
+            "market": "usa",
+            "next_open_utc": "2026-06-03T13:30:00+00:00",
+            "next_open_local": "2026-06-03T09:30:00-04:00",
+            "next_open_date": "2026-06-03",
+            "days_until": 1,
+            "timezone": "America/New_York"
+          },
+          "warnings": []
+        },
+        "holiday_calendar": {
+          "ok": true,
+          "calendar_ok": true,
+          "holiday_calendar_status": "OK",
+          "warnings": [],
+          "india": {
+            "year": 2026,
+            "holidays": 15,
+            "special_sessions": 1,
+            "next_holiday": {
+              "date": "2026-06-26",
+              "name": "Muharram",
+              "type": "full_day",
+              "days_until": 24
+            }
+          },
+          "usa": {
+            "year": 2026,
+            "holidays": 10,
+            "early_closes": 2,
+            "next_holiday": {
+              "date": "2026-06-19",
+              "name": "Juneteenth National Independence Day",
+              "type": "full_day",
+              "days_until": 17
+            },
+            "next_early_close": {
+              "date": "2026-11-27",
+              "name": "Day after Thanksgiving",
+              "close_time": "13:00",
+              "days_until": 178
+            }
+          }
+        },
+        "warnings": []
+      },
+      "source_freshness": {
+        "ok": true,
+        "checked_at": "2026-06-02T18:41:56.247279+00:00",
+        "market_status": "closed",
+        "market_closed": true,
+        "safe_to_use": false,
+        "runtime_snapshot_age_hours": 5.35,
+        "latest_market_data_age_hours": 7.0,
+        "enriched_price_age_hours": 94.23,
+        "news_age_hours": 7.99,
+        "sources": {
+          "prices": {
+            "status": "closed-market",
+            "age_hours": 7.0,
+            "file": "latest_market_data.json",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\latest_market_data.json",
+            "timestamp": "2026-06-02T11:42:10.429875+00:00",
+            "timestamp_key": "last_updated",
+            "basis": "embedded",
+            "exists": true,
+            "symbols_ok": 15,
+            "market_period": "post_market",
+            "active_source": "angel_one",
+            "degraded": false
+          },
+          "news": {
+            "status": "stale",
+            "age_hours": 7.99,
+            "file": "live_news_feed.json",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\live_news_feed.json",
+            "timestamp": "2026-06-02T10:42:21.444915+00:00",
+            "timestamp_key": "last_updated",
+            "basis": "embedded",
+            "exists": true,
+            "total_articles": 155,
+            "feeds_ok": 7
+          },
+          "reddit": {
+            "status": "stale",
+            "age_hours": 7.99,
+            "file": "reddit_data.json",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\reddit_data.json",
+            "timestamp": "2026-06-02T10:42:35.771176+00:00",
+            "timestamp_key": "last_updated",
+            "basis": "embedded",
+            "exists": true,
+            "total_posts_analyzed": 99,
+            "market_mood": "bullish"
+          },
+          "global": {
+            "status": "stale",
+            "age_hours": 7.99,
+            "file": "global_markets.json",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\global_markets.json",
+            "timestamp": "2026-06-02T10:42:18.464571+00:00",
+            "timestamp_key": "last_updated",
+            "basis": "embedded",
+            "exists": true,
+            "sentiment": {
+              "usa": {
+                "mood": "NEUTRAL",
+                "average_change": 0.31,
+                "expected_open": 0.2,
+                "sample_size": 8
+              },
+              "asia": {
+                "mood": "BULLISH",
+                "average_change": 0.88,
+                "expected_open": 0.57,
+                "sample_size": 3
+              },
+              "global": {
+                "mood": "NEUTRAL",
+                "average_change": -0.22,
+                "expected_open": -0.14,
+                "sample_size": 7
+              }
+            },
+            "coverage": {
+              "usa": 8,
+              "asia": 3,
+              "macro": 7,
+              "geopolitics_alerts": 11
+            }
+          },
+          "govt": {
+            "status": "stale",
+            "age_hours": 6.99,
+            "file": "govt_intelligence.json",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\govt_intelligence.json",
+            "timestamp": "2026-06-02T11:42:19.684660+00:00",
+            "timestamp_key": "timestamp",
+            "basis": "embedded",
+            "exists": true,
+            "total_items": 0
+          },
+          "market_memory": {
+            "status": "fresh",
+            "age_hours": 0.02,
+            "file": "canonical_market_memory.db",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\canonical_market_memory.db",
+            "timestamp": "2026-06-02T18:40:27.597904+00:00",
+            "basis": "mtime",
+            "predictions": 177,
+            "outcomes": 24,
+            "latest_prediction_timestamp": "2026-06-02T00:00:00+00:00",
+            "latest_outcome_timestamp": null,
+            "latest_prediction_age_hours": 18.7,
+            "latest_outcome_age_hours": null,
+            "advisor_report_age_hours": 94.23,
+            "advisor_report_timestamp": "2026-05-29T20:28:04.290610+00:00"
+          },
+          "ai_package": {
+            "status": "stale",
+            "age_hours": 5.35,
+            "timestamp": "2026-06-02T13:20:52.917200+00:00",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\cache\\runtime_snapshot.json",
+            "basis": "embedded",
+            "exists": true
+          },
+          "external_evidence": {
+            "status": "stale",
+            "age_hours": 10.85,
+            "timestamp": "2026-06-02T07:50:48.859860+00:00",
+            "path": "C:\\Users\\sujan\\trading-copilot\\data\\external_evidence_latest.json",
+            "basis": "embedded",
+            "exists": true,
+            "items": 145,
+            "broker_candidates": 0
+          }
+        },
+        "runtime_snapshot": {
+          "status": "stale",
+          "age_hours": 5.35,
+          "path": "C:\\Users\\sujan\\trading-copilot\\data\\cache\\runtime_snapshot.json",
+          "timestamp": "2026-06-02T13:20:52.917200+00:00",
+          "basis": "embedded"
+        },
+        "ai_package_age_hours": 5.35,
+        "external_evidence_age_hours": 10.85,
+        "warnings": [
+          "market_closed",
+          "runtime_snapshot_stale",
+          "news_feed_stale",
+          "reddit_only_news",
+          "ai_package_stale",
+          "external_evidence_stale",
+          "refresh_intelligence_before_next_session"
+        ]
+      },
+      "final_confidence": {
+        "ok": true,
+        "active_mode": "USA_MODE",
+        "market_closed": false,
+        "buy_cap_active": false,
+        "checked": 50,
+        "buy_candidate": 0,
+        "watch": 18,
+        "avoid": 24,
+        "no_decision": 8,
+        "calibration": {
+          "report_loaded": true,
+          "candidates_adjusted": 0,
+          "candidates_weak_signal": 26
+        },
+        "simulation": {
+          "simulation_applied": 39,
+          "simulation_positive": 6,
+          "simulation_negative": 33,
+          "simulation_neutral": 11
+        },
+        "top_tickers": [
+          "SILVERBEES",
+          "RELIANCE",
+          "RELIANCE",
+          "SUNTECK",
+          "TATASTEEL"
+        ]
+      },
+      "tomorrow_watchlist": {
+        "ok": true,
+        "market_mode": "USA_MODE",
+        "watch": 17,
+        "avoid": 23,
+        "no_decision": 6,
+        "raw_candidates": 50,
+        "unique_tickers": 46,
+        "duplicates_removed": 4,
+        "top_watchlist": [
+          {
+            "ticker": "SILVERBEES",
+            "prediction_id": "mm:5720b31ad1fe5bc811756b01",
+            "score": 46,
+            "pre_calibration_score": 46,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "breakout",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation momentum_breakout_20 => +1",
+              "details": {
+                "inferred_strategy": "momentum_breakout_20",
+                "strategy_win_rate": 0.43687169875617654,
+                "strategy_expectancy_pct": 0.17005275541496445,
+                "adjustment": 1,
+                "warnings": [],
+                "reasons": [
+                  "simulation metrics neutral \u2014 no adjustment",
+                  "ticker n=143 positive expectancy => +1"
+                ]
+              },
+              "lines": [
+                "H: historical simulation momentum_breakout_20 => +1"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "SILVERBEES",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation momentum_breakout_20 => +1",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:5720b31ad1fe5bc811756b01"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              46
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "RELIANCE",
+            "prediction_id": "mm:b08e510e4901953c6f5b1c88",
+            "score": 45,
+            "pre_calibration_score": 45,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "breakout",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+              "details": {
+                "inferred_strategy": "momentum_breakout_20",
+                "strategy_win_rate": 0.43687169875617654,
+                "strategy_expectancy_pct": 0.17005275541496445,
+                "adjustment": 0,
+                "warnings": [],
+                "reasons": [
+                  "simulation metrics neutral \u2014 no adjustment"
+                ]
+              },
+              "lines": [
+                "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "broker_prediction_candidate_excluded_from_scoring",
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "RELIANCE",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "broker_prediction_candidate_excluded_from_scoring",
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 1,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "broker_prediction_candidate_excluded_from_scoring",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:b08e510e4901953c6f5b1c88",
+              "mm:982d6d2eb6b55c87c2594368"
+            ],
+            "grouped_candidate_count": 2,
+            "grouped_scores": [
+              45,
+              45
+            ],
+            "grouped_decisions": [
+              "WATCH",
+              "WATCH"
+            ],
+            "grouped_evidence_note": "2 predictions grouped; showing best candidate for RELIANCE.",
+            "shadow_mode": true
+          },
+          {
+            "ticker": "SUNTECK",
+            "prediction_id": "mm:14a6aa74ce0ddb62a710f0c5",
+            "score": 45,
+            "pre_calibration_score": 45,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "breakout",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+              "details": {
+                "inferred_strategy": "momentum_breakout_20",
+                "strategy_win_rate": 0.43687169875617654,
+                "strategy_expectancy_pct": 0.17005275541496445,
+                "adjustment": 0,
+                "warnings": [],
+                "reasons": [
+                  "simulation metrics neutral \u2014 no adjustment"
+                ]
+              },
+              "lines": [
+                "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "SUNTECK",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:14a6aa74ce0ddb62a710f0c5"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              45
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "TATASTEEL",
+            "prediction_id": "mm:57502a8f1c6a3bb4526b038e",
+            "score": 45,
+            "pre_calibration_score": 45,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "Reddit momentum",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+              "details": {
+                "inferred_strategy": "momentum_breakout_20",
+                "strategy_win_rate": 0.43687169875617654,
+                "strategy_expectancy_pct": 0.17005275541496445,
+                "adjustment": 0,
+                "warnings": [],
+                "reasons": [
+                  "simulation metrics neutral \u2014 no adjustment"
+                ]
+              },
+              "lines": [
+                "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "TATASTEEL",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:57502a8f1c6a3bb4526b038e"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              45
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "AWL",
+            "prediction_id": "mm:98533a94719b61b8c7c15c5d",
+            "score": 44,
+            "pre_calibration_score": 44,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "govt alert",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation UNKNOWN => -1",
+              "details": {
+                "inferred_strategy": "UNKNOWN",
+                "strategy_win_rate": 0.44140625,
+                "strategy_expectancy_pct": -0.5692429168746945,
+                "adjustment": -1,
+                "warnings": [],
+                "reasons": [
+                  "weak simulation expectancy=-0.5692429168746945 win_rate=44.140625 => -2",
+                  "ticker n=233 positive expectancy => +1"
+                ]
+              },
+              "lines": [
+                "H: historical simulation UNKNOWN => -1"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "AWL",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation UNKNOWN => -1",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:98533a94719b61b8c7c15c5d"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              44
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "DMART",
+            "prediction_id": "mm:41cb9f078b8c36d125daf99b",
+            "score": 44,
+            "pre_calibration_score": 44,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "sector rotation",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation UNKNOWN => -1",
+              "details": {
+                "inferred_strategy": "UNKNOWN",
+                "strategy_win_rate": 0.44140625,
+                "strategy_expectancy_pct": -0.5692429168746945,
+                "adjustment": -1,
+                "warnings": [],
+                "reasons": [
+                  "weak simulation expectancy=-0.5692429168746945 win_rate=44.140625 => -2",
+                  "ticker n=272 positive expectancy => +1"
+                ]
+              },
+              "lines": [
+                "H: historical simulation UNKNOWN => -1"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "DMART",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation UNKNOWN => -1",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:41cb9f078b8c36d125daf99b"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              44
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "RVNL",
+            "prediction_id": "mm:4d3f02db102d65a554bda743",
+            "score": 44,
+            "pre_calibration_score": 44,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "sector rotation",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation UNKNOWN => -1",
+              "details": {
+                "inferred_strategy": "UNKNOWN",
+                "strategy_win_rate": 0.44140625,
+                "strategy_expectancy_pct": -0.5692429168746945,
+                "adjustment": -1,
+                "warnings": [],
+                "reasons": [
+                  "weak simulation expectancy=-0.5692429168746945 win_rate=44.140625 => -2",
+                  "ticker n=263 positive expectancy => +1"
+                ]
+              },
+              "lines": [
+                "H: historical simulation UNKNOWN => -1"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "RVNL",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation UNKNOWN => -1",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:4d3f02db102d65a554bda743"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              44
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "GOLDBEES",
+            "prediction_id": "mm:db5081f736f4760157e40577",
+            "score": 43,
+            "pre_calibration_score": 43,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "breakout",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation momentum_breakout_20 => -2",
+              "details": {
+                "inferred_strategy": "momentum_breakout_20",
+                "strategy_win_rate": 0.43687169875617654,
+                "strategy_expectancy_pct": 0.17005275541496445,
+                "adjustment": -2,
+                "warnings": [],
+                "reasons": [
+                  "simulation metrics neutral \u2014 no adjustment",
+                  "ticker n=204 weak performance => -2"
+                ]
+              },
+              "lines": [
+                "H: historical simulation momentum_breakout_20 => -2"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "GOLDBEES",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation momentum_breakout_20 => -2",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:db5081f736f4760157e40577"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              43
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "NCC",
+            "prediction_id": "mm:3d912f3a178797f234b3246c",
+            "score": 43,
+            "pre_calibration_score": 43,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "sector rotation",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation UNKNOWN => -2",
+              "details": {
+                "inferred_strategy": "UNKNOWN",
+                "strategy_win_rate": 0.44140625,
+                "strategy_expectancy_pct": -0.5692429168746945,
+                "adjustment": -2,
+                "warnings": [],
+                "reasons": [
+                  "weak simulation expectancy=-0.5692429168746945 win_rate=44.140625 => -2"
+                ]
+              },
+              "lines": [
+                "H: historical simulation UNKNOWN => -2"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "NCC",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation UNKNOWN => -2",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:3d912f3a178797f234b3246c"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              43
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          },
+          {
+            "ticker": "RAYMOND",
+            "prediction_id": "mm:b27bd46d9af65ab0f7f15f63",
+            "score": 43,
+            "pre_calibration_score": 43,
+            "confidence_label": "MEDIUM",
+            "direction": null,
+            "signal_type": "sector rotation",
+            "decision": "WATCH",
+            "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+            "primary_label": "watch candidate",
+            "broker_evidence": {
+              "summary": "B: broker consensus (no_broker_evidence) => +0",
+              "lines": [
+                "B: broker consensus (no_broker_evidence) => +0",
+                "C: broker intelligence relationship=unclear picks=0 => +0"
+              ]
+            },
+            "simulation_evidence": {
+              "summary": "H: historical simulation UNKNOWN => -2",
+              "details": {
+                "inferred_strategy": "UNKNOWN",
+                "strategy_win_rate": 0.44140625,
+                "strategy_expectancy_pct": -0.5692429168746945,
+                "adjustment": -2,
+                "warnings": [],
+                "reasons": [
+                  "weak simulation expectancy=-0.5692429168746945 win_rate=44.140625 => -2"
+                ]
+              },
+              "lines": [
+                "H: historical simulation UNKNOWN => -2"
+              ]
+            },
+            "memory_evidence": {
+              "summary": "A: memory advisor learning_score=50 overall=neutral => +0",
+              "lines": [
+                "A: memory advisor learning_score=50 overall=neutral => +0",
+                "D: historical replay n=0 win_rate=N/A => +0"
+              ]
+            },
+            "external_evidence_summary": {
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "stock_news_count": 0,
+              "latest_titles": [],
+              "score_adjustment": 0,
+              "summary_reason": "no scoring impact from external stock news",
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "external_evidence": {
+              "ok": true,
+              "ticker": "RAYMOND",
+              "items": [],
+              "counts": {
+                "positive": 0,
+                "negative": 0,
+                "watch": 0,
+                "neutral": 0
+              },
+              "score_adjustment": 0,
+              "warnings": [
+                "no_stock_news_evidence_for_ticker"
+              ],
+              "summary_reason": "no scoring impact from external stock news",
+              "broker_candidates_skipped": 0,
+              "disclaimer": "External evidence is read-only and not trade execution."
+            },
+            "warnings": [
+              "ai_package_stale",
+              "external_evidence_stale",
+              "low_sample_size",
+              "market_closed",
+              "missing_key",
+              "news_feed_stale",
+              "no_history",
+              "no_stock_news_evidence_for_ticker",
+              "reddit_only_news",
+              "refresh_intelligence_before_next_session",
+              "runtime_snapshot_stale",
+              "stale_critical_sources"
+            ],
+            "hard_warnings": [],
+            "explanations": [
+              "A: memory advisor learning_score=50 overall=neutral => +0",
+              "B: broker consensus (no_broker_evidence) => +0",
+              "C: broker intelligence relationship=unclear picks=0 => +0",
+              "D: historical replay n=0 win_rate=N/A => +0",
+              "H: historical simulation UNKNOWN => -2",
+              "E: market router mode=USA_MODE => +1",
+              "F: source freshness safe_to_use=False => -8",
+              "G: price context present and sane => +2",
+              "I: external evidence \u2014 no score adjustment"
+            ],
+            "grouped_prediction_ids": [
+              "mm:b27bd46d9af65ab0f7f15f63"
+            ],
+            "grouped_candidate_count": 1,
+            "grouped_scores": [
+              43
+            ],
+            "grouped_decisions": [
+              "WATCH"
+            ],
+            "grouped_evidence_note": null,
+            "shadow_mode": true
+          }
+        ],
+        "risk_notes": [
+          "Source freshness warning: ai package stale.",
+          "Source freshness warning: external evidence stale.",
+          "Historical sample size is low for some signals.",
+          "Market is closed \u2014 review only, not live entry.",
+          "News feed may be stale.",
+          "Runtime snapshot may be stale.",
+          "Some critical sources are stale.",
+          "Broker headline excluded from external score (broker DB handles it).",
+          "Calibration sample is weak for some score buckets.",
+          "Broker intelligence conflicts with memory.",
+          "Low sample warning: historical low sample.",
+          "Suspicious price scale detected for some tickers.",
+          "External market/macro context: 20 market + 20 macro headline(s) (risk notes only)."
+        ]
+      },
+      "broker_intelligence": {
+        "ok": true,
+        "broker_predictions": 2,
+        "sources": 0,
+        "tickers": 0,
+        "conflicts": 0,
+        "agreements": 0,
+        "warnings": []
+      },
+      "external_source_coverage": {
+        "ok": true,
+        "collected_items": 11,
+        "source_count": 6,
+        "unique_tickers": 10,
+        "broker_db_pick_count": 2,
+        "latest_sources": [
+          "Business Standard Markets",
+          "Economic Times (Markets Alt)",
+          "Economic Times (Markets)",
+          "LiveMint (Companies)",
+          "NDTV Profit",
+          "Zee Business"
+        ],
+        "broker_prediction_candidate": 21,
+        "stock_news_evidence": 40,
+        "market_context": 24,
+        "macro_context": 42,
+        "external_evidence_accepted": 127,
+        "warnings": [],
+        "disclaimer": "External evidence is separated from our final prediction."
+      },
+      "external_evidence": {
+        "ok": true,
+        "accepted": 127,
+        "broker_prediction_candidate": 21,
+        "stock_news_evidence": 40,
+        "market_context": 24,
+        "macro_context": 42,
+        "rejected": 155,
+        "top_evidence_items": [
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "COFORGE",
+            "direction": "WATCH",
+            "title": "Buy, Sell Or Hold: Tata Tech, Physicswallah, Force Motors, MRPL, Cummins, Coforge, And More  \u2014 Ask Profit",
+            "source": "NDTV Profit"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "NIFTY50",
+            "direction": "WATCH",
+            "title": "Groww, Lenskart, 9 other stocks among Motilal\u2019s non-Nifty ideas. Check full list",
+            "source": "Economic Times (Markets)"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "NIFTY50",
+            "direction": "BEARISH",
+            "title": "FIIs build aggressive Nifty shorts; sell 76k Lots in 4 trading days",
+            "source": "Business Standard Markets"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "TCS",
+            "direction": "BEARISH",
+            "title": "IT rally rages on! Infosys, TCS, other stocks jump up to 4% despite overall market weakness",
+            "source": "Economic Times (Markets)"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "BAJFINANCE",
+            "direction": "BULLISH",
+            "title": "Top 15 Stocks To Buy This June: Eternal, Bajaj Finance, Nestle, LG Electronics Among Axis Securities Bet \u2014 Full List Ins",
+            "source": "NDTV Profit"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "WIPRO",
+            "direction": "BULLISH",
+            "title": "Wipro to buy additional 20% stake in Aggne Global in a $28.5 million deal",
+            "source": "LiveMint (Companies)"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "NDTV",
+            "direction": "BULLISH",
+            "title": "Share Bazaar LIVE | Top Stocks To Buy | NDTV Profit Ask Profit | Stock Market LIVE News",
+            "source": "NDTV Profit"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "POLICYBZR",
+            "direction": "BULLISH",
+            "title": "PB Fintech sees Rs 665 crore block deal as founders pare stake; Goldman among other top funds buy",
+            "source": "Economic Times (Markets)"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "RELIANCE",
+            "direction": "WATCH",
+            "title": "Moody's upgrades Reliance Industries rating to Baa1, now 2 notches above India's sovereign rating",
+            "source": "Economic Times (Markets)"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "HFCL",
+            "direction": "WATCH",
+            "title": "HFCL shares soar 17% in two days, rally 170% in 2026. Should you buy, sell or hold?",
+            "source": "Economic Times (Markets Alt)"
+          },
+          {
+            "classification": "broker_prediction_candidate",
+            "ticker": "MCX",
+            "direction": "BEARISH",
+            "title": "MCX Crashes After UBS Downgrade: What Triggered the Sharp Fall?",
+            "source": "Zee Business"
+          },
+          {
+            "classification": "stock_news_evidence",
+            "ticker": "NIFTY50",
+            "direction": "WATCH",
+            "title": "Nifty at 25,900 by March 2027? Nomura cites key catalysts to watch out for",
+            "source": "Economic Times (Markets)"
+          }
+        ],
+        "disclaimer": "External evidence is read-only and not trade execution.",
+        "adapter_summary": {
+          "ok": true,
+          "generated_at": "2026-06-02T07:50:48.859860+00:00",
+          "total_raw": 282,
+          "accepted": 71,
+          "rejected": 155,
+          "broker_prediction_candidate": 11,
+          "stock_news_evidence": 20,
+          "market_context": 20,
+          "macro_context": 20,
+          "direction_counts": {
+            "positive": 4,
+            "negative": 3,
+            "watch": 15,
+            "neutral": 49
+          },
+          "unique_tickers": 16,
+          "sources": [
+            "Agile Market Angler",
+            "Business Standard Markets",
+            "Business Today",
+            "CNBC-TV18",
+            "ET Now Swadesh",
+            "Economic Times (Markets Alt)",
+            "Economic Times (Markets)",
+            "Investing.com (Global Macro)",
+            "LiveMint (Companies)",
+            "Market Breakout Live",
+            "Moneycontrol",
+            "NDTV Profit",
+            "Option Trading Only",
+            "Shanky's Trading",
+            "TRADING FLOOR \u0c24\u0c46\u0c32\u0c41\u0c17\u0c41",
+            "Trade With Radheshyam",
+            "Trade with Ankur",
+            "Traderz Hut - SEBi Registered",
+            "Zee Business"
+          ],
+          "disclaimer": "External evidence is read-only and not trade execution."
+        },
+        "market_context_count": 20,
+        "macro_context_count": 20,
+        "top_stock_evidence": [
+          {
+            "ticker": "NIFTY50",
+            "direction": "WATCH",
+            "title": "Nifty at 25,900 by March 2027? Nomura cites key catalysts to watch out for",
+            "source": "Economic Times (Markets)"
+          },
+          {
+            "ticker": "OLAELEC",
+            "direction": "NEUTRAL",
+            "title": "Ola Electric slips as company launches QIP, sets floor price at Rs 37.74",
+            "source": "Business Standard Markets"
+          },
+          {
+            "ticker": "TCS",
+            "direction": "NEUTRAL",
+            "title": "Newgen Software Technologies Ltd leads gainers in 'A' group",
+            "source": "Business Standard Markets"
+          },
+          {
+            "ticker": "WIPRO",
+            "direction": "NEUTRAL",
+            "title": "Wipro Consumer Care Ventures eyes fund bets to widen startup reach in India and Southeast Asia",
+            "source": "LiveMint (Companies)"
+          },
+          {
+            "ticker": "OLAELEC",
+            "direction": "WATCH",
+            "title": "Ola Electric shares drop 4% as company launches QIP to raise funds",
+            "source": "Business Standard Markets"
+          },
+          {
+            "ticker": "NMDC",
+            "direction": "WATCH",
+            "title": "NMDC shares rise 5% after Q4; Brokerages bullish but flag rich valuations",
+            "source": "Business Standard Markets"
+          },
+          {
+            "ticker": "COFORGE",
+            "direction": "WATCH",
+            "title": "The Nvidia Effect? Why Infosys, TCS, Coforge And Other IT Stocks Are Surging",
+            "source": "NDTV Profit"
+          },
+          {
+            "ticker": "WOCKPHARMA",
+            "direction": "WATCH",
+            "title": "Wockhardt shares pause massive 36% rally in 5 sessions; slip 7%. What\u2019s behind the selloff?",
+            "source": "Economic Times (Markets)"
+          }
+        ],
+        "context_items": [
+          {
+            "classification": "macro_context",
+            "ticker": null,
+            "market": "GLOBAL",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "Economic Times (Markets)",
+            "title": "Global Markets: European stocks rise as STMicroelectronics' forecasts lift tech stocks",
+            "reason": "macro_headline",
+            "matched_keywords": [
+              "rise"
+            ],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          },
+          {
+            "classification": "macro_context",
+            "ticker": null,
+            "market": "GLOBAL",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "Economic Times (Markets)",
+            "title": "Global Markets: South Korean shares post record-high close as Nvidia hopes lift tech stocks",
+            "reason": "macro_headline",
+            "matched_keywords": [
+              "surged"
+            ],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          },
+          {
+            "classification": "market_context",
+            "ticker": null,
+            "market": "INDIA",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "Business Standard Markets",
+            "title": "Sensex drops 265 pts; media shares decline",
+            "reason": "index_or_market_headline",
+            "matched_keywords": [
+              "drops"
+            ],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          },
+          {
+            "classification": "macro_context",
+            "ticker": null,
+            "market": "GLOBAL",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "Economic Times (Markets)",
+            "title": "RBI may have sold gold to save foreign reserves, BE report shows",
+            "reason": "macro_headline",
+            "matched_keywords": [],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          },
+          {
+            "classification": "macro_context",
+            "ticker": null,
+            "market": "GLOBAL",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "Investing.com (Global Macro)",
+            "title": "Bitcoin slides to $70k on Strategy sale, Iran uncertainty",
+            "reason": "macro_headline",
+            "matched_keywords": [],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          },
+          {
+            "classification": "market_context",
+            "ticker": null,
+            "market": "INDIA",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "NDTV Profit",
+            "title": "Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expiry, Sensex Falls 200 Points; NHPC Declines 7%",
+            "reason": "index_or_market_headline",
+            "matched_keywords": [
+              "crash",
+              "falls"
+            ],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          },
+          {
+            "classification": "macro_context",
+            "ticker": null,
+            "market": "GLOBAL",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "Economic Times (Markets)",
+            "title": "Relentless Selloff: FIIs pull out 10 years' worth of India equity inflows",
+            "reason": "macro_headline",
+            "matched_keywords": [
+              "fallen"
+            ],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          },
+          {
+            "classification": "macro_context",
+            "ticker": null,
+            "market": "GLOBAL",
+            "direction": "NEUTRAL",
+            "direction_confidence": "context_only",
+            "evidence_strength": "medium",
+            "source": "Economic Times (Markets)",
+            "title": "Bitcoin hits 7-week low near $70K amid escalating US-Iran tensions, early $744 million liquidated in 24 hours",
+            "reason": "macro_headline",
+            "matched_keywords": [
+              "crashed"
+            ],
+            "matched_ticker": null,
+            "matched_alias": null,
+            "match_method": "context",
+            "match_confidence": "context_only"
+          }
+        ],
+        "direction_counts": {
+          "positive": 4,
+          "negative": 3,
+          "watch": 15,
+          "neutral": 49
+        }
+      },
+      "broker_write_review": {
+        "ok": true,
+        "generated_at": "2026-05-31T15:59:57+00:00",
+        "write_safe": 1,
+        "review_only": 0,
+        "rejected": 0,
+        "duplicates": 0,
+        "total_candidates": 1,
+        "disclaimer": "Only write-safe items can enter broker prediction memory."
+      },
+      "historical_learning": {
+        "ok": true,
+        "price_rows": 194302,
+        "replay_rows": 91,
+        "win_rate": 0.5161290322580645,
+        "warnings": [],
+        "simulation": {
+          "stats": {
+            "simulation_runs": 2,
+            "simulated_predictions": 22403,
+            "simulated_outcomes": 22403,
+            "strategy_performance_rows": 3,
+            "sim_wins": 9379,
+            "sim_losses": 11869,
+            "sim_ambiguous": 547,
+            "sim_resolved": 21795,
+            "sim_win_rate": 0.44140625,
+            "latest_run_id": "hsr:5ac91179850ed95a21a6e1d1"
+          },
+          "runs": [
+            {
+              "run_id": "hsr:5ac91179850ed95a21a6e1d1",
+              "strategy_set": "momentum_breakout_20,mean_reversion_rsi,bearish_breakdown_20",
+              "market": "INDIA",
+              "from_date": "2016-06-02",
+              "to_date": "2026-05-31",
+              "tickers": 85,
+              "generated_predictions": 22027,
+              "resolved_predictions": 22027,
+              "wins": 9243,
+              "losses": 11654,
+              "ambiguous": 545,
+              "created_at": "2026-05-31T13:11:26+00:00",
+              "params_json": "{\"strategies\": [\"momentum_breakout_20\", \"mean_reversion_rsi\", \"bearish_breakdown_20\"], \"tickers\": [\"ICICIBANK\", \"RELIANCE\", \"ADANIPOWER\", \"AEGISLOG\", \"APOLLOTYRE\", \"ARE&M\", \"ASTRAL\", \"AWL\", \"AXISBANK\", \"BAJAJFINSV\", \"BALAMINES\", \"BEML\", \"BERGEPAINT\", \"BHARTIARTL\", \"BPCL\", \"CENTURYPLY\", \"CHAMBLFERT\", \"COALINDIA\", \"COFORGE\", \"COLPAL\", \"DIXON\", \"DMART\", \"EICHERMOT\", \"EPL\", \"GLAND\", \"GNFC\", \"GOLDBEES\", \"GREENLAM\", \"HDFCBANK\", \"HFCL\", \"HTMEDIA\", \"IDEA\", \"IIFL\", \"INFY\", \"IOC\", \"ITC\", \"JKTYRE\", \"JWL\", \"KIRLOSBROS\", \"KIRLOSENG\", \"KOLTEPATIL\", \"KOTAKBANK\", \"LICI\", \"MARUTI\", \"MASTEK\", \"MHRIL\", \"MUTHOOTFIN\", \"NATCOPHARM\", \"NAZARA\", \"NCC\", \"NDTV\", \"NETWORK18\", \"NITINSPIN\", \"ONGC\", \"PFIZER\", \"PURVA\", \"RAYMOND\", \"RVNL\", \"SAIL\", \"SAREGAMA\", \"SBIN\", \"SFL\", \"SILVERBEES\", \"SUNTECK\", \"TATAPOWER\", \"TATASTEEL\", \"TCS\", \"TEXRAIL\", \"TIPSMUSIC\", \"TITAGARH\", \"TITAN\", \"TORNTPHARM\", \"TORNTPOWER\", \"TRITURBINE\", \"V2RETAIL\", \"VEDL\", \"VENKEYS\", \"WESTLIFE\", \"ZEEL\", \"GSPL\", \"IDEAFORGE\", \"LT\", \"NIFTY 50\", \"SENSEX\", \"STLTECH\"], \"limit_tickers\": null, \"max_signals_per_ticker_strategy\": 100, \"dry_run\": false, \"simulation\": true, \"params_hash\": \"5ac91179850ed95a21a6e1d1f9a6b9570c27660fcd65a2b3e10a5c1282c314e9\", \"anomaly_exclusion_mode\": \"exclude_from_simulation\", \"years\": 10}",
+              "params_hash": "5ac91179850ed95a21a6e1d1f9a6b9570c27660fcd65a2b3e10a5c1282c314e9"
+            },
+            {
+              "run_id": "hsr:16edd84d457b3d7b6a45676b",
+              "strategy_set": "momentum_breakout_20,mean_reversion_rsi,bearish_breakdown_20",
+              "market": "INDIA",
+              "from_date": "2025-05-31",
+              "to_date": "2026-05-31",
+              "tickers": 10,
+              "generated_predictions": 376,
+              "resolved_predictions": 376,
+              "wins": 136,
+              "losses": 215,
+              "ambiguous": 2,
+              "created_at": "2026-05-31T13:04:24+00:00",
+              "params_json": "{\"strategies\": [\"momentum_breakout_20\", \"mean_reversion_rsi\", \"bearish_breakdown_20\"], \"limit_tickers\": 10, \"max_signals_per_ticker_strategy\": 200, \"dry_run\": false, \"simulation\": true, \"params_hash\": \"16edd84d457b3d7b6a45676b3dcbc3c83e2cea928184e1d8232649627de5a37c\", \"anomaly_exclusion_mode\": \"exclude_from_simulation\", \"years\": 1}",
+              "params_hash": "e36b023cd9266446dd38028a7fc43101c9b89717698d7235e99cd2c2d95bb98b"
+            }
+          ],
+          "strategy_performance": [
+            {
+              "strategy": "mean_reversion_rsi",
+              "market": "INDIA",
+              "predictions": 8238,
+              "resolved": 8238,
+              "wins": 3750,
+              "losses": 4057,
+              "ambiguous": 196,
+              "win_rate": 0.48033815806327657,
+              "avg_gain_pct": 3.2030582475337206,
+              "avg_loss_pct": -2.733020879978435,
+              "expectancy_pct": 0.11830443424861592,
+              "max_drawdown_proxy": -33.54846519831994,
+              "sample_warning": null,
+              "updated_at": "2026-05-31T13:29:01+00:00"
+            },
+            {
+              "strategy": "bearish_breakdown_20",
+              "market": "INDIA",
+              "predictions": 8002,
+              "resolved": 8002,
+              "wins": 3065,
+              "losses": 4507,
+              "ambiguous": 220,
+              "win_rate": 0.40478077126254625,
+              "avg_gain_pct": 2.0447250044739524,
+              "avg_loss_pct": -4.492673684057655,
+              "expectancy_pct": -1.8464604008630725,
+              "max_drawdown_proxy": -9959.435238444272,
+              "sample_warning": null,
+              "updated_at": "2026-05-31T13:29:01+00:00"
+            },
+            {
+              "strategy": "momentum_breakout_20",
+              "market": "INDIA",
+              "predictions": 6163,
+              "resolved": 6163,
+              "wins": 2564,
+              "losses": 3305,
+              "ambiguous": 131,
+              "win_rate": 0.43687169875617654,
+              "avg_gain_pct": 3.986671052901407,
+              "avg_loss_pct": -2.790857778550312,
+              "expectancy_pct": 0.17005275541496445,
+              "max_drawdown_proxy": -25.0,
+              "sample_warning": null,
+              "updated_at": "2026-05-31T13:29:01+00:00"
+            }
+          ],
+          "disclaimer": "Simulated predictions are backtest samples, not live predictions."
+        }
+      },
+      "historical_simulation": {
+        "ok": true,
+        "simulation_runs": 2,
+        "simulated_predictions": 22403,
+        "simulated_outcomes": 22403,
+        "sim_win_rate": 0.44140625,
+        "strategy_count": 0
+      },
+      "confidence_calibration": {
+        "ok": true,
+        "live_resolved": 24,
+        "historical_resolved": 62,
+        "recommendations": 1,
+        "overconfident_buckets": 0,
+        "underconfident_buckets": 1,
+        "warnings": []
+      },
+      "risk_notes": [
+        "Shadow analysis only \u2014 not trade execution.",
+        "Source freshness not fully safe \u2014 treat scores cautiously.",
+        "Freshness: market closed.",
+        "Freshness: runtime snapshot stale.",
+        "Freshness: news feed stale.",
+        "Freshness: reddit only news.",
+        "Freshness: ai package stale.",
+        "Freshness: external evidence stale.",
+        "Freshness: refresh intelligence before next session.",
+        "Source freshness warning: ai package stale.",
+        "Source freshness warning: external evidence stale.",
+        "Historical sample size is low for some signals.",
+        "Market is closed \u2014 review only, not live entry.",
+        "News feed may be stale.",
+        "Runtime snapshot may be stale.",
+        "Some critical sources are stale.",
+        "Broker headline excluded from external score (broker DB handles it).",
+        "Calibration sample is weak for some score buckets.",
+        "Broker intelligence conflicts with memory.",
+        "Low sample warning: historical low sample.",
+        "Suspicious price scale detected for some tickers.",
+        "External market/macro context: 20 market + 20 macro headline(s) (risk notes only).",
+        "Most external headlines are context/news \u2014 not broker picks.",
+        "External market/macro context attached as risk notes only \u2014 not ticker BUY signals."
+      ],
+      "files": {
+        "final_confidence": "data/final_confidence_report.json",
+        "tomorrow_watchlist": "data/tomorrow_watchlist_report.json",
+        "calibration": "data/confidence_calibration_report.json"
+      },
+      "refresh_status": {
+        "final_confidence": "ok",
+        "tomorrow_watchlist": "ok",
+        "calibration": "ok"
+      },
+      "disclaimer": "Shadow analysis only \u2014 not trade execution."
+    },
+    "top_watch": [
+      {
+        "ticker": "SILVERBEES",
+        "decision": "WATCH",
+        "score": 46.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+        "line": "SILVERBEES \u2014 WATCH \u2014 46 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20"
+      },
+      {
+        "ticker": "RELIANCE",
+        "decision": "WATCH",
+        "score": 45.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+        "line": "RELIANCE \u2014 WATCH \u2014 45 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+      },
+      {
+        "ticker": "SUNTECK",
+        "decision": "WATCH",
+        "score": 45.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+        "line": "SUNTECK \u2014 WATCH \u2014 45 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+      },
+      {
+        "ticker": "TATASTEEL",
+        "decision": "WATCH",
+        "score": 45.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+        "line": "TATASTEEL \u2014 WATCH \u2014 45 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment"
+      },
+      {
+        "ticker": "AWL",
+        "decision": "WATCH",
+        "score": 44.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+        "line": "AWL \u2014 WATCH \u2014 44 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+      },
+      {
+        "ticker": "DMART",
+        "decision": "WATCH",
+        "score": 44.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+        "line": "DMART \u2014 WATCH \u2014 44 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+      },
+      {
+        "ticker": "RVNL",
+        "decision": "WATCH",
+        "score": 44.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+        "line": "RVNL \u2014 WATCH \u2014 44 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+      },
+      {
+        "ticker": "GOLDBEES",
+        "decision": "WATCH",
+        "score": 43.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+        "line": "GOLDBEES \u2014 WATCH \u2014 43 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20"
+      },
+      {
+        "ticker": "NCC",
+        "decision": "WATCH",
+        "score": 43.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+        "line": "NCC \u2014 WATCH \u2014 43 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+      },
+      {
+        "ticker": "RAYMOND",
+        "decision": "WATCH",
+        "score": 43.0,
+        "main_reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+        "line": "RAYMOND \u2014 WATCH \u2014 43 \u2014 A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN"
+      }
+    ],
+    "top_watch_label": "WATCH is not BUY. It means wait for confirmation.",
+    "actionable_candidates": {
+      "buy_candidate": [],
+      "watch_for_entry": [
+        {
+          "ticker": "SILVERBEES",
+          "score": 46.0,
+          "why": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+          "confirmation_needed": "Price/volume confirmation required before entry.",
+          "decision": "WATCH"
+        },
+        {
+          "ticker": "RELIANCE",
+          "score": 45.0,
+          "why": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+          "confirmation_needed": "Price/volume confirmation required before entry.",
+          "decision": "WATCH"
+        },
+        {
+          "ticker": "SUNTECK",
+          "score": 45.0,
+          "why": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+          "confirmation_needed": "Price/volume confirmation required before entry.",
+          "decision": "WATCH"
+        }
+      ],
+      "avoid": [],
+      "watch_entry_note": "Watch for entry only after price confirms strength. Not a blind buy."
+    },
+    "failed_strong_warnings": []
+  },
+  "warnings": []
+}

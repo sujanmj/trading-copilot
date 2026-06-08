@@ -44,8 +44,8 @@ def main() -> int:
                 return _fail('overview not ok')
             if not overview.get('top_themes'):
                 return _fail('overview missing top_themes')
-            if overview.get('stage') != '48A':
-                return _fail('overview stage not 48A')
+            if overview.get('stage') != '48C':
+                return _fail('overview stage not 48C')
 
             themes = bi.get_budget_themes()
             if not themes.get('categories') or themes.get('count', 0) < 30:

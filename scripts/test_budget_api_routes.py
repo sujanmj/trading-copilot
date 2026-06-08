@@ -37,8 +37,8 @@ def main() -> int:
         if route not in api_src:
             return _fail(f'missing route {route}')
 
-    if "'stage': '48A'" not in api_src:
-        return _fail('build-info stage not 48A')
+    if "'stage': '48C'" not in api_src:
+        return _fail('build-info stage not 48C')
 
     with tempfile.TemporaryDirectory() as tmp:
         baskets_path = Path(tmp) / 'theme_baskets.json'

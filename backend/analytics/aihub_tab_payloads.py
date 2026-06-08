@@ -54,6 +54,7 @@ STATS_FILE = DATA_DIR / 'stats_data.json'
 PACK_FILE = DATA_DIR / 'daily_report_pack_latest.json'
 CALIBRATION_FILE = DATA_DIR / 'confidence_calibration_report.json'
 FINAL_CONFIDENCE_FILE = DATA_DIR / 'final_confidence_report.json'
+AIHUB_TAB_CACHE_DIR = DATA_DIR / 'cache' / 'aihub_tabs'
 
 GOVT_EMPTY_MESSAGE = (
     'No fresh government/policy intelligence collected. '
@@ -83,6 +84,49 @@ MARKET_STALE_REFRESH_CMD = 'python scripts\\refresh_closed_market_intelligence.p
 CLOSED_MARKET_NOTE = 'Closed-market snapshot — review only, not live entry.'
 UNDERLYING_DATA_STALE_NOTE = 'Underlying market data is stale.'
 MARKET_FORCE_REFRESH_TIMEOUT_SEC = 5.0
+
+
+def _aihub_tab_cache_path(tab: str) -> Path:
+    return AIHUB_TAB_CACHE_DIR / f'{tab}.json'
+
+
+def load_aihub_tab_cache(tab: str) -> Optional[dict[str, Any]]:
+    path = _aihub_tab_cache_path(tab)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def save_aihub_tab_cache(tab: str, payload: dict[str, Any]) -> None:
+    if not isinstance(payload, dict):
+        return
+    try:
+        AIHUB_TAB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        path = _aihub_tab_cache_path(tab)
+        path.write_text(json.dumps(payload, indent=2, default=str) + '\n', encoding='utf-8')
+    except OSError:
+        pass
+
+
+def _aihub_tab_cache_placeholder(tab: str) -> dict[str, Any]:
+    key = _normalize_tab(tab)
+    return {
+        'ok': True,
+        'tab': key or str(tab),
+        'cache_missing': True,
+        'generated_at': _now_iso(),
+        'market_mode': 'RESEARCH_MODE',
+        'source': 'cache_missing',
+        'cache_age_seconds': 0,
+        'items': [],
+        'summary': {},
+        'warnings': ['cache_missing'],
+        'message': 'AI Hub cache unavailable. Tap Refresh.',
+    }
 
 
 def _is_closed_market_mode(mode: str) -> bool:
@@ -1409,7 +1453,12 @@ _TAB_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
 }
 
 
-def build_aihub_tab_payload(tab: str, *, force_refresh: bool = False) -> dict[str, Any]:
+def build_aihub_tab_payload(
+    tab: str,
+    *,
+    force_refresh: bool = False,
+    cache_only: bool = False,
+) -> dict[str, Any]:
     """Build aggregated AI Hub tab payload (partial OK on source failures)."""
     key = _normalize_tab(tab)
     if key not in VALID_TABS:
@@ -1425,6 +1474,15 @@ def build_aihub_tab_payload(tab: str, *, force_refresh: bool = False) -> dict[st
             'warnings': ['invalid_tab'],
             'error': 'invalid_tab',
         }
+
+    if cache_only and not force_refresh:
+        cached = load_aihub_tab_cache(key)
+        if cached:
+            cached.setdefault('ok', True)
+            cached['source'] = cached.get('source') or 'disk_cache'
+            cached.setdefault('tab', key)
+            return cached
+        return _aihub_tab_cache_placeholder(key)
 
     builder = _TAB_BUILDERS[key]
     try:
@@ -1459,4 +1517,6 @@ def build_aihub_tab_payload(tab: str, *, force_refresh: bool = False) -> dict[st
             'error': 'tab_build_failed',
         }
     payload.setdefault('ok', True)
+    payload.setdefault('tab', key)
+    save_aihub_tab_cache(key, payload)
     return payload

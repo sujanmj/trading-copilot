@@ -21,7 +21,7 @@ def _fail(msg: str) -> int:
 def main() -> int:
     src = (PROJECT_ROOT / 'backend/telegram/response_format.py').read_text(encoding='utf-8')
     for needle in (
-        'AstraEdge 48A',
+        'AstraEdge 48C',
         '_parse_status_timestamp',
         'age ',
         "freshness = 'fresh'",

@@ -33,7 +33,7 @@ def main() -> int:
         'Confirm on next trading session after 9:15',
         'Use /refresh full for fresh closed-market research.',
         'Cache is stale — run /refresh full for updated research.',
-        "'stage': '48A'",
+        "'stage': '48C'",
     ):
         if needle not in pc_src:
             return _fail(f'premarket_conviction missing {needle}')

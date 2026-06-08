@@ -1,0 +1,479 @@
+{
+  "ok": true,
+  "tab": "tv",
+  "generated_at": "2026-06-08T09:34:52+00:00",
+  "market_mode": "RESEARCH_MODE",
+  "source": "report_cache",
+  "cache_age_seconds": 0,
+  "items": [
+    {
+      "title": "Buy Now Sell Now | Share &amp; Stock Market Tips | Viewer Stock Queries Answered | ET Now",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "BEARISH",
+      "published_at": null,
+      "url": "https://www.youtube.com/watch?v=Oi_bZI8ZWj0",
+      "source": "ET NOW"
+    },
+    {
+      "title": "Stock Market Updates Live | Share Market LIVE  | 2 June 2026  | ET Now Swadesh | Business News Live",
+      "classification": "market_context",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": null,
+      "url": "https://www.youtube.com/watch?v=4MNoFeT9uFU",
+      "source": "ET Now Swadesh"
+    },
+    {
+      "title": "Indices Open Lower | Mean Reversion Trade Playing Out In Nifty IT Index: Laurence Balanco, CLSA",
+      "classification": "stock_news",
+      "ticker": "NIFTY50",
+      "direction": "NEUTRAL",
+      "published_at": null,
+      "url": "https://www.youtube.com/watch?v=gx5X1tg3Re4",
+      "source": "CNBC-TV18"
+    },
+    {
+      "title": "UAE Real Estate Crisis: Abu Dhabi Announces Rent Freeze For All Commercial, Residential Tenants",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T09:38:42+00:00",
+      "url": "https://www.ndtvprofit.com/business/uae-real-estate-crisis-abu-dhabi-announces-rent-freeze-for-all-commercial-residential-tenants-11579938#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Why BofA Is Betting On India's Affluent Consumer Despite Inflation Concerns",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T09:33:29+00:00",
+      "url": "https://www.ndtvprofit.com/markets/consumption-boom-not-yet-why-bofa-is-betting-on-indias-affluent-consumer-despite-inflation-concerns-11579912#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "SIP Calculator: Rs 1 Crore Goal? Here's The Monthly Investment Needed For 5, 10, 20-Year Timelines",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T09:23:59+00:00",
+      "url": "https://www.ndtvprofit.com/personal-finance/sip-calculator-rs-1-crore-goal-heres-the-monthly-investment-needed-for-5-10-and-20-year-timelines-11579013#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Who Is Ritabrata Banerjee? Expelled MLA In Focus Amid TMC Turmoil, Forged-Signature Row",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T09:06:56+00:00",
+      "url": "https://www.ndtvprofit.com/india/politics-who-is-ritabrata-banerjee-expelled-mla-in-focus-amid-tmc-turmoil-forged-signature-row-11579544#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Obsession Box Office: Curry Barker's Horror Thriller Crosses New Milestones In India, Overseas \u2014 Check Earnings",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:56:53+00:00",
+      "url": "https://www.ndtvprofit.com/business/entertainment-cinema-hollywood-movie-obsession-box-office-collection-curry-barker-horror-film-india-overseas-check-earnings-11579697#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Necessity Is The Mother Of Invention: China Knows It Better | The Reason Why",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:51:24+00:00",
+      "url": "https://www.ndtvprofit.com/technology/necessity-is-the-mother-of-invention-china-knows-it-better-the-reason-why-11579617#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "FIFA World Cup: 'Better Than Shakira' \u2014 IShowSpeed's Champions Song Wins Over Internet",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:49:38+00:00",
+      "url": "https://www.ndtvprofit.com/sports/football-music-fifa-world-cup-2026-ishowspeed-champions-song-wins-over-internet-11579480#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "FMCG Sell-Off On Weak Monsoon Fears May Be Overdone, Says Nuvama's Abneesh Roy",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:46:08+00:00",
+      "url": "https://www.ndtvprofit.com/markets/fmcg-sell-off-on-weak-monsoon-fears-may-be-overdone-says-nuvamas-abneesh-roy-11579703#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Nifty Above 23,500, Sensex Up 1,000 Points From Day's Low \u2014 Three Key Reasons Why Market Is Rising",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:44:44+00:00",
+      "url": "https://www.ndtvprofit.com/markets/nifty-above-23-500-sensex-up-1-000-points-from-days-low-three-key-reasons-why-market-is-rising-11579700#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "The Nvidia Effect? Why Infosys, TCS, Coforge And Other IT Stocks Are Surging",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:43:45+00:00",
+      "url": "https://www.ndtvprofit.com/markets/heres-why-infosys-tcs-coforge-other-it-stocks-are-rallying-11579000#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Mumbai: Unauthorised Dargah Demolition Underway At Aarey Colony Under Heavy Police Protection | Watch Video",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:32:15+00:00",
+      "url": "https://www.ndtvprofit.com/india/mumbai-unauthorised-dargah-demolition-video-underway-at-aarey-colony-under-heavy-police-protection-11579637#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Vaibhav Sooryavanshi Doubles Endorsement Fee After Record-Breaking IPL 2026 Season",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:27:55+00:00",
+      "url": "https://www.ndtvprofit.com/business/cricket-vaibhav-sooryavanshi-doubles-endorsement-fee-after-record-breaking-ipl-2026-season-11579416#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Titagarh Rail Shares Rally After Nuvama Sees 30% Upside \u2014 Check Target Price, Outlook",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:23:05+00:00",
+      "url": "https://www.ndtvprofit.com/markets/titagarh-rail-shares-rally-after-nuvama-sees-30-percent-upside-check-target-price-outlook-11579589#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Claude Down: Users Say AI Chatbot, App, Website Inaccessible. Here's What Anthropic Says",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:21:19+00:00",
+      "url": "https://www.ndtvprofit.com/technology/claude-down-users-say-ai-chatbot-app-website-inaccessible-heres-what-anthropic-says-11579469#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Trouble In TMC? 'Asli Trinamool' Buzz Grows As 50 MLAs Reportedly In Touch With Two Expelled Lawmakers",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:19:36+00:00",
+      "url": "https://www.ndtvprofit.com/india/trouble-in-tmc-asli-trinamool-buzz-grows-as-50-mlas-reportedly-in-touch-with-two-expelled-lawmakers-11579313#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Amazon Introduces New Music Unlimited Tier In India; Free Version Coming Soon \u2014 Check Plans, Features",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:11:40+00:00",
+      "url": "https://www.ndtvprofit.com/business/entertainment-amazon-introduces-new-music-unlimited-tier-in-india-free-songs-version-coming-soon-check-plans-features-11579404#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Computex 2026 Highlights: Nvidia RTX Spark, Microsoft Surface Laptop Ultra, Dell XPS 13, Asus ROG Edition 20 Line, More",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:11:31+00:00",
+      "url": "https://www.ndtvprofit.com/technology/computex-2026-highlights-nvidia-rtx-spark-microsoft-surface-laptop-ultra-dell-xps-13-asus-rog-edition-20-line-more-11579541#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Stock Market News Today Live Updates: Nifty Rebounds To Reclaim 23,500, Sensex Surges 900 Points From Day's Low; Newgen Software Surges 15%",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:05:19+00:00",
+      "url": "https://www.ndtvprofit.com/markets/stock-market-crash-news-today-live-updates-share-market-sensex-nifty-gift-nifty-iran-war-us-attack-oil-market-impact-fno-expiry-futures-options-11578229#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Company Faces Rs 2 Crore Loss, Employees Asked To Take 20-30% Pay Cut; Reddit Post Triggers Debate",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:01:42+00:00",
+      "url": "https://www.ndtvprofit.com/trending/company-faces-rs-2-crore-loss-employees-asked-to-take-20-30-pay-cut-reddit-post-triggers-debate-11579076#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "ITR Filing 2026: Home Loan Tax Benefits Explained Under Old And New Tax Regimes",
+      "classification": "headline",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T08:01:07+00:00",
+      "url": "https://www.ndtvprofit.com/personal-finance/itr-filing-2026-home-loan-tax-benefits-explained-under-old-and-new-tax-regimes-11578926#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Monsoon To Arrive In Kerala In Two Days: IMD",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T06:38:17+00:00",
+      "url": "https://www.ndtvprofit.com/india/monsoon-to-arrive-in-kerala-in-two-days-imd-11579157#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expiry, Sensex Falls 200 Points; NHPC Declines 7%",
+      "classification": "market_context",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T06:34:02+00:00",
+      "url": "https://www.ndtvprofit.com/markets/stock-market-crash-news-today-live-updates-share-market-sensex-nifty-gift-nifty-iran-war-us-attack-oil-market-impact-fno-expiry-futures-options-11578229#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "May Auto Sales: EV Penetration Hits New Highs As Fuel Price Shock Sparks Rush",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T06:27:56+00:00",
+      "url": "https://www.ndtvprofit.com/business/may-auto-sales-fuel-price-shock-sparks-ev-rush-penetration-hits-new-highs-11579140#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Massive Russian Strikes Hit Ukraine's Kyiv, Several Killed And Dozens Injured",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T06:17:49+00:00",
+      "url": "https://www.ndtvprofit.com/world/massive-russian-strikes-hit-ukraine-s-kyiv-several-killed-amp-dozens-injured-11578938#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Sankashti Chaturthi 2026: Vibhuvana Sankashti On June 3 or 4? Date, Muhurat Timing, Fast Rituals And More",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T06:15:49+00:00",
+      "url": "https://www.ndtvprofit.com/trending/sankashti-chaturthi-2026-vibhuvana-sankashti-on-june-3-or-4-date-muhurat-timing-fast-rituals-and-more-11579026#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Buy, Sell Or Hold: Tata Tech, Physicswallah, Force Motors, MRPL, Cummins, Coforge, And More  \u2014 Ask Profit",
+      "classification": "broker_candidates",
+      "ticker": "COFORGE",
+      "direction": "WATCH",
+      "published_at": "2026-06-02T06:13:42+00:00",
+      "url": "https://www.ndtvprofit.com/markets/buy-sell-or-hold-tata-technologies-physicswallah-force-motors-mrpl-cummins-coforge-ask-profit-11578768#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Lalit Modi Defends Sushmita Sen Against 'Gold Digger' Tag: 'I Was The Diamond Digger'",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T06:04:21+00:00",
+      "url": "https://www.ndtvprofit.com/trending/lalit-modi-defends-sushmita-sen-against-gold-digger-tag-i-was-the-diamond-digger-11578705#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "'All Systems Glow': Apple Gives New Tagline To WWDC 2026 \u2014 Check Keynote Timings, How To Watch, Expectations",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T06:03:58+00:00",
+      "url": "https://www.ndtvprofit.com/technology/all-systems-glow-apple-gives-new-tagline-to-wwdc-2026-check-keynote-timings-how-to-watch-expectations-11579058#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Gujarat Gas: Target Price Hiked Post Q4; Limited Upside Ahead Says ICICI Securities \u2014 Here's Why",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "WATCH",
+      "published_at": "2026-06-02T05:53:27+00:00",
+      "url": "https://www.ndtvprofit.com/markets/gujarat-gas-target-price-hiked-post-q4-but-limited-upside-ahead-says-icici-securities-heres-why-11579005#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Coffee Day Shares Rally For Third Straight Day \u2014 Check Two Key Triggers",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "WATCH",
+      "published_at": "2026-06-02T05:51:24+00:00",
+      "url": "https://www.ndtvprofit.com/markets/why-are-coffee-day-shares-rallying-for-third-straight-day-11578810#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Video: Iran's IRGC Strikes Giant Cargo Ship In Retaliation To Attack On Iranian Vessel",
+      "classification": "macro_context",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T05:46:42+00:00",
+      "url": "https://www.ndtvprofit.com/world/video-iran-s-irgc-strikes-giant-cargo-ship-in-retaliation-to-attack-on-iranian-vessel-11578770#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "ED Searches Vedanta-Linked Premises In Delhi, Mumbai Over FEMA Probe",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "WATCH",
+      "published_at": "2026-06-02T05:39:49+00:00",
+      "url": "https://www.ndtvprofit.com/business/ed-searches-vedanta-linked-premises-in-delhi-mumbai-over-fema-probe-11578934#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "KCET 2026 Results To Be Out Soon At cetonline.karnataka.gov.in; Check Direct link To Download",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T05:39:29+00:00",
+      "url": "https://www.ndtvprofit.com/india/kcet-2026-result-to-be-out-soon-at-cetonline-karnataka-gov-in-check-direct-link-to-download-11578712#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "RBI Likely To Hold Rates, Raise Inflation Forecast: HSBC's Pranjul Bhandari",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "WATCH",
+      "published_at": "2026-06-02T05:30:59+00:00",
+      "url": "https://www.ndtvprofit.com/economy/rbi-monetary-policy-pranjul-bhandari-expects-mpc-to-hold-rates-raise-inflation-forecast-11578929#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "IndiGo Shares in Focus: Strong Demand, Rising Yields Drives ICICI Securities Bullish View \u2014 Check Target Price",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "WATCH",
+      "published_at": "2026-06-02T05:18:19+00:00",
+      "url": "https://www.ndtvprofit.com/markets/indigo-shares-in-focus-strong-demand-rising-yields-drives-icici-securities-bullish-view-check-target-price-11578754#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Top 15 Stocks To Buy This June: Eternal, Bajaj Finance, Nestle, LG Electronics Among Axis Securities Bet \u2014 Full List Inside",
+      "classification": "broker_candidates",
+      "ticker": "BAJFINANCE",
+      "direction": "BULLISH",
+      "published_at": "2026-06-02T04:49:26+00:00",
+      "url": "https://www.ndtvprofit.com/markets/top-15-stocks-to-buy-this-june-eternal-bajaj-finance-nestle-lg-electronics-icici-bank-kotak-mahindra-minda-corp-among-axis-securities-bet-full-list-in-11578700#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Shankar Sharma Flags India's Impossible Choice: Rupee Or The Stock Market",
+      "classification": "macro_context",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T04:46:05+00:00",
+      "url": "https://www.ndtvprofit.com/markets/rupee-vs-stock-market-shankar-sharma-flags-indias-impossible-choice-11578701#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "IndiGo, SpiceJet Shares Under Pressure As Russia Halts Jet Fuel Exports",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T04:42:46+00:00",
+      "url": "https://www.ndtvprofit.com/markets/indigo-spicejet-shares-under-pressure-as-russia-halts-jet-fuel-exports-11578642#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "IShowSpeed's FIFA World Cup 2026 Song 'Champions' Goes Viral, Gets 3 Million Views In 13 Hours On YouTube",
+      "classification": "reject",
+      "ticker": null,
+      "direction": "NEUTRAL",
+      "published_at": "2026-06-02T04:41:51+00:00",
+      "url": "https://www.ndtvprofit.com/trending/ishowspeeds-champions-song-viral-ahead-of-fifa-world-cup-2026-gets-3-million-views-in-13-hours-on-youtube-11578610#publisher=newsstand",
+      "source": "NDTV Profit"
+    },
+    {
+      "title": "Share Bazaar LIVE | Top Stocks To Buy | NDTV Profit Ask Profit | Stock Market LIVE News",
+      "classification": "broker_candidates",
+      "ticker": "NDTV",
+      "direction": "BULLISH",
+      "published_at": null,
+      "url": "https://www.youtube.com/watch?v=HnFgtsADDJA",
+      "source": "NDTV Profit"
+    }
+  ],
+  "summary": {
+    "external_coverage": {
+      "ok": true,
+      "cache_exists": true,
+      "as_of": "2026-06-02T07:50:48.912919+00:00",
+      "collected_items": 11,
+      "normalized_items": 11,
+      "rejected_items": 4,
+      "source_count": 6,
+      "sources": [
+        "Business Standard Markets",
+        "Economic Times (Markets Alt)",
+        "Economic Times (Markets)",
+        "LiveMint (Companies)",
+        "NDTV Profit",
+        "Zee Business"
+      ],
+      "latest_sources": [
+        "Business Standard Markets",
+        "Economic Times (Markets Alt)",
+        "Economic Times (Markets)",
+        "LiveMint (Companies)",
+        "NDTV Profit",
+        "Zee Business"
+      ],
+      "unique_tickers": 10,
+      "tickers": [
+        "BAJFINANCE",
+        "COFORGE",
+        "HFCL",
+        "MCX",
+        "NDTV",
+        "NIFTY50",
+        "POLICYBZR",
+        "RELIANCE",
+        "TCS",
+        "WIPRO"
+      ],
+      "broker_db_pick_count": 2,
+      "source_counts": {
+        "NDTV Profit": 3,
+        "Economic Times (Markets)": 4,
+        "Business Standard Markets": 1,
+        "LiveMint (Companies)": 1,
+        "Economic Times (Markets Alt)": 1,
+        "Zee Business": 1
+      },
+      "direction_counts": {
+        "bullish": 4,
+        "bearish": 3,
+        "watch": 4,
+        "neutral": 0
+      },
+      "fake_predictions": 0,
+      "channels_used": [
+        "news",
+        "tv",
+        "manual"
+      ],
+      "external_evidence": {
+        "accepted": 127,
+        "broker_prediction_candidate": 21,
+        "stock_news_evidence": 40,
+        "market_context": 24,
+        "macro_context": 42,
+        "rejected": 155,
+        "unique_tickers": 16
+      },
+      "warnings": [],
+      "disclaimer": "External evidence is separated from our final prediction.",
+      "broker_write_review": {
+        "ok": true,
+        "generated_at": "2026-05-31T15:59:57+00:00",
+        "write_safe": 1,
+        "review_only": 0,
+        "rejected": 0,
+        "duplicates": 0,
+        "disclaimer": "Only write-safe items can enter broker prediction memory."
+      }
+    }
+  },
+  "warnings": []
+}

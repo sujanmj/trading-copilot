@@ -1,12 +1,20 @@
 /**
- * Budget Impact Intelligence workspace (Stage 48A).
+ * Budget Impact Intelligence workspace (Stage 48A/48B).
  * Theme Wishlist engine — research-only watch/confirm stances.
  */
 (function (global) {
   'use strict';
 
   const NON_JSON_ERROR = 'Budget API returned non-JSON. Check API route/base.';
-  const FETCH_MS = 20000;
+  const CACHE_FETCH_MS = 8000;
+  const FETCH_MS = CACHE_FETCH_MS;
+  const REFRESH_MS = 90000;
+  const CACHE_MISSING_MSG = 'Budget cache unavailable. Tap Refresh Budget Intel.';
+  const CACHE_TIMEOUT_MSG = 'Budget cache request timed out. Tap Refresh Budget Intel.';
+  const REFRESH_TIMEOUT_MSG = 'Budget refresh may still be running. Try again in a minute.';
+  const OVERVIEW_LITE_PATH = '/api/budget/overview?cache_only=1&lite=1';
+  const THEMES_LITE_PATH = '/api/budget/themes?lite=1';
+  const abortMeta = new WeakMap();
 
   let config = {
     getApiBase: () => '',
@@ -22,6 +30,57 @@
     themeScan: null,
     analyzeResult: null,
   };
+
+  let loadGeneration = 0;
+  let activeController = null;
+
+  function createAbortController(reason) {
+    const controller = new AbortController();
+    abortMeta.set(controller, { reason: reason || 'unknown' });
+    return controller;
+  }
+
+  function abortActiveRequest(reason) {
+    if (activeController) {
+      abortMeta.set(activeController, { reason: reason || 'superseded' });
+      activeController.abort();
+      activeController = null;
+    }
+  }
+
+  function isStaleAbort(err, controller) {
+    if (!err || err.name !== 'AbortError') return false;
+    const meta = abortMeta.get(controller) || {};
+    return meta.reason === 'superseded' || meta.reason === 'cleanup' || meta.reason === 'strict_mode';
+  }
+
+  function budgetFetchErrorMessage(err, controller, context) {
+    if (isStaleAbort(err, controller)) return null;
+    if (err && err.name === 'AbortError') {
+      if (context === 'refresh') return REFRESH_TIMEOUT_MSG;
+      return CACHE_TIMEOUT_MSG;
+    }
+    const msg = err && err.message ? String(err.message) : String(err || '');
+    if (/signal is aborted/i.test(msg)) {
+      return context === 'refresh' ? REFRESH_TIMEOUT_MSG : CACHE_TIMEOUT_MSG;
+    }
+    if (/timed out|timeout|cancelled/i.test(msg)) {
+      return context === 'refresh' ? REFRESH_TIMEOUT_MSG : CACHE_TIMEOUT_MSG;
+    }
+    return msg || CACHE_TIMEOUT_MSG;
+  }
+
+  function renderBudgetShell(message, showRefresh) {
+    const refreshBtn = showRefresh
+      ? '<button type="button" class="refresh-btn bud-refresh-btn" id="budgetRefreshBtn">↻ Refresh Budget Intel</button>'
+      : '';
+    return `<div class="bud-dashboard">
+      <div class="bud-header-row"><h2 class="bud-title">🏛️ Budget Impact Intelligence</h2></div>
+      <p class="bud-disclaimer">Research only — watch/confirm. No blind entry.</p>
+      <div class="panel-error-card"><p>${escapeHtml(message || CACHE_MISSING_MSG)}</p></div>
+      ${refreshBtn}
+    </div>`;
+  }
 
   function escapeHtml(text) {
     if (text == null) return '';
@@ -49,15 +108,32 @@
   async function fetchBudgetJson(path, options, signal) {
     const base = (config.getApiBase() || '').replace(/\/$/, '');
     const url = `${base}${path}${path.indexOf('?') >= 0 ? '&' : '?'}_ts=${Date.now()}`;
-    const res = await fetch(url, {
-      method: (options && options.method) || 'GET',
-      headers: Object.assign({ 'Content-Type': 'application/json' }, config.getHeaders(), (options && options.headers) || {}),
-      body: options && options.body ? JSON.stringify(options.body) : undefined,
-      cache: 'no-store',
-      signal,
-    });
+    let res;
+    try {
+      res = await fetch(url, {
+        method: (options && options.method) || 'GET',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, config.getHeaders(), (options && options.headers) || {}),
+        body: options && options.body ? JSON.stringify(options.body) : undefined,
+        cache: 'no-store',
+        signal,
+      });
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      throw err;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status} ${path}`);
     return parseJsonResponse(res, path);
+  }
+
+  async function fetchBudgetJsonWithRetry(path, options, controller) {
+    const signal = controller.signal;
+    try {
+      return await fetchBudgetJson(path, options, signal);
+    } catch (err) {
+      if (isStaleAbort(err, controller)) throw err;
+      if (err && err.name === 'AbortError') throw err;
+      return fetchBudgetJson(path, options, signal);
+    }
   }
 
   function freshnessBadge(status) {
@@ -168,6 +244,13 @@
 
   function renderDashboard() {
     const overview = state.overview || {};
+    if (overview.cache_missing) {
+      return `<div class="bud-dashboard">
+        <div class="bud-header-row"><h2 class="bud-title">🏛️ Budget Impact Intelligence</h2></div>
+        <div class="panel-error-card"><p>${escapeHtml(overview.message || CACHE_MISSING_MSG)}</p></div>
+        <button type="button" class="refresh-btn bud-refresh-btn" id="budgetRefreshBtn">↻ Refresh Budget Intel</button>
+      </div>`;
+    }
     const freshness = overview.freshness || {};
     const categories = (state.themes && state.themes.categories) || {};
     const news = (state.themeNews && state.themeNews.catalysts) || overview.top_catalysts || [];
@@ -215,11 +298,16 @@
 
   async function loadThemeDetail(themeId, host) {
     state.selectedThemeId = themeId;
+    const controller = createAbortController('theme_detail');
+    const timer = setTimeout(() => {
+      abortMeta.set(controller, { reason: 'timeout' });
+      controller.abort();
+    }, FETCH_MS);
     try {
       const [detail, news, scan] = await Promise.all([
-        fetchBudgetJson(`/api/budget/theme/${encodeURIComponent(themeId)}`),
-        fetchBudgetJson(`/api/budget/news/${encodeURIComponent(themeId)}`),
-        fetchBudgetJson(`/api/budget/scan/${encodeURIComponent(themeId)}`),
+        fetchBudgetJson(`/api/budget/theme/${encodeURIComponent(themeId)}`, null, controller.signal),
+        fetchBudgetJson(`/api/budget/news/${encodeURIComponent(themeId)}`, null, controller.signal),
+        fetchBudgetJson(`/api/budget/scan/${encodeURIComponent(themeId)}`, null, controller.signal),
       ]);
       state.themeDetail = detail;
       state.themeNews = news;
@@ -227,17 +315,50 @@
       host.innerHTML = renderDashboard();
       wireEvents(host);
     } catch (err) {
-      host.innerHTML = `<div class="panel-error-card"><strong>Budget theme</strong><p>${escapeHtml(err.message || String(err))}</p></div>`;
+      const msg = budgetFetchErrorMessage(err, controller, 'theme');
+      if (msg) {
+        host.innerHTML = `<div class="panel-error-card"><strong>Budget theme</strong><p>${escapeHtml(msg)}</p></div>`;
+      }
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   async function refreshBudget(host) {
+    host.innerHTML = '<div class="loading">⏳ Refreshing Budget Impact Intelligence…</div>';
+    const controller = createAbortController('refresh');
+    const timer = setTimeout(() => {
+      abortMeta.set(controller, { reason: 'timeout' });
+      controller.abort();
+    }, REFRESH_MS);
     try {
-      state.overview = await fetchBudgetJson('/api/budget/refresh', { method: 'POST' });
+      await fetchBudgetJson('/api/budget/refresh', { method: 'POST' }, controller.signal);
+      const [overview, themes] = await Promise.all([
+        fetchBudgetJsonWithRetry(OVERVIEW_LITE_PATH, null, controller),
+        fetchBudgetJsonWithRetry(THEMES_LITE_PATH, null, controller),
+      ]);
+      state.overview = overview;
+      state.themes = themes;
+      if (state.selectedThemeId) {
+        const [detail, news, scan] = await Promise.all([
+          fetchBudgetJson(`/api/budget/theme/${encodeURIComponent(state.selectedThemeId)}`, null, controller.signal),
+          fetchBudgetJson(`/api/budget/news/${encodeURIComponent(state.selectedThemeId)}`, null, controller.signal),
+          fetchBudgetJson(`/api/budget/scan/${encodeURIComponent(state.selectedThemeId)}`, null, controller.signal),
+        ]);
+        state.themeDetail = detail;
+        state.themeNews = news;
+        state.themeScan = scan;
+      }
       host.innerHTML = renderDashboard();
       wireEvents(host);
     } catch (err) {
-      host.innerHTML = `<div class="panel-error-card"><strong>Budget refresh</strong><p>${escapeHtml(err.message || String(err))}</p></div>`;
+      const msg = budgetFetchErrorMessage(err, controller, 'refresh');
+      if (msg) {
+        host.innerHTML = renderBudgetShell(msg, true);
+        wireEvents(host);
+      }
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -255,7 +376,9 @@
       const ta = host.querySelector('#budgetSimInput');
       if (ta) ta.value = text;
     } catch (err) {
-      state.analyzeResult = { political_neutral: false, summary: err.message || String(err) };
+      const msg = budgetFetchErrorMessage(err, null);
+      if (!msg) return;
+      state.analyzeResult = { political_neutral: false, summary: msg };
       host.innerHTML = renderDashboard();
       wireEvents(host);
     }
@@ -264,22 +387,40 @@
   async function loadMain(targetEl) {
     const host = targetEl || document.getElementById('budgetMainContent');
     if (!host) return;
+
+    loadGeneration += 1;
+    const myGen = loadGeneration;
+    abortActiveRequest('superseded');
+
     host.innerHTML = '<div class="loading">⏳ Loading Budget Impact Intelligence…</div>';
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_MS);
+
+    const controller = createAbortController('load');
+    activeController = controller;
+    const timer = setTimeout(() => {
+      abortMeta.set(controller, { reason: 'timeout' });
+      controller.abort();
+    }, FETCH_MS);
+
     try {
       const [overview, themes] = await Promise.all([
-        fetchBudgetJson('/api/budget/overview', null, controller.signal),
-        fetchBudgetJson('/api/budget/themes', null, controller.signal),
+        fetchBudgetJsonWithRetry(OVERVIEW_LITE_PATH, null, controller),
+        fetchBudgetJsonWithRetry(THEMES_LITE_PATH, null, controller),
       ]);
+      if (myGen !== loadGeneration) return;
       state.overview = overview;
       state.themes = themes;
       host.innerHTML = renderDashboard();
       wireEvents(host);
     } catch (err) {
-      host.innerHTML = `<div class="panel-error-card"><strong>Budget Impact Intelligence</strong><p>${escapeHtml(err.message || String(err))}</p></div>`;
+      if (myGen !== loadGeneration) return;
+      const msg = budgetFetchErrorMessage(err, controller, 'load');
+      state.overview = { cache_missing: true, message: msg || CACHE_MISSING_MSG };
+      state.themes = state.themes || { categories: {} };
+      host.innerHTML = msg ? renderBudgetShell(msg, true) : renderDashboard();
+      wireEvents(host);
     } finally {
       clearTimeout(timer);
+      if (activeController === controller) activeController = null;
     }
   }
 

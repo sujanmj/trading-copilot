@@ -16,7 +16,7 @@
     .header-grid {
       display: grid;
       grid-template-columns: 240px 1fr;
-      grid-template-rows: auto auto;
+      grid-template-rows: auto;
       column-gap: 14px;
       row-gap: 4px;
       align-items: center;
@@ -26,7 +26,7 @@
     }
     .brand-block {
       grid-column: 1;
-      grid-row: 1 / span 2;
+      grid-row: 1;
       display: flex;
       align-items: center;
       justify-content: flex-start;
@@ -63,16 +63,17 @@
       display: flex;
       align-items: center;
       gap: 5px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       min-width: 0;
     }
-    .header-status-line {
-      grid-column: 2;
-      grid-row: 2;
+    .header-status-inline {
       display: flex;
       align-items: center;
-      justify-content: flex-start;
       gap: 6px;
+      flex-shrink: 0;
+    }
+    .header-status-line {
+      display: none;
     }
     .header-group {
       display: flex;
@@ -152,6 +153,11 @@
       background: rgba(20, 28, 40, 0.9);
       border: 1px solid rgba(100, 180, 255, 0.25);
       color: #7eb8ff;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      min-height: unset;
+      letter-spacing: 0.06em;
     }
     .primary-nav-btn.router-nav-btn:hover { border-color: rgba(100, 180, 255, 0.55); color: #a8d4ff; background: rgba(88, 166, 255, 0.2); }
     .primary-nav-btn.router-nav-btn.active { background: rgba(88, 166, 255, 0.2); color: #a8d4ff; border-color: rgba(100, 180, 255, 0.55); font-weight: bold; }
@@ -357,10 +363,10 @@
     .mr-compact-loading { color: #666; font-style: italic; }
     .router-nav-btn {
       position: relative;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      padding: 4px 10px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.2s;
@@ -1407,6 +1413,20 @@
         <span class="brand-fallback">AstraEdge AI</span>
       </div>
       <div class="header-main-line">
+        <div class="header-group header-nav-group">
+          <span class="live-badge">🔴 LIVE</span>
+          <button type="button" class="primary-nav-btn router-nav-btn" id="routerNavBtn" title="Market Router session routing">🌍 Router</button>
+          <span class="gui-mode-badge web web-local-badge" id="guiModeBadge" title="Local GUI runtime mode">WEB LOCAL</span>
+          <span class="gui-mode-badge api-target-badge local" id="apiTargetBadge" title="API base">API: LOCAL</span>
+          <button type="button" class="ai-ops-btn" id="aiOpsBtn" title="AI Ops / Logs">OPS</button>
+          <span class="api-status" id="apiStatus">⏳</span>
+          <button type="button" class="ai-review-btn review-btn" id="reviewBtn" title="Daily Intelligence Review">REVIEW</button>
+          <span class="btn-group-label">AI:</span>
+          <button type="button" class="primary-nav-btn" id="memoryNavBtn" title="Canonical Market Memory">🧠 Memory</button>
+          <button type="button" class="primary-nav-btn" id="budgetNavBtn" title="Budget Impact Intelligence">🏛️ Budget</button>
+          <button type="button" class="primary-nav-btn" id="brokersNavBtn" title="Broker prediction intelligence">🏦 Brokers</button>
+          <button type="button" class="primary-nav-btn" id="aiHubNavBtn" title="AI Intelligence Hub">🤖 AI Hub</button>
+        </div>
         <div class="header-group" id="brokerSourceRow">
           <span class="btn-group-label">BROKERS:</span>
           <button type="button" class="broker-btn" data-source="Angel" data-url="https://www.angelone.in/login">Angel</button>
@@ -1428,22 +1448,6 @@
           <button type="button" class="news-btn" data-source="CNBC" data-url="https://www.youtube.com/@CNBC-TV18">CNBC</button>
           <button type="button" class="news-btn" data-source="NSE" data-url="https://www.nseindia.com">NSE</button>
         </div>
-        <div class="header-group header-nav-group">
-          <span class="btn-group-label">AI:</span>
-          <button type="button" class="primary-nav-btn" id="memoryNavBtn" title="Canonical Market Memory">🧠 Memory</button>
-          <button type="button" class="primary-nav-btn" id="budgetNavBtn" title="Budget Impact Intelligence">🏛️ Budget</button>
-          <button type="button" class="primary-nav-btn" id="brokersNavBtn" title="Broker prediction intelligence">🏦 Brokers</button>
-          <button type="button" class="primary-nav-btn" id="aiHubNavBtn" title="AI Intelligence Hub">🤖 AI Hub</button>
-          <button type="button" class="primary-nav-btn router-nav-btn" id="routerNavBtn" title="Market Router session routing">🌍 Router</button>
-        </div>
-      </div>
-      <div class="header-status-line">
-        <span class="live-badge">🔴 LIVE</span>
-        <span class="gui-mode-badge web web-local-badge" id="guiModeBadge" title="Local GUI runtime mode">WEB LOCAL</span>
-        <span class="gui-mode-badge api-target-badge local" id="apiTargetBadge" title="API base">API: LOCAL</span>
-        <button type="button" class="ai-ops-btn" id="aiOpsBtn" title="AI Ops / Logs">OPS</button>
-        <span class="api-status" id="apiStatus">⏳</span>
-        <button type="button" class="ai-review-btn review-btn" id="reviewBtn" title="Daily Intelligence Review">REVIEW</button>
       </div>
     </div>
     <div class="header-body-boundary" id="headerBodyBoundary" aria-hidden="true"></div>
@@ -3130,19 +3134,43 @@
     ASTRA_GUI.aihubTabPromises[tabId] = (async () => {
       let data = { ok: false, tabId, errors: [] }
       try {
-        const qs = force ? `?refresh=1&_ts=${Date.now()}` : `?_ts=${Date.now()}`
-        const payload = await astraFetchJson(`/api/debug/aihub-tab/${apiTab}${qs}`)
-        if (payload && payload.ok !== false) {
+        let payload
+        if (force) {
+          payload = await astraFetchJson(
+            `/api/debug/aihub-tab/${apiTab}/refresh`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+            REFRESH_TIMEOUT_SLOW_MS,
+          )
+        } else {
+          payload = await astraFetchJson(`/api/debug/aihub-tab/${apiTab}?_ts=${Date.now()}`)
+        }
+        if (payload && (payload.ok !== false || payload.cache_missing)) {
           data = Object.assign({ tabId }, payload)
         } else {
           throw new Error((payload && payload.error) || 'aihub_tab_unavailable')
         }
       } catch (e) {
-        console.warn('[AIHUB] tab payload failed, emergency legacy batch:', tabId, e)
-        try {
-          data = await loadAihubTabDataLegacyBatch(tabId, force)
-        } catch (legacyErr) {
-          data.errors.push(String(legacyErr || e))
+        console.warn('[AIHUB] tab payload failed:', tabId, e)
+        const errMsg = String(e && e.message ? e.message : e)
+        if (force && (/404|refresh route|HTTP 404/i.test(errMsg))) {
+          data = {
+            ok: false,
+            tabId,
+            items: [],
+            summary: {},
+            message: 'AI Hub refresh route unavailable.',
+            errors: [errMsg],
+          }
+        } else {
+          data = {
+            ok: true,
+            tabId,
+            cache_missing: true,
+            items: [],
+            summary: {},
+            message: 'AI Hub cache unavailable. Tap Refresh.',
+            errors: [errMsg],
+          }
         }
       }
       ASTRA_GUI.aihubTabCache[tabId] = {
@@ -6227,21 +6255,43 @@
       ASTRA_GUI.aihubTabPromises[tabId] = (async () => {
         let data = { ok: false, tabId, errors: [] }
         try {
-          const qs = force
-            ? (tabId === 'markets' ? `?force=1&_ts=${now}` : `?refresh=1&_ts=${now}`)
-            : `?_ts=${now}`
-          const payload = await astraFetchJson(`/api/debug/aihub-tab/${apiTab}${qs}`)
-          if (payload && payload.ok !== false) {
+          let payload
+          if (force) {
+            payload = await astraFetchJson(
+              `/api/debug/aihub-tab/${apiTab}/refresh`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+              REFRESH_TIMEOUT_SLOW_MS,
+            )
+          } else {
+            payload = await astraFetchJson(`/api/debug/aihub-tab/${apiTab}?_ts=${now}`)
+          }
+          if (payload && (payload.ok !== false || payload.cache_missing)) {
             data = Object.assign({ tabId }, payload)
           } else {
             throw new Error((payload && payload.error) || 'aihub_tab_unavailable')
           }
         } catch (e) {
-          console.warn('[AIHUB] tab payload failed, emergency legacy batch:', tabId, e)
-          try {
-            data = await loadAihubTabDataLegacyBatch(tabId, force)
-          } catch (legacyErr) {
-            data.errors.push(String(legacyErr || e))
+          console.warn('[AIHUB] tab payload failed:', tabId, e)
+          const errMsg = String(e && e.message ? e.message : e)
+          if (force && (/404|refresh route|HTTP 404/i.test(errMsg))) {
+            data = {
+              ok: false,
+              tabId,
+              items: [],
+              summary: {},
+              message: 'AI Hub refresh route unavailable.',
+              errors: [errMsg],
+            }
+          } else {
+            data = {
+              ok: true,
+              tabId,
+              cache_missing: true,
+              items: [],
+              summary: {},
+              message: 'AI Hub cache unavailable. Tap Refresh.',
+              errors: [errMsg],
+            }
           }
         }
         if (tabId === 'markets' && force) {

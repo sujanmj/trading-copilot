@@ -22,7 +22,7 @@ def main() -> int:
     if not engine.is_file():
         return _fail('missing budget_impact.py')
     src = engine.read_text(encoding='utf-8')
-    for needle in ('STAGE = \'48A\'', 'get_budget_overview', 'analyze_news_text', 'handle_budget_command'):
+    for needle in ('STAGE = \'48C\'', 'get_budget_overview', 'analyze_news_text', 'handle_budget_command'):
         if needle not in src:
             return _fail(f'budget_impact.py missing {needle!r}')
 

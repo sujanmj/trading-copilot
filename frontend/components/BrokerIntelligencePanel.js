@@ -1,16 +1,79 @@
 /**
- * Broker prediction intelligence workspace (Stage 23).
- * External broker/app evidence — not our final prediction.
+ * Broker prediction intelligence workspace (Stage 48E).
+ * Cache-first mount — heavy refresh only via Refresh Brokers.
  */
 (function (global) {
   'use strict';
 
-  const INTEL_SOURCE = '/api/debug/broker-intelligence';
-  const COLLECTOR_SOURCE = '/api/debug/broker-app-collector';
-  const COVERAGE_SOURCE = '/api/debug/external-source-coverage';
-  const COMPARE_SOURCE = '/api/debug/our-vs-broker';
-  const FETCH_MS = 18000;
+  const OVERVIEW_LITE_PATH = '/api/brokers/overview?cache_only=1&lite=1';
+  const REFRESH_PATH = '/api/brokers/refresh';
+  const CACHE_FETCH_MS = 8000;
+  const REFRESH_MS = 90000;
+  const CACHE_MISSING_MSG = 'Broker cache unavailable. Tap Refresh Brokers.';
+  const CACHE_TIMEOUT_MSG = 'Broker cache request timed out. Tap Refresh Brokers.';
+  const REFRESH_TIMEOUT_MSG = 'Broker refresh may still be running. Try again in a minute.';
   const NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.';
+  const abortMeta = new WeakMap();
+
+  let config = {
+    getApiBase: () => '',
+    getHeaders: () => ({}),
+  };
+
+  let loadGeneration = 0;
+  let activeController = null;
+  let refreshBusy = false;
+
+  function createAbortController(reason) {
+    const controller = new AbortController();
+    abortMeta.set(controller, { reason: reason || 'unknown' });
+    return controller;
+  }
+
+  function abortActiveRequest(reason) {
+    if (activeController) {
+      abortMeta.set(activeController, { reason: reason || 'superseded' });
+      activeController.abort();
+      activeController = null;
+    }
+  }
+
+  function isStaleAbort(err, controller) {
+    if (!err || err.name !== 'AbortError') return false;
+    const meta = abortMeta.get(controller) || {};
+    return meta.reason === 'superseded' || meta.reason === 'cleanup' || meta.reason === 'strict_mode';
+  }
+
+  function brokerFetchErrorMessage(err, controller, context) {
+    if (isStaleAbort(err, controller)) return null;
+    if (err && err.name === 'AbortError') {
+      return context === 'refresh' ? REFRESH_TIMEOUT_MSG : CACHE_TIMEOUT_MSG;
+    }
+    const msg = err && err.message ? String(err.message) : String(err || '');
+    if (/signal is aborted/i.test(msg) || /AbortError/i.test(msg)) {
+      return context === 'refresh' ? REFRESH_TIMEOUT_MSG : CACHE_TIMEOUT_MSG;
+    }
+    if (/timed out|timeout|cancelled/i.test(msg)) {
+      return context === 'refresh' ? REFRESH_TIMEOUT_MSG : CACHE_TIMEOUT_MSG;
+    }
+    return msg || CACHE_TIMEOUT_MSG;
+  }
+
+  function renderBrokerShell(message, showRefresh, stale) {
+    const staleBanner = stale
+      ? '<p class="bi-muted bi-warn">Cached broker data is stale. Showing last snapshot.</p>'
+      : '';
+    const refreshBtn = showRefresh
+      ? '<button type="button" class="refresh-btn bi-refresh-btn" id="brokersRefreshBtn">↻ Refresh Brokers</button>'
+      : '';
+    return `<div class="bi-dashboard">
+      <div class="bi-header-row"><h2 class="bi-title">🏦 Broker Prediction Intelligence</h2></div>
+      <p class="bi-disclaimer">External broker/app evidence — not our final prediction.</p>
+      ${staleBanner}
+      <div class="panel-error-card"><p>${escapeHtml(message || CACHE_MISSING_MSG)}</p></div>
+      ${refreshBtn}
+    </div>`;
+  }
 
   async function parseJsonResponse(res, path) {
     const ct = (res.headers && res.headers.get('content-type')) || '';
@@ -26,24 +89,32 @@
     }
   }
 
-  function formatFetchError(err) {
-    if (!err) return 'Unknown error';
-    if (err.name === 'AbortError') return 'Broker request timed out or was cancelled.';
+  function formatFetchError(err, controller, context) {
+    const clean = brokerFetchErrorMessage(err, controller, context);
+    if (clean) return clean;
+    if (!err) return CACHE_TIMEOUT_MSG;
     return err.message || String(err);
   }
 
-  async function fetchBrokerJson(path, headers, signal) {
+  async function fetchBrokerJson(path, options, signal) {
     const base = (config.getApiBase() || '').replace(/\/$/, '');
-    const url = `${base}${path}?_ts=${Date.now()}`;
-    const res = await fetch(url, { headers, cache: 'no-store', signal });
+    const url = `${base}${path}${path.indexOf('?') >= 0 ? '&' : '?'}_ts=${Date.now()}`;
+    let res;
+    try {
+      res = await fetch(url, {
+        method: (options && options.method) || 'GET',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, config.getHeaders(), (options && options.headers) || {}),
+        body: options && options.body ? JSON.stringify(options.body) : undefined,
+        cache: 'no-store',
+        signal,
+      });
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      throw err;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status} ${path}`);
     return parseJsonResponse(res, path);
   }
-
-  let config = {
-    getApiBase: () => '',
-    getHeaders: () => ({}),
-  };
 
   function escapeHtml(text) {
     if (text == null) return '';
@@ -118,14 +189,37 @@
     </tr></thead><tbody>${body}</tbody></table>`;
   }
 
-  async function fetchJson(path) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_MS);
-    try {
-      return await fetchBrokerJson(path, config.getHeaders(), controller.signal);
-    } finally {
-      clearTimeout(timer);
+  function bindRefreshButton(host) {
+    const refreshBtn = host && host.querySelector('#brokersRefreshBtn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => refreshBrokers(host));
     }
+  }
+
+  function overviewToRenderParts(overview) {
+    const dashboard = overview.dashboard || {
+      ok: true,
+      stats: overview.stats || {},
+      source_performance: (overview.brokers || []).map((row) => ({
+        broker_source: row.source || row.broker_source,
+        pick_count: row.picks || row.pick_count,
+        alignment_rate: row.accuracy || row.alignment_rate,
+      })),
+      disclaimer: overview.disclaimer,
+    };
+    if (!dashboard.source_performance && overview.brokers && overview.brokers.length) {
+      dashboard.source_performance = overview.brokers.map((row) => ({
+        broker_source: row.source || row.broker_source,
+        pick_count: row.picks || row.pick_count,
+        alignment_rate: row.accuracy || row.alignment_rate,
+      }));
+    }
+    return {
+      dashboard,
+      comparison: overview.comparison || null,
+      collector: overview.collector || null,
+      coverage: overview.coverage || null,
+    };
   }
 
   function renderSourceTable(sources) {
@@ -240,7 +334,7 @@
       <div class="bi-section-subtitle">Latest sources</div>
       <div class="bi-tag-row">${sources || '<span class="bi-muted">—</span>'}</div>
       ${warnings ? `<div class="bi-section-subtitle">Warnings</div><ul class="bi-expl-list">${warnings}</ul>` : ''}
-      <div class="bi-debug-line">GET ${escapeHtml(COVERAGE_SOURCE)}</div>
+      <div class="bi-debug-line">GET ${escapeHtml(OVERVIEW_LITE_PATH)} · POST ${escapeHtml(REFRESH_PATH)}</div>
     </div>`;
   }
 
@@ -290,7 +384,7 @@
     </div>`;
   }
 
-  function renderInto(host, dashboard, comparison, collector, coverage) {
+  function renderInto(host, dashboard, comparison, collector, coverage, overviewMeta) {
     if (!host) return;
     const stats = dashboard.stats || dashboard;
     const sources = dashboard.source_performance || [];
@@ -304,8 +398,9 @@
       <div class="bi-dashboard">
         <div class="bi-header-row">
           <h2 class="bi-title">🏦 Broker Prediction Intelligence</h2>
-          <button type="button" class="refresh-btn bi-refresh-btn" id="brokersRefreshBtn">↻ Refresh</button>
+          <button type="button" class="refresh-btn bi-refresh-btn" id="brokersRefreshBtn">↻ Refresh Brokers</button>
         </div>
+        ${overviewMeta && overviewMeta.stale ? '<p class="bi-muted bi-warn">Cached broker data is stale. Showing last snapshot.</p>' : ''}
         <p class="bi-disclaimer">${escapeHtml(disclaimer)}</p>
         <p class="bi-shadow-label">External broker/app evidence — not our final prediction.</p>
         ${renderStats(stats)}
@@ -322,45 +417,68 @@
           ${renderSourceTable(sources)}
         </div>
         ${renderImportHint(dashboard)}
-        <div class="bi-debug-line">GET ${escapeHtml(INTEL_SOURCE)} · ${escapeHtml(COLLECTOR_SOURCE)} · ${escapeHtml(COVERAGE_SOURCE)} · ${escapeHtml(COMPARE_SOURCE)}</div>
+        <div class="bi-debug-line">GET ${escapeHtml(OVERVIEW_LITE_PATH)} · POST ${escapeHtml(REFRESH_PATH)}</div>
       </div>`;
 
-    const refreshBtn = host.querySelector('#brokersRefreshBtn');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => loadMain(host));
+    bindRefreshButton(host);
+  }
+
+  async function loadCacheOverview(host, generation) {
+    abortActiveRequest('superseded');
+    const controller = createAbortController('load');
+    activeController = controller;
+    const timer = setTimeout(() => controller.abort(), CACHE_FETCH_MS);
+    try {
+      const overview = await fetchBrokerJson(OVERVIEW_LITE_PATH, null, controller.signal);
+      if (generation !== loadGeneration) return;
+      if (overview.cache_missing) {
+        host.innerHTML = renderBrokerShell(overview.message || CACHE_MISSING_MSG, true, false);
+        bindRefreshButton(host);
+        return;
+      }
+      const parts = overviewToRenderParts(overview);
+      renderInto(host, parts.dashboard, parts.comparison, parts.collector, parts.coverage, overview);
+    } catch (err) {
+      if (generation !== loadGeneration) return;
+      if (isStaleAbort(err, controller)) return;
+      const msg = formatFetchError(err, controller, 'cache');
+      host.innerHTML = renderBrokerShell(msg, true, false);
+      bindRefreshButton(host);
+    } finally {
+      clearTimeout(timer);
+      if (activeController === controller) activeController = null;
+    }
+  }
+
+  async function refreshBrokers(targetEl) {
+    const host = targetEl || document.getElementById('brokersMainContent');
+    if (!host || refreshBusy) return;
+    refreshBusy = true;
+    abortActiveRequest('superseded');
+    host.innerHTML = '<div class="loading">⏳ Refreshing broker intelligence…</div>';
+    const controller = createAbortController('refresh');
+    const timer = setTimeout(() => controller.abort(), REFRESH_MS);
+    try {
+      await fetchBrokerJson(REFRESH_PATH, { method: 'POST' }, controller.signal);
+      refreshBusy = false;
+      await loadMain(host);
+    } catch (err) {
+      refreshBusy = false;
+      const msg = formatFetchError(err, controller, 'refresh');
+      host.innerHTML = renderBrokerShell(msg, true, false);
+      bindRefreshButton(host);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   async function loadMain(targetEl) {
     const host = targetEl || document.getElementById('brokersMainContent');
     if (!host) return;
+    loadGeneration += 1;
+    const generation = loadGeneration;
     host.innerHTML = '<div class="loading">⏳ Loading broker intelligence…</div>';
-    const loadOnce = async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), FETCH_MS);
-      try {
-        const headers = config.getHeaders();
-        const [dashboard, comparison, collector, coverage] = await Promise.all([
-          fetchBrokerJson(INTEL_SOURCE, headers, controller.signal),
-          fetchBrokerJson(COMPARE_SOURCE, headers, controller.signal).catch(() => null),
-          fetchBrokerJson(COLLECTOR_SOURCE, headers, controller.signal).catch(() => null),
-          fetchBrokerJson(COVERAGE_SOURCE, headers, controller.signal).catch(() => null),
-        ]);
-        if (dashboard.ok === false) throw new Error(dashboard.error || 'broker-intelligence failed');
-        renderInto(host, dashboard, comparison, collector, coverage);
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-    try {
-      await loadOnce();
-    } catch (err) {
-      try {
-        await loadOnce();
-      } catch (retryErr) {
-        host.innerHTML = `<div class="panel-error-card"><strong>Broker intelligence</strong><p>${escapeHtml(formatFetchError(retryErr))}</p></div>`;
-      }
-    }
+    await loadCacheOverview(host, generation);
   }
 
   function init(opts) {

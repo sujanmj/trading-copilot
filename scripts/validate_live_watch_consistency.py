@@ -22,7 +22,7 @@ def main() -> int:
     pre_src = (PROJECT_ROOT / 'backend/analytics/premarket_conviction.py').read_text(encoding='utf-8')
     gate_src = (PROJECT_ROOT / 'backend/orchestration/alert_freshness_gate.py').read_text(encoding='utf-8')
     for needle in (
-        "'stage': '48A'",
+        "'stage': '48C'",
         'Previous-session / stale research only',
         'Context partially stale',
         'CRITICAL_MARKET_HOURS_KEYS',

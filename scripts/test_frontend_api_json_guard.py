@@ -30,7 +30,8 @@ def main() -> int:
         (index_html, ('astraParseJsonResponse', 'astraFetchJson', 'API returned HTML/non-JSON')),
         (PROJECT_ROOT / 'frontend/components/BrokerIntelligencePanel.js', (
             'API returned HTML/non-JSON',
-            'Broker request timed out or was cancelled',
+            'Broker cache request timed out',
+            'cache_only=1&lite=1',
         )),
         (PROJECT_ROOT / 'frontend/components/MarketRouterCard.js', ('API returned HTML/non-JSON',)),
         (PROJECT_ROOT / 'frontend/components/SourceFreshnessCard.js', ('API returned HTML/non-JSON',)),
@@ -45,11 +46,18 @@ def main() -> int:
             if needle not in text:
                 return _fail(f'{name} missing {needle!r}')
 
-    for needle in ("'stage': '48A'", 'api_not_found', 'JSONResponse'):
+    for needle in ("'stage': '48E'", 'api_not_found', 'JSONResponse'):
         if needle not in api_server:
             return _fail(f'api_server.py missing {needle!r}')
 
-    for rel in ('/api/debug/source-freshness', '/api/debug/market-router', '/api/budget/overview'):
+    for rel in (
+        '/api/debug/source-freshness',
+        '/api/debug/market-router',
+        '/api/budget/overview',
+        '/api/brokers/overview',
+        '/api/brokers/status',
+        '/api/brokers/refresh',
+    ):
         if rel not in api_server:
             return _fail(f'api_server.py missing route {rel!r}')
 

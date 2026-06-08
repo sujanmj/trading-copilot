@@ -1,0 +1,1479 @@
+{
+  "ok": true,
+  "tab": "scan",
+  "generated_at": "2026-06-08T09:34:52+00:00",
+  "market_mode": "USA_MODE",
+  "source": "runtime",
+  "cache_age_seconds": 514311,
+  "items": [
+    {
+      "ticker": "NEWGEN",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 518.1,
+      "change_pct": 17.35,
+      "change_percent": 17.35,
+      "volume_ratio": 43.89,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "BALAMINES",
+      "sector": "CHEMICALS",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 2016.1,
+      "change_pct": 15.09,
+      "change_percent": 15.09,
+      "volume_ratio": 5.09,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "NHPC",
+      "sector": "POWER",
+      "strength": "ULTRA",
+      "direction": "BEARISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKDOWN",
+        "GAP_DOWN",
+        "MAJOR_MOVE"
+      ],
+      "price": 72.29,
+      "change_pct": -6.36,
+      "change_percent": -6.36,
+      "volume_ratio": 14.23,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ROUTE",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "MAJOR_MOVE"
+      ],
+      "price": 536.1,
+      "change_pct": 6.35,
+      "change_percent": 6.35,
+      "volume_ratio": 5.28,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "INFY",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "GAP_UP",
+        "MAJOR_MOVE"
+      ],
+      "price": 1270.8,
+      "change_pct": 5.68,
+      "change_percent": 5.68,
+      "volume_ratio": 2.49,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "TATAELXSI",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 4530.3,
+      "change_pct": 5.28,
+      "change_percent": 5.28,
+      "volume_ratio": 4.3,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "BSOFT",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "GAP_UP",
+        "MAJOR_MOVE"
+      ],
+      "price": 344.8,
+      "change_pct": 5.19,
+      "change_percent": 5.19,
+      "volume_ratio": 10.06,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "STLTECH",
+      "sector": "TELECOM",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "GAP_UP",
+        "BIG_MOVE"
+      ],
+      "price": 591.05,
+      "change_pct": 4.99,
+      "change_percent": 4.99,
+      "volume_ratio": 2.24,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "MASTEK",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 1727.9,
+      "change_pct": 4.72,
+      "change_percent": 4.72,
+      "volume_ratio": 7.73,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "NMDC",
+      "sector": "METALS_MINING",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 95.31,
+      "change_pct": 3.18,
+      "change_percent": 3.18,
+      "volume_ratio": 4.56,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "GUJGASLTD",
+      "sector": "ENERGY_OIL",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT"
+      ],
+      "price": 396.95,
+      "change_pct": 0.04,
+      "change_percent": 0.04,
+      "volume_ratio": 3.96,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "WOCKPHARMA",
+      "sector": "PHARMA",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "MAJOR_MOVE"
+      ],
+      "price": 1966.2,
+      "change_pct": -8.67,
+      "change_percent": -8.67,
+      "volume_ratio": 1.41,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "TCS",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 2446.9,
+      "change_pct": 6.51,
+      "change_percent": 6.51,
+      "volume_ratio": 2.44,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "IFBIND",
+      "sector": "CONSUMER_DURABLES",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "MAJOR_MOVE"
+      ],
+      "price": 1317.8,
+      "change_pct": 5.72,
+      "change_percent": 5.72,
+      "volume_ratio": 0.85,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ZENSARTECH",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BIG_MOVE"
+      ],
+      "price": 519.95,
+      "change_pct": 4.94,
+      "change_percent": 4.94,
+      "volume_ratio": 9.67,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "SONATSOFTW",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BIG_MOVE"
+      ],
+      "price": 278.35,
+      "change_pct": 4.51,
+      "change_percent": 4.51,
+      "volume_ratio": 6.88,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "HCLTECH",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 1243.5,
+      "change_pct": 4.05,
+      "change_percent": 4.05,
+      "volume_ratio": 2.28,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "COFORGE",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 1519.5,
+      "change_pct": 3.99,
+      "change_percent": 3.99,
+      "volume_ratio": 2.16,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "EXIDEIND",
+      "sector": "AUTO",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 406.25,
+      "change_pct": 3.57,
+      "change_percent": 3.57,
+      "volume_ratio": 1.66,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "MPHASIS",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 2387.7,
+      "change_pct": 3.34,
+      "change_percent": 3.34,
+      "volume_ratio": 2.22,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "NTPC",
+      "sector": "POWER",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 367.4,
+      "change_pct": -2.98,
+      "change_percent": -2.98,
+      "volume_ratio": 1.83,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "KPITTECH",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "BREAKOUT"
+      ],
+      "price": 809.25,
+      "change_pct": 2.94,
+      "change_percent": 2.94,
+      "volume_ratio": 1.39,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ANANTRAJ",
+      "sector": "CONSTRUCTION_REALTY",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "GAP_UP"
+      ],
+      "price": 552.2,
+      "change_pct": 2.52,
+      "change_percent": 2.52,
+      "volume_ratio": 3.44,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ANDHRSUGAR",
+      "sector": "CHEMICALS",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 77.97,
+      "change_pct": -2.43,
+      "change_percent": -2.43,
+      "volume_ratio": 1.55,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "CENTRALBK",
+      "sector": "BANKING",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKDOWN"
+      ],
+      "price": 29.62,
+      "change_pct": -2.28,
+      "change_percent": -2.28,
+      "volume_ratio": 2.22,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "BLUESTARCO",
+      "sector": "CONSUMER_DURABLES",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 1579.6,
+      "change_pct": 2.25,
+      "change_percent": 2.25,
+      "volume_ratio": 0.76,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "RECLTD",
+      "sector": "NBFC_FINANCE",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 325.05,
+      "change_pct": -1.92,
+      "change_percent": -1.92,
+      "volume_ratio": 1.31,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "PFC",
+      "sector": "NBFC_FINANCE",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 413.05,
+      "change_pct": -1.91,
+      "change_percent": -1.91,
+      "volume_ratio": 1.07,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "POWERGRID",
+      "sector": "POWER",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 282.15,
+      "change_pct": -1.4,
+      "change_percent": -1.4,
+      "volume_ratio": 1.12,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "PERSISTENT",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT"
+      ],
+      "price": 5470.5,
+      "change_pct": 1.27,
+      "change_percent": 1.27,
+      "volume_ratio": 2.38,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "SILVERBEES",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 46.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "RELIANCE",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 45.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "SUNTECK",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 45.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "TATASTEEL",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 45.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "AWL",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 44.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "DMART",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 44.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "RVNL",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 44.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "GOLDBEES",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 43.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "NCC",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 43.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "RAYMOND",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 43.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "NIFTY50",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "WATCH",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "OLAELEC",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "NEUTRAL",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "WIPRO",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "NEUTRAL",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    }
+  ],
+  "summary": {
+    "scanner": {
+      "total_scanned": 439,
+      "total_signals": 169,
+      "summary": {
+        "BREAKDOWN": 116,
+        "VOLUME_SPIKE": 25,
+        "BIG_MOVE": 28,
+        "BREAKOUT": 19,
+        "MAJOR_MOVE": 10,
+        "GAP_UP": 5,
+        "GAP_DOWN": 10
+      },
+      "last_updated": "2026-06-02T10:43:00.766509+00:00"
+    },
+    "live_scanner_count": 30,
+    "watchlist_count": 10,
+    "memory_signal_count": 8,
+    "mode": "USA_MODE",
+    "memory_fallback_count": 8
+  },
+  "warnings": [],
+  "live_scanner": [
+    {
+      "ticker": "NEWGEN",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 518.1,
+      "change_pct": 17.35,
+      "change_percent": 17.35,
+      "volume_ratio": 43.89,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "BALAMINES",
+      "sector": "CHEMICALS",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 2016.1,
+      "change_pct": 15.09,
+      "change_percent": 15.09,
+      "volume_ratio": 5.09,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "NHPC",
+      "sector": "POWER",
+      "strength": "ULTRA",
+      "direction": "BEARISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKDOWN",
+        "GAP_DOWN",
+        "MAJOR_MOVE"
+      ],
+      "price": 72.29,
+      "change_pct": -6.36,
+      "change_percent": -6.36,
+      "volume_ratio": 14.23,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ROUTE",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "MAJOR_MOVE"
+      ],
+      "price": 536.1,
+      "change_pct": 6.35,
+      "change_percent": 6.35,
+      "volume_ratio": 5.28,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "INFY",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "GAP_UP",
+        "MAJOR_MOVE"
+      ],
+      "price": 1270.8,
+      "change_pct": 5.68,
+      "change_percent": 5.68,
+      "volume_ratio": 2.49,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "TATAELXSI",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 4530.3,
+      "change_pct": 5.28,
+      "change_percent": 5.28,
+      "volume_ratio": 4.3,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "BSOFT",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "GAP_UP",
+        "MAJOR_MOVE"
+      ],
+      "price": 344.8,
+      "change_pct": 5.19,
+      "change_percent": 5.19,
+      "volume_ratio": 10.06,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "STLTECH",
+      "sector": "TELECOM",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "GAP_UP",
+        "BIG_MOVE"
+      ],
+      "price": 591.05,
+      "change_pct": 4.99,
+      "change_percent": 4.99,
+      "volume_ratio": 2.24,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "MASTEK",
+      "sector": "IT",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 1727.9,
+      "change_pct": 4.72,
+      "change_percent": 4.72,
+      "volume_ratio": 7.73,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "NMDC",
+      "sector": "METALS_MINING",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 95.31,
+      "change_pct": 3.18,
+      "change_percent": 3.18,
+      "volume_ratio": 4.56,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "GUJGASLTD",
+      "sector": "ENERGY_OIL",
+      "strength": "ULTRA",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT"
+      ],
+      "price": 396.95,
+      "change_pct": 0.04,
+      "change_percent": 0.04,
+      "volume_ratio": 3.96,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "WOCKPHARMA",
+      "sector": "PHARMA",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "MAJOR_MOVE"
+      ],
+      "price": 1966.2,
+      "change_pct": -8.67,
+      "change_percent": -8.67,
+      "volume_ratio": 1.41,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "TCS",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "MAJOR_MOVE"
+      ],
+      "price": 2446.9,
+      "change_pct": 6.51,
+      "change_percent": 6.51,
+      "volume_ratio": 2.44,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "IFBIND",
+      "sector": "CONSUMER_DURABLES",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "MAJOR_MOVE"
+      ],
+      "price": 1317.8,
+      "change_pct": 5.72,
+      "change_percent": 5.72,
+      "volume_ratio": 0.85,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ZENSARTECH",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BIG_MOVE"
+      ],
+      "price": 519.95,
+      "change_pct": 4.94,
+      "change_percent": 4.94,
+      "volume_ratio": 9.67,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "SONATSOFTW",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BIG_MOVE"
+      ],
+      "price": 278.35,
+      "change_pct": 4.51,
+      "change_percent": 4.51,
+      "volume_ratio": 6.88,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "HCLTECH",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 1243.5,
+      "change_pct": 4.05,
+      "change_percent": 4.05,
+      "volume_ratio": 2.28,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "COFORGE",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 1519.5,
+      "change_pct": 3.99,
+      "change_percent": 3.99,
+      "volume_ratio": 2.16,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "EXIDEIND",
+      "sector": "AUTO",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 406.25,
+      "change_pct": 3.57,
+      "change_percent": 3.57,
+      "volume_ratio": 1.66,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "MPHASIS",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT",
+        "BIG_MOVE"
+      ],
+      "price": 2387.7,
+      "change_pct": 3.34,
+      "change_percent": 3.34,
+      "volume_ratio": 2.22,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "NTPC",
+      "sector": "POWER",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 367.4,
+      "change_pct": -2.98,
+      "change_percent": -2.98,
+      "volume_ratio": 1.83,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "KPITTECH",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "BREAKOUT"
+      ],
+      "price": 809.25,
+      "change_pct": 2.94,
+      "change_percent": 2.94,
+      "volume_ratio": 1.39,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ANANTRAJ",
+      "sector": "CONSTRUCTION_REALTY",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "GAP_UP"
+      ],
+      "price": 552.2,
+      "change_pct": 2.52,
+      "change_percent": 2.52,
+      "volume_ratio": 3.44,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "ANDHRSUGAR",
+      "sector": "CHEMICALS",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 77.97,
+      "change_pct": -2.43,
+      "change_percent": -2.43,
+      "volume_ratio": 1.55,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "CENTRALBK",
+      "sector": "BANKING",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKDOWN"
+      ],
+      "price": 29.62,
+      "change_pct": -2.28,
+      "change_percent": -2.28,
+      "volume_ratio": 2.22,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "BLUESTARCO",
+      "sector": "CONSUMER_DURABLES",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 1579.6,
+      "change_pct": 2.25,
+      "change_percent": 2.25,
+      "volume_ratio": 0.76,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "RECLTD",
+      "sector": "NBFC_FINANCE",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 325.05,
+      "change_pct": -1.92,
+      "change_percent": -1.92,
+      "volume_ratio": 1.31,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "PFC",
+      "sector": "NBFC_FINANCE",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 413.05,
+      "change_pct": -1.91,
+      "change_percent": -1.91,
+      "volume_ratio": 1.07,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "POWERGRID",
+      "sector": "POWER",
+      "strength": "STRONG",
+      "direction": "BEARISH",
+      "signals": [
+        "BREAKDOWN"
+      ],
+      "price": 282.15,
+      "change_pct": -1.4,
+      "change_percent": -1.4,
+      "volume_ratio": 1.12,
+      "source": "scanner",
+      "is_memory_fallback": false
+    },
+    {
+      "ticker": "PERSISTENT",
+      "sector": "IT",
+      "strength": "STRONG",
+      "direction": "BULLISH",
+      "signals": [
+        "VOLUME_SPIKE",
+        "BREAKOUT"
+      ],
+      "price": 5470.5,
+      "change_pct": 1.27,
+      "change_percent": 1.27,
+      "volume_ratio": 2.38,
+      "source": "scanner",
+      "is_memory_fallback": false
+    }
+  ],
+  "watchlist_candidates": [
+    {
+      "ticker": "SILVERBEES",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 46.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "RELIANCE",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 45.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "SUNTECK",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 45.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "TATASTEEL",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 45.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation \u2014 simulation metrics neutral \u2014 no adjustment",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "AWL",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 44.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "DMART",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 44.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "RVNL",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 44.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "GOLDBEES",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 43.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation momentum_breakout_20",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "NCC",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 43.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    },
+    {
+      "ticker": "RAYMOND",
+      "sector": "\u2014",
+      "decision": "WATCH",
+      "score": 43.0,
+      "reason": "A: memory advisor learning_score=50 overall=neutral; B: broker consensus (no_broker_evidence); H: historical simulation UNKNOWN",
+      "source": "watchlist",
+      "is_watchlist_candidate": true,
+      "is_memory_fallback": false,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null
+    }
+  ],
+  "memory_signals": [
+    {
+      "ticker": "NIFTY50",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "WATCH",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "OLAELEC",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "NEUTRAL",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "TCS",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "NEUTRAL",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "WIPRO",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "NEUTRAL",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "OLAELEC",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "WATCH",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "NMDC",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "WATCH",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "COFORGE",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "WATCH",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    },
+    {
+      "ticker": "WOCKPHARMA",
+      "sector": "\u2014",
+      "strength": "EVIDENCE",
+      "direction": "WATCH",
+      "signals": [
+        "evidence"
+      ],
+      "source": "market-memory",
+      "is_memory_fallback": true,
+      "price": null,
+      "change_pct": null,
+      "change_percent": null,
+      "volume_ratio": null,
+      "display_note": "Memory signal \u2014 no live price attached",
+      "_packSource": "external-evidence"
+    }
+  ]
+}
