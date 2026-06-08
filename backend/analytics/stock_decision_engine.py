@@ -580,6 +580,13 @@ def _build_telegram_message(
         ])
         for item in top_pick.get('why') or []:
             lines.append(f'• {item}')
+        try:
+            from backend.analytics.broker_intelligence import broker_decision_bullets
+
+            for bullet in broker_decision_bullets(str(top_pick.get('ticker') or ''), mode=mode):
+                lines.append(f'• {bullet}')
+        except Exception:
+            pass
         lines.extend(['', '<b>Wait for:</b>'])
         for item in top_pick.get('confirmation_needed') or CONFIRMATION_DEFAULTS:
             lines.append(f'• {item}')
@@ -601,6 +608,14 @@ def _build_telegram_message(
             if isinstance(reason, list):
                 reason = reason[0] if reason else 'weak signal'
             lines.append(f"• {row.get('ticker')} — {reason}")
+            try:
+                from backend.analytics.broker_intelligence import broker_decision_bullets
+
+                for bullet in broker_decision_bullets(str(row.get('ticker') or ''), mode=mode):
+                    if 'conflict' in bullet.lower() or 'risk' in bullet.lower():
+                        lines.append(f'• {bullet}')
+            except Exception:
+                pass
 
     return '\n'.join(lines)
 

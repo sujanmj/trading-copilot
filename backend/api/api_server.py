@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '48K',
+        'stage': '48L',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -2126,6 +2126,24 @@ def api_brokers_refresh():
     from backend.analytics.broker_overview_cache import refresh_broker_intel
 
     return sanitize_json_value(refresh_broker_intel(persist=True))
+
+
+@app.get("/api/brokers/ticker/{ticker}", dependencies=[Depends(verify_api_key)])
+def api_brokers_ticker(ticker: str, cache_only: int = Query(1), lite: int = Query(0)):
+    from backend.analytics.broker_intelligence import get_broker_intel_ticker
+
+    return sanitize_json_value(
+        get_broker_intel_ticker(ticker, cache_only=bool(cache_only), lite=bool(lite)),
+    )
+
+
+@app.get("/api/brokers/evidence", dependencies=[Depends(verify_api_key)])
+def api_brokers_evidence(cache_only: int = Query(1), lite: int = Query(0)):
+    from backend.analytics.broker_intelligence import get_broker_intel_evidence
+
+    return sanitize_json_value(
+        get_broker_intel_evidence(cache_only=bool(cache_only), lite=bool(lite)),
+    )
 
 
 @app.get("/api/all", dependencies=[Depends(verify_api_key)])

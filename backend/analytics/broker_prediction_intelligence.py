@@ -544,9 +544,127 @@ def get_source_intelligence(source: str) -> dict[str, Any]:
     }
 
 
-def get_top_broker_display_candidates(*, limit: int = 5) -> dict[str, Any]:
-    """Latest broker or external-evidence rows for Telegram/GUI display."""
+def _consensus_label_to_direction(label: object) -> str:
+    text = str(label or '').strip().lower()
+    if not text or text == 'unknown':
+        return 'NEUTRAL'
+    if 'mixed' in text:
+        return 'MIXED'
+    if 'negative' in text or 'avoid' in text:
+        return 'BEARISH'
+    if 'positive' in text:
+        return 'BULLISH'
+    return 'NEUTRAL'
+
+
+def _display_candidates_from_intel_cache(*, limit: int) -> dict[str, Any] | None:
+    """Cache-first broker intel rows mapped to legacy Telegram display shape."""
+    try:
+        from backend.analytics.broker_intelligence import get_broker_intel_overview
+
+        overview = get_broker_intel_overview(cache_only=True, lite=True)
+    except Exception as exc:
+        _log_error(f'get_top_broker_display_candidates intel cache failed: {exc}')
+        return {
+            'ok': True,
+            'origin': 'broker_intel_cache',
+            'section_label': 'Top broker candidates:',
+            'candidates': [],
+            'pick_count': 0,
+        }
+
+    if overview.get('cache_missing'):
+        return {
+            'ok': True,
+            'origin': 'broker_intel_cache',
+            'section_label': 'Top broker candidates:',
+            'candidates': [],
+            'pick_count': 0,
+        }
+
     capped = max(1, int(limit))
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _append_candidate(
+        *,
+        ticker: str | None,
+        direction: str,
+        source: object,
+        title: object,
+        confidence_score: object = None,
+        freshness: object = None,
+        headline: object = None,
+    ) -> None:
+        sym = _normalize_ticker(ticker)
+        if not sym or sym in seen or len(candidates) >= capped:
+            return
+        seen.add(sym)
+        candidates.append({
+            'ticker': sym,
+            'direction': str(direction or 'NEUTRAL').upper(),
+            'source': str(source or 'broker_intel')[:80],
+            'title': str(title or headline or '')[:80] or None,
+            'headline': str(headline or title or '')[:120] or None,
+            'confidence_score': confidence_score,
+            'freshness': freshness,
+            'origin': 'broker_intel_cache',
+        })
+
+    for row in (overview.get('top_positive') or []) + (overview.get('top_negative') or []):
+        if not isinstance(row, dict):
+            continue
+        evidence = (row.get('evidence') or [])
+        first_ev = evidence[0] if evidence and isinstance(evidence[0], dict) else {}
+        _append_candidate(
+            ticker=row.get('ticker'),
+            direction=_consensus_label_to_direction(row.get('consensus_label')),
+            source=first_ev.get('broker_house') or first_ev.get('source') or row.get('consensus_label'),
+            title=first_ev.get('headline') or row.get('consensus_label'),
+            confidence_score=row.get('confidence_score'),
+            freshness=row.get('freshness'),
+            headline=first_ev.get('headline'),
+        )
+
+    if len(candidates) < capped:
+        for row in overview.get('evidence_items') or []:
+            if not isinstance(row, dict):
+                continue
+            rating = str(row.get('rating') or row.get('direction') or 'neutral').lower()
+            direction = {
+                'positive': 'BULLISH',
+                'negative': 'BEARISH',
+                'neutral': 'NEUTRAL',
+            }.get(rating, 'NEUTRAL')
+            _append_candidate(
+                ticker=row.get('ticker'),
+                direction=direction,
+                source=row.get('broker_house') or row.get('source'),
+                title=row.get('headline'),
+                confidence_score=row.get('confidence_score'),
+                freshness=row.get('freshness'),
+                headline=row.get('headline'),
+            )
+
+    tracked = int(overview.get('tracked_tickers') or 0)
+    if candidates or tracked > 0:
+        return {
+            'ok': True,
+            'origin': 'broker_intel_cache',
+            'section_label': 'Top broker candidates:',
+            'candidates': candidates[:capped],
+            'pick_count': tracked or len(candidates),
+        }
+    return None
+
+
+def get_top_broker_display_candidates(*, limit: int = 5) -> dict[str, Any]:
+    """Latest broker or external-evidence rows for Telegram/GUI display (cache-first)."""
+    capped = max(1, int(limit))
+    intel_display = _display_candidates_from_intel_cache(limit=capped)
+    if intel_display is not None:
+        return intel_display
+
     db_rows = _fetch_all_broker_rows()
     if db_rows:
         candidates: list[dict[str, Any]] = []

@@ -1,10 +1,10 @@
 {
   "ok": true,
   "tab": "news",
-  "generated_at": "2026-06-08T20:43:48+00:00",
+  "generated_at": "2026-06-08T21:17:37+00:00",
   "market_mode": "USA_MODE",
   "source": "report_cache",
-  "cache_age_seconds": 525709,
+  "cache_age_seconds": 527738,
   "items": [
     {
       "title": "AI will expand opportunities for Indian IT; luxury housing demand remains strong: BofA Securities",
@@ -232,24 +232,6 @@
       "source": "Economic Times (Markets)"
     },
     {
-      "title": "India\u2019s domestic growth story still strong despite global headwinds: Rajeev Agrawal",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:16:35+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/expert-view/indias-domestic-growth-story-still-strong-despite-global-headwinds-rajeev-agrawal/articleshow/131456264.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
-      "title": "Chinese humanoids are one step closer to IPOs",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:04:34+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/ipos/fpos/chinese-humanoids-are-one-step-closer-to-ipos/articleshow/131456149.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
       "title": "NHPC shares tumble 5% as govt\u2019s OFS worth up to Rs 4,300 crore opens at 8% discount. Check details",
       "classification": "headline",
       "ticker": null,
@@ -277,24 +259,6 @@
       "source": "Economic Times (Markets Alt)"
     },
     {
-      "title": "Inside SpaceX's IPO: Special share access, flexible lockups and soaring demand",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T05:38:03+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/us-stocks/news/inside-spacexs-ipo-special-share-access-flexible-lockups-and-soaring-demand/slideshow/131456067.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
-      "title": "FII exodus, crude shock, and Rupee under pressure: Deepak Shenoy breaks down India's market storm",
-      "classification": "macro_context",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T05:13:53+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/expert-view/fii-exodus-crude-shock-and-rupee-under-pressure-deepak-shenoy-breaks-down-indias-market-storm/articleshow/131455228.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
       "title": "IT rally rages on! Infosys, TCS, other stocks jump up to 4% despite overall market weakness",
       "classification": "headline",
       "ticker": null,
@@ -311,42 +275,6 @@
       "published_at": "2026-06-02T05:05:09+00:00",
       "url": "https://economictimes.indiatimes.com/markets/stocks/news/anant-raj-shares-rally-5-after-signing-rs-25000-crore-haryana-data-centre-mou/articleshow/131455134.cms",
       "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Oil rally may fuel stagflation concerns, though AI remains market's key driver: Arnab Das",
-      "classification": "macro_context",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T05:02:11+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/us-stocks/news/oil-rally-may-fuel-stagflation-concerns-though-ai-remains-markets-key-driver-arnab-das/articleshow/131455094.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
-      "title": "Berkshire's $16.8 billion bets signal Greg Abel's new direction at the helm",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T04:59:29+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/us-stocks/news/berkshires-16-8-billion-bets-signal-greg-abels-new-direction-at-the-helm/articleshow/131455078.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
-      "title": "US Stock Market:  Treasury yields rise after strong US data, geopolitical risks fuel inflation fears",
-      "classification": "macro_context",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T04:54:30+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/us-stocks/news/us-stock-market-treasury-yields-rise-after-strong-us-data-geopolitical-risks-fuel-inflation-fears/articleshow/131454986.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
-      "title": "Indian bonds steady as U.S.-Iran tensions linger; RBI policy review due Friday",
-      "classification": "macro_context",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T04:53:38+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/bonds/indian-bonds-steady-as-u-s-iran-tensions-linger-rbi-policy-review-due-friday/articleshow/131455015.cms",
-      "source": "Economic Times (Markets)"
     },
     {
       "title": "Coforge shares gain over 2% after unveiling agentic AI platform for insurance industry",
@@ -409,114 +337,6 @@
       "direction": "NEUTRAL",
       "published_at": "2026-06-02T03:38:41+00:00",
       "url": "https://economictimes.indiatimes.com/markets/stocks/news/wipro-shares-in-focus-on-deal-to-acquire-additional-stake-in-aggne-global-for-28-5-million-check-details/articleshow/131454017.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Coca-Cola explores listing of India bottling unit in 2027",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T03:29:46+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/coca-cola-explores-listing-of-india-bottling-unit-in-2027/articleshow/131453938.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "IREDA among 5 F&amp;O stocks with a sharp rise in futures open interest",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "WATCH",
-      "published_at": "2026-06-02T03:28:34+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/ireda-among-5-fampo-stocks-with-a-sharp-rise-in-futures-open-interest/slideshow/131453970.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Ola Electric shares fall nearly 4% as firm launches QIP to raise funds. Check floor price, other details",
-      "classification": "stock_news",
-      "ticker": "OLAELEC",
-      "direction": "WATCH",
-      "published_at": "2026-06-02T03:25:01+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/ola-electric-shares-in-focus-as-firm-launches-qip-to-raise-funds-check-floor-price-other-details/articleshow/131453860.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Morgan Stanley says Indian stock market poised for strong year ahead. Here\u2019s why",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T03:20:08+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/morgan-stanley-says-indian-stock-market-poised-for-strong-year-ahead-heres-why/articleshow/131453800.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "\u200bNMDC among 4 stocks closed crossing above VWAP",
-      "classification": "stock_news",
-      "ticker": "NMDC",
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T03:07:00+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/nmdc-among-4-stocks-closed-crossing-above-vwap/slideshow/131453724.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Coal India among 5 stocks showing bullish RSI upswing",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T02:58:42+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/coal-india-among-5-stocks-showing-bullish-rsi-upswing/slideshow/131453607.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Coal India Share Price Live Updates: Coal India  Price Movement",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T02:54:17+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/stock-liveblog/coal-india-ltd-stock-price-today-live-02-jun-2026/liveblog/131453435.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Kotak Bank Share Price Live Updates: Kotak Bank's Price Movement Today",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T02:53:58+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/stock-liveblog/kotak-bank-stock-price-livestock-price-today-live-updates-02-jun-2026/liveblog/131453429.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "Apollo Hospital Share Price Live Updates: Apollo Hospital's Current Price and Market Performance",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T02:53:55+00:00",
-      "url": "https://economictimes.indiatimes.com/markets/stocks/stock-liveblog/apollo-hospital-share-price-today-live-updates-02-jun-2026/liveblog/131453428.cms",
-      "source": "Economic Times (Markets Alt)"
-    },
-    {
-      "title": "PB Fintech sees Rs 665 crore block deal as founders pare stake; Goldman among other top funds buy",
-      "classification": "broker_candidates",
-      "ticker": "POLICYBZR",
-      "direction": "BULLISH",
-      "published_at": null,
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/pb-fintech-sees-rs-665-crore-block-deal-as-founders-pare-stake-goldman-among-other-top-funds-buy/articleshow/131394439.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
-      "title": "Moody's upgrades Reliance Industries rating to Baa1, now 2 notches above India's sovereign rating",
-      "classification": "broker_candidates",
-      "ticker": "RELIANCE",
-      "direction": "WATCH",
-      "published_at": null,
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/moodys-upgrades-reliance-industries-rating-to-baa1-now-2-notches-above-indias-sovereign-rating/articleshow/131392282.cms",
-      "source": "Economic Times (Markets)"
-    },
-    {
-      "title": "HFCL shares soar 17% in two days, rally 170% in 2026. Should you buy, sell or hold?",
-      "classification": "broker_candidates",
-      "ticker": "HFCL",
-      "direction": "WATCH",
-      "published_at": null,
-      "url": "https://economictimes.indiatimes.com/markets/stocks/news/hfcl-shares-soar-17-in-two-days-rally-170-in-2026-should-you-buy-sell-or-hold/articleshow/131386095.cms",
       "source": "Economic Times (Markets Alt)"
     },
     {
@@ -718,177 +538,6 @@
       "source": "NDTV Profit"
     },
     {
-      "title": "Monsoon To Arrive In Kerala In Two Days: IMD",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:38:17+00:00",
-      "url": "https://www.ndtvprofit.com/india/monsoon-to-arrive-in-kerala-in-two-days-imd-11579157#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Stock Market Crash News Today Live Updates: Nifty Sees Resistance At 23,300 Amid F&O Expiry, Sensex Falls 200 Points; NHPC Declines 7%",
-      "classification": "market_context",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:34:02+00:00",
-      "url": "https://www.ndtvprofit.com/markets/stock-market-crash-news-today-live-updates-share-market-sensex-nifty-gift-nifty-iran-war-us-attack-oil-market-impact-fno-expiry-futures-options-11578229#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "May Auto Sales: EV Penetration Hits New Highs As Fuel Price Shock Sparks Rush",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:27:56+00:00",
-      "url": "https://www.ndtvprofit.com/business/may-auto-sales-fuel-price-shock-sparks-ev-rush-penetration-hits-new-highs-11579140#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Massive Russian Strikes Hit Ukraine's Kyiv, Several Killed And Dozens Injured",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:17:49+00:00",
-      "url": "https://www.ndtvprofit.com/world/massive-russian-strikes-hit-ukraine-s-kyiv-several-killed-amp-dozens-injured-11578938#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Sankashti Chaturthi 2026: Vibhuvana Sankashti On June 3 or 4? Date, Muhurat Timing, Fast Rituals And More",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:15:49+00:00",
-      "url": "https://www.ndtvprofit.com/trending/sankashti-chaturthi-2026-vibhuvana-sankashti-on-june-3-or-4-date-muhurat-timing-fast-rituals-and-more-11579026#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Buy, Sell Or Hold: Tata Tech, Physicswallah, Force Motors, MRPL, Cummins, Coforge, And More  \u2014 Ask Profit",
-      "classification": "broker_candidates",
-      "ticker": "COFORGE",
-      "direction": "WATCH",
-      "published_at": "2026-06-02T06:13:42+00:00",
-      "url": "https://www.ndtvprofit.com/markets/buy-sell-or-hold-tata-technologies-physicswallah-force-motors-mrpl-cummins-coforge-ask-profit-11578768#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Lalit Modi Defends Sushmita Sen Against 'Gold Digger' Tag: 'I Was The Diamond Digger'",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:04:21+00:00",
-      "url": "https://www.ndtvprofit.com/trending/lalit-modi-defends-sushmita-sen-against-gold-digger-tag-i-was-the-diamond-digger-11578705#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "'All Systems Glow': Apple Gives New Tagline To WWDC 2026 \u2014 Check Keynote Timings, How To Watch, Expectations",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T06:03:58+00:00",
-      "url": "https://www.ndtvprofit.com/technology/all-systems-glow-apple-gives-new-tagline-to-wwdc-2026-check-keynote-timings-how-to-watch-expectations-11579058#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Gujarat Gas: Target Price Hiked Post Q4; Limited Upside Ahead Says ICICI Securities \u2014 Here's Why",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "WATCH",
-      "published_at": "2026-06-02T05:53:27+00:00",
-      "url": "https://www.ndtvprofit.com/markets/gujarat-gas-target-price-hiked-post-q4-but-limited-upside-ahead-says-icici-securities-heres-why-11579005#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Coffee Day Shares Rally For Third Straight Day \u2014 Check Two Key Triggers",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "WATCH",
-      "published_at": "2026-06-02T05:51:24+00:00",
-      "url": "https://www.ndtvprofit.com/markets/why-are-coffee-day-shares-rallying-for-third-straight-day-11578810#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Video: Iran's IRGC Strikes Giant Cargo Ship In Retaliation To Attack On Iranian Vessel",
-      "classification": "macro_context",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T05:46:42+00:00",
-      "url": "https://www.ndtvprofit.com/world/video-iran-s-irgc-strikes-giant-cargo-ship-in-retaliation-to-attack-on-iranian-vessel-11578770#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "ED Searches Vedanta-Linked Premises In Delhi, Mumbai Over FEMA Probe",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "WATCH",
-      "published_at": "2026-06-02T05:39:49+00:00",
-      "url": "https://www.ndtvprofit.com/business/ed-searches-vedanta-linked-premises-in-delhi-mumbai-over-fema-probe-11578934#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "KCET 2026 Results To Be Out Soon At cetonline.karnataka.gov.in; Check Direct link To Download",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T05:39:29+00:00",
-      "url": "https://www.ndtvprofit.com/india/kcet-2026-result-to-be-out-soon-at-cetonline-karnataka-gov-in-check-direct-link-to-download-11578712#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "RBI Likely To Hold Rates, Raise Inflation Forecast: HSBC's Pranjul Bhandari",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "WATCH",
-      "published_at": "2026-06-02T05:30:59+00:00",
-      "url": "https://www.ndtvprofit.com/economy/rbi-monetary-policy-pranjul-bhandari-expects-mpc-to-hold-rates-raise-inflation-forecast-11578929#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "IndiGo Shares in Focus: Strong Demand, Rising Yields Drives ICICI Securities Bullish View \u2014 Check Target Price",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "WATCH",
-      "published_at": "2026-06-02T05:18:19+00:00",
-      "url": "https://www.ndtvprofit.com/markets/indigo-shares-in-focus-strong-demand-rising-yields-drives-icici-securities-bullish-view-check-target-price-11578754#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Top 15 Stocks To Buy This June: Eternal, Bajaj Finance, Nestle, LG Electronics Among Axis Securities Bet \u2014 Full List Inside",
-      "classification": "broker_candidates",
-      "ticker": "BAJFINANCE",
-      "direction": "BULLISH",
-      "published_at": "2026-06-02T04:49:26+00:00",
-      "url": "https://www.ndtvprofit.com/markets/top-15-stocks-to-buy-this-june-eternal-bajaj-finance-nestle-lg-electronics-icici-bank-kotak-mahindra-minda-corp-among-axis-securities-bet-full-list-in-11578700#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "Shankar Sharma Flags India's Impossible Choice: Rupee Or The Stock Market",
-      "classification": "macro_context",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T04:46:05+00:00",
-      "url": "https://www.ndtvprofit.com/markets/rupee-vs-stock-market-shankar-sharma-flags-indias-impossible-choice-11578701#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "IndiGo, SpiceJet Shares Under Pressure As Russia Halts Jet Fuel Exports",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T04:42:46+00:00",
-      "url": "https://www.ndtvprofit.com/markets/indigo-spicejet-shares-under-pressure-as-russia-halts-jet-fuel-exports-11578642#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
-      "title": "IShowSpeed's FIFA World Cup 2026 Song 'Champions' Goes Viral, Gets 3 Million Views In 13 Hours On YouTube",
-      "classification": "reject",
-      "ticker": null,
-      "direction": "NEUTRAL",
-      "published_at": "2026-06-02T04:41:51+00:00",
-      "url": "https://www.ndtvprofit.com/trending/ishowspeeds-champions-song-viral-ahead-of-fifa-world-cup-2026-gets-3-million-views-in-13-hours-on-youtube-11578610#publisher=newsstand",
-      "source": "NDTV Profit"
-    },
-    {
       "title": "Share Bazaar LIVE | Top Stocks To Buy | NDTV Profit Ask Profit | Stock Market LIVE News",
       "classification": "broker_candidates",
       "ticker": "NDTV",
@@ -929,53 +578,29 @@
     "external_coverage": {
       "ok": true,
       "cache_exists": true,
-      "as_of": "2026-06-02T07:50:48.912919+00:00",
-      "collected_items": 11,
-      "normalized_items": 11,
-      "rejected_items": 4,
-      "source_count": 6,
+      "as_of": "2026-06-08T21:09:42.410545+00:00",
+      "collected_items": 1,
+      "normalized_items": 1,
+      "rejected_items": 14,
+      "source_count": 1,
       "sources": [
-        "Business Standard Markets",
-        "Economic Times (Markets Alt)",
-        "Economic Times (Markets)",
-        "LiveMint (Companies)",
-        "NDTV Profit",
-        "Zee Business"
+        "NDTV Profit"
       ],
       "latest_sources": [
-        "Business Standard Markets",
-        "Economic Times (Markets Alt)",
-        "Economic Times (Markets)",
-        "LiveMint (Companies)",
-        "NDTV Profit",
-        "Zee Business"
+        "NDTV Profit"
       ],
-      "unique_tickers": 10,
+      "unique_tickers": 1,
       "tickers": [
-        "BAJFINANCE",
-        "COFORGE",
-        "HFCL",
-        "MCX",
-        "NDTV",
-        "NIFTY50",
-        "POLICYBZR",
-        "RELIANCE",
-        "TCS",
-        "WIPRO"
+        "NDTV"
       ],
       "broker_db_pick_count": 2,
       "source_counts": {
-        "NDTV Profit": 3,
-        "Economic Times (Markets)": 4,
-        "Business Standard Markets": 1,
-        "LiveMint (Companies)": 1,
-        "Economic Times (Markets Alt)": 1,
-        "Zee Business": 1
+        "NDTV Profit": 1
       },
       "direction_counts": {
-        "bullish": 4,
-        "bearish": 3,
-        "watch": 4,
+        "bullish": 1,
+        "bearish": 0,
+        "watch": 0,
         "neutral": 0
       },
       "fake_predictions": 0,
@@ -985,13 +610,13 @@
         "manual"
       ],
       "external_evidence": {
-        "accepted": 127,
-        "broker_prediction_candidate": 21,
-        "stock_news_evidence": 40,
-        "market_context": 24,
-        "macro_context": 42,
-        "rejected": 155,
-        "unique_tickers": 16
+        "accepted": 150,
+        "broker_prediction_candidate": 26,
+        "stock_news_evidence": 52,
+        "market_context": 34,
+        "macro_context": 38,
+        "rejected": 189,
+        "unique_tickers": 13
       },
       "warnings": [],
       "disclaimer": "External evidence is separated from our final prediction.",

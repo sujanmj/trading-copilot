@@ -376,7 +376,7 @@ def _handle_health() -> str:
         )
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append('Telegram build: <code>AstraEdge 48K</code>')
+    lines.append('Telegram build: <code>AstraEdge 48L</code>')
     return '\n'.join(lines)
 
 
@@ -449,7 +449,11 @@ def handle_analysis_command(
         result = run_without_ai(run_memory_only, command='memory')
         response_text = result.get('text') or 'Memory unavailable.'
     elif cmd == 'broker':
-        result = run_without_ai(lambda: run_broker_only(refresh=False), command='broker')
+        refresh_broker = str(args or '').strip().lower() == 'refresh'
+        result = run_without_ai(
+            lambda: run_broker_only(refresh=refresh_broker, args=args),
+            command='broker',
+        )
         response_text = result.get('text') or 'Broker intelligence unavailable.'
     elif cmd == 'aihub':
         response_text = run_without_ai(lambda: {'text': _handle_aihub(args)}, command='aihub').get('text') or _handle_aihub(args)

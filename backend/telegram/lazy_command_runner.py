@@ -295,19 +295,25 @@ def run_memory_only() -> dict[str, Any]:
     return _runner_result('memory', text='\n'.join(lines), payload=dashboard)
 
 
-def run_broker_only(*, refresh: bool = False) -> dict[str, Any]:
+def run_broker_only(*, refresh: bool = False, args: str = '') -> dict[str, Any]:
     refresh_result = None
     if refresh:
         refresh_result = _scoped_refresh('brokers')
 
-    try:
-        from backend.analytics.broker_prediction_intelligence import (
-            get_broker_intelligence_dashboard,
-            get_top_broker_display_candidates,
-        )
+    from backend.analytics.broker_prediction_intelligence import get_top_broker_display_candidates
 
-        payload = get_broker_intelligence_dashboard()
-        display = get_top_broker_display_candidates(limit=3)
+    try:
+        from backend.analytics.broker_intelligence import handle_broker_command
+
+        if refresh and str(args or '').strip().lower() == 'refresh':
+            from backend.analytics.broker_intelligence import refresh_broker_intelligence
+
+            refresh_broker_intelligence(persist=True)
+            text = handle_broker_command('refresh')
+        elif args and str(args).strip():
+            text = handle_broker_command(str(args).strip())
+        else:
+            text = handle_broker_command('')
     except Exception as exc:
         return _runner_result(
             'broker',
@@ -316,66 +322,20 @@ def run_broker_only(*, refresh: bool = False) -> dict[str, Any]:
             ok=False,
         )
 
-    stats = payload.get('stats') or {}
-    our_vs = payload.get('our_vs_broker') or {}
-    comparisons = our_vs.get('comparisons') or our_vs.get('rows') or our_vs.get('pairs') or []
-    picks = int(stats.get('picks_tracked') or stats.get('broker_predictions') or stats.get('total_picks') or 0)
-    source_count = stats.get('unique_sources') or stats.get('source_count') or 0
-    top_sources = stats.get('top_sources') or []
+    display = get_top_broker_display_candidates(limit=8)
+    pick_count = int(display.get('pick_count') or len(display.get('candidates') or []))
+    payload = {
+        'stats': {
+            'picks_tracked': pick_count,
+            'broker_predictions': pick_count,
+            'display_origin': display.get('origin'),
+        },
+        'display': display,
+    }
 
-    if picks <= 0 and not comparisons and not top_sources and not display.get('candidates'):
-        return _runner_result(
-            'broker',
-            text='Broker evidence cache is limited.',
-            payload=payload,
-            refresh=refresh_result,
-        )
-
-    agreements = sum(1 for row in comparisons if isinstance(row, dict) and row.get('agreement'))
-    conflicts = sum(1 for row in comparisons if isinstance(row, dict) and row.get('conflict'))
-    lines = [
-        '<b>🏦 Broker intelligence</b>',
-        f'Picks tracked: {picks}',
-    ]
-    if source_count:
-        lines.append(f'Sources: {source_count}')
-    elif top_sources:
-        lines.append(f'Sources: {len(top_sources)}')
-    if comparisons:
-        lines.append(f'Agreement/conflict: {agreements}/{conflicts}')
-
-    section_label = (
-        display.get('section_label')
-        or our_vs.get('display_section_label')
-        or 'Top broker candidates:'
-    )
-    lines.extend(['', f'<b>{section_label}</b>'])
-    top = (
-        display.get('candidates')
-        or our_vs.get('top_broker_candidates')
-        or our_vs.get('top_candidates')
-        or comparisons[:3]
-    )
-    if isinstance(top, list) and top:
-        for row in top[:3]:
-            if not isinstance(row, dict):
-                continue
-            ticker = row.get('ticker') or row.get('symbol') or '?'
-            direction = (
-                row.get('direction')
-                or row.get('broker_stance')
-                or row.get('stance')
-                or row.get('action')
-                or '—'
-            )
-            src = row.get('source') or row.get('broker') or row.get('title') or '—'
-            src_short = str(src)[:60]
-            lines.append(f'• {ticker} · {direction} · {src_short}')
-    else:
-        lines.append('• No broker picks in cache.')
-    if refresh_result and not refresh_result.get('ok'):
-        lines.append(f"Refresh note: {refresh_result.get('error') or 'partial'}")
-    return _runner_result('broker', text='\n'.join(lines), payload=payload, refresh=refresh_result)
+    if refresh_result and not refresh_result.get('ok') and 'Refresh note' not in text:
+        text = f'{text}\nRefresh note: {refresh_result.get("error") or "partial"}'
+    return _runner_result('broker', text=text, payload=payload, refresh=refresh_result)
 
 
 def _read_qa_report(path: Path, label: str) -> dict[str, Any]:

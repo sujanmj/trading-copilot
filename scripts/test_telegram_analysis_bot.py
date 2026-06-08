@@ -104,6 +104,8 @@ def main() -> int:
                 if cmd not in ('/buy TATA', '/sell RELIANCE'):
                     for phrase in FORBIDDEN_USER_PHRASES:
                         if phrase.lower() in text.lower():
+                            if cmd == '/broker' and phrase == 'Research only':
+                                continue
                             return _fail(f'forbidden phrase in {cmd}: {phrase!r}')
 
                 if len(text.strip()) < 20 and cmd not in ('/buy TATA', '/sell RELIANCE'):

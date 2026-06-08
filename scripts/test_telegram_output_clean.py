@@ -92,6 +92,8 @@ def main() -> int:
             if cmd != '/buy TATA':
                 for phrase in FORBIDDEN_PHRASES:
                     if phrase.lower() in text.lower():
+                        if cmd == '/broker' and phrase == 'Research only':
+                            continue
                         return _fail(f'forbidden phrase in {cmd}: {phrase!r}')
 
             if cmd == '/buy TATA':

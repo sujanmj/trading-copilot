@@ -1,10 +1,10 @@
 {
   "ok": true,
   "tab": "global",
-  "generated_at": "2026-06-08T20:43:48+00:00",
+  "generated_at": "2026-06-08T21:17:37+00:00",
   "market_mode": "USA_MODE",
   "source": "runtime",
-  "cache_age_seconds": 550890,
+  "cache_age_seconds": 552919,
   "items": [
     {
       "kind": "global_snapshot",
@@ -1127,53 +1127,29 @@
     "external_coverage": {
       "ok": true,
       "cache_exists": true,
-      "as_of": "2026-06-02T07:50:48.912919+00:00",
-      "collected_items": 11,
-      "normalized_items": 11,
-      "rejected_items": 4,
-      "source_count": 6,
+      "as_of": "2026-06-08T21:09:42.410545+00:00",
+      "collected_items": 1,
+      "normalized_items": 1,
+      "rejected_items": 14,
+      "source_count": 1,
       "sources": [
-        "Business Standard Markets",
-        "Economic Times (Markets Alt)",
-        "Economic Times (Markets)",
-        "LiveMint (Companies)",
-        "NDTV Profit",
-        "Zee Business"
+        "NDTV Profit"
       ],
       "latest_sources": [
-        "Business Standard Markets",
-        "Economic Times (Markets Alt)",
-        "Economic Times (Markets)",
-        "LiveMint (Companies)",
-        "NDTV Profit",
-        "Zee Business"
+        "NDTV Profit"
       ],
-      "unique_tickers": 10,
+      "unique_tickers": 1,
       "tickers": [
-        "BAJFINANCE",
-        "COFORGE",
-        "HFCL",
-        "MCX",
-        "NDTV",
-        "NIFTY50",
-        "POLICYBZR",
-        "RELIANCE",
-        "TCS",
-        "WIPRO"
+        "NDTV"
       ],
       "broker_db_pick_count": 2,
       "source_counts": {
-        "NDTV Profit": 3,
-        "Economic Times (Markets)": 4,
-        "Business Standard Markets": 1,
-        "LiveMint (Companies)": 1,
-        "Economic Times (Markets Alt)": 1,
-        "Zee Business": 1
+        "NDTV Profit": 1
       },
       "direction_counts": {
-        "bullish": 4,
-        "bearish": 3,
-        "watch": 4,
+        "bullish": 1,
+        "bearish": 0,
+        "watch": 0,
         "neutral": 0
       },
       "fake_predictions": 0,
@@ -1183,13 +1159,13 @@
         "manual"
       ],
       "external_evidence": {
-        "accepted": 127,
-        "broker_prediction_candidate": 21,
-        "stock_news_evidence": 40,
-        "market_context": 24,
-        "macro_context": 42,
-        "rejected": 155,
-        "unique_tickers": 16
+        "accepted": 150,
+        "broker_prediction_candidate": 26,
+        "stock_news_evidence": 52,
+        "market_context": 34,
+        "macro_context": 38,
+        "rejected": 189,
+        "unique_tickers": 13
       },
       "warnings": [],
       "disclaimer": "External evidence is separated from our final prediction.",
