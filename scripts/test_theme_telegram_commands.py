@@ -41,21 +41,21 @@ def main() -> int:
 
             if '/theme' not in HELP_TEXT:
                 return _fail('/theme missing from HELP_TEXT')
-            for phrase in ('/theme list', '/theme infra', '/theme budget', '/theme news infra', '/theme scan infra', '/theme refresh'):
+            for phrase in ('Theme Wishlist', 'search', 'category', 'refresh'):
                 if phrase not in HELP_TEXT:
                     return _fail(f'{phrase} missing from HELP_TEXT')
-            if 'Theme Baskets' not in HELP_TEXT:
-                return _fail('Theme Baskets section missing from help')
 
             list_text = _text(handle_analysis_command('/theme list', 'test', dry_run=True))
-            if 'AstraEdge Theme Baskets' not in list_text:
-                return _fail('/theme list missing title')
+            if 'AstraEdge Theme Wishlist' not in list_text:
+                return _fail('/theme list missing Theme Wishlist title')
+            if 'Government/Budget' not in list_text:
+                return _fail('/theme list missing grouped category')
             if 'Infrastructure' not in list_text:
                 return _fail('/theme list missing Infrastructure')
 
             infra_text = _text(handle_analysis_command('/theme infra', 'test', dry_run=True))
-            if 'Theme Basket' not in infra_text:
-                return _fail('/theme infra missing basket header')
+            if 'Theme Wishlist' not in infra_text:
+                return _fail('/theme infra missing wishlist header')
             if 'Direct beneficiaries' not in infra_text:
                 return _fail('/theme infra missing direct beneficiaries')
             if 'buy now' in infra_text.lower() or 'guaranteed' in infra_text.lower():
@@ -76,12 +76,12 @@ def main() -> int:
                 return _fail('/theme scan infra missing title')
 
             health = handle_analysis_command('/health', 'test', dry_run=True)
-            if 'AstraEdge 47B' not in _text(health):
-                return _fail('/health missing AstraEdge 47B')
+            if 'AstraEdge 47D' not in _text(health):
+                return _fail('/health missing AstraEdge 47D')
 
             status = handle_analysis_command('/status', 'test', dry_run=True)
-            if 'AstraEdge 47B' not in _text(status):
-                return _fail('/status missing AstraEdge 47B build line')
+            if 'AstraEdge 47D' not in _text(status):
+                return _fail('/status missing AstraEdge 47D build line')
         finally:
             tb.BASKETS_FILE = orig_baskets
             tb.CATALYST_LOG_FILE = orig_log

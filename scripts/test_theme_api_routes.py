@@ -26,7 +26,7 @@ def _api_list():
     data = load_theme_baskets()
     return {
         'ok': True,
-        'stage': data.get('stage', '47B'),
+        'stage': data.get('stage', '47D'),
         'generated_at': data.get('generated_at'),
         'cache_refreshed_at': data.get('cache_refreshed_at'),
         'baskets': list_all_baskets(),
@@ -101,8 +101,8 @@ def main() -> int:
             listing = _api_list()
             if not isinstance(listing, dict) or not listing.get('ok'):
                 return _fail('list route should return ok JSON')
-            if listing.get('count', 0) != 18:
-                return _fail(f'list route expected 18 baskets, got {listing.get("count")}')
+            if listing.get('count', 0) < 40:
+                return _fail(f'list route expected >=40 baskets, got {listing.get("count")}')
 
             detail = _api_detail('infra')
             if not detail or detail.get('theme_id') != 'infrastructure':

@@ -32,6 +32,8 @@ def main() -> int:
         '46J': (46, ord('J')),
         '47A': (47, ord('A')),
         '47B': (47, ord('B')),
+        '47C': (47, ord('C')),
+        '47D': (47, ord('D')),
         '48A': (48, ord('A')),
     }
     for stage, expected in cases.items():
@@ -52,6 +54,10 @@ def main() -> int:
         return _fail('47A should pass minimum')
     if not _stage_at_least_46e('47B'):
         return _fail('47B should pass minimum')
+    if not _stage_at_least_46e('47C'):
+        return _fail('47C should pass minimum')
+    if not _stage_at_least_46e('47D'):
+        return _fail('47D should pass minimum')
     if not _stage_at_least_46e('48A'):
         return _fail('48A should pass minimum')
     if _stage_at_least_46e('46D'):
@@ -63,6 +69,14 @@ def main() -> int:
         return _fail('47B should be >= 47A')
     if _stage_at_least('47B', '47A'):
         return _fail('47A should not be >= 47B')
+    if not _stage_at_least('47B', '47C'):
+        return _fail('47C should be >= 47B')
+    if _stage_at_least('47C', '47B'):
+        return _fail('47B should not be >= 47C')
+    if not _stage_at_least('47C', '47D'):
+        return _fail('47D should be >= 47C')
+    if _stage_at_least('47D', '47C'):
+        return _fail('47C should not be >= 47D')
 
     payload_47a = {
         'app': 'AstraEdge',
@@ -82,6 +96,18 @@ def main() -> int:
     err = _validate_build_info(payload_47b)
     if err:
         return _fail(f'47B build-info should pass strict validation, got: {err}')
+
+    payload_47c = dict(payload_47a)
+    payload_47c['stage'] = '47C'
+    err = _validate_build_info(payload_47c)
+    if err:
+        return _fail(f'47C build-info should pass strict validation, got: {err}')
+
+    payload_47d = dict(payload_47a)
+    payload_47d['stage'] = '47D'
+    err = _validate_build_info(payload_47d)
+    if err:
+        return _fail(f'47D build-info should pass strict validation, got: {err}')
 
     bad = dict(payload_47a)
     bad['stage'] = '46D'

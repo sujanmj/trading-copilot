@@ -1,8 +1,8 @@
 """
-AstraEdge Theme Baskets — thematic intelligence engine (Stage 47B).
+AstraEdge Theme Baskets — thematic intelligence engine (Stage 47D).
 
 Maps news/govt/budget headlines to theme baskets, sectors, and beneficiary stocks.
-Research-only wording — watch/confirm, never buy now or guaranteed.
+User-facing label: Theme Wishlist. Research-only — watch/confirm, never buy now or guaranteed.
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '47B'
+STAGE = '47D'
+WISHLIST_TITLE = 'AstraEdge Theme Wishlist'
 NO_CATALYST_MESSAGE = 'No strong fresh catalyst found. Research basket only.'
 
 SKIP_KEYWORDS: tuple[str, ...] = (
@@ -67,7 +68,7 @@ THEME_ANCHORS: dict[str, list[str]] = {
         'nh-',
         'nh ',
     ],
-    'railways': [
+    'railways_metro': [
         'railway',
         'rail project',
         'railways',
@@ -78,7 +79,7 @@ THEME_ANCHORS: dict[str, list[str]] = {
         'rolling stock',
         'signalling',
     ],
-    'defence': [
+    'defence_aerospace': [
         'defence order',
         'defense order',
         'military',
@@ -120,14 +121,70 @@ CATALYST_LOG_FILE = get_data_path('theme_catalyst_log.jsonl')
 FORBIDDEN_WORDS = ('buy now', 'guaranteed', 'invest now')
 BUDGET_THEME_IDS = (
     'infrastructure',
-    'defence',
-    'railways',
+    'defence_aerospace',
+    'railways_metro',
     'power_grid_transmission',
     'agriculture_fertilizer',
     'housing_real_estate',
     'banking_psu_nbfc',
     'renewable_energy',
+    'pli_manufacturing',
 )
+
+LEGACY_THEME_ID_MAP: dict[str, str] = {
+    'railways': 'railways_metro',
+    'defence': 'defence_aerospace',
+}
+
+THEME_CATEGORIES: dict[str, list[str]] = {
+    'Government/Budget': [
+        'infrastructure', 'water_jal_jeevan', 'pli_manufacturing', 'agriculture_fertilizer',
+        'housing_real_estate', 'renewable_energy', 'power_grid_transmission',
+        'semiconductors_electronics',
+    ],
+    'Transport/Logistics': [
+        'roads_highways', 'railways_metro', 'aviation', 'ports_shipping', 'logistics_warehousing',
+        'ports_logistics', 'auto_ev_batteries',
+    ],
+    'Digital/Communication': [
+        'telecom_5g', 'it_digital_india', 'data_center_ai',
+    ],
+    'Finance': [
+        'psu_banks', 'private_banks', 'nbfc', 'insurance', 'amc_brokers', 'banking_psu_nbfc',
+    ],
+    'Commodities/Materials': [
+        'cement_steel_paint', 'metals_mining', 'chemicals', 'sugar_ethanol', 'oil_gas_energy',
+    ],
+    'Consumer/India Growth': [
+        'fmcg', 'retail', 'textiles', 'media_entertainment', 'tourism_temple_culture',
+    ],
+    'Healthcare': [
+        'pharma', 'hospitals', 'diagnostics',
+    ],
+    'Market Risk': [
+        'rbi_rates', 'currency_import_export', 'crude_sensitive', 'war_geopolitics',
+    ],
+}
+
+CATEGORY_ALIASES: dict[str, str] = {
+    'budget': 'Government/Budget',
+    'govt': 'Government/Budget',
+    'government': 'Government/Budget',
+    'transport': 'Transport/Logistics',
+    'logistics': 'Transport/Logistics',
+    'digital': 'Digital/Communication',
+    'communication': 'Digital/Communication',
+    'finance': 'Finance',
+    'bank': 'Finance',
+    'banks': 'Finance',
+    'commodities': 'Commodities/Materials',
+    'materials': 'Commodities/Materials',
+    'consumer': 'Consumer/India Growth',
+    'healthcare': 'Healthcare',
+    'health': 'Healthcare',
+    'risk': 'Market Risk',
+    'market_risk': 'Market Risk',
+}
 
 THEME_ALIASES: dict[str, str] = {
     'infra': 'infrastructure',
@@ -136,11 +193,13 @@ THEME_ALIASES: dict[str, str] = {
     'road': 'roads_highways',
     'highways': 'roads_highways',
     'highway': 'roads_highways',
-    'railway': 'railways',
-    'railways': 'railways',
-    'rail': 'railways',
-    'defence': 'defence',
-    'defense': 'defence',
+    'railway': 'railways_metro',
+    'railways': 'railways_metro',
+    'rail': 'railways_metro',
+    'metro': 'railways_metro',
+    'defence': 'defence_aerospace',
+    'defense': 'defence_aerospace',
+    'aerospace': 'defence_aerospace',
     'renewable': 'renewable_energy',
     'renewables': 'renewable_energy',
     'power': 'power_grid_transmission',
@@ -190,81 +249,123 @@ def _now_iso() -> str:
     return datetime.now(IST).replace(microsecond=0).isoformat()
 
 
+def _canonical_theme_id(theme_id: str) -> str:
+    resolved = resolve_theme_id(theme_id)
+    if resolved and resolved != 'budget' and not resolved.startswith('__category_'):
+        return resolved
+    key = str(theme_id or '').strip().lower()
+    return LEGACY_THEME_ID_MAP.get(key, key)
+
+
+def _basket_skeleton(
+    *,
+    theme_id: str,
+    display_name: str,
+    category: str,
+    aliases: list[str],
+    keywords: list[str],
+    trigger_keywords: list[str],
+    direct_sectors: list[str],
+    indirect_sectors: list[str],
+    raw_material: list[str],
+    risk_sectors: list[str],
+    stocks_direct: list[str],
+    stocks_indirect: list[str],
+    stocks_raw: list[str],
+    stocks_risk: list[str] | None = None,
+    confirmation_rules: list[str],
+    stale_after_hours: int = 48,
+) -> dict[str, Any]:
+    return {
+        'theme_id': theme_id,
+        'display_name': display_name,
+        'category': category,
+        'aliases': aliases,
+        'keywords': keywords,
+        'trigger_keywords': trigger_keywords,
+        'direct_beneficiary_sectors': direct_sectors,
+        'indirect_beneficiary_sectors': indirect_sectors,
+        'raw_material_beneficiaries': raw_material,
+        'risk_sectors': risk_sectors,
+        'stocks': {
+            'direct': stocks_direct,
+            'indirect': stocks_indirect,
+            'raw_material': stocks_raw,
+            'avoid_or_risk': stocks_risk or [],
+        },
+        'confirmation_rules': confirmation_rules,
+        'stale_after_hours': stale_after_hours,
+    }
+
+
 def _default_baskets() -> list[dict[str, Any]]:
-    """Bootstrap 18 default theme baskets."""
+    """Bootstrap core theme baskets."""
     defs = [
-        {
-            'theme_id': 'infrastructure',
-            'display_name': 'Infrastructure',
-            'keywords': ['infrastructure', 'infra', 'construction', 'epc', 'project', 'capex'],
-            'trigger_keywords': ['road', 'highway', 'metro', 'bridge', 'tunnel', 'smart city'],
-            'direct_beneficiary_sectors': ['EPC contractors', 'Construction', 'Civil engineering'],
-            'indirect_beneficiary_sectors': ['Cement', 'Steel', 'Paint', 'Pipes', 'Cables', 'Logistics'],
-            'raw_material_beneficiaries': ['Cement', 'Steel', 'Aggregates'],
-            'risk_sectors': ['Over-leveraged infra', 'Delayed receivables'],
-            'stocks': {
-                'direct': ['LT', 'ADANIENT', 'IRB', 'PNCINFRA', 'KNR'],
-                'indirect': ['ULTRACEMCO', 'ACC', 'TATASTEEL', 'ASIANPAINT', 'POLYCAB'],
-                'raw_material': ['SHREECEM', 'RAMCOCEM', 'SAIL'],
-                'avoid_or_risk': ['YESBANK'],
-            },
-            'confirmation_rules': ['Price strength + volume', 'Sector support', 'Named order/tender'],
-            'stale_after_hours': 48,
-        },
-        {
-            'theme_id': 'roads_highways',
-            'display_name': 'Roads / Highways',
-            'keywords': ['road', 'highway', 'nh', 'expressway', 'bharatmala', 'toll'],
-            'trigger_keywords': ['road project', 'highway project', 'expressway', 'nhai'],
-            'direct_beneficiary_sectors': ['Road EPC', 'Highway contractors', 'Toll operators'],
-            'indirect_beneficiary_sectors': ['Cement', 'Steel', 'Bitumen', 'Equipment'],
-            'raw_material_beneficiaries': ['Cement', 'Steel', 'Bitumen'],
-            'risk_sectors': ['Land acquisition delays', 'Margin compression'],
-            'stocks': {
-                'direct': ['IRB', 'PNCINFRA', 'KNR', 'GRINFRA', 'HGINFRA'],
-                'indirect': ['ULTRACEMCO', 'ACC', 'DALBHARAT', 'TATASTEEL'],
-                'raw_material': ['SHREECEM', 'RAMCOCEM'],
-                'avoid_or_risk': [],
-            },
-            'confirmation_rules': ['Order win confirmation', 'Volume breakout', 'Sector breadth'],
-            'stale_after_hours': 48,
-        },
-        {
-            'theme_id': 'railways',
-            'display_name': 'Railways',
-            'keywords': ['railway', 'rail', 'rlys', 'train', 'locomotive', 'vande bharat'],
-            'trigger_keywords': ['rail project', 'railway capex', 'railyard', 'metro rail'],
-            'direct_beneficiary_sectors': ['Rail EPC', 'Rolling stock', 'Signalling'],
-            'indirect_beneficiary_sectors': ['Steel', 'Electricals', 'Cables', 'Logistics'],
-            'raw_material_beneficiaries': ['Steel', 'Aluminium'],
-            'risk_sectors': ['Execution delays', 'PSU order timing'],
-            'stocks': {
-                'direct': ['TITAGARH', 'TEXRAIL', 'IRCON', 'RVNL', 'RAILTEL'],
-                'indirect': ['TATASTEEL', 'POLYCAB', 'KEI', 'CONCOR'],
-                'raw_material': ['SAIL', 'JINDALSTEL'],
-                'avoid_or_risk': [],
-            },
-            'confirmation_rules': ['Rail order/tender clarity', 'Price + volume confirm'],
-            'stale_after_hours': 48,
-        },
-        {
-            'theme_id': 'defence',
-            'display_name': 'Defence',
-            'keywords': ['defence', 'defense', 'military', 'army', 'navy', 'air force', 'ordnance'],
-            'trigger_keywords': ['defence order', 'defence budget', 'make in india defence'],
-            'direct_beneficiary_sectors': ['Defence OEM', 'Aerospace', 'Shipbuilding'],
-            'indirect_beneficiary_sectors': ['Electronics', 'Metals', 'Precision engineering'],
-            'raw_material_beneficiaries': ['Specialty metals', 'Electronics components'],
-            'risk_sectors': ['Export dependency', 'Long gestation'],
-            'stocks': {
-                'direct': ['HAL', 'BEL', 'BEML', 'COCHINSHIP', 'MAZDOCK'],
-                'indirect': ['MTARTECH', 'DATAPATTNS', 'ASTRAMICRO'],
-                'raw_material': ['HINDZINC', 'NATIONALUM'],
-                'avoid_or_risk': [],
-            },
-            'confirmation_rules': ['Named contract/order', 'Budget allocation clarity'],
-            'stale_after_hours': 72,
-        },
+        _basket_skeleton(
+            theme_id='infrastructure',
+            display_name='Infrastructure',
+            category='Government/Budget',
+            aliases=['infra', 'infrastructure'],
+            keywords=['infrastructure', 'infra', 'construction', 'epc', 'project', 'capex'],
+            trigger_keywords=['road', 'highway', 'metro', 'bridge', 'tunnel', 'smart city'],
+            direct_sectors=['EPC contractors', 'Construction', 'Civil engineering'],
+            indirect_sectors=['Cement', 'Steel', 'Paint', 'Pipes', 'Cables', 'Logistics'],
+            raw_material=['Cement', 'Steel', 'Aggregates'],
+            risk_sectors=['Over-leveraged infra', 'Delayed receivables'],
+            stocks_direct=['LT', 'ADANIENT', 'IRB', 'PNCINFRA', 'KNR'],
+            stocks_indirect=['ULTRACEMCO', 'ACC', 'TATASTEEL', 'ASIANPAINT', 'POLYCAB'],
+            stocks_raw=['SHREECEM', 'RAMCOCEM', 'SAIL'],
+            confirmation_rules=['Price strength + volume', 'Sector support', 'Named order/tender'],
+        ),
+        _basket_skeleton(
+            theme_id='roads_highways',
+            display_name='Roads / Highways',
+            category='Transport/Logistics',
+            aliases=['roads', 'road', 'highways', 'highway'],
+            keywords=['road', 'highway', 'nh', 'expressway', 'bharatmala', 'toll'],
+            trigger_keywords=['road project', 'highway project', 'expressway', 'nhai'],
+            direct_sectors=['Road EPC', 'Highway contractors', 'Toll operators'],
+            indirect_sectors=['Cement', 'Steel', 'Bitumen', 'Equipment'],
+            raw_material=['Cement', 'Steel', 'Bitumen'],
+            risk_sectors=['Land acquisition delays', 'Margin compression'],
+            stocks_direct=['IRB', 'PNCINFRA', 'KNR', 'GRINFRA', 'HGINFRA'],
+            stocks_indirect=['ULTRACEMCO', 'ACC', 'DALBHARAT', 'TATASTEEL'],
+            stocks_raw=['SHREECEM', 'RAMCOCEM'],
+            confirmation_rules=['Order win confirmation', 'Volume breakout', 'Sector breadth'],
+        ),
+        _basket_skeleton(
+            theme_id='railways_metro',
+            display_name='Railways / Metro',
+            category='Transport/Logistics',
+            aliases=['railway', 'railways', 'rail', 'metro'],
+            keywords=['railway', 'rail', 'rlys', 'train', 'locomotive', 'vande bharat', 'metro'],
+            trigger_keywords=['rail project', 'railway capex', 'railyard', 'metro rail'],
+            direct_sectors=['Rail EPC', 'Rolling stock', 'Signalling'],
+            indirect_sectors=['Steel', 'Electricals', 'Cables', 'Logistics'],
+            raw_material=['Steel', 'Aluminium'],
+            risk_sectors=['Execution delays', 'PSU order timing'],
+            stocks_direct=['TITAGARH', 'TEXRAIL', 'IRCON', 'RVNL', 'RAILTEL'],
+            stocks_indirect=['TATASTEEL', 'POLYCAB', 'KEI', 'CONCOR'],
+            stocks_raw=['SAIL', 'JINDALSTEL'],
+            confirmation_rules=['Rail order/tender clarity', 'Price + volume confirm'],
+        ),
+        _basket_skeleton(
+            theme_id='defence_aerospace',
+            display_name='Defence / Aerospace',
+            category='Market Risk',
+            aliases=['defence', 'defense', 'aerospace'],
+            keywords=['defence', 'defense', 'military', 'army', 'navy', 'air force', 'ordnance'],
+            trigger_keywords=['defence order', 'defence budget', 'make in india defence'],
+            direct_sectors=['Defence OEM', 'Aerospace', 'Shipbuilding'],
+            indirect_sectors=['Electronics', 'Metals', 'Precision engineering'],
+            raw_material=['Specialty metals', 'Electronics components'],
+            risk_sectors=['Export dependency', 'Long gestation'],
+            stocks_direct=['HAL', 'BEL', 'BEML', 'COCHINSHIP', 'MAZDOCK'],
+            stocks_indirect=['MTARTECH', 'DATAPATTNS', 'ASTRAMICRO'],
+            stocks_raw=['HINDZINC', 'NATIONALUM'],
+            confirmation_rules=['Named contract/order', 'Budget allocation clarity'],
+            stale_after_hours=72,
+        ),
         {
             'theme_id': 'renewable_energy',
             'display_name': 'Renewable Energy',
@@ -518,15 +619,425 @@ def _default_baskets() -> list[dict[str, Any]]:
             'stale_after_hours': 72,
         },
     ]
-    return defs
+    extras = _additional_baskets()
+    by_id = {b['theme_id']: b for b in defs if isinstance(b, dict) and b.get('theme_id')}
+    for basket in extras:
+        by_id[basket['theme_id']] = basket
+    return [_normalize_basket(b) for b in by_id.values()]
+
+
+def _category_for_theme_id(theme_id: str) -> str:
+    for category, ids in THEME_CATEGORIES.items():
+        if theme_id in ids:
+            return category
+    return 'Government/Budget'
+
+
+def _normalize_basket(basket: dict[str, Any]) -> dict[str, Any]:
+    tid = str(basket.get('theme_id') or '')
+    if tid in LEGACY_THEME_ID_MAP:
+        basket = dict(basket)
+        basket['theme_id'] = LEGACY_THEME_ID_MAP[tid]
+        tid = basket['theme_id']
+    basket.setdefault('category', _category_for_theme_id(tid))
+    basket.setdefault('aliases', [])
+    if not basket.get('aliases'):
+        for alias, resolved in THEME_ALIASES.items():
+            if resolved == tid and not alias.startswith('__'):
+                basket['aliases'].append(alias)
+    return basket
+
+
+def _additional_baskets() -> list[dict[str, Any]]:
+    """Stage 47C expanded sector baskets."""
+    return [
+        _basket_skeleton(
+            theme_id='aviation', display_name='Aviation', category='Transport/Logistics',
+            aliases=['aviation', 'airline', 'airlines', 'airport'],
+            keywords=['aviation', 'airline', 'airport', 'udan', 'aircraft'],
+            trigger_keywords=['aviation policy', 'airport expansion', 'udan scheme'],
+            direct_sectors=['Airlines', 'Airport operators', 'MRO'],
+            indirect_sectors=['Tourism', 'Fuel', 'Ground handling'],
+            raw_material=['ATF', 'Aircraft parts'],
+            risk_sectors=['Fuel cost', 'Regulatory fare caps'],
+            stocks_direct=['INDIGO', 'SPICEJET', 'GMRINFRA', 'ADANIENT'],
+            stocks_indirect=['IRCTC', 'IHCL', 'BPCL'],
+            stocks_raw=['IOC'],
+            confirmation_rules=['Traffic recovery', 'Policy clarity', 'Volume confirm'],
+        ),
+        _basket_skeleton(
+            theme_id='ports_shipping', display_name='Ports / Shipping', category='Transport/Logistics',
+            aliases=['ports', 'shipping', 'port'],
+            keywords=['port', 'shipping', 'container', 'cargo', 'maritime'],
+            trigger_keywords=['port expansion', 'container traffic', 'shipping corridor'],
+            direct_sectors=['Port operators', 'Shipping lines'],
+            indirect_sectors=['Logistics', 'Road/rail connectivity'],
+            raw_material=['Fuel', 'Equipment'],
+            risk_sectors=['Global trade slowdown', 'Freight volatility'],
+            stocks_direct=['ADANIPORTS', 'SCI', 'GESHIP'],
+            stocks_indirect=['CONCOR', 'TCIEXP'],
+            stocks_raw=['IOC'],
+            confirmation_rules=['Cargo volume trend', 'Named port project'],
+        ),
+        _basket_skeleton(
+            theme_id='logistics_warehousing', display_name='Logistics / Warehousing',
+            category='Transport/Logistics',
+            aliases=['logistics', 'warehousing', 'warehouse', 'cold chain'],
+            keywords=['logistics', 'warehousing', 'supply chain', 'cold chain', '3pl'],
+            trigger_keywords=['logistics park', 'warehouse demand', 'cold chain expansion'],
+            direct_sectors=['3PL', 'Warehousing', 'Express logistics'],
+            indirect_sectors=['E-commerce', 'Road transport', 'Packaging'],
+            raw_material=['Fuel', 'Real estate'],
+            risk_sectors=['Margin pressure', 'Competition'],
+            stocks_direct=['BLUEDART', 'TCIEXP', 'MAHLOG', 'GATI'],
+            stocks_indirect=['CONCOR', 'DELHIVERY'],
+            stocks_raw=['IOC'],
+            confirmation_rules=['Volume growth', 'Named contract', 'Sector breadth'],
+        ),
+        _basket_skeleton(
+            theme_id='auto_ev_batteries', display_name='Auto / EV / Batteries',
+            category='Transport/Logistics',
+            aliases=['auto', 'ev', 'electric vehicle', 'battery'],
+            keywords=['auto', 'ev', 'electric vehicle', 'battery', 'fame', 'pli auto'],
+            trigger_keywords=['ev policy', 'battery plant', 'auto pli', 'fame scheme'],
+            direct_sectors=['Auto OEM', 'EV', 'Battery cell'],
+            indirect_sectors=['Auto ancillaries', 'Metals', 'Electronics'],
+            raw_material=['Lithium', 'Copper', 'Aluminium'],
+            risk_sectors=['Demand slowdown', 'Subsidy changes'],
+            stocks_direct=['TATAMOTORS', 'M&M', 'MARUTI', 'EXIDE', 'AMARAJABAT'],
+            stocks_indirect=['BOSCHLTD', 'MOTHERSON', 'HINDALCO'],
+            stocks_raw=['HINDCOPPER'],
+            confirmation_rules=['Volume trend', 'Policy clarity', 'Named order'],
+        ),
+        _basket_skeleton(
+            theme_id='data_center_ai', display_name='Data Center / AI Infra',
+            category='Digital/Communication',
+            aliases=['data center', 'datacenter', 'ai infra', 'cloud infra'],
+            keywords=['data center', 'data centre', 'ai infra', 'cloud', 'hyperscale'],
+            trigger_keywords=['data centre investment', 'ai cloud capex', 'hyperscale facility'],
+            direct_sectors=['Data centres', 'Cloud infra', 'Colocation'],
+            indirect_sectors=['Power', 'Cooling', 'Networking'],
+            raw_material=['Copper', 'Electronics'],
+            risk_sectors=['Capex intensity', 'Power availability'],
+            stocks_direct=['NTTDATA', 'BHARTIARTL', 'RELIANCE', 'TCS'],
+            stocks_indirect=['POLYCAB', 'KEI', 'ABB', 'SIEMENS'],
+            stocks_raw=['HINDCOPPER'],
+            confirmation_rules=['Named project', 'Capex clarity', 'Volume confirm'],
+        ),
+        _basket_skeleton(
+            theme_id='psu_banks', display_name='PSU Banks', category='Finance',
+            aliases=['psu bank', 'psu banks', 'public sector bank'],
+            keywords=['psu bank', 'public sector bank', 'sbi', 'pnb', 'bank recap'],
+            trigger_keywords=['psu bank recap', 'psu divestment', 'credit growth'],
+            direct_sectors=['PSU banks'],
+            indirect_sectors=['NBFC', 'Insurance', 'Capital markets'],
+            raw_material=[],
+            risk_sectors=['NPA cycle', 'Rate shock'],
+            stocks_direct=['SBIN', 'PNB', 'BANKBARODA', 'CANBK', 'UNIONBANK'],
+            stocks_indirect=['LICHSGFIN', 'HUDCO'],
+            stocks_raw=[],
+            confirmation_rules=['Policy clarity', 'Credit growth trend'],
+            stale_after_hours=24,
+        ),
+        _basket_skeleton(
+            theme_id='private_banks', display_name='Private Banks', category='Finance',
+            aliases=['private bank', 'private banks', 'hdfc bank', 'icici'],
+            keywords=['private bank', 'hdfc bank', 'icici', 'kotak', 'axis bank'],
+            trigger_keywords=['private bank earnings', 'credit growth', 'retail loan'],
+            direct_sectors=['Private banks'],
+            indirect_sectors=['Insurance', 'Wealth', 'Fintech'],
+            raw_material=[],
+            risk_sectors=['Asset quality', 'Rate shock'],
+            stocks_direct=['HDFCBANK', 'ICICIBANK', 'KOTAKBANK', 'AXISBANK', 'INDUSINDBK'],
+            stocks_indirect=['BAJFINANCE', 'HDFCLIFE'],
+            stocks_raw=[],
+            confirmation_rules=['Credit growth', 'Asset quality trend'],
+            stale_after_hours=24,
+        ),
+        _basket_skeleton(
+            theme_id='nbfc', display_name='NBFC', category='Finance',
+            aliases=['nbfc', 'nbfcs', 'shadow bank'],
+            keywords=['nbfc', 'shadow bank', 'microfinance', 'vehicle finance'],
+            trigger_keywords=['nbfc regulation', 'microfinance growth', 'vehicle loan'],
+            direct_sectors=['NBFCs', 'Microfinance', 'Vehicle finance'],
+            indirect_sectors=['Banks', 'Insurance', 'Housing finance'],
+            raw_material=[],
+            risk_sectors=['Liquidity', 'Regulatory action'],
+            stocks_direct=['BAJFINANCE', 'CHOLAFIN', 'M&MFIN', 'SHRIRAMFIN', 'LICHSGFIN'],
+            stocks_indirect=['HDFCBANK', 'ICICIBANK'],
+            stocks_raw=[],
+            confirmation_rules=['Growth trend', 'Regulatory clarity'],
+            stale_after_hours=24,
+        ),
+        _basket_skeleton(
+            theme_id='insurance', display_name='Insurance', category='Finance',
+            aliases=['insurance', 'life insurance', 'general insurance', 'lic'],
+            keywords=['insurance', 'life insurance', 'general insurance', 'lic', 'premium'],
+            trigger_keywords=['insurance penetration', 'lic listing', 'health insurance'],
+            direct_sectors=['Life insurance', 'General insurance'],
+            indirect_sectors=['Banks', 'Brokers', 'Healthcare'],
+            raw_material=[],
+            risk_sectors=['Claims cycle', 'Investment returns'],
+            stocks_direct=['LICI', 'HDFCLIFE', 'SBILIFE', 'ICICIPRULI', 'GICRE'],
+            stocks_indirect=['HDFCBANK', 'ICICIBANK'],
+            stocks_raw=[],
+            confirmation_rules=['Premium growth', 'Persistency trend'],
+            stale_after_hours=48,
+        ),
+        _basket_skeleton(
+            theme_id='amc_brokers', display_name='AMC / Brokers', category='Finance',
+            aliases=['amc', 'broker', 'brokers', 'mutual fund', 'demat'],
+            keywords=['amc', 'broker', 'mutual fund', 'demat', 'asset management'],
+            trigger_keywords=['mutual fund inflows', 'retail participation', 'demat accounts'],
+            direct_sectors=['AMCs', 'Brokers', 'Wealth platforms'],
+            indirect_sectors=['Banks', 'Insurance', 'Fintech'],
+            raw_material=[],
+            risk_sectors=['Market volumes', 'Regulatory fee changes'],
+            stocks_direct=['HDFCAMC', 'MFSL', 'CAMS', 'ANGELONE', 'IIFL'],
+            stocks_indirect=['ICICIBANK', 'HDFCBANK'],
+            stocks_raw=[],
+            confirmation_rules=['AUM growth', 'Volume trend'],
+            stale_after_hours=48,
+        ),
+        _basket_skeleton(
+            theme_id='chemicals', display_name='Chemicals', category='Commodities/Materials',
+            aliases=['chemical', 'chemicals', 'specialty chemical'],
+            keywords=['chemical', 'specialty chemical', 'agrochemical', 'petrochemical'],
+            trigger_keywords=['chemical demand', 'china chemical', 'specialty chemical expansion'],
+            direct_sectors=['Specialty chemicals', 'Agrochemicals', 'Petrochemicals'],
+            indirect_sectors=['Pharma', 'Textiles', 'Auto'],
+            raw_material=['Crude', 'Natural gas'],
+            risk_sectors=['China demand', 'Input cost volatility'],
+            stocks_direct=['DEEPAKNTR', 'SRF', 'AARTIIND', 'PIDILITIND', 'UPL'],
+            stocks_indirect=['TATACHEM', 'GNFC'],
+            stocks_raw=['RELIANCE'],
+            confirmation_rules=['Volume + margin trend', 'Named expansion'],
+        ),
+        _basket_skeleton(
+            theme_id='sugar_ethanol', display_name='Sugar / Ethanol', category='Commodities/Materials',
+            aliases=['sugar', 'ethanol', 'distillery'],
+            keywords=['sugar', 'ethanol', 'distillery', 'e20', 'blending'],
+            trigger_keywords=['ethanol blending', 'sugar export', 'distillery expansion'],
+            direct_sectors=['Sugar mills', 'Ethanol distilleries'],
+            indirect_sectors=['OMCs', 'Agri inputs'],
+            raw_material=['Sugarcane', 'Molasses'],
+            risk_sectors=['Policy changes', 'Crush season'],
+            stocks_direct=['BALRAMCHIN', 'TRIVENI', 'EIDPARRY', 'BAJAJHIND', 'DHAMPURSUG'],
+            stocks_indirect=['IOC', 'BPCL'],
+            stocks_raw=['COROMANDEL'],
+            confirmation_rules=['Blending policy', 'Volume trend'],
+        ),
+        _basket_skeleton(
+            theme_id='fmcg', display_name='FMCG', category='Consumer/India Growth',
+            aliases=['fmcg', 'consumer staples', 'staples'],
+            keywords=['fmcg', 'consumer staples', 'rural demand', 'urban demand'],
+            trigger_keywords=['rural demand recovery', 'fmcg volume growth', 'monsoon boost'],
+            direct_sectors=['FMCG', 'Consumer staples'],
+            indirect_sectors=['Retail', 'Packaging', 'Agri'],
+            raw_material=['Palm oil', 'Packaging'],
+            risk_sectors=['Input inflation', 'Weak monsoon'],
+            stocks_direct=['HINDUNILVR', 'ITC', 'NESTLEIND', 'BRITANNIA', 'DABUR'],
+            stocks_indirect=['MARICO', 'GODREJCP', 'TATACONSUM'],
+            stocks_raw=['UPL'],
+            confirmation_rules=['Volume growth', 'Rural recovery signal'],
+        ),
+        _basket_skeleton(
+            theme_id='retail', display_name='Retail', category='Consumer/India Growth',
+            aliases=['retail', 'retailer', 'organised retail'],
+            keywords=['retail', 'store expansion', 'organised retail', 'ecommerce'],
+            trigger_keywords=['retail expansion', 'same-store sales', 'festive demand'],
+            direct_sectors=['Retail', 'E-commerce'],
+            indirect_sectors=['FMCG', 'Logistics', 'Payments'],
+            raw_material=['Inventory', 'Real estate'],
+            risk_sectors=['Margin pressure', 'Competition'],
+            stocks_direct=['TITAN', 'TRENT', 'DMART', 'SHOPERSTOP', 'JUBLFOOD'],
+            stocks_indirect=['HINDUNILVR', 'DELHIVERY'],
+            stocks_raw=['ITC'],
+            confirmation_rules=['SSS growth', 'Festive demand confirm'],
+        ),
+        _basket_skeleton(
+            theme_id='textiles', display_name='Textiles', category='Consumer/India Growth',
+            aliases=['textile', 'textiles', 'garment', 'apparel'],
+            keywords=['textile', 'garment', 'apparel', 'cotton', 'fabric'],
+            trigger_keywords=['textile pli', 'garment export', 'cotton prices'],
+            direct_sectors=['Textiles', 'Garments', 'Apparel'],
+            indirect_sectors=['Chemicals', 'Retail', 'Exports'],
+            raw_material=['Cotton', 'Polyester'],
+            risk_sectors=['Input costs', 'Export demand'],
+            stocks_direct=['ARVIND', 'RAYMOND', 'WELSPUNIND', 'TRIDENT', 'KPRMILL'],
+            stocks_indirect=['GRASIM', 'VARDHACRLC'],
+            stocks_raw=['RUPA'],
+            confirmation_rules=['Order book', 'Export trend'],
+        ),
+        _basket_skeleton(
+            theme_id='media_entertainment', display_name='Media / Entertainment',
+            category='Consumer/India Growth',
+            aliases=['media', 'entertainment', 'ott', 'broadcast'],
+            keywords=['media', 'entertainment', 'ott', 'broadcast', 'streaming'],
+            trigger_keywords=['ott subscriber', 'ad revenue', 'content deal'],
+            direct_sectors=['Media', 'Broadcast', 'OTT'],
+            indirect_sectors=['Telecom', 'Retail', 'Advertising'],
+            raw_material=['Content', 'Sports rights'],
+            risk_sectors=['Ad cycle', 'Content costs'],
+            stocks_direct=['ZEEL', 'SUNTV', 'PVRINOX', 'SAREGAMA', 'NETWORK18'],
+            stocks_indirect=['BHARTIARTL', 'RELIANCE'],
+            stocks_raw=['TIPS'],
+            confirmation_rules=['Ad recovery', 'Subscriber trend'],
+        ),
+        _basket_skeleton(
+            theme_id='pharma', display_name='Pharma', category='Healthcare',
+            aliases=['pharma', 'pharmaceutical', 'drug', 'api'],
+            keywords=['pharma', 'pharmaceutical', 'drug', 'api', 'formulation'],
+            trigger_keywords=['fda approval', 'us pharma', 'api export', 'formulation growth'],
+            direct_sectors=['Pharma formulations', 'APIs', 'CDMO'],
+            indirect_sectors=['Hospitals', 'Diagnostics', 'Chemicals'],
+            raw_material=['API inputs', 'Excipients'],
+            risk_sectors=['US pricing', 'Regulatory action'],
+            stocks_direct=['SUNPHARMA', 'DRREDDY', 'CIPLA', 'DIVISLAB', 'LUPIN'],
+            stocks_indirect=['BIOCON', 'TORNTPHARM'],
+            stocks_raw=['AARTIIND'],
+            confirmation_rules=['Approval clarity', 'Volume trend'],
+        ),
+        _basket_skeleton(
+            theme_id='hospitals', display_name='Hospitals', category='Healthcare',
+            aliases=['hospital', 'hospitals', 'healthcare provider'],
+            keywords=['hospital', 'healthcare', 'bed capacity', 'ayushman'],
+            trigger_keywords=['hospital expansion', 'bed addition', 'ayushman bharat'],
+            direct_sectors=['Hospital chains', 'Healthcare providers'],
+            indirect_sectors=['Pharma', 'Diagnostics', 'Insurance'],
+            raw_material=['Medical equipment'],
+            risk_sectors=['Regulatory', 'Doctor attrition'],
+            stocks_direct=['APOLLOHOSP', 'FORTIS', 'MAXHEALTH', 'NH', 'MEDANTA'],
+            stocks_indirect=['LALPATHLAB', 'METROPOLIS'],
+            stocks_raw=['POLYMED'],
+            confirmation_rules=['Occupancy trend', 'Expansion clarity'],
+        ),
+        _basket_skeleton(
+            theme_id='diagnostics', display_name='Diagnostics', category='Healthcare',
+            aliases=['diagnostic', 'diagnostics', 'pathology', 'lab'],
+            keywords=['diagnostic', 'pathology', 'lab test', 'diagnostics chain'],
+            trigger_keywords=['diagnostics expansion', 'lab network', 'preventive care'],
+            direct_sectors=['Diagnostics chains', 'Pathology labs'],
+            indirect_sectors=['Hospitals', 'Pharma', 'Insurance'],
+            raw_material=['Reagents', 'Equipment'],
+            risk_sectors=['Competition', 'Pricing pressure'],
+            stocks_direct=['LALPATHLAB', 'METROPOLIS', 'THYROCARE', 'KRSNAA'],
+            stocks_indirect=['APOLLOHOSP', 'MAXHEALTH'],
+            stocks_raw=['TATAELXSI'],
+            confirmation_rules=['Volume growth', 'Network expansion'],
+        ),
+        _basket_skeleton(
+            theme_id='rbi_rates', display_name='RBI / Rates', category='Market Risk',
+            aliases=['rbi', 'rates', 'repo rate', 'monetary policy'],
+            keywords=['rbi', 'repo rate', 'monetary policy', 'rate cut', 'rate hike'],
+            trigger_keywords=['rbi policy', 'repo rate', 'mpc decision', 'liquidity'],
+            direct_sectors=['Banks', 'NBFCs', 'Rate-sensitive sectors'],
+            indirect_sectors=['Real estate', 'Auto', 'Consumption'],
+            raw_material=[],
+            risk_sectors=['Rate volatility', 'Liquidity squeeze'],
+            stocks_direct=['HDFCBANK', 'ICICIBANK', 'SBIN', 'BAJFINANCE', 'DLF'],
+            stocks_indirect=['TATAMOTORS', 'HINDUNILVR'],
+            stocks_raw=[],
+            confirmation_rules=['Policy clarity', 'Sector breadth confirm'],
+            stale_after_hours=24,
+        ),
+        _basket_skeleton(
+            theme_id='currency_import_export', display_name='Currency / Import-Export',
+            category='Market Risk',
+            aliases=['currency', 'forex', 'rupee', 'import export', 'fx'],
+            keywords=['rupee', 'forex', 'currency', 'import', 'export', 'fx'],
+            trigger_keywords=['rupee weakness', 'export incentive', 'import duty', 'forex reserves'],
+            direct_sectors=['Exporters', 'Importers', 'IT services'],
+            indirect_sectors=['OMCs', 'Metals', 'Pharma'],
+            raw_material=['Crude', 'Commodities'],
+            risk_sectors=['FX volatility', 'Trade deficit'],
+            stocks_direct=['TCS', 'INFY', 'HCLTECH', 'SUNPHARMA', 'DRREDDY'],
+            stocks_indirect=['RELIANCE', 'IOC'],
+            stocks_raw=['ONGC'],
+            confirmation_rules=['FX trend', 'Named policy action'],
+            stale_after_hours=24,
+        ),
+        _basket_skeleton(
+            theme_id='crude_sensitive', display_name='Crude Sensitive', category='Market Risk',
+            aliases=['crude', 'oil shock', 'brent', 'atf'],
+            keywords=['crude', 'brent', 'oil price', 'atf', 'fuel cost'],
+            trigger_keywords=['crude spike', 'oil shock', 'fuel price hike', 'brent surge'],
+            direct_sectors=['OMCs', 'Airlines', 'Paint', 'Tyres'],
+            indirect_sectors=['Logistics', 'Chemicals', 'FMCG'],
+            raw_material=['Crude'],
+            risk_sectors=['Margin squeeze', 'Demand destruction'],
+            stocks_direct=['IOC', 'BPCL', 'HINDPETRO', 'INDIGO', 'ASIANPAINT'],
+            stocks_indirect=['RELIANCE', 'BERGER'],
+            stocks_raw=['ONGC'],
+            confirmation_rules=['Crude trend', 'Margin impact clarity'],
+            stale_after_hours=24,
+        ),
+        _basket_skeleton(
+            theme_id='war_geopolitics', display_name='War / Geopolitics', category='Market Risk',
+            aliases=['war', 'geopolitics', 'conflict', 'sanctions'],
+            keywords=['war', 'geopolitics', 'conflict', 'sanctions', 'tension', 'strike'],
+            trigger_keywords=['military strike', 'geopolitical tension', 'sanctions', 'conflict escalation'],
+            direct_sectors=['Defence', 'Energy', 'Gold'],
+            indirect_sectors=['Shipping', 'Aviation', 'IT'],
+            raw_material=['Crude', 'Gold'],
+            risk_sectors=['Risk-off', 'Supply disruption'],
+            stocks_direct=['HAL', 'BEL', 'COCHINSHIP', 'MAZDOCK', 'GOLDETF'],
+            stocks_indirect=['RELIANCE', 'ONGC', 'INDIGO'],
+            stocks_raw=['TATASTEEL'],
+            confirmation_rules=['Headline clarity', 'Sector reaction confirm'],
+            stale_after_hours=24,
+        ),
+        _basket_skeleton(
+            theme_id='pli_manufacturing', display_name='PLI / Manufacturing',
+            category='Government/Budget',
+            aliases=['pli', 'manufacturing', 'make in india'],
+            keywords=['pli', 'production linked incentive', 'manufacturing', 'make in india'],
+            trigger_keywords=['pli scheme', 'manufacturing incentive', 'local manufacturing'],
+            direct_sectors=['Electronics', 'Auto', 'Pharma', 'Textiles'],
+            indirect_sectors=['Capital goods', 'Chemicals', 'Logistics'],
+            raw_material=['Components', 'Industrial inputs'],
+            risk_sectors=['Execution delays', 'Import competition'],
+            stocks_direct=['DIXON', 'KAYNES', 'SYRMA', 'TATASTEEL', 'SUNPHARMA'],
+            stocks_indirect=['LT', 'ABB', 'SIEMENS'],
+            stocks_raw=['HINDALCO'],
+            confirmation_rules=['PLI approval', 'Named beneficiary', 'Volume confirm'],
+            stale_after_hours=72,
+        ),
+    ]
+
+
+def migrate_theme_baskets(data: dict[str, Any]) -> dict[str, Any]:
+    """Upgrade persisted baskets to Stage 47C schema."""
+    canonical = {b['theme_id']: _normalize_basket(b) for b in _default_baskets()}
+    existing = data.get('baskets') or []
+    merged: dict[str, dict[str, Any]] = {}
+    for basket in existing:
+        if not isinstance(basket, dict):
+            continue
+        tid = str(basket.get('theme_id') or '')
+        tid = LEGACY_THEME_ID_MAP.get(tid, tid)
+        base = canonical.get(tid, {})
+        row = dict(base)
+        row.update(basket)
+        row['theme_id'] = tid
+        merged[tid] = _normalize_basket(row)
+    for tid, basket in canonical.items():
+        merged.setdefault(tid, basket)
+    data['baskets'] = list(merged.values())
+    data['stage'] = STAGE
+    return data
 
 
 def bootstrap_theme_baskets(*, force: bool = False) -> dict[str, Any]:
-    """Create theme_baskets.json with 18 default baskets if missing."""
+    """Create or migrate theme_baskets.json with full wishlist baskets."""
     if BASKETS_FILE.is_file() and not force:
         try:
             data = json.loads(BASKETS_FILE.read_text(encoding='utf-8'))
             if isinstance(data, dict) and data.get('baskets'):
+                if data.get('stage') != STAGE or len(data.get('baskets') or []) < len(_default_baskets()):
+                    data = migrate_theme_baskets(data)
+                    atomic_write_json(BASKETS_FILE, data)
+                    _log(f'migrated to {len(data.get("baskets") or [])} baskets')
                 return data
         except (OSError, json.JSONDecodeError):
             pass
@@ -554,7 +1065,7 @@ def load_theme_baskets() -> dict[str, Any]:
 
 def get_basket_by_id(theme_id: str) -> Optional[dict[str, Any]]:
     resolved = resolve_theme_id(theme_id)
-    if not resolved or resolved == 'budget':
+    if not resolved or resolved == 'budget' or str(resolved).startswith('__category__'):
         return None
     for basket in load_theme_baskets().get('baskets') or []:
         if isinstance(basket, dict) and basket.get('theme_id') == resolved:
@@ -567,17 +1078,85 @@ def resolve_theme_id(raw: str) -> Optional[str]:
     if not key:
         return None
     if key in THEME_ALIASES:
-        return THEME_ALIASES[key]
+        alias = THEME_ALIASES[key]
+        return alias
+    if key in CATEGORY_ALIASES:
+        return f'__category__:{CATEGORY_ALIASES[key]}'
     for basket in load_theme_baskets().get('baskets') or []:
         if not isinstance(basket, dict):
             continue
         tid = str(basket.get('theme_id') or '')
         if key == tid or key in tid:
             return tid
+        for alias in basket.get('aliases') or []:
+            if key == str(alias).lower().replace('-', '_').replace(' ', '_'):
+                return tid
         display = str(basket.get('display_name') or '').lower()
         if key.replace('_', ' ') in display or key in display.replace('/', ' ').replace(' ', '_'):
             return tid
     return None
+
+
+def resolve_category(raw: str) -> Optional[str]:
+    key = str(raw or '').strip().lower().replace('-', '_').replace(' ', '_')
+    if not key:
+        return None
+    if key in CATEGORY_ALIASES:
+        return CATEGORY_ALIASES[key]
+    for category in THEME_CATEGORIES:
+        if key == category.lower().replace('/', '_').replace(' ', '_'):
+            return category
+        if key in category.lower():
+            return category
+    return None
+
+
+def search_theme_baskets(keyword: str) -> list[dict[str, str]]:
+    """Return baskets matching keyword in id, display name, aliases, or keywords."""
+    needle = _normalize_text(keyword)
+    if not needle:
+        return []
+    matches: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for basket in load_theme_baskets().get('baskets') or []:
+        if not isinstance(basket, dict):
+            continue
+        tid = str(basket.get('theme_id') or '')
+        if tid in seen:
+            continue
+        haystacks = [
+            tid,
+            str(basket.get('display_name') or ''),
+            str(basket.get('category') or ''),
+        ]
+        haystacks.extend(str(a) for a in (basket.get('aliases') or []))
+        haystacks.extend(str(k) for k in (basket.get('keywords') or []))
+        haystacks.extend(str(k) for k in (basket.get('trigger_keywords') or []))
+        blob = _normalize_text(' '.join(haystacks))
+        if needle in blob or any(needle in _normalize_text(h) for h in haystacks):
+            seen.add(tid)
+            matches.append({
+                'theme_id': tid,
+                'display_name': str(basket.get('display_name') or tid),
+                'category': str(basket.get('category') or ''),
+            })
+    matches.sort(key=lambda r: (r.get('category', ''), r.get('display_name', '')))
+    return matches
+
+
+def get_baskets_by_category(category: str) -> list[dict[str, str]]:
+    resolved = resolve_category(category) or category
+    ids = THEME_CATEGORIES.get(resolved) or []
+    rows: list[dict[str, str]] = []
+    for tid in ids:
+        basket = get_basket_by_id(tid)
+        if basket:
+            rows.append({
+                'theme_id': tid,
+                'display_name': str(basket.get('display_name') or tid),
+                'category': str(basket.get('category') or resolved),
+            })
+    return rows
 
 
 def _normalize_text(text: str) -> str:
@@ -623,13 +1202,14 @@ def is_theme_catalyst_relevant(
     item: Optional[dict] = None,
 ) -> bool:
     """Return True only when headline has real thematic tie — not amount/corporate noise."""
+    theme_id = _canonical_theme_id(theme_id)
     basket = get_basket_by_id(theme_id) or {}
     text = headline
     if item:
         text = f'{headline} {item.get("description") or ""}'
     lower = _normalize_text(text)
 
-    if theme_id == 'defence':
+    if theme_id == 'defence_aerospace':
         if 'currency defence' in lower or 'rupee defence' in lower:
             military = any(
                 w in lower
@@ -752,6 +1332,7 @@ def score_theme_catalyst(
     seen_headlines: Optional[set[str]] = None,
 ) -> Optional[dict[str, Any]]:
     """Compute Theme Catalyst Score components for a headline + theme."""
+    theme_id = _canonical_theme_id(theme_id)
     if not is_theme_catalyst_relevant(headline, theme_id, item=item):
         return None
 
@@ -1159,6 +1740,7 @@ def list_all_baskets() -> list[dict[str, str]]:
         {
             'theme_id': b.get('theme_id', ''),
             'display_name': b.get('display_name', ''),
+            'category': b.get('category', ''),
         }
         for b in load_theme_baskets().get('baskets') or []
         if isinstance(b, dict)
@@ -1166,24 +1748,36 @@ def list_all_baskets() -> list[dict[str, str]]:
 
 
 def format_theme_list_telegram() -> str:
-    lines = ['<b>🧺 AstraEdge Theme Baskets</b>', '']
+    lines = [f'<b>🧺 {WISHLIST_TITLE}</b>', '']
+    grouped: dict[str, list[dict[str, str]]] = {}
     for row in list_all_baskets():
-        lines.append(f"• {row.get('display_name') or row.get('theme_id')}")
+        cat = row.get('category') or 'Other'
+        grouped.setdefault(cat, []).append(row)
+    for category in THEME_CATEGORIES:
+        rows = grouped.get(category) or []
+        if not rows:
+            continue
+        lines.append(f'<b>{category}</b>')
+        for row in rows:
+            lines.append(f"• {row.get('display_name') or row.get('theme_id')}")
+        lines.append('')
     lines.extend([
-        '',
         '<i>Research only — watch/confirm, no blind entry.</i>',
         'Use <code>/theme infra</code> for basket details.',
+        'Use <code>/theme search bank</code> or <code>/theme category finance</code>.',
     ])
     return '\n'.join(lines)
 
 
 def format_theme_overview_telegram() -> str:
     return (
-        '<b>🧺 AstraEdge Theme Baskets</b>\n\n'
+        f'<b>🧺 {WISHLIST_TITLE}</b>\n\n'
         'Thematic intelligence mapping news/govt events to sectors and stocks.\n\n'
         '<b>Commands:</b>\n'
-        '• <code>/theme list</code> — all baskets\n'
-        '• <code>/theme infra</code> — basket details\n'
+        '• <code>/theme list</code> — grouped wishlist\n'
+        '• <code>/theme &lt;basket&gt;</code> — basket details\n'
+        '• <code>/theme search &lt;keyword&gt;</code> — find baskets\n'
+        '• <code>/theme category &lt;name&gt;</code> — baskets by category\n'
         '• <code>/theme news infra</code> — matched catalysts\n'
         '• <code>/theme scan infra</code> — ranked watchlist\n'
         '• <code>/theme budget</code> — budget-sensitive themes\n'
@@ -1222,12 +1816,13 @@ def format_theme_detail_telegram(theme_id: str) -> str:
     emoji_map = {
         'infrastructure': '🏗️',
         'roads_highways': '🛣️',
-        'railways': '🚆',
-        'defence': '🛡️',
+        'railways_metro': '🚆',
+        'defence_aerospace': '🛡️',
         'tourism_temple_culture': '🛕',
     }
     emoji = emoji_map.get(str(basket.get('theme_id')), '🧺')
 
+    lines = [f'<b>{emoji} {WISHLIST_TITLE} — {display}</b>', '']
     related = []
     if basket.get('theme_id') == 'infrastructure':
         related = ['Infrastructure', 'Roads', 'Cement', 'Steel', 'Paint']
@@ -1235,7 +1830,9 @@ def format_theme_detail_telegram(theme_id: str) -> str:
         related = [display]
         related.extend((basket.get('indirect_beneficiary_sectors') or [])[:3])
 
-    lines = [f'<b>{emoji} AstraEdge Theme Basket — {display}</b>', '']
+    if basket.get('category'):
+        lines.append(f"<i>Category: {basket.get('category')}</i>")
+        lines.append('')
     if stale:
         lines.append('<i>Research only — catalyst cache stale. Run /theme refresh.</i>')
         lines.append('')
@@ -1333,6 +1930,43 @@ def format_theme_scan_telegram(theme_id: str) -> str:
     return '\n'.join(lines)
 
 
+def format_theme_search_telegram(keyword: str) -> str:
+    rows = search_theme_baskets(keyword)
+    lines = [f'<b>🔍 Theme Search — {keyword}</b>', '']
+    if not rows:
+        lines.append('No matching baskets.')
+        lines.append('Try <code>/theme list</code> or another keyword.')
+        return '\n'.join(lines)
+    for row in rows:
+        lines.append(
+            f"• {row.get('display_name')} "
+            f"(<code>{row.get('theme_id')}</code>) — {row.get('category')}"
+        )
+    lines.extend(['', '<i>Research only — use /theme &lt;basket&gt; for details.</i>'])
+    return '\n'.join(lines)
+
+
+def format_theme_category_telegram(category: str) -> str:
+    resolved = resolve_category(category)
+    if not resolved:
+        return (
+            f'Unknown category: <code>{category}</code>. '
+            'Try transport, finance, healthcare, commodities, digital, budget.'
+        )
+    rows = get_baskets_by_category(resolved)
+    lines = [f'<b>📂 {resolved}</b>', '']
+    if not rows:
+        lines.append('No baskets in this category.')
+        return '\n'.join(lines)
+    for row in rows:
+        lines.append(f"• {row.get('display_name')} (<code>{row.get('theme_id')}</code>)")
+    lines.extend([
+        '',
+        '<i>Research only — /theme &lt;basket&gt; for details.</i>',
+    ])
+    return '\n'.join(lines)
+
+
 def handle_theme_command(args: str) -> str:
     """Dispatch /theme subcommands."""
     raw = str(args or '').strip()
@@ -1355,6 +1989,12 @@ def handle_theme_command(args: str) -> str:
             f"Refreshed: {result.get('refreshed_at', '—')}\n"
             '<i>Research only — manual refresh, no automatic alerts.</i>'
         )
+    if sub == 'search' and len(parts) >= 2:
+        keyword = ' '.join(parts[1:])
+        return format_theme_search_telegram(keyword)
+    if sub == 'category' and len(parts) >= 2:
+        category_key = ' '.join(parts[1:])
+        return format_theme_category_telegram(category_key)
     if sub == 'add' and len(parts) >= 4:
         result = add_stock_to_basket(parts[1], parts[2], parts[3])
         if result.get('ok'):
@@ -1385,6 +2025,8 @@ def handle_theme_command(args: str) -> str:
 
     theme_key = ' '.join(parts)
     resolved = resolve_theme_id(theme_key)
+    if resolved and str(resolved).startswith('__category__:'):
+        return format_theme_category_telegram(str(resolved).split(':', 1)[-1])
     if resolved == 'budget':
         return format_theme_budget_telegram()
     if not resolved:

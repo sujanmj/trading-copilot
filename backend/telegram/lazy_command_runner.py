@@ -48,11 +48,11 @@ def _cache_age_minutes(path: Path) -> int:
         return -1
 
 
-def _scoped_refresh(scope: str) -> dict[str, Any]:
+def _scoped_refresh(scope: str, *, dry_run: bool = False) -> dict[str, Any]:
     try:
         from scripts.refresh_local_intelligence import run_refresh_scoped
 
-        return run_refresh_scoped(scope, dry_run=False)
+        return run_refresh_scoped(scope, dry_run=dry_run)
     except Exception as exc:
         return {'ok': False, 'scope': scope, 'error': str(exc)[:200]}
 

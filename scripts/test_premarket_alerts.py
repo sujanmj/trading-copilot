@@ -35,8 +35,8 @@ def main() -> int:
     report = build_premarket_conviction_report(persist=True)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
-    if report.get('stage') != '46J':
-        return _fail('report stage not 46J')
+    if report.get('stage') != '47D':
+        return _fail('report stage not 47D')
 
     from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
     from backend.analytics.premarket_conviction import _is_after_open
@@ -45,9 +45,13 @@ def main() -> int:
     text = format_premarket_telegram(full=False, report=report)
     lower = text.lower()
     if not weekend:
-        for phrase in REQUIRED_ALWAYS:
-            if phrase not in lower:
-                return _fail(f'missing required phrase: {phrase}')
+        if 'no blind entry' not in lower:
+            return _fail('missing required phrase: no blind entry')
+        if _is_after_open():
+            if 'wait for volume' not in lower and 'watch for entry' not in lower:
+                return _fail('after open: missing wait for volume or watch for entry')
+        elif 'watch for entry' not in lower:
+            return _fail('missing required phrase: watch for entry')
     else:
         for phrase in REQUIRED_ALWAYS:
             if phrase not in lower:

@@ -37,7 +37,7 @@ def main() -> int:
                 ('Hindustan Zinc stake sale worth ₹5,000 crore', 'infrastructure'),
                 ('Hindustan Zinc stake sale worth ₹5,000 crore', 'roads_highways'),
                 ('Page Industries sees heavy F&O activity ahead of expiry', 'railways'),
-                ('RBI steps in for currency defence as rupee weakens', 'defence'),
+                ('RBI steps in for currency defence as rupee weakens', 'defence_aerospace'),
             ]
             for headline, theme_id in false_positives:
                 if tb.is_theme_catalyst_relevant(headline, theme_id):
@@ -50,8 +50,8 @@ def main() -> int:
             valid = [
                 ('Govt announces ₹11,000 crore road project in Delhi', 'roads_highways'),
                 ('L&T wins ₹2,500 crore highway order in Maharashtra', 'roads_highways'),
-                ('IRCON bags railway signalling contract from Indian Railways', 'railways'),
-                ('HAL wins ₹1,200 crore defence order from Indian Army', 'defence'),
+                ('IRCON bags railway signalling contract from Indian Railways', 'railways_metro'),
+                ('HAL wins ₹1,200 crore defence order from Indian Army', 'defence_aerospace'),
                 ('Ram Mandir tourism boost expected to lift Ayodhya travel demand', 'tourism_temple_culture'),
             ]
             for headline, theme_id in valid:
@@ -69,7 +69,7 @@ def main() -> int:
             if not generic.get('hide_from_top3'):
                 return _fail('generic policy should hide from top 3')
 
-            detail = tb.format_theme_detail_telegram('defence')
+            detail = tb.format_theme_detail_telegram('defence_aerospace')
             if tb.NO_CATALYST_MESSAGE not in detail and 'Latest catalysts' not in detail:
                 return _fail('detail output missing catalyst section')
             if 'buy now' in detail.lower() or 'guaranteed' in detail.lower():

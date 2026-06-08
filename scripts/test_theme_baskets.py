@@ -33,15 +33,15 @@ def main() -> int:
         try:
             data = tb.bootstrap_theme_baskets(force=True)
             baskets = data.get('baskets') or []
-            if len(baskets) != 18:
-                return _fail(f'expected 18 baskets, got {len(baskets)}')
+            if len(baskets) < 40:
+                return _fail(f'expected >=40 baskets, got {len(baskets)}')
 
             ids = {b.get('theme_id') for b in baskets}
             required = {
                 'infrastructure',
                 'roads_highways',
-                'railways',
-                'defence',
+                'railways_metro',
+                'defence_aerospace',
                 'renewable_energy',
                 'power_grid_transmission',
                 'housing_real_estate',
@@ -56,6 +56,9 @@ def main() -> int:
                 'metals_mining',
                 'telecom_5g',
                 'water_jal_jeevan',
+                'aviation',
+                'pharma',
+                'hospitals',
             }
             missing = required - ids
             if missing:
@@ -75,7 +78,7 @@ def main() -> int:
             loaded = json.loads(baskets_path.read_text(encoding='utf-8'))
             sample = loaded['baskets'][0]
             for field in (
-                'theme_id', 'display_name', 'keywords', 'trigger_keywords',
+                'theme_id', 'display_name', 'category', 'aliases', 'keywords', 'trigger_keywords',
                 'direct_beneficiary_sectors', 'indirect_beneficiary_sectors',
                 'raw_material_beneficiaries', 'risk_sectors', 'stocks',
                 'confirmation_rules', 'stale_after_hours',

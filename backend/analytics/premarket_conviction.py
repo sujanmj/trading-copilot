@@ -1,9 +1,10 @@
 """
-Premarket conviction pipeline (Stage 46J).
+Premarket conviction pipeline (Stage 47D).
 
 Builds premarket_conviction_report.json and Telegram message formatters.
 Research-only wording — watch for entry, confirm after 9:15 (before open), no blind entry.
 Weekend/holiday/research mode uses closed-market watchlist wording and manual refresh hints.
+Hard stale lock (07:45–09:15) suppresses live conviction when feeds are stale.
 """
 
 from __future__ import annotations
@@ -248,7 +249,7 @@ def _build_setup_candidates(
         setup = neg_label or str(row.get('decision') or row.get('label') or 'WATCH').replace('_', ' ')
         if neg_label:
             score = min(score, 52)
-        candidates.append({
+        candidates.append(_annotate_setup_row({
             'ticker': ticker,
             'setup': setup,
             'score': round(score),
@@ -260,7 +261,7 @@ def _build_setup_candidates(
             'source': 'final_confidence',
             'change_percent': chg,
             'direction': direction,
-        })
+        }, source='final_confidence', source_data=final_conf))
 
     wl_rows = (watchlist or {}).get('top_watchlist') or (watchlist or {}).get('watchlist') or []
     for row in wl_rows[:6]:
@@ -277,7 +278,7 @@ def _build_setup_candidates(
         setup = neg_label or str(row.get('setup') or row.get('action') or 'WATCH').replace('_', ' ')
         if neg_label:
             score = min(score, 50)
-        candidates.append({
+        candidates.append(_annotate_setup_row({
             'ticker': ticker,
             'setup': setup,
             'score': round(score),
@@ -289,7 +290,7 @@ def _build_setup_candidates(
             'source': 'watchlist',
             'change_percent': chg,
             'direction': direction,
-        })
+        }, source='watchlist', source_data=watchlist))
 
     for sig in (scanner or {}).get('top_signals', [])[:8]:
         if not isinstance(sig, dict):
@@ -315,7 +316,7 @@ def _build_setup_candidates(
             if _is_after_open()
             else 'Watch for entry — confirm after 9:15 with volume'
         )
-        candidates.append({
+        candidates.append(_annotate_setup_row({
             'ticker': ticker,
             'setup': setup,
             'score': round(score),
@@ -327,7 +328,7 @@ def _build_setup_candidates(
             'source': 'scanner',
             'change_percent': chg,
             'direction': direction,
-        })
+        }, source='scanner', source_data=scanner))
 
     opps = (intel or {}).get('top_opportunities') or []
     for row in opps[:4]:
@@ -344,7 +345,7 @@ def _build_setup_candidates(
         else:
             setup = str(row.get('action') or 'WATCH')
             score = 52
-        candidates.append({
+        candidates.append(_annotate_setup_row({
             'ticker': ticker,
             'setup': setup,
             'score': score,
@@ -354,10 +355,21 @@ def _build_setup_candidates(
             ],
             'sector': row.get('sector') or '?',
             'source': 'intel',
-        })
+        }, source='intel', source_data=intel))
 
     candidates.sort(key=lambda c: c.get('score', 0), reverse=True)
     return candidates[:limit]
+
+
+def _annotate_setup_row(row: dict, *, source: str, source_data: dict) -> dict:
+    from backend.orchestration.alert_freshness_gate import annotate_candidate_session
+
+    annotated = annotate_candidate_session(row, source=source, source_data=source_data)
+    if annotated.get('previous_session_research'):
+        annotated['setup'] = 'Previous-session research'
+        annotated['score'] = min(int(annotated.get('score', 50)), 50)
+        annotated['tier_cap'] = 'not_top3'
+    return annotated
 
 
 def _format_sentiment_value(value: Any) -> str:
@@ -533,9 +545,21 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     market = _load_json(DATA_FILES['market'])
     india_mode = _india_mode_info()
 
-    from backend.orchestration.alert_freshness_gate import premarket_freshness_state
+    from backend.orchestration.alert_freshness_gate import (
+        apply_hard_stale_lock_to_setups,
+        cap_premarket_scores,
+        premarket_freshness_state,
+        premarket_hard_stale_lock,
+    )
 
+    hard_locked, hard_header, hard_stale_keys, riskoff_override = premarket_hard_stale_lock(
+        now=now, try_refresh=False,
+    )
     fresh_ok, fresh_header, stale_keys = premarket_freshness_state(now=now, try_refresh=False)
+    if hard_locked:
+        fresh_ok = False
+        fresh_header = hard_header
+        stale_keys = hard_stale_keys or stale_keys
 
     bullish_sectors, bearish_sectors = _sector_cues(intel)
     setups = _build_setup_candidates(scanner, watchlist, final_conf, intel)
@@ -544,8 +568,12 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     setups = _apply_conflict_guard(setups, avoids)
     setups = _rank_top_setups(setups)
 
-    if not fresh_ok:
-        from backend.orchestration.alert_freshness_gate import cap_premarket_scores
+    previous_session_movers: list[dict] = []
+    if hard_locked:
+        setups, previous_session_movers = apply_hard_stale_lock_to_setups(
+            setups, locked=True, riskoff=riskoff_override,
+        )
+    elif not fresh_ok:
         setups = cap_premarket_scores(setups)
 
     prior_cache_age_h = _existing_report_cache_age_hours(now=now)
@@ -560,7 +588,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '46J',
+        'stage': '47D',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
         'weekend_research_mode': weekend_research,
@@ -571,6 +599,9 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
         'freshness_ok': fresh_ok,
         'freshness_header': fresh_header if not fresh_ok else '',
         'stale_keys': stale_keys,
+        'hard_stale_lock': hard_locked,
+        'riskoff_premarket': riskoff_override,
+        'previous_session_movers': previous_session_movers,
         'overnight_global': {
             'sentiment': global_m.get('sentiment') or global_m.get('overall_sentiment'),
             'sentiment_formatted': _format_global_sentiment_dict(
@@ -766,6 +797,9 @@ def format_premarket_telegram(
     mode_info = data.get('market_mode') or {}
     fresh_ok = data.get('freshness_ok', True)
     fresh_header = data.get('freshness_header') or ''
+    hard_stale_lock = bool(data.get('hard_stale_lock'))
+    riskoff_premarket = bool(data.get('riskoff_premarket'))
+    previous_session_movers = data.get('previous_session_movers') or []
     weekend_research = data.get('weekend_research_mode')
     if weekend_research is None:
         weekend_research = _is_weekend_holiday_research(mode_info)
@@ -782,10 +816,22 @@ def format_premarket_telegram(
     slot_key = slot or ('premarket_action' if full else 'premarket_top3')
     title = _title_for_slot(slot_key, now)
 
+    from backend.orchestration.alert_freshness_gate import (
+        PREMARKET_OLD_SESSION_NOTE,
+        PREMARKET_RISKOFF_HEADER,
+        PREMARKET_WAIT_SCANNER_NOTE,
+        PREMARKET_WATCHLIST_ONLY_NOTE,
+    )
+
     lines: list[str] = []
     if not fresh_ok and fresh_header:
         lines.append(f'<b>{fresh_header}</b>')
-        lines.append('<i>Watchlist preparation only — not conviction.</i>')
+        lines.append(f'<i>{PREMARKET_WATCHLIST_ONLY_NOTE}</i>')
+        if hard_stale_lock:
+            lines.append(f'<i>{PREMARKET_OLD_SESSION_NOTE}</i>')
+            lines.append(f'<i>{PREMARKET_WAIT_SCANNER_NOTE}</i>')
+            if riskoff_premarket:
+                lines.append(f'<b>{PREMARKET_RISKOFF_HEADER}</b>')
         lines.append('')
     if stale_msg:
         lines.append(f'<i>{stale_msg}</i>')
@@ -795,11 +841,15 @@ def format_premarket_telegram(
         f'<b>Market bias:</b> {bias}',
         f"<b>Mode:</b> <code>{mode_info.get('market_mode', '—')}</code>",
         '',
-        '<b>Top watch:</b>',
     ])
 
-    top3 = [s for s in setups if s.get('tier_cap') != 'not_top3'][:3 if not full else 5]
-    display_setups = top3 if top3 else setups[:3 if not full else 5]
+    if hard_stale_lock:
+        lines.append('<b>Previous-session movers (research only):</b>')
+        display_setups = (previous_session_movers or setups)[:3 if not full else 5]
+    else:
+        lines.append('<b>Top watch:</b>')
+        top3 = [s for s in setups if s.get('tier_cap') != 'not_top3'][:3 if not full else 5]
+        display_setups = top3 if top3 else setups[:3 if not full else 5]
 
     if display_setups:
         for idx, setup in enumerate(display_setups, 1):
@@ -814,6 +864,8 @@ def format_premarket_telegram(
                 f"   Why: {why}",
                 f"   {why2}",
             ])
+    elif hard_stale_lock:
+        lines.append('— No live setups — wait for fresh scanner after 09:15')
     else:
         lines.append('— Awaiting scanner + watchlist data')
 

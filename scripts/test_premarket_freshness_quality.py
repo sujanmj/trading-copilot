@@ -65,6 +65,8 @@ def main() -> int:
         return _fail('telegram missing freshness header')
     if 'watchlist preparation only' not in text.lower():
         return _fail('missing watchlist preparation only note')
+    if 'NO LIVE SETUPS' not in text:
+        return _fail('missing NO LIVE SETUPS header')
     if '{' in text and "'usa'" in text:
         return _fail('raw sentiment dict in telegram')
 

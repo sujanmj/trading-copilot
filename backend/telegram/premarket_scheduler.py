@@ -80,6 +80,27 @@ def due_premarket_slots(now: Optional[datetime] = None) -> list[str]:
     return due
 
 
+# Scheduled Telegram alert slots — all suppressed on weekend/holiday/research.
+WEEKEND_SUPPRESS_SEND_SLOTS = frozenset({
+    'premarket_top3',
+    'premarket_action',
+    'preopen_watch',
+    'live_validation',
+    'open_confirmation',
+})
+
+
+def _is_weekend_research_mode(now: Optional[datetime] = None) -> bool:
+    from backend.analytics.market_calendar_router import (
+        get_india_telegram_mode,
+        is_weekend_holiday_research_telegram_mode,
+    )
+
+    now = now or datetime.now(IST)
+    mode = get_india_telegram_mode(now.astimezone(ZoneInfo('UTC')))
+    return is_weekend_holiday_research_telegram_mode(mode)
+
+
 def run_premarket_slot(slot: str, *, send_fn: Optional[Callable[[str], bool]] = None) -> bool:
     from backend.analytics.premarket_conviction import build_premarket_conviction_report, send_scheduled_premarket
 
@@ -92,6 +113,13 @@ def run_premarket_slot(slot: str, *, send_fn: Optional[Callable[[str], bool]] = 
         return True
 
     if slot in send_slots:
+        if _is_weekend_research_mode():
+            print(
+                'WEEKEND_SCHEDULE_SUPPRESSED premarket_alert reason=weekend_research_mode '
+                f'slot={slot}',
+                flush=True,
+            )
+            return False
         ok = send_scheduled_premarket(slot, send_fn=send_fn)
         print(f'[PREMARKET_SCHED] sent slot={slot} ok={ok}', flush=True)
         return ok

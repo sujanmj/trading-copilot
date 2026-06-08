@@ -638,6 +638,23 @@ def try_emergency_macro() -> tuple[int, int]:
 
     candidates.sort(key=lambda x: x[0], reverse=True)
     conf, headline, item = candidates[0]
+    from backend.orchestration.alert_freshness_gate import is_headline_source_stale
+
+    if is_headline_source_stale(item):
+        _log('EMERGENCY_MACRO_SKIPPED', 'reason=stale_cache headline_source_stale')
+        research_text = (
+            '<b>Macro research only — stale cache</b>\n'
+            f'{headline[:900]}\n'
+            '<i>Headline source stale — not Emergency Macro. Run /refresh quick.</i>'
+        )
+        get_observability().record_suppressed(
+            EMERGENCY_MACRO_ALERT, 'stale_cache', headline[:120],
+        )
+        if is_silenced():
+            return 0, 1
+        _send(research_text)
+        return 0, 1
+
     should_send, skip_reason, theme = evaluate_emergency_macro(headline, conf, item=item)
     if not should_send:
         if skip_reason in ('duplicate_headline', 'theme_repeat'):

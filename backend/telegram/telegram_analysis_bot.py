@@ -105,20 +105,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /morning — pre-market brief
 /close — market close summary
 
-<b>Theme Baskets:</b>
-/theme — overview
-/theme list — all baskets
-/theme infra — basket details
-/theme infrastructure — basket details
-/theme roads — roads/highways basket
-/theme railway — railway basket
-/theme defence — defence basket
-/theme budget — budget-sensitive themes
-/theme news infra — matched news for theme
-/theme scan infra — ranked stocks under theme
-/theme add &lt;theme&gt; &lt;ticker&gt; &lt;direct|indirect|raw|risk&gt;
-/theme remove &lt;theme&gt; &lt;ticker&gt;
-/theme refresh — rebuild catalyst cache
+<b>Theme Wishlist:</b>
+/theme — overview · list · search · category
+/theme &lt;basket&gt; · news · scan · budget · refresh
 
 <b>AI:</b>
 /ask ai &lt;question&gt;"""
@@ -376,7 +365,7 @@ def _handle_health() -> str:
         )
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append('Telegram build: <code>AstraEdge 47B</code>')
+    lines.append('Telegram build: <code>AstraEdge 47D</code>')
     return '\n'.join(lines)
 
 
