@@ -132,9 +132,14 @@ def run_market_only(*, force: bool = False) -> dict[str, Any]:
 
     from backend.analytics.aihub_tab_payloads import build_market_payload
 
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
     payload = build_market_payload(force=force)
     summary = payload.get('summary') or {}
-    mode = payload.get('market_mode') or summary.get('market_mode') or 'RESEARCH_MODE'
+    mode = resolve_telegram_market_mode(
+        payload_mode=payload.get('market_mode'),
+        summary_mode=summary.get('market_mode'),
+    )
     stale = summary.get('stale') or summary.get('is_stale')
     age_min = int(payload.get('cache_age_seconds') or 0) // 60
     age_txt = format_cache_age_label(age_min, timestamp=file_timestamp_iso(DAILY_PACK_FILE))
@@ -155,11 +160,14 @@ def run_market_only(*, force: bool = False) -> dict[str, Any]:
 def run_global_only() -> dict[str, Any]:
     from backend.analytics.aihub_tab_payloads import build_global_payload
 
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
     payload = build_global_payload()
     summary = payload.get('summary') or {}
+    mode = resolve_telegram_market_mode(payload_mode=payload.get('market_mode'))
     lines = [
         '<b>🌍 Global / overnight</b>',
-        f"Mode: {payload.get('market_mode', 'RESEARCH_MODE')}",
+        f'Mode: {mode}',
     ]
     risk = summary.get('global_risk') or summary.get('risk_tone') or summary.get('tone')
     if risk:
@@ -191,12 +199,19 @@ def run_daily_pack_only() -> dict[str, Any]:
             payload={},
             ok=False,
         )
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
     generated = pack.get('generated_at') or pack.get('package_generated_at') or 'unknown'
     summary = pack.get('summary') or {}
+    mode = resolve_telegram_market_mode(
+        pack_mode=pack.get('market_mode'),
+        summary_mode=summary.get('market_mode'),
+        active_mode=(pack.get('final_confidence') or {}).get('active_mode'),
+    )
     lines = [
         '<b>📦 Daily report pack</b>',
         f"Generated: {generated}",
-        f"Market mode: {pack.get('market_mode') or summary.get('market_mode') or '—'}",
+        f'Market mode: {mode}',
     ]
     fc = pack.get('final_confidence') or {}
     if isinstance(fc, dict):

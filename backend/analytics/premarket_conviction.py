@@ -137,6 +137,16 @@ def _india_mode_info() -> dict:
     return get_india_telegram_mode()
 
 
+def _telegram_display_mode(mode_info: dict | None) -> str:
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
+    info = mode_info if isinstance(mode_info, dict) else {}
+    return resolve_telegram_market_mode(
+        payload_mode=info.get('market_mode'),
+        router_mode=info.get('mode_code'),
+    )
+
+
 def _is_weekend_holiday_research(mode_info: dict) -> bool:
     from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
     return is_weekend_holiday_research_telegram_mode(mode_info)
@@ -625,7 +635,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '48J',
+        'stage': '48K',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
         'weekend_research_mode': weekend_research,
@@ -765,7 +775,7 @@ def _format_weekend_research_telegram(
     title = WEEKEND_RESEARCH_FULL_TITLE if full else WEEKEND_RESEARCH_TOP_TITLE
     lines: list[str] = [
         f'<b>{title} — {slot_label}</b>',
-        f"<b>Mode:</b> <code>{mode_info.get('market_mode', '—')}</code>",
+        f"<b>Mode:</b> <code>{_telegram_display_mode(mode_info)}</code>",
         'No live premarket signal.',
         'Next trading session confirmation required.',
         'Fresh scan required before market open.',
@@ -892,7 +902,7 @@ def format_premarket_telegram(
     lines.extend([
         f'<b>{title} — {slot_label}</b>',
         f'<b>Market bias:</b> {bias}',
-        f"<b>Mode:</b> <code>{mode_info.get('market_mode', '—')}</code>",
+        f"<b>Mode:</b> <code>{_telegram_display_mode(mode_info)}</code>",
         '',
     ])
 

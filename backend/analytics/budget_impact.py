@@ -18,7 +18,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48J'
+STAGE = '48K'
 ENGINE_NAME = 'Budget Impact Intelligence'
 
 CACHE_FILE = get_data_path('budget_impact_cache.json')
@@ -445,6 +445,15 @@ def _source_freshness_status(age_h: Optional[float]) -> str:
     if age_h <= 24:
         return 'partial'
     return 'stale'
+
+
+def _budget_cache_freshness_status(age_h: Optional[float]) -> str:
+    from backend.telegram.freshness_consistency import budget_cache_freshness_from_age_hours
+
+    token = budget_cache_freshness_from_age_hours(age_h)
+    if token == 'cache_missing':
+        return 'cache_missing'
+    return token
 
 
 def _freshness_status(*ages: Optional[float]) -> str:
@@ -880,6 +889,13 @@ def compute_freshness_panel() -> dict[str, Any]:
     cached = _load_cache()
     if cached.get('generated_at') or cached.get('refreshed_at'):
         budget_ts = cached.get('refreshed_at') or cached.get('generated_at')
+        try:
+            ts = datetime.fromisoformat(str(budget_ts))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=IST)
+            budget_cache_age_h = (datetime.now(IST) - ts.astimezone(IST)).total_seconds() / 3600.0
+        except (TypeError, ValueError):
+            pass
 
     news_row = _build_source_freshness_row(label='News', path=news_path)
     if govt_age_h is not None and (news_age_h is None or govt_age_h < news_age_h):
@@ -909,7 +925,7 @@ def compute_freshness_panel() -> dict[str, Any]:
         'timestamp': budget_theme_ts,
         'age_hours': budget_theme_age_h,
         'age_label': _age_label(budget_theme_age_h),
-        'status': _source_freshness_status(budget_theme_age_h),
+        'status': _budget_cache_freshness_status(budget_theme_age_h),
     }
     scanner_row = _build_source_freshness_row(label='Scanner', path=scanner_path)
     budget_row = {
@@ -917,18 +933,20 @@ def compute_freshness_panel() -> dict[str, Any]:
         'timestamp': budget_ts,
         'age_hours': budget_cache_age_h,
         'age_label': _age_label(budget_cache_age_h),
-        'status': _source_freshness_status(budget_cache_age_h),
+        'status': _budget_cache_freshness_status(budget_cache_age_h),
     }
 
     effective_budget_theme_age = (
         budget_theme_age_h if budget_theme_age_h is not None else theme_cache_age_h
     )
-    status = _freshness_status(
-        combined_news_age,
-        effective_budget_theme_age,
-        scanner_age_h,
-        budget_cache_age_h,
-    )
+    budget_panel_status = _budget_cache_freshness_status(budget_cache_age_h)
+    theme_panel_status = _budget_cache_freshness_status(budget_theme_age_h)
+    if budget_panel_status == 'stale' or theme_panel_status == 'stale':
+        status = 'stale'
+    elif budget_panel_status == 'cache_missing' and theme_panel_status == 'cache_missing':
+        status = 'cache_missing'
+    else:
+        status = 'fresh'
 
     legacy_theme_row = {
         'label': 'Legacy theme cache',
@@ -1732,11 +1750,21 @@ def refresh_budget_intel(*, persist: bool = True) -> dict[str, Any]:
 def format_budget_overview_telegram() -> str:
     overview = get_budget_overview()
     fresh = overview.get('freshness') or {}
+    budget_cache = fresh.get('budget_cache') or {}
+    theme_cache = fresh.get('theme_cache') or {}
     lines = [
         '<b>🏛️ Budget Impact Intelligence</b>',
         '',
         f"Freshness: <code>{fresh.get('status', 'unknown')}</code>",
-        f"News: {fresh.get('latest_news_age', 'Unavailable')} · Theme cache: {fresh.get('latest_theme_cache_age', 'Unavailable')}",
+        (
+            f"Budget cache: {budget_cache.get('age_label', 'Unavailable')} · "
+            f"{budget_cache.get('status', 'unknown')}"
+        ),
+        (
+            f"Theme cache: {theme_cache.get('age_label', 'Unavailable')} · "
+            f"{theme_cache.get('status', 'unknown')}"
+        ),
+        f"News: {fresh.get('latest_news_age', 'Unavailable')}",
         '',
         '<b>Top budget themes:</b>',
     ]

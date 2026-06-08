@@ -42,6 +42,8 @@ AIHUB_FULL_TABS = (
 )
 
 STALE_CACHE_HOURS = 24
+TELEGRAM_INDIA_MODE_LOCK_STAGE = 'TELEGRAM_STAGE_48K_INDIA_MODE_LOCK'
+TELEGRAM_FRESHNESS_CONSISTENCY_STAGE = 'TELEGRAM_STAGE_48K_FRESHNESS_CONSISTENCY'
 DATA_ACCURACY_STAGE_MARKER = 'TELEGRAM_STAGE_45B4_DATA_ACCURACY_ACTION_PLAN'
 ACTION_PLAN_STAGE_MARKER = 'TELEGRAM_STAGE_45B4_DATA_ACCURACY_ACTION_PLAN'
 FINAL_POLISH_STAGE_MARKER = 'TELEGRAM_STAGE_45B5_FINAL_MESSAGE_POLISH'
@@ -268,11 +270,13 @@ def _load_market_fallback_context() -> dict[str, Any]:
     risk_notes = pack.get('risk_notes') if pack else []
     risk_count = len(risk_notes) if isinstance(risk_notes, list) else 0
 
-    mode = (
-        pack.get('market_mode')
-        or summary.get('market_mode')
-        or tw.get('market_mode')
-        or fc_merged.get('active_mode')
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
+    mode = resolve_telegram_market_mode(
+        pack_mode=pack.get('market_mode') if pack else None,
+        summary_mode=summary.get('market_mode') if summary else None,
+        active_mode=fc_merged.get('active_mode') if fc_merged else None,
+        payload_mode=tw.get('market_mode') if tw else None,
     )
 
     has_data = bool(
@@ -322,7 +326,12 @@ def format_aihub_market_section(payload: dict[str, Any]) -> list[str]:
     summary = payload.get('summary') or {}
     items = payload.get('items') or []
     warnings = payload.get('warnings') or []
-    mode = payload.get('market_mode') or summary.get('market_mode') or 'RESEARCH_MODE'
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
+    mode = resolve_telegram_market_mode(
+        payload_mode=payload.get('market_mode'),
+        summary_mode=summary.get('market_mode'),
+    )
     fallback = _load_market_fallback_context()
     if not fallback.get('mode'):
         fallback = {**fallback, 'mode': mode}
@@ -332,8 +341,7 @@ def format_aihub_market_section(payload: dict[str, Any]) -> list[str]:
     lines: list[str] = []
 
     if stale_warns:
-        display_mode = fallback.get('mode') or mode
-        lines.append(f'Mode: {display_mode}')
+        lines.append(f'Mode: {mode}')
         lines.append('Status: stale market snapshot')
         lines.append('Reason: underlying market data is old')
         if useful_bullets:
@@ -355,8 +363,7 @@ def format_aihub_market_section(payload: dict[str, Any]) -> list[str]:
         return lines
 
     if fallback.get('has_data'):
-        display_mode = fallback.get('mode') or mode
-        lines.append(f'Mode: {display_mode}')
+        lines.append(f'Mode: {mode}')
         _append_market_fallback_lines(lines, fallback)
         lines.append('Refresh: scheduled market refresh or /news')
         return lines
@@ -892,7 +899,12 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
 
     market = payloads.get('market') or {}
     market_summary = market.get('summary') or {}
-    mode = market.get('market_mode') or market_summary.get('market_mode') or 'RESEARCH_MODE'
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
+    mode = resolve_telegram_market_mode(
+        payload_mode=market.get('market_mode'),
+        summary_mode=market_summary.get('market_mode'),
+    )
     stale = market_summary.get('stale') or market_summary.get('is_stale')
     lines.append('<b>📊 Market</b>')
     lines.append(f'- mode: {mode}')
@@ -969,7 +981,13 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     top_watch = journal_summary.get('top_watch') or []
     failed = journal_summary.get('failed_strong_warnings') or []
     lines.append('<b>📜 Journal</b>')
-    lines.append(f"- mode: {journal.get('market_mode') or journal_summary.get('market_mode') or '—'}")
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
+    journal_mode = resolve_telegram_market_mode(
+        payload_mode=journal.get('market_mode'),
+        summary_mode=journal_summary.get('market_mode'),
+    )
+    lines.append(f'- mode: {journal_mode}')
     if top_watch:
         names = [_ticker_from_row(r) for r in top_watch[:3] if isinstance(r, dict)]
         lines.append(f"- top watch: {', '.join(names)}")
@@ -1027,16 +1045,43 @@ def format_action_plan_telegram() -> str:
     global_p = build_global_payload()
     pack = _load_json(DAILY_PACK_FILE)
 
-    market_summary = (market.get('summary') or {})
-    mode = (
-        market.get('market_mode')
-        or market_summary.get('market_mode')
-        or pack.get('market_mode')
-        or (pack.get('summary') or {}).get('market_mode')
-        or 'RESEARCH_MODE'
+    from backend.telegram.freshness_consistency import (
+        classify_budget_cache_freshness,
+        compute_feed_age_minutes,
     )
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+    from backend.storage.data_paths import get_data_path
+
+    market_summary = (market.get('summary') or {})
+    mode = resolve_telegram_market_mode(
+        payload_mode=market.get('market_mode'),
+        summary_mode=market_summary.get('market_mode'),
+        pack_mode=pack.get('market_mode') if pack else None,
+        active_mode=(pack.get('final_confidence') or {}).get('active_mode') if pack else None,
+    )
+    report_age_min = -1
+    if DAILY_PACK_FILE.is_file():
+        report_age_min, _ = compute_feed_age_minutes(DAILY_PACK_FILE)
+    scanner_age_min, _ = compute_feed_age_minutes(get_data_path('scanner_data.json'))
+    news_age_min, _ = compute_feed_age_minutes(get_data_path('news_feed.json'))
+    report_fresh = classify_budget_cache_freshness(report_age_min)
+    scanner_fresh = classify_budget_cache_freshness(scanner_age_min)
+    news_fresh = classify_budget_cache_freshness(news_age_min)
     stale_flag = market_summary.get('stale') or market_summary.get('is_stale')
-    fresh_stale = 'Stale' if stale_flag else 'Fresh'
+    if report_fresh == 'stale' and scanner_fresh == 'fresh' and news_fresh == 'fresh':
+        market_state_lines = [
+            'Market state: Research mode',
+            f'Report: {report_fresh}',
+            f'Scanner: {scanner_fresh}',
+            f'News: {news_fresh}',
+            'Action: watch only, refresh before live entry.',
+        ]
+    else:
+        fresh_stale = 'Stale' if stale_flag or report_fresh == 'stale' else 'Fresh'
+        market_state_lines = [
+            f'• Mode: {mode}',
+            f'• Fresh/Stale: {fresh_stale}',
+        ]
     main_risk = resolve_global_risk_text(global_p)
 
     brain_summary = brain.get('summary') or {}
@@ -1074,8 +1119,7 @@ def format_action_plan_telegram() -> str:
         '<b>📌 AstraEdge Action Plan</b>',
         '',
         '<b>Market state:</b>',
-        f'• Mode: {mode}',
-        f'• Fresh/Stale: {fresh_stale}',
+        *market_state_lines,
         f'• Main risk: {main_risk}',
         '',
         '<b>Top candidate:</b>',
@@ -1175,7 +1219,12 @@ def format_aihub_brain_full() -> str:
 
     market = sources.get('market') or {}
     market_summary = market.get('summary') or {}
-    mode = market.get('market_mode') or market_summary.get('market_mode') or '—'
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
+    mode = resolve_telegram_market_mode(
+        payload_mode=market.get('market_mode'),
+        summary_mode=market_summary.get('market_mode'),
+    )
     stale = 'Stale' if (market_summary.get('stale') or market_summary.get('is_stale')) else 'Fresh'
     global_p = sources.get('global') or {}
     risk = resolve_global_risk_text(global_p)
@@ -1337,49 +1386,12 @@ def _parse_status_timestamp(value: Any) -> Optional[datetime]:
 
 
 def _format_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = '') -> str:
-    """Format Latest <label>: timestamp · age <x> · fresh|stale (single status)."""
+    """Format Latest <label>: timestamp · age <x> · fresh|stale (90m budget threshold)."""
     from backend.storage.data_paths import get_data_path
+    from backend.telegram.freshness_consistency import format_budget_feed_freshness_line
 
     file_path = path if path.is_absolute() else get_data_path(str(path))
-    ts_txt = '—'
-    age_min = -1
-    if file_path.is_file():
-        try:
-            age_sec = datetime.now(timezone.utc).timestamp() - file_path.stat().st_mtime
-            age_min = max(0, int(age_sec // 60))
-        except OSError:
-            age_min = -1
-        try:
-            from backend.telegram.lazy_command_runner import _load_json
-            payload = _load_json(file_path)
-            if isinstance(payload, dict):
-                embedded = (
-                    payload.get(timestamp_key)
-                    or payload.get('generated_at')
-                    or payload.get('cache_refreshed_at')
-                    or payload.get('updated_at')
-                    or payload.get('timestamp')
-                    or payload.get('last_updated')
-                )
-                if embedded:
-                    ts_txt = str(embedded)
-                    parsed = _parse_status_timestamp(embedded)
-                    if parsed is not None:
-                        age_min = max(
-                            0,
-                            int((datetime.now(timezone.utc) - parsed).total_seconds() // 60),
-                        )
-        except Exception:
-            pass
-        if ts_txt == '—':
-            file_ts = file_timestamp_iso(file_path)
-            if file_ts:
-                ts_txt = file_ts
-    if age_min < 0:
-        return f'{label}: unavailable'
-    age_txt = f'{age_min}m' if age_min < 60 else f'{age_min // 60}h'
-    freshness = 'fresh' if age_min < 60 else 'stale'
-    return f'{label}: {ts_txt} · age {age_txt} · {freshness}'
+    return format_budget_feed_freshness_line(label, file_path, timestamp_key=timestamp_key)
 
 
 def format_status_text() -> str:
@@ -1391,7 +1403,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 48J</code>')
+        lines.append('Telegram build: <code>AstraEdge 48K</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
@@ -1449,7 +1461,13 @@ def format_status_text() -> str:
             report_age_txt = f'{report_age}m' if 0 <= report_age < 60 else (
                 f'{report_age // 60}h' if report_age >= 60 else 'unknown'
             )
-            report_fresh = 'fresh' if 0 <= report_age < 60 else ('stale' if report_age >= 0 else 'unknown')
+            from backend.telegram.freshness_consistency import classify_budget_cache_freshness
+
+            report_fresh = (
+                classify_budget_cache_freshness(report_age)
+                if report_age >= 0
+                else 'cache_missing'
+            )
             lines.append(f'Latest report: {report_time} · age {report_age_txt} · {report_fresh}')
         else:
             lines.append('Latest report: unavailable')
