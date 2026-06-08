@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '47F',
+        'stage': '48A',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -1977,6 +1977,70 @@ def api_theme_baskets_refresh():
 
     result = refresh_theme_catalyst_cache(persist=True)
     return sanitize_json_value(result)
+
+
+@app.get("/api/budget/overview", dependencies=[Depends(verify_api_key)])
+def api_budget_overview():
+    from backend.analytics.budget_impact import get_budget_overview
+
+    return sanitize_json_value(get_budget_overview())
+
+
+@app.get("/api/budget/themes", dependencies=[Depends(verify_api_key)])
+def api_budget_themes():
+    from backend.analytics.budget_impact import get_budget_themes
+
+    return sanitize_json_value(get_budget_themes())
+
+
+@app.get("/api/budget/theme/{theme_id}", dependencies=[Depends(verify_api_key)])
+def api_budget_theme_detail(theme_id: str):
+    from backend.analytics.budget_impact import get_budget_theme_detail
+
+    result = get_budget_theme_detail(theme_id)
+    if not result.get('ok'):
+        raise HTTPException(status_code=404, detail=result.get('error', 'theme not found'))
+    return sanitize_json_value(result)
+
+
+@app.get("/api/budget/news/{theme_id}", dependencies=[Depends(verify_api_key)])
+def api_budget_theme_news(theme_id: str):
+    from backend.analytics.budget_impact import get_budget_theme_news
+
+    result = get_budget_theme_news(theme_id)
+    if not result.get('ok'):
+        raise HTTPException(status_code=404, detail=result.get('error', 'theme not found'))
+    return sanitize_json_value(result)
+
+
+@app.get("/api/budget/scan/{theme_id}", dependencies=[Depends(verify_api_key)])
+def api_budget_theme_scan(theme_id: str):
+    from backend.analytics.budget_impact import get_budget_theme_scan
+
+    result = get_budget_theme_scan(theme_id)
+    if not result.get('ok'):
+        raise HTTPException(status_code=404, detail=result.get('error', 'theme not found'))
+    return sanitize_json_value(result)
+
+
+@app.post("/api/budget/analyze-news", dependencies=[Depends(verify_api_key)])
+def api_budget_analyze_news(payload: dict = Body(default={})):
+    from backend.analytics.budget_impact import analyze_news_text
+
+    text = str(payload.get('text') or payload.get('headline') or '').strip()
+    if not text:
+        raise HTTPException(status_code=400, detail='text required')
+    result = analyze_news_text(text, persist=True)
+    if not result.get('ok'):
+        raise HTTPException(status_code=400, detail=result.get('error', 'analyze failed'))
+    return sanitize_json_value(result)
+
+
+@app.post("/api/budget/refresh", dependencies=[Depends(verify_api_key)])
+def api_budget_refresh():
+    from backend.analytics.budget_impact import refresh_budget_intel
+
+    return sanitize_json_value(refresh_budget_intel(persist=True))
 
 
 @app.get("/api/all", dependencies=[Depends(verify_api_key)])

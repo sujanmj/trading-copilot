@@ -45,13 +45,20 @@ def main() -> int:
             if needle not in text:
                 return _fail(f'{name} missing {needle!r}')
 
-    for needle in ("'stage': '47F'", 'api_not_found', 'JSONResponse'):
+    for needle in ("'stage': '48A'", 'api_not_found', 'JSONResponse'):
         if needle not in api_server:
             return _fail(f'api_server.py missing {needle!r}')
 
-    for rel in ('/api/debug/source-freshness', '/api/debug/market-router'):
+    for rel in ('/api/debug/source-freshness', '/api/debug/market-router', '/api/budget/overview'):
         if rel not in api_server:
             return _fail(f'api_server.py missing route {rel!r}')
+
+    budget_panel = PROJECT_ROOT / 'frontend/components/BudgetImpactPanel.js'
+    if not budget_panel.is_file():
+        return _fail('missing BudgetImpactPanel.js')
+    budget_text = budget_panel.read_text(encoding='utf-8')
+    if 'Budget API returned non-JSON' not in budget_text:
+        return _fail('BudgetImpactPanel.js missing non-JSON guard')
 
     print('FRONTEND_API_JSON_GUARD_TEST_OK')
     return 0

@@ -1340,7 +1340,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 47F</code>')
+        lines.append('Telegram build: <code>AstraEdge 48A</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on

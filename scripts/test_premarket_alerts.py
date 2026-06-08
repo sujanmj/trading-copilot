@@ -35,8 +35,8 @@ def main() -> int:
     report = build_premarket_conviction_report(persist=True)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
-    if report.get('stage') != '47F':
-        return _fail('report stage not 47F')
+    if report.get('stage') != '48A':
+        return _fail('report stage not 48A')
 
     from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
     from backend.analytics.premarket_conviction import _is_after_open

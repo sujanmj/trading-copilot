@@ -21,7 +21,7 @@ def _fail(msg: str) -> int:
 def main() -> int:
     src = (PROJECT_ROOT / 'backend/telegram/response_format.py').read_text(encoding='utf-8')
     for needle in (
-        'AstraEdge 47F',
+        'AstraEdge 48A',
         '_format_feed_freshness_line',
         'Latest scanner:',
         'Latest news:',

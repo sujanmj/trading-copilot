@@ -457,3 +457,10 @@ def run_theme_only(args: str = '') -> dict[str, Any]:
 
     text = handle_theme_command(args)
     return _runner_result('theme', text=text)
+
+
+def run_budget_only(args: str = '') -> dict[str, Any]:
+    from backend.analytics.budget_impact import handle_budget_command
+
+    text = handle_budget_command(args)
+    return _runner_result('budget', text=text)

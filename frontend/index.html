@@ -128,6 +128,7 @@
     .main[data-workspace="browser"] .workspace-browser,
     .main[data-workspace="placeholder"] .workspace-browser { display: flex; }
     .main[data-workspace="memory"] .workspace-memory { display: flex; }
+    .main[data-workspace="budget"] .workspace-budget { display: flex; }
     .main[data-workspace="brokers"] .workspace-brokers { display: flex; }
     .main[data-workspace="aihub"] .workspace-aihub { display: flex; }
     .main[data-workspace="router"] .workspace-router { display: flex; }
@@ -1032,6 +1033,37 @@
     .brokers-main-panel .bi-tag { font-size: 11px; }
     .brokers-main-panel::-webkit-scrollbar { width: 4px; }
     .brokers-main-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .budget-main-panel { flex: 1; overflow-y: auto; background: #080a0c; padding: 12px; min-height: 0; font-size: 14px; }
+    .bud-dashboard { min-height: 120px; line-height: 1.5; }
+    .bud-title { font-size: 18px; color: #d4af37; font-weight: 700; margin: 0; }
+    .bud-subtitle { font-size: 12px; color: #8B949E; margin: 4px 0 0; }
+    .bud-disclaimer { font-size: 11px; color: #ffaa00; margin: 8px 0 12px; }
+    .bud-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #8B949E; margin-bottom: 8px; font-weight: 700; }
+    .bud-freshness-panel { margin-bottom: 12px; padding: 12px; }
+    .bud-freshness-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 12px; margin-bottom: 10px; }
+    .bud-label { color: #8B949E; font-size: 10px; display: block; }
+    .bud-freshness-badge { font-size: 10px; padding: 2px 8px; border-radius: 8px; text-transform: uppercase; }
+    .bud-freshness-badge.bud-fresh { background: #0d2a0d; color: #00ff88; }
+    .bud-freshness-badge.bud-partial { background: #2a220d; color: #ffaa00; }
+    .bud-freshness-badge.bud-stale { background: #2a0d0d; color: #ff6666; }
+    .bud-layout { display: grid; grid-template-columns: 280px 1fr; gap: 12px; margin-bottom: 12px; }
+    @media (max-width: 900px) { .bud-layout { grid-template-columns: 1fr; } }
+    .bud-category { margin-bottom: 8px; }
+    .bud-category summary { cursor: pointer; color: #c9d1d9; font-weight: 600; font-size: 12px; }
+    .bud-theme-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .bud-theme-chip { background: #111820; border: 1px solid #334455; color: #a8c4e0; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; }
+    .bud-theme-chip:hover, .bud-theme-chip.active { border-color: #d4af37; color: #ffe08a; background: rgba(212,175,55,0.12); }
+    .bud-catalyst-row { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .bud-catalyst-headline { font-size: 13px; color: #e6edf3; }
+    .bud-catalyst-meta { font-size: 11px; color: #8B949E; margin-top: 4px; }
+    .bud-catalyst-why { font-size: 11px; color: #7eb8ff; margin-top: 2px; }
+    .bud-impact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .bud-impact-col ul { margin: 0; padding-left: 16px; font-size: 12px; color: #c9d1d9; }
+    .bud-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .bud-table th { text-align: left; color: #8B949E; padding: 6px 8px; border-bottom: 1px solid #222; }
+    .bud-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: top; }
+    .bud-sim-input { width: 100%; background: #0d1117; border: 1px solid #30363d; color: #e6edf3; border-radius: 6px; padding: 8px; font-size: 12px; margin-bottom: 8px; }
+    .bud-empty { font-size: 12px; color: #8B949E; padding: 8px 0; }
     .bi-dashboard { min-height: 120px; }
     .bi-header-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
     .bi-title { font-size: 16px; color: #66cc99; font-weight: 700; margin: 0; }
@@ -1399,6 +1431,7 @@
         <div class="header-group header-nav-group">
           <span class="btn-group-label">AI:</span>
           <button type="button" class="primary-nav-btn" id="memoryNavBtn" title="Canonical Market Memory">🧠 Memory</button>
+          <button type="button" class="primary-nav-btn" id="budgetNavBtn" title="Budget Impact Intelligence">🏛️ Budget</button>
           <button type="button" class="primary-nav-btn" id="brokersNavBtn" title="Broker prediction intelligence">🏦 Brokers</button>
           <button type="button" class="primary-nav-btn" id="aiHubNavBtn" title="AI Intelligence Hub">🤖 AI Hub</button>
           <button type="button" class="primary-nav-btn router-nav-btn" id="routerNavBtn" title="Market Router session routing">🌍 Router</button>
@@ -1437,6 +1470,10 @@
 
     <div class="workspace-panel workspace-memory memory-main-panel" id="memoryMainPanel" aria-label="Canonical Market Memory">
       <div id="memoryMainContent"><div class="loading">⏳ Loading Canonical Market Memory…</div></div>
+    </div>
+
+    <div class="workspace-panel workspace-budget budget-main-panel" id="budgetMainPanel" aria-label="Budget Impact Intelligence">
+      <div id="budgetMainContent"><div class="loading">⏳ Loading Budget Impact Intelligence…</div></div>
     </div>
 
     <div class="workspace-panel workspace-brokers brokers-main-panel" id="brokersMainPanel" aria-label="Broker prediction intelligence">
@@ -1648,6 +1685,7 @@
   <script src="components/AIOpsPanel.js"></script>
   <script src="components/MarketMemoryPanel.js"></script>
   <script src="components/BrokerIntelligencePanel.js"></script>
+  <script src="components/BudgetImpactPanel.js"></script>
   <script src="components/FinalConfidencePanel.js"></script>
   <script src="components/DailyReportPackPanel.js"></script>
   <script src="components/SourceFreshnessCard.js"></script>
@@ -7789,6 +7827,12 @@
     }
     if (window.BrokerIntelligencePanel) {
       BrokerIntelligencePanel.init({
+        getApiBase: () => API_BASE,
+        getHeaders: apiHeaders,
+      })
+    }
+    if (window.BudgetImpactPanel) {
+      BudgetImpactPanel.init({
         getApiBase: () => API_BASE,
         getHeaders: apiHeaders,
       })

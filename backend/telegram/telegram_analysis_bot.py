@@ -40,6 +40,7 @@ from backend.telegram.lazy_command_runner import (
     run_qa_status_only,
     run_scan_only,
     run_theme_only,
+    run_budget_only,
 )
 from backend.telegram.response_format import (
     BLOCKED_TRADE_COMMANDS,
@@ -108,6 +109,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 <b>Theme Wishlist:</b>
 /theme — overview · list · search · category
 /theme &lt;basket&gt; · news · scan · budget · refresh
+
+<b>Budget Impact:</b>
+/budget — overview · theme &lt;basket&gt; · analyze &lt;text&gt;
 
 <b>AI:</b>
 /ask ai &lt;question&gt;"""
@@ -365,7 +369,7 @@ def _handle_health() -> str:
         )
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append('Telegram build: <code>AstraEdge 47F</code>')
+    lines.append('Telegram build: <code>AstraEdge 48A</code>')
     return '\n'.join(lines)
 
 
@@ -490,6 +494,8 @@ def handle_analysis_command(
         response_text = run_without_ai(lambda: {'text': _handle_schedule()}, command='schedule').get('text') or _handle_schedule()
     elif cmd == 'theme':
         response_text = run_without_ai(lambda: run_theme_only(args), command='theme').get('text') or run_theme_only(args).get('text') or 'Theme baskets unavailable.'
+    elif cmd == 'budget':
+        response_text = run_without_ai(lambda: run_budget_only(args), command='budget').get('text') or run_budget_only(args).get('text') or 'Budget impact unavailable.'
     else:
         response_text = f'Unknown command: <code>{cmd}</code>\nType /help for allowed commands.'
 

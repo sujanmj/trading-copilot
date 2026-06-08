@@ -65,8 +65,8 @@ def main() -> int:
             dp.get_data_root = orig_root  # type: ignore[method-assign]
             lcr.DAILY_PACK_FILE = orig_pack
 
-    if 'AstraEdge 47F' not in text:
-        return _fail('status missing AstraEdge 47F build line')
+    if 'AstraEdge 48A' not in text:
+        return _fail('status missing AstraEdge 48A build line')
     for label in (
         'Latest report:',
         'Latest scanner:',

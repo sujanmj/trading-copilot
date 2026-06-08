@@ -2,7 +2,7 @@
 
  * Full-screen workspace router — one active view at a time (Stage 19).
 
- * Workspaces: placeholder | browser | memory | brokers | aihub | router
+ * Workspaces: placeholder | browser | memory | budget | brokers | aihub | router
 
  */
 
@@ -186,6 +186,8 @@
 
     const memoryWs = $('memoryMainPanel');
 
+    const budgetWs = $('budgetMainPanel');
+
     const brokersWs = $('brokersMainPanel');
 
     const aihubWs = $('aiHubWorkspace');
@@ -201,6 +203,8 @@
     if (browserWs) browserWs.style.display = (next === 'browser' || next === 'placeholder') ? '' : 'none';
 
     if (memoryWs) memoryWs.style.display = next === 'memory' ? '' : 'none';
+
+    if (budgetWs) budgetWs.style.display = next === 'budget' ? '' : 'none';
 
     if (brokersWs) brokersWs.style.display = next === 'brokers' ? '' : 'none';
 
@@ -259,6 +263,28 @@
       const memPanel = $('memoryMainPanel');
 
       if (memPanel) memPanel.style.display = 'none';
+
+    }
+
+
+
+    if (next === 'budget') {
+
+      const budgetPanel = $('budgetMainPanel');
+
+      if (budgetPanel) budgetPanel.style.display = 'block';
+
+      if (global.BudgetImpactPanel && BudgetImpactPanel.loadMain) {
+
+        BudgetImpactPanel.loadMain();
+
+      }
+
+    } else {
+
+      const budgetPanel = $('budgetMainPanel');
+
+      if (budgetPanel) budgetPanel.style.display = 'none';
 
     }
 
@@ -677,6 +703,20 @@
       memoryBtn.addEventListener('click', () => {
 
         setActiveWorkspace('memory', { navBtn: memoryBtn });
+
+      });
+
+    }
+
+
+
+    const budgetBtn = $('budgetNavBtn');
+
+    if (budgetBtn) {
+
+      budgetBtn.addEventListener('click', () => {
+
+        setActiveWorkspace('budget', { navBtn: budgetBtn });
 
       });
 
