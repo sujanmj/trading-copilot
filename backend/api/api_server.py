@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '48F',
+        'stage': '48G',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -2018,20 +2018,28 @@ def api_budget_themes(lite: int = Query(0)):
 
 
 @app.get("/api/budget/theme/{theme_id}", dependencies=[Depends(verify_api_key)])
-def api_budget_theme_detail(theme_id: str):
+def api_budget_theme_detail(
+    theme_id: str,
+    cache_only: int = Query(0),
+    lite: int = Query(0),
+):
     from backend.analytics.budget_impact import get_budget_theme_detail
 
-    result = get_budget_theme_detail(theme_id)
+    result = get_budget_theme_detail(theme_id, cache_only=bool(cache_only), lite=bool(lite))
     if not result.get('ok'):
         raise HTTPException(status_code=404, detail=result.get('error', 'theme not found'))
     return sanitize_json_value(result)
 
 
 @app.get("/api/budget/news/{theme_id}", dependencies=[Depends(verify_api_key)])
-def api_budget_theme_news(theme_id: str):
+def api_budget_theme_news(
+    theme_id: str,
+    cache_only: int = Query(0),
+    lite: int = Query(0),
+):
     from backend.analytics.budget_impact import get_budget_theme_news
 
-    result = get_budget_theme_news(theme_id)
+    result = get_budget_theme_news(theme_id, cache_only=bool(cache_only), lite=bool(lite))
     if not result.get('ok'):
         raise HTTPException(status_code=404, detail=result.get('error', 'theme not found'))
     return sanitize_json_value(result)
@@ -2041,12 +2049,39 @@ def api_budget_theme_news(theme_id: str):
 def api_budget_theme_scan(
     theme_id: str,
     catalyst_headline: str | None = Query(None),
+    catalyst_id: str | None = Query(None),
+    cache_only: int = Query(0),
+    lite: int = Query(0),
 ):
     from backend.analytics.budget_impact import get_budget_theme_scan
 
-    result = get_budget_theme_scan(theme_id, catalyst_headline=catalyst_headline)
+    result = get_budget_theme_scan(
+        theme_id,
+        catalyst_headline=catalyst_headline,
+        catalyst_id=catalyst_id,
+        cache_only=bool(cache_only),
+        lite=bool(lite),
+    )
     if not result.get('ok'):
         raise HTTPException(status_code=404, detail=result.get('error', 'theme not found'))
+    return sanitize_json_value(result)
+
+
+@app.get("/api/budget/catalyst/{catalyst_id}", dependencies=[Depends(verify_api_key)])
+def api_budget_catalyst_drilldown(
+    catalyst_id: str,
+    cache_only: int = Query(0),
+    lite: int = Query(0),
+):
+    from backend.analytics.budget_impact import get_budget_catalyst_drilldown
+
+    result = get_budget_catalyst_drilldown(
+        catalyst_id,
+        cache_only=bool(cache_only),
+        lite=bool(lite),
+    )
+    if not result.get('ok'):
+        raise HTTPException(status_code=404, detail=result.get('error', 'catalyst not found'))
     return sanitize_json_value(result)
 
 

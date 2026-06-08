@@ -7,6 +7,7 @@ Research-only — watch/confirm stances, never buy now or guaranteed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -17,11 +18,12 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48F'
+STAGE = '48G'
 ENGINE_NAME = 'Budget Impact Intelligence'
 
 CACHE_FILE = get_data_path('budget_impact_cache.json')
 EVENT_LOG_FILE = get_data_path('budget_event_log.jsonl')
+CACHE_MISSING_MSG = 'Budget cache unavailable. Tap Refresh Budget Intel.'
 
 FORBIDDEN_WORDS = ('buy now', 'guaranteed', 'sure shot', 'sell now', 'invest now')
 ALLOWED_STANCES = (
@@ -130,7 +132,267 @@ def _load_cache() -> dict[str, Any]:
 def _save_cache(payload: dict[str, Any]) -> None:
     payload['stage'] = STAGE
     payload['engine'] = ENGINE_NAME
+    payload.setdefault('generated_at', payload.get('refreshed_at') or _now_iso())
+    if not payload.get('themes_by_id'):
+        payload.update(build_budget_cache_indexes(payload, freshness=payload.get('freshness')))
     atomic_write_json(CACHE_FILE, payload)
+
+
+def _make_catalyst_id(theme_id: str, headline: str) -> str:
+    from backend.analytics.theme_baskets import _normalize_title
+
+    raw = f'{theme_id}|{_normalize_title(headline)}'
+    return hashlib.sha1(raw.encode('utf-8')).hexdigest()[:16]
+
+
+def _detected_themes_for_headline(headline: str, primary_theme_id: str) -> list[dict[str, Any]]:
+    from backend.analytics.theme_baskets import get_basket_by_id, match_headline_to_themes
+
+    lower = str(headline or '').lower()
+    hint_ids: list[str] = [primary_theme_id]
+    for hint, ids in THEME_EVENT_HINTS.items():
+        if hint in lower:
+            for tid in ids:
+                if tid not in hint_ids:
+                    hint_ids.append(tid)
+    for row in match_headline_to_themes(headline):
+        tid = str(row.get('theme_id') or '')
+        if tid and tid not in hint_ids:
+            hint_ids.append(tid)
+    themes_out = []
+    for tid in hint_ids[:8]:
+        basket = get_basket_by_id(tid)
+        if basket:
+            themes_out.append({
+                'theme_id': tid,
+                'display_name': basket.get('display_name') or tid,
+            })
+    return themes_out
+
+
+def _suggested_stance_for_ranking(
+    direction: str,
+    sections: dict[str, list[dict[str, Any]]],
+    *,
+    stale: bool = False,
+) -> str:
+    if stale:
+        return 'Research Only'
+    if direction == 'Negative' and sections.get('avoid_risk'):
+        return 'Avoid / Risk'
+    if direction == 'Positive' and sections.get('positive_investment_watch'):
+        return 'Investment Watch'
+    if direction == 'Mixed' or sections.get('wait_confirmation'):
+        return 'Wait for Confirmation'
+    return 'Research Only'
+
+
+def _build_catalyst_drilldown_payload(
+    catalyst_row: dict[str, Any],
+    *,
+    freshness: dict[str, Any],
+    theme_id: str | None = None,
+) -> dict[str, Any]:
+    headline = str(catalyst_row.get('headline') or '')
+    tid = str(theme_id or catalyst_row.get('theme_id') or 'infrastructure')
+    cid = str(catalyst_row.get('catalyst_id') or _make_catalyst_id(tid, headline))
+    ranked = rank_stocks_for_catalyst(headline, tid, freshness=freshness, limit=15)
+    sections = ranked.get('sections') or build_stock_ranking_sections([])
+    direction = str(ranked.get('catalyst_direction') or detect_catalyst_direction(headline))
+    stale = freshness.get('status') in ('stale', 'cache_missing')
+    themes = _detected_themes_for_headline(headline, tid)
+    why = catalyst_row.get('why') or (themes[0].get('display_name') if themes else 'Theme catalyst match')
+    stance = _suggested_stance_for_ranking(direction, sections, stale=stale)
+    return {
+        'ok': True,
+        'lite': True,
+        'from_cache': True,
+        'catalyst_id': cid,
+        'headline': _sanitize_text(headline[:240]),
+        'theme_id': tid,
+        'direction': direction,
+        'detected_themes': themes,
+        'direct_beneficiaries': sections.get('positive_investment_watch') or [],
+        'indirect_beneficiaries': sections.get('indirect_watch') or [],
+        'avoid_risk': sections.get('avoid_risk') or [],
+        'wait_confirmation': sections.get('wait_confirmation') or [],
+        'research_only': sections.get('research_only') or [],
+        'stock_sections': sections,
+        'section_labels': STOCK_SECTION_LABELS,
+        'stocks': ranked.get('stocks') or [],
+        'reason': _sanitize_text(str(why)),
+        'freshness': freshness,
+        'suggested_stance': stance,
+        'confirmation': 'Confirm with price + volume + sector breadth.',
+        'named_companies': ranked.get('named_companies') or [],
+        'disclaimer': 'Research only — watch/confirm. No blind entry.',
+    }
+
+
+def _build_theme_scan_payload(
+    theme_id: str,
+    catalyst_rows: list[dict[str, Any]],
+    *,
+    freshness: dict[str, Any],
+    catalyst_headline: str | None = None,
+    catalyst_id: str | None = None,
+) -> dict[str, Any]:
+    headline = str(catalyst_headline or '').strip()
+    if catalyst_id and not headline:
+        for row in catalyst_rows:
+            if str(row.get('catalyst_id') or '') == str(catalyst_id):
+                headline = str(row.get('headline') or '')
+                break
+    if not headline and catalyst_rows:
+        headline = str(catalyst_rows[0].get('headline') or '')
+    if headline:
+        ranked = rank_stocks_for_catalyst(headline, theme_id, freshness=freshness, limit=15)
+        return {
+            'theme_id': theme_id,
+            'catalyst_id': catalyst_id or (catalyst_rows[0].get('catalyst_id') if catalyst_rows else None),
+            'catalyst_headline': headline[:240],
+            'catalyst_direction': ranked.get('catalyst_direction'),
+            'stocks': ranked.get('stocks') or [],
+            'sections': ranked.get('sections') or {},
+            'section_labels': STOCK_SECTION_LABELS,
+            'summary': {
+                'direction': ranked.get('catalyst_direction'),
+                'stock_count': len(ranked.get('stocks') or []),
+                'named_companies': ranked.get('named_companies') or [],
+            },
+        }
+    return {
+        'theme_id': theme_id,
+        'stocks': [],
+        'sections': build_stock_ranking_sections([]),
+        'section_labels': STOCK_SECTION_LABELS,
+        'summary': {'direction': 'Mixed', 'stock_count': 0, 'named_companies': []},
+    }
+
+
+def build_budget_cache_indexes(
+    overview: dict[str, Any],
+    *,
+    freshness: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from backend.analytics.theme_baskets import BUDGET_THEME_IDS, get_basket_by_id, get_theme_catalysts
+
+    freshness = freshness or overview.get('freshness') or compute_freshness_panel()
+    themes_by_id: dict[str, Any] = {}
+    catalysts_by_id: dict[str, Any] = {}
+    catalysts_by_theme: dict[str, list[dict[str, Any]]] = {}
+    scan_by_theme: dict[str, Any] = {}
+    drilldown_by_catalyst: dict[str, Any] = {}
+
+    for tid in BUDGET_THEME_IDS:
+        basket = get_basket_by_id(tid)
+        if not basket:
+            continue
+        display = basket.get('display_name') or tid
+        raw_rows = dedupe_catalyst_rows(get_theme_catalysts(tid, limit=8, for_top_display=False))
+        enriched: list[dict[str, Any]] = []
+        for cat in raw_rows:
+            headline = str(cat.get('headline') or '')
+            if not headline:
+                continue
+            cid = _make_catalyst_id(tid, headline)
+            row = {
+                **cat,
+                'catalyst_id': cid,
+                'theme_id': tid,
+                'display_name': display,
+                'catalyst_direction': detect_catalyst_direction(headline),
+                'named_companies': extract_named_companies_strict(headline),
+                'budget_impact_score': _budget_impact_score(headline, tid).get(
+                    'budget_impact_score',
+                    cat.get('catalyst_score', 0),
+                ),
+            }
+            enriched.append(row)
+            catalysts_by_id[cid] = row
+            drilldown_by_catalyst[cid] = _build_catalyst_drilldown_payload(row, freshness=freshness, theme_id=tid)
+
+        catalysts_by_theme[tid] = enriched
+        scan = _build_theme_scan_payload(tid, enriched, freshness=freshness)
+        scan_by_theme[tid] = scan
+        themes_by_id[tid] = {
+            'theme_id': tid,
+            'display_name': display,
+            'category': basket.get('category') or '',
+            'catalysts': enriched,
+            'stock_sections': scan.get('sections') or {},
+            'summary': scan.get('summary') or {},
+            'impact_map': build_impact_map(tid),
+        }
+
+    return {
+        'themes_by_id': themes_by_id,
+        'catalysts_by_id': catalysts_by_id,
+        'catalysts_by_theme': catalysts_by_theme,
+        'scan_by_theme': scan_by_theme,
+        'drilldown_by_catalyst': drilldown_by_catalyst,
+    }
+
+
+def ensure_cache_indexes(cached: dict[str, Any]) -> dict[str, Any]:
+    if cached.get('themes_by_id') and cached.get('drilldown_by_catalyst'):
+        return cached
+
+    freshness = cached.get('freshness') or {
+        'status': 'cache_missing',
+        'latest_news_age': 'Unavailable',
+        'latest_theme_cache_age': 'Unavailable',
+        'latest_scanner_age': 'Unavailable',
+        'latest_budget_cache_age': 'Unavailable',
+    }
+    themes_by_id: dict[str, Any] = {}
+    catalysts_by_id: dict[str, Any] = {}
+    catalysts_by_theme: dict[str, list[dict[str, Any]]] = {}
+    scan_by_theme: dict[str, Any] = {}
+    drilldown_by_catalyst: dict[str, Any] = {}
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in cached.get('top_catalysts') or []:
+        tid = str(row.get('theme_id') or 'infrastructure')
+        grouped.setdefault(tid, []).append(row)
+
+    for tid, rows in grouped.items():
+        enriched = []
+        for cat in dedupe_catalyst_rows(rows):
+            headline = str(cat.get('headline') or '')
+            if not headline:
+                continue
+            cid = _make_catalyst_id(tid, headline)
+            item = {
+                **cat,
+                'catalyst_id': cid,
+                'theme_id': tid,
+                'display_name': cat.get('display_name') or tid,
+                'catalyst_direction': detect_catalyst_direction(headline),
+                'named_companies': extract_named_companies_strict(headline),
+            }
+            enriched.append(item)
+            catalysts_by_id[cid] = item
+            drilldown_by_catalyst[cid] = _build_catalyst_drilldown_payload(item, freshness=freshness, theme_id=tid)
+        catalysts_by_theme[tid] = enriched
+        scan_by_theme[tid] = _build_theme_scan_payload(tid, enriched, freshness=freshness)
+        themes_by_id[tid] = {
+            'theme_id': tid,
+            'display_name': enriched[0].get('display_name') if enriched else tid,
+            'catalysts': enriched,
+            'stock_sections': scan_by_theme[tid].get('sections') or {},
+            'summary': scan_by_theme[tid].get('summary') or {},
+            'impact_map': build_impact_map(tid),
+        }
+
+    cached.update({
+        'themes_by_id': themes_by_id,
+        'catalysts_by_id': catalysts_by_id,
+        'catalysts_by_theme': catalysts_by_theme,
+        'scan_by_theme': scan_by_theme,
+        'drilldown_by_catalyst': drilldown_by_catalyst,
+    })
+    return cached
 
 
 def _file_age_hours(path) -> Optional[float]:
@@ -785,6 +1047,18 @@ def analyze_news_text(text: str, *, persist: bool = False) -> dict[str, Any]:
         'freshness': freshness,
         'political_neutral': False,
     }
+    cid = _make_catalyst_id(primary_theme, headline)
+    result['catalyst_id'] = cid
+    result['drilldown'] = _build_catalyst_drilldown_payload(
+        {
+            'catalyst_id': cid,
+            'headline': headline,
+            'theme_id': primary_theme,
+            'why': themes_out[0].get('why') if themes_out else 'News analysis',
+        },
+        freshness=freshness,
+        theme_id=primary_theme,
+    )
     if persist:
         _append_event_log({
             'stage': STAGE,
@@ -971,6 +1245,7 @@ def get_budget_overview(*, cache_only: bool = False, lite: bool = False) -> dict
         },
         'disclaimer': 'Research only — watch/confirm. No blind entry.',
     }
+    payload.update(build_budget_cache_indexes(payload, freshness=freshness))
     return payload
 
 
@@ -1000,38 +1275,115 @@ def get_budget_themes(*, lite: bool = False) -> dict[str, Any]:
     }
 
 
-def get_budget_theme_detail(theme_id: str) -> dict[str, Any]:
+def get_budget_theme_detail(
+    theme_id: str,
+    *,
+    cache_only: bool = False,
+    lite: bool = False,
+) -> dict[str, Any]:
     from backend.analytics.theme_baskets import get_basket_by_id, resolve_theme_id
 
     resolved = resolve_theme_id(theme_id)
+    if cache_only and lite:
+        cached = ensure_cache_indexes(_load_cache())
+        if not cached.get('ok'):
+            return {
+                'ok': True,
+                'lite': True,
+                'cache_missing': True,
+                'message': CACHE_MISSING_MSG,
+            }
+        theme = (cached.get('themes_by_id') or {}).get(resolved or '')
+        if not theme and not get_basket_by_id(theme_id):
+            return {'ok': False, 'error': f'theme not found: {theme_id}'}
+        if not theme:
+            theme = {
+                'theme_id': resolved,
+                'display_name': resolved,
+                'catalysts': [],
+                'stock_sections': {},
+                'summary': {},
+                'impact_map': build_impact_map(resolved or theme_id),
+            }
+        return {
+            'ok': True,
+            'lite': True,
+            'from_cache': True,
+            'theme_id': resolved,
+            'theme': theme,
+            'freshness': cached.get('freshness') or {},
+            'catalysts': (cached.get('catalysts_by_theme') or {}).get(resolved or '', []),
+            'stock_sections': (cached.get('scan_by_theme') or {}).get(resolved or '', {}).get('sections') or {},
+            'summary': (cached.get('scan_by_theme') or {}).get(resolved or '', {}).get('summary') or {},
+            'impact_map': theme.get('impact_map') or build_impact_map(resolved or theme_id),
+            'disclaimer': 'Research only — watch/confirm.',
+        }
+
     basket = get_basket_by_id(theme_id)
     if not basket or not resolved:
         return {'ok': False, 'error': f'theme not found: {theme_id}'}
     impact = build_impact_map(resolved)
     freshness = compute_freshness_panel()
+    news = get_budget_theme_news(theme_id, limit=8)
+    scan = get_budget_theme_scan(theme_id, limit=12)
     return {
         'ok': True,
         'theme_id': resolved,
+        'theme': {
+            'theme_id': resolved,
+            'display_name': basket.get('display_name') or resolved,
+            'category': basket.get('category') or '',
+            'catalysts': news.get('catalysts') or [],
+            'stock_sections': scan.get('sections') or {},
+            'summary': scan.get('summary') or {},
+            'impact_map': impact,
+        },
         'basket': basket,
         'impact_map': impact,
         'freshness': freshness,
+        'catalysts': news.get('catalysts') or [],
+        'stock_sections': scan.get('sections') or {},
+        'summary': scan.get('summary') or {},
         'disclaimer': 'Research only — watch/confirm.',
     }
 
 
-def get_budget_theme_news(theme_id: str, *, limit: int = 12) -> dict[str, Any]:
+def get_budget_theme_news(
+    theme_id: str,
+    *,
+    limit: int = 12,
+    cache_only: bool = False,
+    lite: bool = False,
+) -> dict[str, Any]:
     from backend.analytics.theme_baskets import get_basket_by_id, get_theme_catalysts, resolve_theme_id
 
     resolved = resolve_theme_id(theme_id)
+    if cache_only and lite:
+        cached = ensure_cache_indexes(_load_cache())
+        rows = list((cached.get('catalysts_by_theme') or {}).get(resolved or '', []))[:limit]
+        if not rows and not get_basket_by_id(theme_id):
+            return {'ok': False, 'error': f'theme not found: {theme_id}'}
+        return {
+            'ok': True,
+            'lite': True,
+            'from_cache': True,
+            'theme_id': resolved,
+            'catalysts': rows,
+            'count': len(rows),
+        }
+
     if not get_basket_by_id(theme_id):
         return {'ok': False, 'error': f'theme not found: {theme_id}'}
     catalysts = get_theme_catalysts(theme_id, limit=limit, for_top_display=False)
     enriched = []
     for cat in catalysts:
         headline_text = str(cat.get('headline') or '')
+        cid = _make_catalyst_id(str(resolved or theme_id), headline_text)
         scored = _budget_impact_score(headline_text, str(resolved or theme_id))
         enriched.append({
             **cat,
+            'catalyst_id': cid,
+            'theme_id': resolved,
             'budget_impact_score': scored.get('budget_impact_score', cat.get('catalyst_score', 0)),
             'catalyst_direction': detect_catalyst_direction(headline_text),
             'named_companies': extract_named_companies_strict(headline_text),
@@ -1050,18 +1402,78 @@ def get_budget_theme_scan(
     *,
     limit: int = 12,
     catalyst_headline: str | None = None,
+    catalyst_id: str | None = None,
+    cache_only: bool = False,
+    lite: bool = False,
 ) -> dict[str, Any]:
     from backend.analytics.theme_baskets import get_basket_by_id, get_theme_catalysts, resolve_theme_id
 
     resolved = resolve_theme_id(theme_id)
+    if cache_only and lite:
+        cached = ensure_cache_indexes(_load_cache())
+        if not get_basket_by_id(theme_id) and resolved not in (cached.get('scan_by_theme') or {}):
+            return {'ok': False, 'error': f'theme not found: {theme_id}'}
+        theme_rows = (cached.get('catalysts_by_theme') or {}).get(resolved or '', [])
+        freshness = cached.get('freshness') or {}
+        if catalyst_id:
+            drill = (cached.get('drilldown_by_catalyst') or {}).get(str(catalyst_id))
+            if drill:
+                return {
+                    'ok': True,
+                    'lite': True,
+                    'from_cache': True,
+                    'theme_id': resolved,
+                    'catalyst_id': catalyst_id,
+                    'catalyst_headline': drill.get('headline'),
+                    'catalyst_direction': drill.get('direction'),
+                    'named_companies': drill.get('named_companies') or [],
+                    'stocks': drill.get('stocks') or [],
+                    'sections': drill.get('stock_sections') or {},
+                    'section_labels': STOCK_SECTION_LABELS,
+                    'count': len(drill.get('stocks') or []),
+                    'freshness': freshness,
+                    'summary': {
+                        'direction': drill.get('direction'),
+                        'stock_count': len(drill.get('stocks') or []),
+                    },
+                }
+        scan = _build_theme_scan_payload(
+            str(resolved or theme_id),
+            theme_rows,
+            freshness=freshness,
+            catalyst_headline=catalyst_headline,
+            catalyst_id=catalyst_id,
+        )
+        return {
+            'ok': True,
+            'lite': True,
+            'from_cache': True,
+            'theme_id': resolved,
+            'catalyst_id': scan.get('catalyst_id'),
+            'catalyst_headline': scan.get('catalyst_headline'),
+            'catalyst_direction': scan.get('catalyst_direction'),
+            'named_companies': (scan.get('summary') or {}).get('named_companies') or [],
+            'stocks': scan.get('stocks') or [],
+            'sections': scan.get('sections') or {},
+            'section_labels': STOCK_SECTION_LABELS,
+            'count': len(scan.get('stocks') or []),
+            'freshness': freshness,
+            'summary': scan.get('summary') or {},
+        }
+
     if not get_basket_by_id(theme_id):
         return {'ok': False, 'error': f'theme not found: {theme_id}'}
     freshness = compute_freshness_panel()
 
     headline = str(catalyst_headline or '').strip()
+    if catalyst_id and not headline:
+        cached = ensure_cache_indexes(_load_cache())
+        cat = (cached.get('catalysts_by_id') or {}).get(str(catalyst_id))
+        if cat:
+            headline = str(cat.get('headline') or '')
+
     if not headline:
-        catalysts = get_theme_catalysts(theme_id, limit=3, for_top_display=False)
-        catalysts = dedupe_catalyst_rows(catalysts)
+        catalysts = dedupe_catalyst_rows(get_theme_catalysts(theme_id, limit=3, for_top_display=False))
         if catalysts:
             headline = str(catalysts[0].get('headline') or '')
 
@@ -1070,6 +1482,7 @@ def get_budget_theme_scan(
         return {
             'ok': True,
             'theme_id': resolved,
+            'catalyst_id': _make_catalyst_id(str(resolved or theme_id), headline),
             'catalyst_headline': headline[:240],
             'catalyst_direction': ranked.get('catalyst_direction'),
             'named_companies': ranked.get('named_companies') or [],
@@ -1078,6 +1491,11 @@ def get_budget_theme_scan(
             'section_labels': STOCK_SECTION_LABELS,
             'count': len(ranked.get('stocks') or []),
             'freshness': freshness,
+            'summary': {
+                'direction': ranked.get('catalyst_direction'),
+                'stock_count': len(ranked.get('stocks') or []),
+                'named_companies': ranked.get('named_companies') or [],
+            },
         }
 
     return {
@@ -1088,7 +1506,43 @@ def get_budget_theme_scan(
         'section_labels': STOCK_SECTION_LABELS,
         'count': 0,
         'freshness': freshness,
+        'summary': {'direction': 'Mixed', 'stock_count': 0},
     }
+
+
+def get_budget_catalyst_drilldown(
+    catalyst_id: str,
+    *,
+    cache_only: bool = False,
+    lite: bool = False,
+) -> dict[str, Any]:
+    if cache_only and lite:
+        cached = ensure_cache_indexes(_load_cache())
+        drill = (cached.get('drilldown_by_catalyst') or {}).get(str(catalyst_id))
+        if drill:
+            out = dict(drill)
+            out.setdefault('ok', True)
+            out.setdefault('lite', True)
+            out.setdefault('from_cache', True)
+            return out
+        cat = (cached.get('catalysts_by_id') or {}).get(str(catalyst_id))
+        if cat:
+            return _build_catalyst_drilldown_payload(
+                cat,
+                freshness=cached.get('freshness') or {},
+                theme_id=str(cat.get('theme_id') or 'infrastructure'),
+            )
+        return {'ok': False, 'error': f'catalyst not found: {catalyst_id}'}
+
+    cached = ensure_cache_indexes(_load_cache())
+    cat = (cached.get('catalysts_by_id') or {}).get(str(catalyst_id))
+    if not cat:
+        return {'ok': False, 'error': f'catalyst not found: {catalyst_id}'}
+    return _build_catalyst_drilldown_payload(
+        cat,
+        freshness=cached.get('freshness') or compute_freshness_panel(),
+        theme_id=str(cat.get('theme_id') or 'infrastructure'),
+    )
 
 
 def refresh_budget_intel(*, persist: bool = True) -> dict[str, Any]:

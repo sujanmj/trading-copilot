@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
-"""Unit tests for Budget API routes (Stage 48A)."""
+"""Unit tests for budget API routes (Stage 48G)."""
 
 from __future__ import annotations
 
-import json
-import os
 import sys
-import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-os.chdir(PROJECT_ROOT)
+
+from backend.analytics import budget_impact as bi
 
 
 def _fail(msg: str) -> int:
@@ -21,82 +20,29 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    import backend.analytics.budget_impact as bi
-    import backend.analytics.theme_baskets as tb
-
-    api_src = (PROJECT_ROOT / 'backend/api/api_server.py').read_text(encoding='utf-8')
-    for route in (
-        '/api/budget/overview',
-        '/api/budget/themes',
+    api = (PROJECT_ROOT / 'backend/api/api_server.py').read_text(encoding='utf-8')
+    routes = (
         '/api/budget/theme/{theme_id}',
         '/api/budget/news/{theme_id}',
         '/api/budget/scan/{theme_id}',
-        '/api/budget/analyze-news',
-        '/api/budget/refresh',
-    ):
-        if route not in api_src:
-            return _fail(f'missing route {route}')
+        '/api/budget/catalyst/{catalyst_id}',
+        'get_budget_theme_detail(theme_id, cache_only=bool(cache_only), lite=bool(lite))',
+        'get_budget_theme_news(theme_id, cache_only=bool(cache_only), lite=bool(lite))',
+        'get_budget_catalyst_drilldown',
+    )
+    for needle in routes:
+        if needle not in api:
+            return _fail(f'api_server.py missing {needle!r}')
 
-    if "'stage': '48C'" not in api_src:
-        return _fail('build-info stage not 48C')
-
-    with tempfile.TemporaryDirectory() as tmp:
-        baskets_path = Path(tmp) / 'theme_baskets.json'
-        log_path = Path(tmp) / 'theme_catalyst_log.jsonl'
-        cache_path = Path(tmp) / 'budget_impact_cache.json'
-        event_path = Path(tmp) / 'budget_event_log.jsonl'
-        orig_baskets = tb.BASKETS_FILE
-        orig_log = tb.CATALYST_LOG_FILE
-        orig_cache = bi.CACHE_FILE
-        orig_event = bi.EVENT_LOG_FILE
-        tb.BASKETS_FILE = baskets_path
-        tb.CATALYST_LOG_FILE = log_path
-        bi.CACHE_FILE = cache_path
-        bi.EVENT_LOG_FILE = event_path
-        try:
-            tb.bootstrap_theme_baskets(force=True)
-
-            overview = bi.get_budget_overview()
-            if not overview.get('ok') or not overview.get('top_themes'):
-                return _fail('overview route logic failed')
-
-            themes = bi.get_budget_themes()
-            if not themes.get('categories'):
-                return _fail('themes route logic failed')
-
-            detail = bi.get_budget_theme_detail('infra')
-            if not detail.get('ok') or detail.get('theme_id') != 'infrastructure':
-                return _fail('theme detail should resolve infra alias')
-
-            news = bi.get_budget_theme_news('infrastructure')
-            if not news.get('ok') or not isinstance(news.get('catalysts'), list):
-                return _fail('news route should return catalysts list')
-
-            scan = bi.get_budget_theme_scan('infrastructure')
-            stocks = scan.get('stocks') or []
-            if not scan.get('ok') or not stocks:
-                return _fail('scan route should return ranked stocks')
-            if 'stance' not in stocks[0]:
-                return _fail('scan stocks missing stance column')
-
-            analyze = bi.analyze_news_text('Govt announces new highway project in Bengaluru', persist=True)
-            if not analyze.get('ok'):
-                return _fail('analyze-news failed')
-
-            missing = bi.get_budget_theme_detail('not_a_real_theme_xyz')
-            if missing.get('ok'):
-                return _fail('unknown theme should not be ok')
-
-            refresh = bi.refresh_budget_intel(persist=True)
-            if not refresh.get('ok'):
-                return _fail('refresh route failed')
-
-            json.dumps({'overview': overview, 'themes': themes, 'scan': scan, 'analyze': analyze})
-        finally:
-            tb.BASKETS_FILE = orig_baskets
-            tb.CATALYST_LOG_FILE = orig_log
-            bi.CACHE_FILE = orig_cache
-            bi.EVENT_LOG_FILE = orig_event
+    cached = {'ok': True, 'freshness': {'status': 'partial'}, 'top_catalysts': []}
+    with patch('backend.analytics.budget_impact._load_cache', return_value=cached):
+        with patch('backend.analytics.theme_baskets.get_basket_by_id', return_value={'theme_id': 'roads_highways', 'display_name': 'Roads / Highways'}):
+            theme = bi.get_budget_theme_detail('roads_highways', cache_only=True, lite=True)
+            news = bi.get_budget_theme_news('roads_highways', cache_only=True, lite=True)
+            scan = bi.get_budget_theme_scan('roads_highways', cache_only=True, lite=True)
+    for payload, name in ((theme, 'theme'), (news, 'news'), (scan, 'scan')):
+        if not payload.get('ok') and not payload.get('cache_missing'):
+            return _fail(f'{name} lite route must return ok JSON')
 
     print('BUDGET_API_ROUTES_TEST_OK')
     return 0

@@ -38,7 +38,7 @@ def run_realtime_alerts():
     safe_print('SMART ALERTS - Intraday event check')
     safe_print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     safe_print('=' * 60)
-    total = engine.try_intraday_events() + engine.try_emergency_macro()[0]
+    total = engine.try_intraday_events() + engine.try_emergency_macro(scheduled=True)[0]
     safe_print(f'\n[INFO] Alerts sent: {total}')
     return total
 

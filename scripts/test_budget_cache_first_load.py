@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for Budget cache-first load (Stage 48A/48C/48D)."""
+"""Unit tests for Budget cache-first load (Stage 48A/48C/48D/48G)."""
 
 from __future__ import annotations
 
@@ -19,9 +19,11 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     panel = PANEL.read_text(encoding='utf-8')
-
     for needle in (
         'cache_only=1&lite=1',
+        'themeLitePath',
+        'newsLitePath',
+        'scanLitePath',
         'themes?lite=1',
         'Budget cache unavailable',
         'Budget cache request timed out',

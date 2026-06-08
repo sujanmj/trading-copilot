@@ -82,22 +82,46 @@ def main() -> int:
             return {'articles': []}
         return {}
 
+    import io
+    from contextlib import redirect_stdout
+
+    engine._MACRO_STALE_RESEARCH_SENT.clear()
+
     with patch('backend.orchestration.alert_freshness_gate.is_headline_source_stale', return_value=True):
         with patch.object(engine, 'is_silenced', return_value=False):
             with patch.object(engine, '_load', side_effect=_fake_load):
-                with patch.object(engine, '_send', return_value={'sent': True, 'ok': True}) as send_mock:
-                    sent, skipped = engine.try_emergency_macro()
+                with patch.object(engine, '_send', return_value={'sent': True, 'ok': True}) as send_sched:
+                    buf = io.StringIO()
+                    with redirect_stdout(buf):
+                        sent, skipped = engine.try_emergency_macro(scheduled=True)
+                    sched_out = buf.getvalue()
     if sent:
-        return _fail('stale headline must not send Emergency Macro alert')
+        return _fail('scheduled stale headline must not send Emergency Macro alert')
     if not skipped:
-        return _fail('stale headline should count as skipped')
-    sent_text = send_mock.call_args[0][0] if send_mock.called else ''
+        return _fail('scheduled stale headline should count as skipped')
+    if send_sched.called:
+        return _fail('scheduled stale path must not call _send')
+    if 'TELEGRAM_MACRO_STALE_SUPPRESSED' not in sched_out:
+        return _fail('scheduled stale path must log TELEGRAM_MACRO_STALE_SUPPRESSED')
+
+    engine._MACRO_STALE_RESEARCH_SENT.clear()
+
+    with patch('backend.orchestration.alert_freshness_gate.is_headline_source_stale', return_value=True):
+        with patch.object(engine, 'is_silenced', return_value=False):
+            with patch.object(engine, '_load', side_effect=_fake_load):
+                with patch.object(engine, '_send', return_value={'sent': True, 'ok': True}) as send_manual:
+                    sent_m, skipped_m = engine.try_emergency_macro(scheduled=False)
+    if sent_m:
+        return _fail('manual stale headline must not send Emergency Macro alert')
+    if not skipped_m:
+        return _fail('manual stale headline should count as skipped')
+    sent_text = send_manual.call_args[0][0] if send_manual.called else ''
     if '<b>🚨 Emergency Macro</b>' in sent_text:
         return _fail('stale cache must not use Emergency Macro alert label')
     if 'Macro research only' not in sent_text:
-        return _fail('stale cache must use Macro research only label')
+        return _fail('manual stale cache must use Macro research only label')
     if 'not Emergency Macro' not in sent_text:
-        return _fail('stale cache should clarify not Emergency Macro')
+        return _fail('manual stale cache should clarify not Emergency Macro')
 
     print('RISKOFF_MACRO_OVERRIDE_TEST_OK')
     return 0

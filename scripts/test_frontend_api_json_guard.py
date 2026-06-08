@@ -46,7 +46,7 @@ def main() -> int:
             if needle not in text:
                 return _fail(f'{name} missing {needle!r}')
 
-    for needle in ("'stage': '48F'", 'api_not_found', 'JSONResponse'):
+    for needle in ("'stage': '48G'", 'api_not_found', 'JSONResponse'):
         if needle not in api_server:
             return _fail(f'api_server.py missing {needle!r}')
 
@@ -57,6 +57,7 @@ def main() -> int:
         '/api/brokers/overview',
         '/api/brokers/status',
         '/api/brokers/refresh',
+        '/api/budget/catalyst/',
     ):
         if rel not in api_server:
             return _fail(f'api_server.py missing route {rel!r}')

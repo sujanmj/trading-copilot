@@ -1,6 +1,6 @@
 /**
- * Budget Impact Intelligence workspace (Stage 48A/48B).
- * Theme Wishlist engine — research-only watch/confirm stances.
+ * Budget Impact Intelligence workspace (Stage 48G).
+ * Theme + catalyst drilldown — cache-only lite loads on click.
  */
 (function (global) {
   'use strict';
@@ -14,6 +14,7 @@
   const REFRESH_TIMEOUT_MSG = 'Budget refresh may still be running. Try again in a minute.';
   const OVERVIEW_LITE_PATH = '/api/budget/overview?cache_only=1&lite=1';
   const THEMES_LITE_PATH = '/api/budget/themes?lite=1';
+  const LITE_QS = 'cache_only=1&lite=1';
   const abortMeta = new WeakMap();
 
   let config = {
@@ -25,9 +26,13 @@
     overview: null,
     themes: null,
     selectedThemeId: null,
+    selectedThemeName: null,
+    selectedCatalystId: null,
+    selectedCatalystHeadline: null,
     themeDetail: null,
     themeNews: null,
     themeScan: null,
+    catalystDrilldown: null,
     analyzeResult: null,
   };
 
@@ -136,6 +141,76 @@
     }
   }
 
+  function themeLitePath(themeId) {
+    return `/api/budget/theme/${encodeURIComponent(themeId)}?${LITE_QS}`;
+  }
+
+  function newsLitePath(themeId) {
+    return `/api/budget/news/${encodeURIComponent(themeId)}?${LITE_QS}`;
+  }
+
+  function scanLitePath(themeId, catalystId) {
+    let path = `/api/budget/scan/${encodeURIComponent(themeId)}?${LITE_QS}`;
+    if (catalystId) path += `&catalyst_id=${encodeURIComponent(catalystId)}`;
+    return path;
+  }
+
+  function catalystLitePath(catalystId) {
+    return `/api/budget/catalyst/${encodeURIComponent(catalystId)}?${LITE_QS}`;
+  }
+
+  function findThemeDisplayName(themeId) {
+    const categories = (state.themes && state.themes.categories) || {};
+    const keys = Object.keys(categories);
+    for (let i = 0; i < keys.length; i += 1) {
+      const rows = categories[keys[i]] || [];
+      for (let j = 0; j < rows.length; j += 1) {
+        if (rows[j].theme_id === themeId) return rows[j].display_name || themeId;
+      }
+    }
+    const theme = (state.themeDetail && state.themeDetail.theme) || {};
+    return theme.display_name || themeId;
+  }
+
+  function renderSelectionBar() {
+    const themeLabel = state.selectedThemeId
+      ? escapeHtml(state.selectedThemeName || findThemeDisplayName(state.selectedThemeId))
+      : 'All';
+    const catalystLabel = state.selectedCatalystHeadline
+      ? escapeHtml(String(state.selectedCatalystHeadline).slice(0, 120))
+      : 'None';
+    return `<div class="bud-selection-bar glass-card">
+      <div class="bud-selection-row"><span class="bud-label">Selected theme:</span> <strong>${themeLabel}</strong></div>
+      <div class="bud-selection-row"><span class="bud-label">Selected catalyst:</span> <strong>${catalystLabel}</strong></div>
+      <div class="bud-selection-actions">
+        <button type="button" class="refresh-btn bud-clear-btn" id="budgetClearThemeBtn">Clear Theme</button>
+        <button type="button" class="refresh-btn bud-clear-btn" id="budgetClearCatalystBtn">Clear Catalyst</button>
+        <button type="button" class="refresh-btn bud-refresh-btn" id="budgetRefreshBtn">↻ Refresh Budget Intel</button>
+      </div>
+    </div>`;
+  }
+
+  function renderCatalystDrilldown(drill) {
+    if (!drill || !state.selectedCatalystId) return '';
+    const themes = (drill.detected_themes || []).map((t) => escapeHtml(t.display_name || t.theme_id)).join(', ');
+    const listTickers = (rows) => (rows || []).map((r) => escapeHtml(r.ticker)).filter(Boolean).join(', ') || '—';
+    const fresh = (drill.freshness && drill.freshness.status) || 'unknown';
+    return `<div class="bud-drilldown glass-card">
+      <div class="bud-section-title">Catalyst impact drilldown</div>
+      <p><b>Headline:</b> ${escapeHtml(drill.headline || state.selectedCatalystHeadline || '—')}</p>
+      <p><b>Direction:</b> ${escapeHtml(drill.direction || drill.catalyst_direction || 'Mixed')}</p>
+      <p><b>Detected themes:</b> ${themes || 'Unavailable'}</p>
+      <p><b>Direct beneficiaries:</b> ${listTickers(drill.direct_beneficiaries)}</p>
+      <p><b>Indirect beneficiaries:</b> ${listTickers(drill.indirect_beneficiaries)}</p>
+      <p><b>Avoid / Risk:</b> ${listTickers(drill.avoid_risk)}</p>
+      <p><b>Wait for confirmation:</b> ${listTickers(drill.wait_confirmation)}</p>
+      <p><b>Reason:</b> ${escapeHtml(drill.reason || '—')}</p>
+      <p><b>Freshness:</b> ${escapeHtml(fresh)}</p>
+      <p><b>Suggested stance:</b> ${escapeHtml(drill.suggested_stance || 'Research Only')}</p>
+      <p class="bud-muted">${escapeHtml(drill.confirmation || 'Confirm with price + volume + sector breadth.')}</p>
+    </div>`;
+  }
+
   function freshnessBadge(status) {
     const s = String(status || 'unknown').toLowerCase();
     const cls = s === 'fresh' ? 'bud-fresh' : (s === 'partial' ? 'bud-partial' : 'bud-stale');
@@ -168,7 +243,6 @@
         ${freshnessSourceRow('Budget cache', Object.assign({}, budget, { age_label: f.latest_budget_cache_age || budget.age_label }))}
         <div><span class="bud-label">Status</span> ${freshnessBadge(f.status || 'unavailable')}</div>
       </div>
-      <button type="button" class="refresh-btn bud-refresh-btn" id="budgetRefreshBtn">↻ Refresh Budget Intel</button>
     </div>`;
   }
 
@@ -193,12 +267,19 @@
     if (!rows.length) {
       return '<div class="bud-empty">No strong fresh catalyst found. Research basket only.</div>';
     }
-    const body = rows.map((cat) => `<div class="bud-catalyst-row">
+    const body = rows.map((cat) => {
+      const cid = cat.catalyst_id || '';
+      const active = state.selectedCatalystId && cid === state.selectedCatalystId ? ' active' : '';
+      return `<button type="button" class="bud-catalyst-row bud-catalyst-btn${active}" data-catalyst-id="${escapeHtml(cid)}" data-theme-id="${escapeHtml(cat.theme_id || state.selectedThemeId || '')}" data-headline="${escapeHtml(cat.headline || '')}">
       <div class="bud-catalyst-headline">${escapeHtml(cat.headline || '—')}</div>
-      <div class="bud-catalyst-meta">Impact ${escapeHtml(cat.impact_10 || '?')}/10 · Score ${escapeHtml(cat.budget_impact_score || cat.catalyst_score || '?')}</div>
+      <div class="bud-catalyst-meta">Direction ${escapeHtml(cat.catalyst_direction || '?')} · Impact ${escapeHtml(cat.impact_10 || '?')}/10 · Score ${escapeHtml(cat.budget_impact_score || cat.catalyst_score || '?')}</div>
       <div class="bud-catalyst-why">Why: ${escapeHtml(cat.why || '—')}</div>
-    </div>`).join('');
-    return `<div class="bud-news-panel glass-card"><div class="bud-section-title">Catalyst news</div>${body}</div>`;
+    </button>`;
+    }).join('');
+    const title = state.selectedThemeId
+      ? `Catalyst news — ${escapeHtml(state.selectedThemeName || findThemeDisplayName(state.selectedThemeId))}`
+      : 'Catalyst news';
+    return `<div class="bud-news-panel glass-card"><div class="bud-section-title">${title}</div>${body}</div>`;
   }
 
   function renderImpactMap(impact) {
@@ -311,11 +392,32 @@
     }
     const freshness = overview.freshness || {};
     const categories = (state.themes && state.themes.categories) || {};
-    const news = (state.themeNews && state.themeNews.catalysts) || overview.top_catalysts || [];
-    const impact = (state.themeDetail && state.themeDetail.impact_map) || null;
-    const stocks = (state.themeScan && state.themeScan.stocks) || overview.stock_rankings || [];
-    const sections = (state.themeScan && state.themeScan.sections) || overview.stock_ranking_sections || null;
-    const sectionLabels = (state.themeScan && state.themeScan.section_labels) || overview.section_labels || null;
+    let news = overview.top_catalysts || [];
+    let impact = null;
+    let stocks = overview.stock_rankings || [];
+    let sections = overview.stock_ranking_sections || null;
+    let sectionLabels = overview.section_labels || null;
+    let rankingTitle = 'Stock ranking — top overall budget impact';
+
+    if (state.selectedThemeId) {
+      news = (state.themeNews && state.themeNews.catalysts) || news;
+      impact = (state.themeDetail && (state.themeDetail.impact_map || (state.themeDetail.theme && state.themeDetail.theme.impact_map))) || null;
+      stocks = (state.themeScan && state.themeScan.stocks) || stocks;
+      sections = (state.themeScan && state.themeScan.sections) || sections;
+      sectionLabels = (state.themeScan && state.themeScan.section_labels) || sectionLabels;
+      rankingTitle = `Stock ranking — ${escapeHtml(state.selectedThemeName || findThemeDisplayName(state.selectedThemeId))}`;
+    }
+
+    if (state.selectedCatalystId && state.catalystDrilldown) {
+      stocks = state.catalystDrilldown.stocks || stocks;
+      sections = state.catalystDrilldown.stock_sections || sections;
+      sectionLabels = state.catalystDrilldown.section_labels || sectionLabels;
+      rankingTitle = 'Stock ranking — selected catalyst impact';
+    }
+
+    const themeHeader = state.selectedThemeId
+      ? `<p class="bud-selected-theme"><b>Selected theme:</b> ${escapeHtml(state.selectedThemeName || findThemeDisplayName(state.selectedThemeId))}</p>`
+      : '';
 
     return `<div class="bud-dashboard">
       <div class="bud-header-row">
@@ -325,13 +427,16 @@
         </div>
       </div>
       <p class="bud-disclaimer">Research only — watch/confirm. No blind entry.</p>
+      ${renderSelectionBar()}
+      ${themeHeader}
       ${renderFreshnessPanel(freshness)}
       <div class="bud-layout">
         <div class="bud-left">${renderThemeCategories(categories)}</div>
         <div class="bud-right">
           ${renderCatalystNews(news)}
+          ${renderCatalystDrilldown(state.catalystDrilldown)}
           ${impact ? renderImpactMap(impact) : ''}
-          <div class="bud-stocks glass-card"><div class="bud-section-title">Stock ranking</div>${renderStockTable(stocks, sections, sectionLabels)}</div>
+          <div class="bud-stocks glass-card"><div class="bud-section-title">${rankingTitle}</div>${renderStockTable(stocks, sections, sectionLabels)}</div>
         </div>
       </div>
       <div class="bud-simulator glass-card">
@@ -350,35 +455,67 @@
         if (tid) loadThemeDetail(tid, host);
       });
     });
+    host.querySelectorAll('.bud-catalyst-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cid = btn.getAttribute('data-catalyst-id');
+        const tid = btn.getAttribute('data-theme-id') || state.selectedThemeId;
+        const headline = btn.getAttribute('data-headline') || '';
+        if (cid && tid) loadCatalystDrilldown(cid, tid, headline, host);
+      });
+    });
+    const clearThemeBtn = host.querySelector('#budgetClearThemeBtn');
+    if (clearThemeBtn) clearThemeBtn.addEventListener('click', () => clearTheme(host));
+    const clearCatalystBtn = host.querySelector('#budgetClearCatalystBtn');
+    if (clearCatalystBtn) clearCatalystBtn.addEventListener('click', () => clearCatalyst(host));
     const refreshBtn = host.querySelector('#budgetRefreshBtn');
     if (refreshBtn) refreshBtn.addEventListener('click', () => refreshBudget(host));
     const simBtn = host.querySelector('#budgetSimBtn');
     if (simBtn) simBtn.addEventListener('click', () => runSimulator(host));
   }
 
-  async function loadThemeDetail(themeId, host, catalystHeadline) {
+  function clearTheme(host) {
+    state.selectedThemeId = null;
+    state.selectedThemeName = null;
+    state.themeDetail = null;
+    state.themeNews = null;
+    state.themeScan = null;
+    clearCatalystState(false);
+    host.innerHTML = renderDashboard();
+    wireEvents(host);
+  }
+
+  function clearCatalystState(rerender) {
+    state.selectedCatalystId = null;
+    state.selectedCatalystHeadline = null;
+    state.catalystDrilldown = null;
+  }
+
+  function clearCatalyst(host) {
+    clearCatalystState(false);
+    host.innerHTML = renderDashboard();
+    wireEvents(host);
+  }
+
+  async function loadThemeDetail(themeId, host) {
     state.selectedThemeId = themeId;
+    state.selectedThemeName = findThemeDisplayName(themeId);
+    clearCatalystState(false);
     const controller = createAbortController('theme_detail');
     const timer = setTimeout(() => {
       abortMeta.set(controller, { reason: 'timeout' });
       controller.abort();
     }, FETCH_MS);
     try {
-      const scanPath = `/api/budget/scan/${encodeURIComponent(themeId)}${
-        catalystHeadline ? `?catalyst_headline=${encodeURIComponent(catalystHeadline)}` : ''
-      }`;
       const [detail, news, scan] = await Promise.all([
-        fetchBudgetJson(`/api/budget/theme/${encodeURIComponent(themeId)}`, null, controller.signal),
-        fetchBudgetJson(`/api/budget/news/${encodeURIComponent(themeId)}`, null, controller.signal),
-        fetchBudgetJson(scanPath, null, controller.signal),
+        fetchBudgetJson(themeLitePath(themeId), null, controller.signal),
+        fetchBudgetJson(newsLitePath(themeId), null, controller.signal),
+        fetchBudgetJson(scanLitePath(themeId), null, controller.signal),
       ]);
       state.themeDetail = detail;
       state.themeNews = news;
       state.themeScan = scan;
-      const firstCatalyst = (news.catalysts || [])[0];
-      if (!catalystHeadline && firstCatalyst && firstCatalyst.headline && !(scan.stocks || []).length) {
-        clearTimeout(timer);
-        return loadThemeDetail(themeId, host, firstCatalyst.headline);
+      if (detail.theme && detail.theme.display_name) {
+        state.selectedThemeName = detail.theme.display_name;
       }
       host.innerHTML = renderDashboard();
       wireEvents(host);
@@ -386,6 +523,37 @@
       const msg = budgetFetchErrorMessage(err, controller, 'theme');
       if (msg) {
         host.innerHTML = `<div class="panel-error-card"><strong>Budget theme</strong><p>${escapeHtml(msg)}</p></div>`;
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function loadCatalystDrilldown(catalystId, themeId, headline, host) {
+    state.selectedCatalystId = catalystId;
+    state.selectedCatalystHeadline = headline;
+    if (!state.selectedThemeId && themeId) {
+      state.selectedThemeId = themeId;
+      state.selectedThemeName = findThemeDisplayName(themeId);
+    }
+    const controller = createAbortController('catalyst_detail');
+    const timer = setTimeout(() => {
+      abortMeta.set(controller, { reason: 'timeout' });
+      controller.abort();
+    }, FETCH_MS);
+    try {
+      const [drill, scan] = await Promise.all([
+        fetchBudgetJson(catalystLitePath(catalystId), null, controller.signal),
+        fetchBudgetJson(scanLitePath(themeId || state.selectedThemeId, catalystId), null, controller.signal),
+      ]);
+      state.catalystDrilldown = drill;
+      state.themeScan = scan;
+      host.innerHTML = renderDashboard();
+      wireEvents(host);
+    } catch (err) {
+      const msg = budgetFetchErrorMessage(err, controller, 'catalyst');
+      if (msg) {
+        host.innerHTML = `<div class="panel-error-card"><strong>Budget catalyst</strong><p>${escapeHtml(msg)}</p></div>`;
       }
     } finally {
       clearTimeout(timer);
@@ -408,14 +576,21 @@
       state.overview = overview;
       state.themes = themes;
       if (state.selectedThemeId) {
-        const [detail, news, scan] = await Promise.all([
-          fetchBudgetJson(`/api/budget/theme/${encodeURIComponent(state.selectedThemeId)}`, null, controller.signal),
-          fetchBudgetJson(`/api/budget/news/${encodeURIComponent(state.selectedThemeId)}`, null, controller.signal),
-          fetchBudgetJson(`/api/budget/scan/${encodeURIComponent(state.selectedThemeId)}`, null, controller.signal),
-        ]);
-        state.themeDetail = detail;
-        state.themeNews = news;
-        state.themeScan = scan;
+        const tid = state.selectedThemeId;
+        const scanPath = scanLitePath(tid, state.selectedCatalystId);
+        const reqs = [
+          fetchBudgetJson(themeLitePath(tid), null, controller.signal),
+          fetchBudgetJson(newsLitePath(tid), null, controller.signal),
+          fetchBudgetJson(scanPath, null, controller.signal),
+        ];
+        if (state.selectedCatalystId) {
+          reqs.push(fetchBudgetJson(catalystLitePath(state.selectedCatalystId), null, controller.signal));
+        }
+        const results = await Promise.all(reqs);
+        state.themeDetail = results[0];
+        state.themeNews = results[1];
+        state.themeScan = results[2];
+        if (state.selectedCatalystId && results[3]) state.catalystDrilldown = results[3];
       }
       host.innerHTML = renderDashboard();
       wireEvents(host);

@@ -1,26 +1,16 @@
 #!/usr/bin/env python3
-"""Validate Budget API routes pack (Stage 48A)."""
+"""Validate budget API routes (Stage 48G)."""
 
 from __future__ import annotations
 
-import subprocess
+import os
 import sys
-from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-
-def _fail(msg: str) -> int:
-    print(f'BUDGET_API_ROUTES_FAIL: {msg}', file=sys.stderr)
-    return 1
 
 
 def main() -> int:
-    proc = subprocess.run([sys.executable, 'scripts/test_budget_api_routes.py'], cwd=PROJECT_ROOT)
-    if proc.returncode != 0:
-        return _fail('test_budget_api_routes.py failed')
+    if os.system(f'{sys.executable} scripts/test_budget_api_routes.py') != 0:
+        print('BUDGET_API_ROUTES_FAIL: test failed', file=sys.stderr)
+        return 1
     print('BUDGET_API_ROUTES_OK')
     return 0
 

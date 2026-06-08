@@ -71,6 +71,41 @@ SINGLE_STOCK_MACRO_PATTERNS = (
     r'\b(warning|probe|fine)\b.*\b(shares?|stock)\b',
 )
 
+SCHEDULED_QUOTE_NOISE = (
+    'quote of the day',
+    'motivational quote',
+    'daily quote',
+    'thought of the day',
+)
+
+CRYPTO_ONLY_KEYWORDS = (
+    'bitcoin', 'ethereum', 'crypto', 'dogecoin', 'solana', 'blockchain ico',
+)
+
+INDIA_EQUITY_LINK_KEYWORDS = (
+    'nifty', 'sensex', 'india', 'indian', 'sebi', 'rbi', 'inr', 'rupee', 'fii', 'nse', 'bse',
+)
+
+COMMODITY_BROAD_KEYWORDS = (
+    'gold price', 'silver price', 'gold surges', 'silver jumps', 'gold hits', 'silver hits',
+    'gold rallies', 'silver rallies',
+)
+
+INDIA_COMMODITY_LINK_KEYWORDS = (
+    'india', 'nifty', 'inr', 'rupee', 'import', 'export', 'mcx', 'crude', 'war', 'iran',
+    'shipping', 'oil', 'petrol', 'diesel',
+)
+
+ACTIONABLE_MACRO_GUIDANCE_KEYS = (
+    'watch_note', 'action_note', 'market_impact', 'impact_summary', 'analysis', 'impact_text',
+)
+
+ACTIONABLE_MACRO_KEYWORDS = (
+    'watch', 'confirm', 'monitor', 'impact', 'nifty', 'sensex', 'inr', 'rupee',
+    'crude', 'oil', 'fed', 'rbi', 'sebi', 'selloff', 'crash', 'surprise', 'escalat',
+    'shipping', 'war', 'hike', 'cut', 'circuit', 'halt',
+)
+
 
 def _log(tag: str, msg: str) -> None:
     print(f'[{tag}] {msg}', flush=True)
@@ -287,6 +322,80 @@ def is_stock_specific_risk(headline: str, item: Optional[dict] = None) -> bool:
     return company_only
 
 
+def is_research_only_macro_item(item: Optional[dict] = None) -> bool:
+    """True when headline item is research-only or cache-stale flagged."""
+    if not item or not isinstance(item, dict):
+        return False
+    if item.get('research_only') or item.get('cache_stale'):
+        return True
+    src = str(item.get('source') or item.get('source_flag') or '').lower()
+    if src in ('research_only', 'cache_stale', 'stale_cache'):
+        return True
+    flags = item.get('flags') or item.get('source_flags') or []
+    if isinstance(flags, (list, tuple)):
+        lowered = {str(f).lower() for f in flags}
+        if lowered & {'research_only', 'cache_stale', 'stale_cache'}:
+            return True
+    return False
+
+
+def is_high_severity_macro(headline: str, item: Optional[dict] = None) -> bool:
+    """HIGH severity — broad emergency macro, not stock-specific or generic skip."""
+    return classify_macro_severity(headline, item) == 'emergency_macro'
+
+
+def has_actionable_macro_guidance(headline: str, item: Optional[dict] = None) -> bool:
+    """Watch/confirm or market-impact text available for scheduled emergency macro."""
+    if item:
+        for key in ACTIONABLE_MACRO_GUIDANCE_KEYS:
+            if item.get(key):
+                return True
+        if item.get('impact') or item.get('market_impact_text'):
+            return True
+    lower = str(headline or '').lower()
+    return any(k in lower for k in ACTIONABLE_MACRO_KEYWORDS)
+
+
+def is_scheduled_macro_noise(headline: str, item: Optional[dict] = None) -> Tuple[bool, str]:
+    """
+    Suppress scheduled emergency macro for low-relevance headline classes.
+    Returns (is_noise, reason).
+    """
+    lower = str(headline or '').lower()
+
+    if any(q in lower for q in SCHEDULED_QUOTE_NOISE):
+        return True, 'quote_noise'
+
+    if 'spacex' in lower and 'ipo' in lower and not has_india_market_relevance(headline, item):
+        return True, 'spacex_ipo_noise'
+
+    if any(c in lower for c in CRYPTO_ONLY_KEYWORDS):
+        if not any(k in lower for k in INDIA_EQUITY_LINK_KEYWORDS):
+            return True, 'crypto_only_noise'
+
+    commodity_broad = any(c in lower for c in COMMODITY_BROAD_KEYWORDS) or (
+        ('gold' in lower or 'silver' in lower)
+        and not any(k in lower for k in INDIA_COMMODITY_LINK_KEYWORDS)
+    )
+    if commodity_broad:
+        return True, 'commodity_no_india_link'
+
+    return False, ''
+
+
+def evaluate_scheduled_emergency_macro_gate(
+    headline: str,
+    confidence: float,
+    *,
+    item: Optional[dict] = None,
+    scheduled: bool = True,
+) -> Tuple[bool, str, str]:
+    """Scheduled emergency macro gate — stricter than manual evaluate_emergency_macro."""
+    return evaluate_emergency_macro(
+        headline, confidence, item=item, scheduled=scheduled,
+    )
+
+
 def classify_macro_severity(headline: str, item: Optional[dict] = None) -> str:
     """
     Returns severity class: emergency_macro | stock_specific | generic_skip.
@@ -306,6 +415,7 @@ def evaluate_emergency_macro(
     confidence: float,
     *,
     item: Optional[dict] = None,
+    scheduled: bool = False,
 ) -> Tuple[bool, str, str]:
     """
     Returns (should_send, reason, theme).
@@ -315,6 +425,24 @@ def evaluate_emergency_macro(
     norm = normalize_headline(headline)
     conf = float(confidence)
     severity = classify_macro_severity(headline, item)
+
+    if scheduled:
+        if is_research_only_macro_item(item):
+            _log('EMERGENCY_MACRO_SKIPPED', f'reason=research_only theme={theme}')
+            return False, 'research_only', theme
+
+        noise, noise_reason = is_scheduled_macro_noise(headline, item)
+        if noise:
+            _log('EMERGENCY_MACRO_SKIPPED', f'reason=scheduled_noise {noise_reason} theme={theme}')
+            return False, noise_reason, theme
+
+        if not is_high_severity_macro(headline, item):
+            _log('EMERGENCY_MACRO_SKIPPED', f'reason=low_severity theme={theme}')
+            return False, 'low_severity', theme
+
+        if not has_actionable_macro_guidance(headline, item):
+            _log('EMERGENCY_MACRO_SKIPPED', f'reason=no_actionable_guidance theme={theme}')
+            return False, 'no_actionable_guidance', theme
 
     if severity == 'stock_specific':
         _log('EMERGENCY_MACRO_SKIPPED', f'reason=stock_specific_risk theme={theme}')

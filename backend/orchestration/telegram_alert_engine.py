@@ -632,10 +632,11 @@ def _should_send_macro_stale_research(headline: str) -> bool:
     return True
 
 
-def try_emergency_macro() -> tuple[int, int]:
+def try_emergency_macro(scheduled: bool = True) -> tuple[int, int]:
     """Returns (sent, skipped). Emergency may be detected when skipped."""
     from backend.orchestration.alert_quality_filters import (
         evaluate_emergency_macro,
+        is_research_only_macro_item,
         record_emergency_macro_sent,
     )
 
@@ -664,11 +665,22 @@ def try_emergency_macro() -> tuple[int, int]:
     conf, headline, item = candidates[0]
     from backend.orchestration.alert_freshness_gate import is_headline_source_stale
 
-    if is_headline_source_stale(item):
-        _log('EMERGENCY_MACRO_SKIPPED', 'reason=stale_cache headline_source_stale')
+    stale_source = is_headline_source_stale(item)
+    research_only = is_research_only_macro_item(item)
+    cache_stale_flag = bool(item and item.get('cache_stale'))
+    if stale_source or research_only or cache_stale_flag:
+        stale_reason = (
+            'research_only' if research_only else
+            'cache_stale' if cache_stale_flag else
+            'stale_cache'
+        )
+        _log('EMERGENCY_MACRO_SKIPPED', f'reason={stale_reason} headline_source_stale')
         get_observability().record_suppressed(
             EMERGENCY_MACRO_ALERT, 'stale_cache', headline[:120],
         )
+        if scheduled:
+            _log('TELEGRAM_MACRO_STALE_SUPPRESSED', f'reason={stale_reason} headline={headline[:120]}')
+            return 0, 1
         if is_silenced():
             return 0, 1
         if not _should_send_macro_stale_research(headline):
@@ -681,7 +693,9 @@ def try_emergency_macro() -> tuple[int, int]:
         _send(research_text)
         return 0, 1
 
-    should_send, skip_reason, theme = evaluate_emergency_macro(headline, conf, item=item)
+    should_send, skip_reason, theme = evaluate_emergency_macro(
+        headline, conf, item=item, scheduled=scheduled,
+    )
     if not should_send:
         if skip_reason in ('duplicate_headline', 'theme_repeat'):
             return 0, 1
