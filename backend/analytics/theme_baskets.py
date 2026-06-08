@@ -1352,19 +1352,27 @@ COMPANY_ALIASES: dict[str, str] = {
 }
 
 
+def _ticker_in_text(ticker: str, text: str) -> bool:
+    """Word-boundary ticker match — avoids ACC matching inside 'according'."""
+    token = str(ticker).lower()
+    if not token:
+        return False
+    return bool(re.search(rf'(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])', _normalize_text(text)))
+
+
 def _find_named_companies(headline: str, basket: dict) -> list[str]:
     lower = _normalize_text(headline)
     found: list[str] = []
-    for alias, ticker in COMPANY_ALIASES.items():
-        if alias in lower:
+    for alias, ticker in sorted(COMPANY_ALIASES.items(), key=lambda x: -len(x[0])):
+        if alias in lower and ticker not in found:
             found.append(ticker)
     stocks = basket.get('stocks') or {}
     for bucket in ('direct', 'indirect', 'raw_material'):
         for ticker in stocks.get(bucket) or []:
-            t = str(ticker).lower()
-            if t and t in lower:
-                found.append(str(ticker).upper())
-    return list(dict.fromkeys(found))
+            t = str(ticker).upper()
+            if _ticker_in_text(t, headline) and t not in found:
+                found.append(t)
+    return found
 
 
 def _match_themes_for_headline(headline: str, *, item: Optional[dict] = None) -> list[str]:

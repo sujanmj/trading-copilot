@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '48E',
+        'stage': '48F',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -2038,10 +2038,13 @@ def api_budget_theme_news(theme_id: str):
 
 
 @app.get("/api/budget/scan/{theme_id}", dependencies=[Depends(verify_api_key)])
-def api_budget_theme_scan(theme_id: str):
+def api_budget_theme_scan(
+    theme_id: str,
+    catalyst_headline: str | None = Query(None),
+):
     from backend.analytics.budget_impact import get_budget_theme_scan
 
-    result = get_budget_theme_scan(theme_id)
+    result = get_budget_theme_scan(theme_id, catalyst_headline=catalyst_headline)
     if not result.get('ok'):
         raise HTTPException(status_code=404, detail=result.get('error', 'theme not found'))
     return sanitize_json_value(result)

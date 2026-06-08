@@ -142,15 +142,31 @@
     return `<span class="bud-freshness-badge ${cls}">${escapeHtml(status || 'unknown')}</span>`;
   }
 
+  function freshnessSourceRow(label, row) {
+    const r = row || {};
+    const age = r.age_label || r.latest_age || 'Unavailable';
+    const ts = r.timestamp ? escapeHtml(String(r.timestamp).slice(0, 19)) : 'Unavailable';
+    const status = r.status || 'unavailable';
+    return `<div class="bud-freshness-item">
+      <div class="bud-freshness-head"><span class="bud-label">${escapeHtml(label)}</span> ${freshnessBadge(status)}</div>
+      <div class="bud-freshness-meta">${escapeHtml(age)} · ${ts}</div>
+    </div>`;
+  }
+
   function renderFreshnessPanel(freshness) {
     const f = freshness || {};
+    const news = f.news || {};
+    const theme = f.theme_cache || {};
+    const scanner = f.scanner || {};
+    const budget = f.budget_cache || {};
     return `<div class="bud-freshness-panel glass-card">
       <div class="bud-section-title">Freshness</div>
       <div class="bud-freshness-grid">
-        <div><span class="bud-label">News</span> ${escapeHtml(f.latest_news_age || '—')}</div>
-        <div><span class="bud-label">Theme cache</span> ${escapeHtml(f.latest_theme_cache_age || '—')}</div>
-        <div><span class="bud-label">Scanner</span> ${escapeHtml(f.latest_scanner_age || '—')}</div>
-        <div><span class="bud-label">Status</span> ${freshnessBadge(f.status)}</div>
+        ${freshnessSourceRow('News', Object.assign({}, news, { age_label: f.latest_news_age || news.age_label }))}
+        ${freshnessSourceRow('Theme cache', Object.assign({}, theme, { age_label: f.latest_theme_cache_age || theme.age_label }))}
+        ${freshnessSourceRow('Scanner', Object.assign({}, scanner, { age_label: f.latest_scanner_age || scanner.age_label }))}
+        ${freshnessSourceRow('Budget cache', Object.assign({}, budget, { age_label: f.latest_budget_cache_age || budget.age_label }))}
+        <div><span class="bud-label">Status</span> ${freshnessBadge(f.status || 'unavailable')}</div>
       </div>
       <button type="button" class="refresh-btn bud-refresh-btn" id="budgetRefreshBtn">↻ Refresh Budget Intel</button>
     </div>`;
@@ -201,22 +217,61 @@
     </div>`;
   }
 
-  function renderStockTable(stocks) {
-    const rows = stocks || [];
-    if (!rows.length) return '<div class="bud-empty">No ranked stocks — research only.</div>';
-    const body = rows.map((row) => `<tr>
-      <td>${escapeHtml(row.ticker)}</td>
-      <td>${escapeHtml(row.theme || row.theme_id || '—')}</td>
-      <td>${escapeHtml(row.impact_side || '—')}</td>
-      <td>${escapeHtml(row.score)}</td>
-      <td>${escapeHtml(row.reason || '—')}</td>
-      <td>${escapeHtml(row.freshness || '—')}</td>
-      <td>${escapeHtml(row.confirmation_needed || '—')}</td>
-      <td>${escapeHtml(row.stance || 'Research Only')}</td>
-    </tr>`).join('');
-    return `<div class="bud-table-wrap"><table class="bud-table"><thead><tr>
-      <th>Ticker</th><th>Theme</th><th>Impact side</th><th>Score</th><th>Reason</th><th>Freshness</th><th>Confirmation</th><th>Stance</th>
-    </tr></thead><tbody>${body}</tbody></table></div>`;
+  function renderStockTable(stocks, sections, sectionLabels) {
+    const labels = sectionLabels || {
+      positive_investment_watch: 'Positive / Investment Watch',
+      indirect_watch: 'Indirect Watch',
+      avoid_risk: 'Avoid / Risk',
+      wait_confirmation: 'Wait for Confirmation',
+      research_only: 'Research Only',
+    };
+    const grouped = sections || buildSectionsFromStocks(stocks || []);
+    const keys = [
+      'positive_investment_watch',
+      'indirect_watch',
+      'avoid_risk',
+      'wait_confirmation',
+      'research_only',
+    ];
+    const blocks = keys.map((key) => {
+      const rows = grouped[key] || [];
+      if (!rows.length) return '';
+      const body = rows.map((row) => {
+        if (!row.ticker) return '';
+        return `<tr>
+          <td>${escapeHtml(row.ticker)}</td>
+          <td>${escapeHtml(row.theme || row.theme_id || '—')}</td>
+          <td>${escapeHtml(row.impact_side || '—')}</td>
+          <td>${escapeHtml(row.score)}</td>
+          <td>${escapeHtml(row.reason || '—')}</td>
+          <td>${escapeHtml(row.freshness || '—')}</td>
+          <td>${escapeHtml(row.confirmation_needed || '—')}</td>
+          <td>${escapeHtml(row.stance || 'Research Only')}</td>
+        </tr>`;
+      }).join('');
+      return `<div class="bud-stock-section"><div class="bud-section-subtitle">${escapeHtml(labels[key] || key)}</div>
+        <div class="bud-table-wrap"><table class="bud-table"><thead><tr>
+          <th>Ticker</th><th>Theme</th><th>Impact side</th><th>Score</th><th>Reason</th><th>Freshness</th><th>Confirmation</th><th>Stance</th>
+        </tr></thead><tbody>${body}</tbody></table></div></div>`;
+    }).join('');
+    if (!blocks.trim()) return '<div class="bud-empty">No ranked stocks — research only.</div>';
+    return blocks;
+  }
+
+  function buildSectionsFromStocks(stocks) {
+    const grouped = {
+      positive_investment_watch: [],
+      indirect_watch: [],
+      avoid_risk: [],
+      wait_confirmation: [],
+      research_only: [],
+    };
+    (stocks || []).forEach((row) => {
+      const key = row.section || 'research_only';
+      if (grouped[key]) grouped[key].push(row);
+      else grouped.research_only.push(row);
+    });
+    return grouped;
   }
 
   function renderSimulatorResult(result) {
@@ -229,16 +284,19 @@
       </div>`;
     }
     const themes = (result.detected_themes || []).map((t) => escapeHtml(t.display_name || t.theme_id)).join(', ');
-    const pos = (result.positive || []).map((p) => escapeHtml(p.ticker)).join(', ');
-    const ind = (result.indirect || []).map((p) => escapeHtml(p.ticker)).join(', ');
-    const risk = (result.risk || []).map((p) => escapeHtml(p.ticker)).join(', ') || 'No direct loser unless funding/tax/rate impact found.';
+    const pos = (result.direct_beneficiaries || result.positive || []).map((p) => escapeHtml(p.ticker)).filter(Boolean).join(', ');
+    const ind = (result.indirect_beneficiaries || result.indirect || []).map((p) => escapeHtml(p.ticker)).filter(Boolean).join(', ');
+    const risk = (result.risks_possible_losers || result.risk || []).map((p) => escapeHtml(p.ticker)).filter(Boolean).join(', ') || 'No direct loser unless funding/tax/rate impact found.';
+    const direction = result.detected_direction || result.catalyst_direction || 'Mixed';
+    const stance = result.suggested_stance || result.stance || 'Research Only';
     return `<div class="bud-sim-result glass-card">
       <div class="bud-section-title">Analysis result</div>
-      <p><b>Detected themes:</b> ${themes || '—'}</p>
-      <p><b>Positive:</b> ${pos || '—'}</p>
-      <p><b>Indirect:</b> ${ind || '—'}</p>
-      <p><b>Risk:</b> ${risk}</p>
-      <p><b>Stance:</b> ${escapeHtml(result.stance || 'Research Only')} — ${escapeHtml(result.confirmation || '')}</p>
+      <p><b>Detected direction:</b> ${escapeHtml(direction)}</p>
+      <p><b>Detected themes:</b> ${themes || 'Unavailable'}</p>
+      <p><b>Direct beneficiaries:</b> ${pos || '—'}</p>
+      <p><b>Indirect beneficiaries:</b> ${ind || '—'}</p>
+      <p><b>Risks / possible losers:</b> ${risk}</p>
+      <p><b>Suggested stance:</b> ${escapeHtml(stance)} — ${escapeHtml(result.confirmation || '')}</p>
     </div>`;
   }
 
@@ -256,6 +314,8 @@
     const news = (state.themeNews && state.themeNews.catalysts) || overview.top_catalysts || [];
     const impact = (state.themeDetail && state.themeDetail.impact_map) || null;
     const stocks = (state.themeScan && state.themeScan.stocks) || overview.stock_rankings || [];
+    const sections = (state.themeScan && state.themeScan.sections) || overview.stock_ranking_sections || null;
+    const sectionLabels = (state.themeScan && state.themeScan.section_labels) || overview.section_labels || null;
 
     return `<div class="bud-dashboard">
       <div class="bud-header-row">
@@ -271,7 +331,7 @@
         <div class="bud-right">
           ${renderCatalystNews(news)}
           ${impact ? renderImpactMap(impact) : ''}
-          <div class="bud-stocks glass-card"><div class="bud-section-title">Stock ranking</div>${renderStockTable(stocks)}</div>
+          <div class="bud-stocks glass-card"><div class="bud-section-title">Stock ranking</div>${renderStockTable(stocks, sections, sectionLabels)}</div>
         </div>
       </div>
       <div class="bud-simulator glass-card">
@@ -296,7 +356,7 @@
     if (simBtn) simBtn.addEventListener('click', () => runSimulator(host));
   }
 
-  async function loadThemeDetail(themeId, host) {
+  async function loadThemeDetail(themeId, host, catalystHeadline) {
     state.selectedThemeId = themeId;
     const controller = createAbortController('theme_detail');
     const timer = setTimeout(() => {
@@ -304,14 +364,22 @@
       controller.abort();
     }, FETCH_MS);
     try {
+      const scanPath = `/api/budget/scan/${encodeURIComponent(themeId)}${
+        catalystHeadline ? `?catalyst_headline=${encodeURIComponent(catalystHeadline)}` : ''
+      }`;
       const [detail, news, scan] = await Promise.all([
         fetchBudgetJson(`/api/budget/theme/${encodeURIComponent(themeId)}`, null, controller.signal),
         fetchBudgetJson(`/api/budget/news/${encodeURIComponent(themeId)}`, null, controller.signal),
-        fetchBudgetJson(`/api/budget/scan/${encodeURIComponent(themeId)}`, null, controller.signal),
+        fetchBudgetJson(scanPath, null, controller.signal),
       ]);
       state.themeDetail = detail;
       state.themeNews = news;
       state.themeScan = scan;
+      const firstCatalyst = (news.catalysts || [])[0];
+      if (!catalystHeadline && firstCatalyst && firstCatalyst.headline && !(scan.stocks || []).length) {
+        clearTimeout(timer);
+        return loadThemeDetail(themeId, host, firstCatalyst.headline);
+      }
       host.innerHTML = renderDashboard();
       wireEvents(host);
     } catch (err) {

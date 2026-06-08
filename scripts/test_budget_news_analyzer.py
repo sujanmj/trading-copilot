@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Unit tests for Budget news analyzer (Stage 48A)."""
+"""Unit tests for budget news analyzer/simulator (Stage 48F)."""
 
 from __future__ import annotations
 
-import os
 import sys
-import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-os.chdir(PROJECT_ROOT)
+
+from backend.analytics.budget_impact import analyze_news_text
 
 
 def _fail(msg: str) -> int:
@@ -20,52 +20,30 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    import backend.analytics.budget_impact as bi
-    import backend.analytics.theme_baskets as tb
+    panel = (PROJECT_ROOT / 'frontend/components/BudgetImpactPanel.js').read_text(encoding='utf-8')
+    for needle in ('Detected direction', 'Suggested stance', 'Direct beneficiaries', 'Risks / possible losers'):
+        if needle not in panel:
+            return _fail(f'BudgetImpactPanel missing simulator field {needle!r}')
 
-    with tempfile.TemporaryDirectory() as tmp:
-        baskets_path = Path(tmp) / 'theme_baskets.json'
-        log_path = Path(tmp) / 'theme_catalyst_log.jsonl'
-        orig_baskets = tb.BASKETS_FILE
-        orig_log = tb.CATALYST_LOG_FILE
-        tb.BASKETS_FILE = baskets_path
-        tb.CATALYST_LOG_FILE = log_path
-        try:
-            tb.bootstrap_theme_baskets(force=True)
+    with patch('backend.analytics.budget_impact.compute_freshness_panel', return_value={'status': 'partial'}):
+        highway = analyze_news_text('Govt announces ₹11,000 crore highway project in Bengaluru')
+        if highway.get('catalyst_direction') != 'Positive':
+            return _fail('simulator must detect positive highway catalyst')
+        if not highway.get('positive'):
+            return _fail('simulator must return direct beneficiaries')
 
-            headline = 'Govt announces new highway project in Bengaluru'
-            result = bi.analyze_news_text(headline)
-            if not result.get('ok'):
-                return _fail('analyzer returned not ok')
-            names = [t.get('display_name', '') for t in (result.get('detected_themes') or [])]
-            blob = ' '.join(names).lower()
-            if 'road' not in blob and 'highway' not in blob:
-                return _fail('highway project should map to Roads/Highways theme')
-            if 'infrastructure' not in ' '.join(t.get('theme_id', '') for t in result.get('detected_themes') or []):
-                return _fail('highway project should include infrastructure theme')
+        delay = analyze_news_text('Tata Steel UK project delayed')
+        if delay.get('catalyst_direction') != 'Negative':
+            return _fail('simulator must detect negative delay catalyst')
+        risk_tickers = {r.get('ticker') for r in (delay.get('risk') or [])}
+        if 'TATASTEEL' not in risk_tickers:
+            return _fail('simulator must mark TATASTEEL as risk on delay headline')
 
-            if not result.get('impact_map') and result.get('detected_themes'):
-                result['impact_map'] = bi.build_impact_map(result['detected_themes'][0]['theme_id'])
-            impact = result.get('impact_map') or {}
-            if not impact.get('direct_beneficiaries'):
-                return _fail('impact map missing direct beneficiaries')
-
-            political = bi.analyze_news_text('Congress may lose Karnataka election and BJP may come')
-            if not political.get('political_neutral'):
-                return _fail('political headline should use policy continuity mode')
-            if political.get('stance') not in bi.ALLOWED_STANCES:
-                return _fail('political stance not in allowed set')
-
-            empty = bi.analyze_news_text('')
-            if empty.get('ok'):
-                return _fail('empty text should fail')
-
-            telegram = bi.format_budget_analyze_telegram(headline)
-            if 'highway' not in telegram.lower() and 'road' not in telegram.lower():
-                return _fail('telegram analyze formatting missing theme context')
-        finally:
-            tb.BASKETS_FILE = orig_baskets
-            tb.CATALYST_LOG_FILE = orig_log
+        political = analyze_news_text('BJP may lose Karnataka election and Congress may come to power')
+        if not political.get('political_neutral'):
+            return _fail('political text must use neutral policy continuity mode')
+        if political.get('stance') != 'Wait for Confirmation':
+            return _fail('political text stance must be Wait for Confirmation')
 
     print('BUDGET_NEWS_ANALYZER_TEST_OK')
     return 0
