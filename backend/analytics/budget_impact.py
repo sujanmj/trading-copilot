@@ -18,7 +18,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48I'
+STAGE = '48J'
 ENGINE_NAME = 'Budget Impact Intelligence'
 
 CACHE_FILE = get_data_path('budget_impact_cache.json')
@@ -1786,14 +1786,25 @@ def format_budget_analyze_telegram(text: str) -> str:
 
 
 def handle_budget_command(args: str) -> str:
+    from backend.telegram.telegram_command_normalize import (
+        format_budget_analyze_usage,
+        format_budget_theme_usage,
+    )
+
     raw = str(args or '').strip()
     if not raw:
         return format_budget_overview_telegram()
     parts = raw.split(maxsplit=1)
     sub = parts[0].lower()
-    if sub == 'theme' and len(parts) >= 2:
+    if sub == 'overview':
+        return format_budget_overview_telegram()
+    if sub == 'theme':
+        if len(parts) < 2 or not parts[1].strip():
+            return format_budget_theme_usage()
         return format_budget_theme_telegram(parts[1].strip())
-    if sub == 'analyze' and len(parts) >= 2:
+    if sub == 'analyze':
+        if len(parts) < 2 or not parts[1].strip():
+            return format_budget_analyze_usage()
         return format_budget_analyze_telegram(parts[1].strip())
     if sub == 'refresh':
         result = refresh_budget_intel(persist=True)

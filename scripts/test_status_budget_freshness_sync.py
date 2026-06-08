@@ -46,7 +46,7 @@ def main() -> int:
             'ok': True,
             'generated_at': now_iso,
             'refreshed_at': now_iso,
-            'stage': '48I',
+            'stage': '48J',
             'top_catalysts': [],
             'top_themes': [],
         })

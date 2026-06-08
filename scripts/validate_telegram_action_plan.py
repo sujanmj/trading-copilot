@@ -50,29 +50,21 @@ def main() -> int:
     if 'build_brain_payload' not in fmt_src:
         return _fail('formatters must use AI Hub brain payload')
 
-    if "cmd == 'action' and (args or '').strip().lower() == 'plan'" not in bot_src:
-        return _fail('/action plan handler missing')
+    if "elif cmd == 'action':" not in bot_src:
+        return _fail('/action handler missing')
+    if 'normalize_parsed_command' not in bot_src:
+        return _fail('command normalization missing in telegram_analysis_bot')
     if "tab == 'brain full'" not in bot_src:
         return _fail('/aihub brain full handler missing')
 
-    if "elif cmd == 'action'" in bot_src.replace(
-        "elif cmd == 'action' and (args or '').strip().lower() == 'plan'", ''
-    ):
-        return _fail('/action alias must not exist as standalone handler')
-
     forbidden_aliases = (
         "cmd == 'action_plan'",
-        "cmd in ('action',",
         "'/action\\n'",
         '/brain full',
     )
     for token in forbidden_aliases:
-        if token in bot_src and token != "cmd == 'action' and (args or '').strip().lower() == 'plan'":
-            if token == "cmd in ('action',":
-                if "cmd in ('action'," in bot_src:
-                    return _fail('/action alias must not be registered')
-            elif token in bot_src:
-                return _fail(f'forbidden alias pattern: {token}')
+        if token in bot_src:
+            return _fail(f'forbidden alias pattern: {token}')
 
     if '/action plan' not in bot_src:
         return _fail('help must include /action plan')

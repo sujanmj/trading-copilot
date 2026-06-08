@@ -231,7 +231,12 @@ def handle_message(
 
 
 def _handle_aihub(args: str) -> str:
-    tab = (args or '').strip().lower()
+    from backend.telegram.telegram_command_normalize import (
+        format_unknown_aihub_tab,
+        normalize_aihub_tab,
+    )
+
+    tab = normalize_aihub_tab(args)
     if not tab:
         return format_aihub_menu()
     if tab == 'brain full':
@@ -240,10 +245,12 @@ def _handle_aihub(args: str) -> str:
     if tab in ('full', 'all'):
         result = run_without_ai(run_aihub_full_only, command='aihub_full')
         return result.get('text') or 'AI Hub full summary unavailable.'
-    from backend.analytics.aihub_tab_payloads import VALID_TABS, build_aihub_tab_payload
+    from backend.analytics.aihub_tab_payloads import TAB_ALIASES, VALID_TABS, build_aihub_tab_payload
 
-    if tab not in VALID_TABS and tab not in ('scanner', 'markets', 'mkt', 'stats', 'history', 'rdt'):
-        return f'Unknown AI Hub tab: <code>{tab}</code>\n{format_aihub_menu()}'
+    canonical = TAB_ALIASES.get(tab, tab)
+    if canonical not in VALID_TABS and tab not in ('scanner', 'mkt', 'stats', 'history', 'rdt'):
+        return format_unknown_aihub_tab(tab)
+    tab = canonical
 
     if tab in ('scan', 'scanner'):
         result = run_without_ai(run_scan_only, command='aihub_scan')
@@ -369,7 +376,7 @@ def _handle_health() -> str:
         )
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append('Telegram build: <code>AstraEdge 48I</code>')
+    lines.append('Telegram build: <code>AstraEdge 48J</code>')
     return '\n'.join(lines)
 
 
@@ -417,7 +424,12 @@ def handle_analysis_command(
     dry_run: bool = False,
 ) -> list[dict[str, Any]]:
     """Process one command; returns list of send results (supports dry_run)."""
-    cmd, args = parse_command(text)
+    from backend.telegram.telegram_command_normalize import (
+        format_unknown_command_response,
+        normalize_parsed_command,
+    )
+
+    cmd, args = normalize_parsed_command(*parse_command(text))
     if not cmd:
         return []
 
@@ -480,7 +492,7 @@ def handle_analysis_command(
             response_text = 'Usage: /why &lt;ticker&gt;\nExample: /why TATASTEEL'
         else:
             response_text = format_why_ticker(args.strip(), mode='today')
-    elif cmd == 'action' and (args or '').strip().lower() == 'plan':
+    elif cmd == 'action':
         result = run_without_ai(run_action_plan_only, command='action_plan')
         response_text = result.get('text') or 'Action plan unavailable.'
     elif cmd == 'premarket':
@@ -497,7 +509,7 @@ def handle_analysis_command(
     elif cmd == 'budget':
         response_text = run_without_ai(lambda: run_budget_only(args), command='budget').get('text') or run_budget_only(args).get('text') or 'Budget impact unavailable.'
     else:
-        response_text = f'Unknown command: <code>{cmd}</code>\nType /help for allowed commands.'
+        response_text = format_unknown_command_response(cmd, args)
 
     if not response_text:
         response_text = 'No response generated.'

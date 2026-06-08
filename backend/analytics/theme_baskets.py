@@ -2080,6 +2080,12 @@ def format_theme_category_telegram(category: str) -> str:
 
 def handle_theme_command(args: str) -> str:
     """Dispatch /theme subcommands."""
+    from backend.telegram.telegram_command_normalize import (
+        THEME_RESERVED_WORDS,
+        format_theme_category_usage,
+        format_theme_search_usage,
+    )
+
     raw = str(args or '').strip()
     if not raw:
         return format_theme_overview_telegram()
@@ -2087,6 +2093,8 @@ def handle_theme_command(args: str) -> str:
     parts = raw.split()
     sub = parts[0].lower()
 
+    if sub == 'overview':
+        return format_theme_overview_telegram()
     if sub == 'list':
         return format_theme_list_telegram()
     if sub == 'budget':
@@ -2100,10 +2108,14 @@ def handle_theme_command(args: str) -> str:
             f"Refreshed: {result.get('refreshed_at', '—')}\n"
             '<i>Research only — manual refresh, no automatic alerts.</i>'
         )
-    if sub == 'search' and len(parts) >= 2:
+    if sub == 'search':
+        if len(parts) < 2:
+            return format_theme_search_usage()
         keyword = ' '.join(parts[1:])
         return format_theme_search_telegram(keyword)
-    if sub == 'category' and len(parts) >= 2:
+    if sub == 'category':
+        if len(parts) < 2:
+            return format_theme_category_usage()
         category_key = ' '.join(parts[1:])
         return format_theme_category_telegram(category_key)
     if sub == 'add' and len(parts) >= 4:
@@ -2135,6 +2147,12 @@ def handle_theme_command(args: str) -> str:
         return format_theme_scan_telegram(resolved)
 
     theme_key = ' '.join(parts)
+    if sub in THEME_RESERVED_WORDS:
+        if sub == 'news':
+            return 'Use <code>/theme news &lt;basket&gt;</code>\nExample: <code>/theme news infra</code>'
+        if sub == 'scan':
+            return 'Use <code>/theme scan &lt;basket&gt;</code>\nExample: <code>/theme scan infra</code>'
+        return format_theme_overview_telegram()
     resolved = resolve_theme_id(theme_key)
     if resolved and str(resolved).startswith('__category__:'):
         return format_theme_category_telegram(str(resolved).split(':', 1)[-1])

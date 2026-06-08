@@ -15,7 +15,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48I'
+STAGE = '48J'
 ENGINE_NAME = 'Broker Overview Cache'
 CACHE_FILE = get_data_path('broker_overview_cache.json')
 MISSING_MESSAGE = 'Broker cache unavailable. Tap Refresh Brokers.'

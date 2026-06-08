@@ -110,10 +110,11 @@ def main() -> int:
                     return _fail(f'/help must not include forbidden alias: {bad!r}')
 
     bare_action = handle_analysis_command('/action', 'test_user', dry_run=True)
-    if bare_action:
-        bare_text = str(bare_action[0].get('text') or '')
-        if 'AstraEdge Action Plan' in bare_text:
-            return _fail('/action alone must not return action plan')
+    if not bare_action:
+        return _fail('/action alone must return a response')
+    bare_text = str(bare_action[0].get('text') or '')
+    if 'AstraEdge Action Plan' not in bare_text:
+        return _fail('/action alone must run /action plan (Stage 48J alias)')
 
     print('TELEGRAM_ACTION_PLAN_TEST_OK')
     return 0

@@ -168,6 +168,52 @@ def _market_has_stale_warnings(warnings: list[Any]) -> bool:
     return bool(tokens & _MARKET_STALE_WARNING_TOKENS)
 
 
+def _aihub_payload_is_stale(payload: dict[str, Any]) -> bool:
+    """True when AIHub tab cache should be labeled stale for Telegram."""
+    summary = payload.get('summary') or {}
+    if summary.get('stale') or summary.get('is_stale') or summary.get('market_stale'):
+        return True
+    age_min = int(payload.get('cache_age_seconds') or 0) // 60
+    if age_min >= 60:
+        return True
+    age_label = format_cache_age_label(age_min)
+    return 'stale' in age_label or 'old cache' in age_label
+
+
+def _stale_aihub_prefix_lines() -> list[str]:
+    return [
+        'Research cache · stale',
+        'Use /refresh full for fresh closed-market research.',
+    ]
+
+
+def _global_item_display_label(row: dict[str, Any]) -> str:
+    """Label global items — mark SpaceX/crypto-only noise unless India equity link."""
+    title = str(row.get('label') or row.get('name') or row.get('title') or '—')[:120]
+    try:
+        from backend.orchestration.alert_quality_filters import is_scheduled_macro_noise
+
+        is_noise, _reason = is_scheduled_macro_noise(title, row)
+        if is_noise:
+            return f'Global/Noise: {title[:100]}'
+    except Exception:
+        pass
+    return title
+
+
+def _news_item_display_label(row: dict[str, Any]) -> str:
+    title = str(row.get('title') or row.get('headline') or '—')[:120]
+    try:
+        from backend.orchestration.alert_quality_filters import is_scheduled_macro_noise
+
+        is_noise, _reason = is_scheduled_macro_noise(title, row)
+        if is_noise:
+            return f'Global/Noise: {title[:100]}'
+    except Exception:
+        pass
+    return title
+
+
 def _load_market_fallback_context() -> dict[str, Any]:
     """Watch/avoid/top-watch/risk counts from daily report pack and final confidence."""
     from backend.utils.config import DATA_DIR
@@ -674,11 +720,14 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
     key = str(tab or '').strip().lower()
     summary = payload.get('summary') or {}
     items = payload.get('items') or []
+    stale_cache = _aihub_payload_is_stale(payload)
     lines = [
         f'<b>AI Hub · {key}</b>',
         f"Source: {payload.get('source', '—')} · cache age: "
         f"{format_cache_age_label(int(payload.get('cache_age_seconds') or 0) // 60)}",
     ]
+    if stale_cache and key in ('news', 'global', 'brain', 'govt', 'market'):
+        lines.extend(_stale_aihub_prefix_lines())
     if key == 'brain':
         warn_tokens = {str(w) for w in (payload.get('warnings') or [])}
         if 'Runtime snapshot missing; using report cache.' in warn_tokens:
@@ -725,7 +774,9 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
     elif key in ('news', 'tv', 'reddit'):
         for row in items[:8]:
             if isinstance(row, dict):
-                title = str(row.get('title') or row.get('headline') or '—')[:120]
+                title = _news_item_display_label(row) if key == 'news' else str(
+                    row.get('title') or row.get('headline') or '—'
+                )[:120]
                 lines.append(f"• {title}")
         if not items:
             empty = summary.get('empty_message') or 'No cached items.'
@@ -754,7 +805,7 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
         bullets = _bullet_lines_from_rows(
             items,
             limit=6,
-            label_fn=lambda row: str(row.get('label') or row.get('name') or row.get('title') or ''),
+            label_fn=lambda row: _global_item_display_label(row) if isinstance(row, dict) else '',
         )
         commodities = summary.get('commodity_impacts') or summary.get('commodities') or []
         if isinstance(commodities, list):
@@ -1340,7 +1391,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 48I</code>')
+        lines.append('Telegram build: <code>AstraEdge 48J</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
