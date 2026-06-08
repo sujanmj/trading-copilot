@@ -35,8 +35,8 @@ def main() -> int:
     report = build_premarket_conviction_report(persist=True)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
-    if report.get('stage') != '47D':
-        return _fail('report stage not 47D')
+    if report.get('stage') != '47E':
+        return _fail('report stage not 47E')
 
     from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
     from backend.analytics.premarket_conviction import _is_after_open
@@ -70,8 +70,14 @@ def main() -> int:
     if weekend:
         if 'WEEKEND RESEARCH BRIEF' not in full:
             return _fail('weekend full premarket missing research brief title')
-    elif 'PREMARKET FULL' not in full:
-        return _fail('full premarket format missing FULL marker')
+    else:
+        mode = str((report.get('market_mode') or {}).get('market_mode') or '')
+        live_hours = 'INDIA_MARKET_HOURS' in mode and _is_after_open()
+        if live_hours:
+            if 'LIVE MARKET BRIEF' not in full:
+                return _fail('market-hours full premarket missing LIVE MARKET BRIEF title')
+        elif 'PREMARKET FULL' not in full:
+            return _fail('full premarket format missing FULL marker')
     if '{' in full and '}' in full and "'summary'" in full:
         return _fail('premarket full must not contain raw dict')
     if not weekend and 'US/global context only' not in full:
@@ -117,7 +123,10 @@ def main() -> int:
 
     results = handle_analysis_command('/premarket', 'test', dry_run=True)
     result_upper = str(results[0].get('text', '')).upper() if results else ''
-    if not results or ('PREMARKET' not in result_upper and 'WEEKEND RESEARCH' not in result_upper):
+    if not results or not any(
+        token in result_upper
+        for token in ('PREMARKET', 'WEEKEND RESEARCH', 'LIVE MARKET WATCH')
+    ):
         return _fail('/premarket command failed')
     results_full = handle_analysis_command('/premarket full', 'test', dry_run=True)
     if not results_full:

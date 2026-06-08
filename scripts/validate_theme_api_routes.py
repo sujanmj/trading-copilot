@@ -31,8 +31,8 @@ def main() -> int:
         if route not in api_src:
             return _fail(f'missing route {route}')
 
-    if "'stage': '47D'" not in api_src:
-        return _fail('build-info stage not 47D')
+    if "'stage': '47E'" not in api_src:
+        return _fail('build-info stage not 47E')
 
     proc = subprocess.run(
         [sys.executable, 'scripts/test_theme_api_routes.py'],

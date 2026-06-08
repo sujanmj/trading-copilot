@@ -4,6 +4,7 @@ Shared Telegram analysis response formatting (Stage 45TG5).
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1263,6 +1264,49 @@ def format_aihub_brain_full() -> str:
     return strip_stage_markers('\n'.join(lines))
 
 
+def _format_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = '') -> str:
+    """Format Latest <label>: timestamp · age · fresh|stale."""
+    from backend.storage.data_paths import get_data_path
+
+    file_path = path if path.is_absolute() else get_data_path(str(path))
+    ts = file_timestamp_iso(file_path)
+    age_min = -1
+    if file_path.is_file():
+        try:
+            age_sec = datetime.now(timezone.utc).timestamp() - file_path.stat().st_mtime
+            age_min = max(0, int(age_sec // 60))
+        except OSError:
+            age_min = -1
+    if timestamp_key and file_path.is_file():
+        try:
+            from backend.telegram.lazy_command_runner import _load_json
+            payload = _load_json(file_path)
+            if isinstance(payload, dict):
+                embedded = (
+                    payload.get(timestamp_key)
+                    or payload.get('generated_at')
+                    or payload.get('cache_refreshed_at')
+                    or payload.get('updated_at')
+                    or payload.get('timestamp')
+                )
+                if embedded:
+                    ts = str(embedded)
+        except Exception:
+            pass
+    if age_min < 0:
+        return f'{label}: unavailable'
+    age_label = format_cache_age_label(age_min, timestamp=ts)
+    freshness = 'fresh' if age_min < 60 else ('stale' if age_min < STALE_CACHE_HOURS * 60 else 'stale')
+    if 'fresh ·' in age_label:
+        freshness = 'fresh'
+    elif age_min >= STALE_CACHE_HOURS * 60:
+        freshness = 'stale'
+    else:
+        freshness = 'stale' if age_min >= 60 else 'fresh'
+    ts_txt = ts or '—'
+    return f'{label}: {ts_txt} · {age_label} · {freshness}'
+
+
 def format_status_text() -> str:
     lines = ['<b>📡 Status</b>']
     telegram_enabled = False
@@ -1272,7 +1316,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 47D</code>')
+        lines.append('Telegram build: <code>AstraEdge 47E</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
@@ -1283,34 +1327,104 @@ def format_status_text() -> str:
 
     try:
         from backend.telegram.lazy_command_runner import DAILY_PACK_FILE, _load_json
+        from backend.storage.data_paths import get_data_path
 
         pack = _load_json(DAILY_PACK_FILE)
+        try:
+            from backend.analytics.market_calendar_router import get_india_telegram_mode
+            india_mode = get_india_telegram_mode()
+            market_mode = india_mode.get('market_mode') or '—'
+        except Exception:
+            market_mode = '—'
+        lines.append(f'Market mode: <code>{market_mode}</code>')
+
         if pack:
             summary = pack.get('summary') or {}
-            try:
-                from backend.analytics.market_calendar_router import get_india_telegram_mode
-                india_mode = get_india_telegram_mode()
-                market_mode = india_mode.get('market_mode') or '—'
-            except Exception:
+            if market_mode == '—':
                 market_mode = (
                     pack.get('market_mode')
                     or summary.get('market_mode')
                     or (pack.get('final_confidence') or {}).get('active_mode')
                     or '—'
                 )
+                lines[-1] = f'Market mode: <code>{market_mode}</code>'
             report_time = (
                 pack.get('generated_at')
                 or pack.get('package_generated_at')
                 or summary.get('generated_at')
                 or '—'
             )
-            lines.append(f'Market mode: <code>{market_mode}</code>')
-            lines.append(f'Latest report: {report_time}')
+            report_age = -1
+            if DAILY_PACK_FILE.is_file():
+                try:
+                    report_age = max(
+                        0,
+                        int(
+                            (datetime.now(timezone.utc).timestamp() - DAILY_PACK_FILE.stat().st_mtime)
+                            // 60
+                        ),
+                    )
+                except OSError:
+                    report_age = -1
+            report_age_txt = (
+                format_cache_age_label(report_age, timestamp=str(report_time))
+                if report_age >= 0
+                else 'unknown age'
+            )
+            report_fresh = 'fresh' if 0 <= report_age < 60 else ('stale' if report_age >= 0 else 'unknown')
+            lines.append(f'Latest report: {report_time} · {report_age_txt} · {report_fresh}')
         else:
-            lines.append('Market mode: unavailable')
             lines.append('Latest report: unavailable')
+
+        lines.append(_format_feed_freshness_line('Latest scanner', get_data_path('scanner_data.json')))
+        lines.append(_format_feed_freshness_line('Latest news', get_data_path('news_feed.json')))
+
+        theme_path = get_data_path('theme_baskets.json')
+        theme_ts = '—'
+        theme_stale = True
+        if theme_path.is_file():
+            try:
+                theme_data = json.loads(theme_path.read_text(encoding='utf-8'))
+                if isinstance(theme_data, dict):
+                    theme_ts = (
+                        theme_data.get('cache_refreshed_at')
+                        or theme_data.get('generated_at')
+                        or '—'
+                    )
+                    refreshed = theme_data.get('cache_refreshed_at') or theme_data.get('generated_at')
+                    if refreshed:
+                        from datetime import timedelta
+                        from zoneinfo import ZoneInfo
+                        ist = ZoneInfo('Asia/Kolkata')
+                        parsed = datetime.fromisoformat(str(refreshed))
+                        if parsed.tzinfo is None:
+                            parsed = parsed.replace(tzinfo=ist)
+                        age_h = (datetime.now(ist) - parsed.astimezone(ist)).total_seconds() / 3600.0
+                        theme_stale = age_h > 48
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                pass
+        theme_age_min = -1
+        if theme_path.is_file():
+            try:
+                theme_age_min = max(
+                    0,
+                    int((datetime.now(timezone.utc).timestamp() - theme_path.stat().st_mtime) // 60),
+                )
+            except OSError:
+                theme_age_min = -1
+        theme_age_txt = (
+            format_cache_age_label(theme_age_min, timestamp=str(theme_ts))
+            if theme_age_min >= 0
+            else 'unknown age'
+        )
+        theme_fresh = 'stale' if theme_stale else 'fresh'
+        lines.append(f'Latest theme cache: {theme_ts} · {theme_age_txt} · {theme_fresh}')
     except Exception:
+        lines.append('Market mode: unavailable')
         lines.append('Latest report: unavailable')
+        lines.append('Latest scanner: unavailable')
+        lines.append('Latest news: unavailable')
+        lines.append('Latest theme cache: unavailable')
 
     try:
         from backend.telegram.lazy_command_runner import (

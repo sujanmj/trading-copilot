@@ -1,5 +1,5 @@
 """
-Premarket conviction pipeline (Stage 47D).
+Premarket conviction pipeline (Stage 47E).
 
 Builds premarket_conviction_report.json and Telegram message formatters.
 Research-only wording — watch for entry, confirm after 9:15 (before open), no blind entry.
@@ -59,6 +59,9 @@ DATA_FILES = {
     'daily_pack': 'daily_report_pack_latest.json',
 }
 
+LIVE_MARKET_WATCH_TITLE = '🔎 LIVE MARKET WATCH'
+LIVE_MARKET_BRIEF_TITLE = '📊 LIVE MARKET BRIEF'
+
 SLOT_TITLES = {
     'premarket_top3': '🌅 PREMARKET TOP SETUPS',
     'premarket_action': '🌅 PREMARKET FULL BRIEF',
@@ -72,6 +75,31 @@ SLOT_TITLES = {
 
 def _log(msg: str) -> None:
     print(f'[PREMARKET] {msg}', flush=True)
+
+
+def _is_india_market_hours(mode_info: dict) -> bool:
+    mode = str(mode_info.get('market_mode') or mode_info.get('mode_code') or '')
+    return 'INDIA_MARKET_HOURS' in mode
+
+
+def _is_live_market_routing(mode_info: dict, now: Optional[datetime] = None) -> bool:
+    """After 09:15 during INDIA_MARKET_HOURS — live watch/brief routing."""
+    now = now or datetime.now(IST)
+    return _is_india_market_hours(mode_info) and _is_after_open(now)
+
+
+def _live_setup_status(setup: dict) -> str:
+    """Market-hours status label: Confirmed / Rejected / Wait for volume."""
+    setup_text = str(setup.get('setup') or '').lower()
+    direction = str(setup.get('direction') or '').upper()
+    if any(token in setup_text for token in ('reject', 'bearish', 'weak', 'avoid', 'short')):
+        return 'Rejected'
+    if direction == 'BEARISH':
+        return 'Rejected'
+    score = int(setup.get('score') or 0)
+    if score >= 70 and str(setup.get('source') or '') == 'scanner':
+        return 'Confirmed'
+    return 'Wait for volume'
 
 
 def _load_json(name: str) -> dict:
@@ -588,7 +616,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '47D',
+        'stage': '47E',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
         'weekend_research_mode': weekend_research,
@@ -645,8 +673,17 @@ def _slot_label(now: Optional[datetime] = None) -> str:
     return now.strftime('%H:%M IST')
 
 
-def _title_for_slot(slot: str, now: Optional[datetime] = None) -> str:
+def _title_for_slot(
+    slot: str,
+    now: Optional[datetime] = None,
+    *,
+    full: bool = False,
+    mode_info: Optional[dict] = None,
+) -> str:
     now = now or datetime.now(IST)
+    mode_info = mode_info or {}
+    if _is_live_market_routing(mode_info, now):
+        return LIVE_MARKET_BRIEF_TITLE if full else LIVE_MARKET_WATCH_TITLE
     if slot in SLOT_TITLES:
         return SLOT_TITLES[slot]
     if _is_after_open(now):
@@ -814,7 +851,8 @@ def format_premarket_telegram(
         stale_msg = CACHE_STALE_12H_MSG
 
     slot_key = slot or ('premarket_action' if full else 'premarket_top3')
-    title = _title_for_slot(slot_key, now)
+    title = _title_for_slot(slot_key, now, full=full, mode_info=mode_info)
+    live_market = _is_live_market_routing(mode_info, now)
 
     from backend.orchestration.alert_freshness_gate import (
         PREMARKET_OLD_SESSION_NOTE,
@@ -847,7 +885,8 @@ def format_premarket_telegram(
         lines.append('<b>Previous-session movers (research only):</b>')
         display_setups = (previous_session_movers or setups)[:3 if not full else 5]
     else:
-        lines.append('<b>Top watch:</b>')
+        watch_header = '<b>Live watch:</b>' if live_market and fresh_ok else '<b>Top watch:</b>'
+        lines.append(watch_header)
         top3 = [s for s in setups if s.get('tier_cap') != 'not_top3'][:3 if not full else 5]
         display_setups = top3 if top3 else setups[:3 if not full else 5]
 
@@ -855,10 +894,16 @@ def format_premarket_telegram(
         for idx, setup in enumerate(display_setups, 1):
             reasons = setup.get('reasons') or []
             why = reasons[0] if reasons else 'Setup candidate'
-            why2 = reasons[1] if len(reasons) > 1 else (
-                'Wait for volume confirmation' if _is_after_open(now)
-                else 'Confirm only if price strength + volume + sector support'
-            )
+            if live_market and fresh_ok and not hard_stale_lock:
+                status = _live_setup_status(setup)
+                why2 = f'{status} — no blind entry'
+            elif live_market:
+                why2 = 'Wait for volume confirmation'
+            else:
+                why2 = reasons[1] if len(reasons) > 1 else (
+                    'Wait for volume confirmation' if _is_after_open(now)
+                    else 'Confirm only if price strength + volume + sector support'
+                )
             lines.extend([
                 f"{idx}. <b>{setup.get('ticker')}</b> — {setup.get('setup')} · Score {setup.get('score', '—')}",
                 f"   Why: {why}",

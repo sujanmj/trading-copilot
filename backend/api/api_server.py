@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '47D',
+        'stage': '47E',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -1897,7 +1897,7 @@ def api_theme_baskets_list():
     data = load_theme_baskets()
     return sanitize_json_value({
         'ok': True,
-        'stage': data.get('stage', '47D'),
+        'stage': data.get('stage', '47E'),
         'generated_at': data.get('generated_at'),
         'cache_refreshed_at': data.get('cache_refreshed_at'),
         'baskets': list_all_baskets(),

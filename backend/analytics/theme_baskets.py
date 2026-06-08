@@ -1,5 +1,5 @@
 """
-AstraEdge Theme Baskets — thematic intelligence engine (Stage 47D).
+AstraEdge Theme Baskets — thematic intelligence engine (Stage 47E).
 
 Maps news/govt/budget headlines to theme baskets, sectors, and beneficiary stocks.
 User-facing label: Theme Wishlist. Research-only — watch/confirm, never buy now or guaranteed.
@@ -17,7 +17,13 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '47D'
+STAGE = '47E'
+
+# Legacy broad baskets hidden from grouped/category lists when split baskets exist.
+HIDDEN_WHEN_SPLIT: dict[str, tuple[str, ...]] = {
+    'ports_logistics': ('ports_shipping', 'logistics_warehousing'),
+    'banking_psu_nbfc': ('psu_banks', 'private_banks', 'nbfc', 'insurance', 'amc_brokers'),
+}
 WISHLIST_TITLE = 'AstraEdge Theme Wishlist'
 NO_CATALYST_MESSAGE = 'No strong fresh catalyst found. Research basket only.'
 
@@ -138,19 +144,19 @@ LEGACY_THEME_ID_MAP: dict[str, str] = {
 
 THEME_CATEGORIES: dict[str, list[str]] = {
     'Government/Budget': [
-        'infrastructure', 'water_jal_jeevan', 'pli_manufacturing', 'agriculture_fertilizer',
-        'housing_real_estate', 'renewable_energy', 'power_grid_transmission',
-        'semiconductors_electronics',
+        'infrastructure', 'defence_aerospace', 'water_jal_jeevan', 'pli_manufacturing',
+        'agriculture_fertilizer', 'housing_real_estate', 'renewable_energy',
+        'power_grid_transmission', 'semiconductors_electronics',
     ],
     'Transport/Logistics': [
-        'roads_highways', 'railways_metro', 'aviation', 'ports_shipping', 'logistics_warehousing',
-        'ports_logistics', 'auto_ev_batteries',
+        'roads_highways', 'railways_metro', 'aviation', 'ports_shipping',
+        'logistics_warehousing', 'auto_ev_batteries',
     ],
     'Digital/Communication': [
         'telecom_5g', 'it_digital_india', 'data_center_ai',
     ],
     'Finance': [
-        'psu_banks', 'private_banks', 'nbfc', 'insurance', 'amc_brokers', 'banking_psu_nbfc',
+        'psu_banks', 'private_banks', 'nbfc', 'insurance', 'amc_brokers',
     ],
     'Commodities/Materials': [
         'cement_steel_paint', 'metals_mining', 'chemicals', 'sugar_ethanol', 'oil_gas_energy',
@@ -211,8 +217,10 @@ THEME_ALIASES: dict[str, str] = {
     'cement': 'cement_steel_paint',
     'steel': 'cement_steel_paint',
     'paint': 'cement_steel_paint',
-    'ports': 'ports_logistics',
-    'logistics': 'ports_logistics',
+    'ports': 'ports_shipping',
+    'shipping': 'ports_shipping',
+    'logistics': 'logistics_warehousing',
+    'warehousing': 'logistics_warehousing',
     'agriculture': 'agriculture_fertilizer',
     'fertilizer': 'agriculture_fertilizer',
     'fertiliser': 'agriculture_fertilizer',
@@ -223,8 +231,8 @@ THEME_ALIASES: dict[str, str] = {
     'temple': 'tourism_temple_culture',
     'culture': 'tourism_temple_culture',
     'banking': 'banking_psu_nbfc',
-    'psu': 'banking_psu_nbfc',
-    'nbfc': 'banking_psu_nbfc',
+    'psu': 'psu_banks',
+    'nbfc': 'nbfc',
     'it': 'it_digital_india',
     'digital': 'it_digital_india',
     'oil': 'oil_gas_energy',
@@ -352,7 +360,7 @@ def _default_baskets() -> list[dict[str, Any]]:
         _basket_skeleton(
             theme_id='defence_aerospace',
             display_name='Defence / Aerospace',
-            category='Market Risk',
+            category='Government/Budget',
             aliases=['defence', 'defense', 'aerospace'],
             keywords=['defence', 'defense', 'military', 'army', 'navy', 'air force', 'ordnance'],
             trigger_keywords=['defence order', 'defence budget', 'make in india defence'],
@@ -1156,7 +1164,7 @@ def get_baskets_by_category(category: str) -> list[dict[str, str]]:
                 'display_name': str(basket.get('display_name') or tid),
                 'category': str(basket.get('category') or resolved),
             })
-    return rows
+    return _filter_display_baskets(rows)
 
 
 def _normalize_text(text: str) -> str:
@@ -1735,8 +1743,31 @@ def remove_stock_from_basket(theme_id: str, ticker: str) -> dict[str, Any]:
     return {'ok': False, 'error': 'ticker not in basket'}
 
 
-def list_all_baskets() -> list[dict[str, str]]:
-    return [
+def _all_basket_ids() -> set[str]:
+    return {
+        str(b.get('theme_id') or '')
+        for b in load_theme_baskets().get('baskets') or []
+        if isinstance(b, dict) and b.get('theme_id')
+    }
+
+
+def _hidden_from_display_ids() -> set[str]:
+    """Return legacy basket IDs to hide when split replacements exist."""
+    present = _all_basket_ids()
+    hidden: set[str] = set()
+    for legacy_id, replacements in HIDDEN_WHEN_SPLIT.items():
+        if legacy_id in present and all(r in present for r in replacements):
+            hidden.add(legacy_id)
+    return hidden
+
+
+def _filter_display_baskets(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    hidden = _hidden_from_display_ids()
+    return [row for row in rows if row.get('theme_id') not in hidden]
+
+
+def list_all_baskets(*, include_hidden: bool = False) -> list[dict[str, str]]:
+    rows = [
         {
             'theme_id': b.get('theme_id', ''),
             'display_name': b.get('display_name', ''),
@@ -1745,6 +1776,9 @@ def list_all_baskets() -> list[dict[str, str]]:
         for b in load_theme_baskets().get('baskets') or []
         if isinstance(b, dict)
     ]
+    if include_hidden:
+        return rows
+    return _filter_display_baskets(rows)
 
 
 def format_theme_list_telegram() -> str:
@@ -1758,7 +1792,7 @@ def format_theme_list_telegram() -> str:
         if not rows:
             continue
         lines.append(f'<b>{category}</b>')
-        for row in rows:
+        for row in sorted(rows, key=lambda r: r.get('display_name', '')):
             lines.append(f"• {row.get('display_name') or row.get('theme_id')}")
         lines.append('')
     lines.extend([
