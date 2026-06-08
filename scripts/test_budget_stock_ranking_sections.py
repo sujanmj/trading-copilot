@@ -20,9 +20,12 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     panel = (PROJECT_ROOT / 'frontend/components/BudgetImpactPanel.js').read_text(encoding='utf-8')
-    for label in STOCK_SECTION_LABELS.values():
+    for key in STOCK_SECTION_LABELS:
+        if key not in panel:
+            return _fail(f'BudgetImpactPanel missing section key {key!r}')
+    for label in ('Investment Watch', 'Indirect Watch', 'Avoid / Risk', 'Wait for Confirmation', 'Research Only'):
         if label not in panel:
-            return _fail(f'BudgetImpactPanel missing section label {label!r}')
+            return _fail(f'BudgetImpactPanel missing section header {label!r}')
 
     hi = rank_stocks_for_catalyst(
         'Govt announces ₹11,000 crore highway project in Bengaluru',

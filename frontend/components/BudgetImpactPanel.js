@@ -1,5 +1,5 @@
 /**
- * Budget Impact Intelligence workspace (Stage 48H).
+ * Budget Impact Intelligence workspace (Stage 48I).
  * Theme + catalyst drilldown — cache-only lite loads on click.
  */
 (function (global) {
@@ -198,7 +198,7 @@
     return `<div class="bud-drilldown glass-card">
       <div class="bud-section-title">Catalyst impact drilldown</div>
       <p><b>Headline:</b> ${escapeHtml(drill.headline || state.selectedCatalystHeadline || '—')}</p>
-      <p><b>Direction:</b> ${escapeHtml(formatCatalystDirection(drill.direction || drill.catalyst_direction))}</p>
+      <p><b>Direction:</b> ${catalystDirectionPill(drill.direction || drill.catalyst_direction)}</p>
       <p><b>Detected themes:</b> ${themes || 'Unavailable'}</p>
       <p><b>Direct beneficiaries:</b> ${listTickers(drill.direct_beneficiaries)}</p>
       <p><b>Indirect beneficiaries:</b> ${listTickers(drill.indirect_beneficiaries)}</p>
@@ -265,7 +265,25 @@
   function formatCatalystDirection(direction) {
     const d = String(direction || '').trim();
     if (!d || d === '?') return 'Neutral';
+    const lower = d.toLowerCase();
+    if (lower === 'positive' || lower === 'negative' || lower === 'neutral' || lower === 'mixed') {
+      return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+    }
     return d;
+  }
+
+  function catalystDirectionClass(direction) {
+    const d = formatCatalystDirection(direction).toLowerCase();
+    if (d === 'positive') return 'bud-dir-positive';
+    if (d === 'negative') return 'bud-dir-negative';
+    if (d === 'mixed') return 'bud-dir-mixed';
+    return 'bud-dir-neutral';
+  }
+
+  function catalystDirectionPill(direction) {
+    const label = formatCatalystDirection(direction);
+    const cls = catalystDirectionClass(direction);
+    return `<span class="bud-dir-pill ${cls}">${escapeHtml(label)}</span>`;
   }
 
   function renderCatalystNews(catalysts) {
@@ -276,16 +294,18 @@
     const body = rows.map((cat) => {
       const cid = cat.catalyst_id || '';
       const active = state.selectedCatalystId && cid === state.selectedCatalystId ? ' active' : '';
-      return `<button type="button" class="bud-catalyst-row bud-catalyst-btn${active}" data-catalyst-id="${escapeHtml(cid)}" data-theme-id="${escapeHtml(cat.theme_id || state.selectedThemeId || '')}" data-headline="${escapeHtml(cat.headline || '')}">
+      const impact = escapeHtml(cat.impact_10 || '—');
+      const score = escapeHtml(cat.budget_impact_score || cat.catalyst_score || '—');
+      return `<button type="button" class="bud-catalyst-btn${active}" data-catalyst-id="${escapeHtml(cid)}" data-theme-id="${escapeHtml(cat.theme_id || state.selectedThemeId || '')}" data-headline="${escapeHtml(cat.headline || '')}">
       <div class="bud-catalyst-headline">${escapeHtml(cat.headline || '—')}</div>
-      <div class="bud-catalyst-meta">Direction ${escapeHtml(formatCatalystDirection(cat.catalyst_direction))} · Impact ${escapeHtml(cat.impact_10 || '?')}/10 · Score ${escapeHtml(cat.budget_impact_score || cat.catalyst_score || '?')}</div>
+      <div class="bud-catalyst-meta">${catalystDirectionPill(cat.catalyst_direction)}<span class="bud-catalyst-scores">Impact ${impact}/10 · Score ${score}</span></div>
       <div class="bud-catalyst-why">Why: ${escapeHtml(cat.why || '—')}</div>
     </button>`;
     }).join('');
     const title = state.selectedThemeId
       ? `Catalyst news — ${escapeHtml(state.selectedThemeName || findThemeDisplayName(state.selectedThemeId))}`
       : 'Catalyst news';
-    return `<div class="bud-news-panel glass-card"><div class="bud-section-title">${title}</div>${body}</div>`;
+    return `<div class="bud-news-panel glass-card"><div class="bud-section-title">${title}</div><div class="bud-catalyst-list">${body}</div></div>`;
   }
 
   function renderImpactMap(impact) {
@@ -306,7 +326,7 @@
 
   function renderStockTable(stocks, sections, sectionLabels) {
     const labels = sectionLabels || {
-      positive_investment_watch: 'Positive / Investment Watch',
+      positive_investment_watch: 'Investment Watch',
       indirect_watch: 'Indirect Watch',
       avoid_risk: 'Avoid / Risk',
       wait_confirmation: 'Wait for Confirmation',
@@ -438,11 +458,10 @@
       ${renderFreshnessPanel(freshness)}
       <div class="bud-layout">
         <div class="bud-left">${renderThemeCategories(categories)}</div>
-        <div class="bud-right">
-          ${renderCatalystNews(news)}
-          ${renderCatalystDrilldown(state.catalystDrilldown)}
+        <div class="bud-right bud-right-stack">
+          <div class="bud-catalyst-block">${renderCatalystNews(news)}${renderCatalystDrilldown(state.catalystDrilldown)}</div>
           ${impact ? renderImpactMap(impact) : ''}
-          <div class="bud-stocks glass-card"><div class="bud-section-title">${rankingTitle}</div>${renderStockTable(stocks, sections, sectionLabels)}</div>
+          <div class="bud-stocks glass-card bud-stocks-block"><div class="bud-section-title">${rankingTitle}</div>${renderStockTable(stocks, sections, sectionLabels)}</div>
         </div>
       </div>
       <div class="bud-simulator glass-card">

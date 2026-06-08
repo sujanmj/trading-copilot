@@ -62,7 +62,7 @@ def main() -> int:
     required = (
         'Latest budget cache:',
         'Latest budget theme cache:',
-        'Telegram build: <code>AstraEdge 48H</code>',
+        'Telegram build: <code>AstraEdge 48I</code>',
     )
     for label in required:
         if label not in text_no_legacy:

@@ -115,8 +115,8 @@
     body.gui-browser-mode #browserReload,
     .browser-nav-only { display: none !important; }
     .gui-build-marker {
-      position: fixed; right: 8px; bottom: 4px; z-index: 9999;
-      font-size: 9px; color: #333; letter-spacing: 0.04em; pointer-events: none; user-select: none;
+      display: none !important; visibility: hidden !important; height: 0; width: 0; overflow: hidden;
+      position: absolute; left: -9999px; pointer-events: none; user-select: none;
     }
     .right-status { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
     .api-status { font-size: 10px; padding: 2px 7px; border-radius: 8px; }
@@ -1039,8 +1039,8 @@
     .brokers-main-panel .bi-tag { font-size: 11px; }
     .brokers-main-panel::-webkit-scrollbar { width: 4px; }
     .brokers-main-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-    .budget-main-panel { flex: 1; overflow-y: auto; background: #080a0c; padding: 12px; min-height: 0; font-size: 14px; }
-    .bud-dashboard { min-height: 120px; line-height: 1.5; }
+    .budget-main-panel { flex: 1; overflow-y: auto; background: #080a0c; padding: 16px 14px 20px; min-height: 0; font-size: 14px; scroll-padding-top: 12px; }
+    .bud-dashboard { min-height: 120px; line-height: 1.5; padding-top: 6px; }
     .bud-title { font-size: 18px; color: #d4af37; font-weight: 700; margin: 0; }
     .bud-subtitle { font-size: 12px; color: #8B949E; margin: 4px 0 0; }
     .bud-disclaimer { font-size: 11px; color: #ffaa00; margin: 8px 0 12px; }
@@ -1059,10 +1059,32 @@
     .bud-theme-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .bud-theme-chip { background: #111820; border: 1px solid #334455; color: #a8c4e0; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; }
     .bud-theme-chip:hover, .bud-theme-chip.active { border-color: #d4af37; color: #ffe08a; background: rgba(212,175,55,0.12); }
-    .bud-catalyst-row { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
-    .bud-catalyst-headline { font-size: 13px; color: #e6edf3; }
-    .bud-catalyst-meta { font-size: 11px; color: #8B949E; margin-top: 4px; }
-    .bud-catalyst-why { font-size: 11px; color: #7eb8ff; margin-top: 2px; }
+    .bud-selection-bar { margin-bottom: 14px; padding: 12px 14px; }
+    .bud-selection-row { margin-bottom: 6px; color: #c9d1d9; font-size: 12px; line-height: 1.45; word-break: break-word; }
+    .bud-selection-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .bud-right-stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
+    .bud-catalyst-block { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 100%; box-sizing: border-box; }
+    .bud-news-panel { padding: 12px; margin-bottom: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
+    .bud-catalyst-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 100%; box-sizing: border-box; overflow-y: auto; max-height: min(480px, 50vh); }
+    .bud-catalyst-btn { display: block; width: 100%; max-width: 100%; box-sizing: border-box; text-align: left; background: #111820; border: 1px solid #2a3544; border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; color: inherit; font-family: inherit; }
+    .bud-catalyst-btn:hover { border-color: #3d5a80; background: #141c28; }
+    .bud-catalyst-btn.active { border-color: #d4af37; background: rgba(212,175,55,0.1); box-shadow: 0 0 0 1px rgba(212,175,55,0.25); }
+    .bud-catalyst-row { padding: 0; border-bottom: none; }
+    .bud-catalyst-headline { font-size: 13px; color: #e6edf3; line-height: 1.45; word-break: break-word; white-space: normal; }
+    .bud-catalyst-meta { font-size: 11px; color: #a8b4c0; margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .bud-catalyst-scores { color: #8B949E; }
+    .bud-catalyst-why { font-size: 11px; color: #5eb8ff; margin-top: 6px; line-height: 1.4; word-break: break-word; }
+    .bud-dir-pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: capitalize; letter-spacing: 0.03em; line-height: 1.3; }
+    .bud-dir-pill.bud-dir-positive { color: #00E676; background: rgba(0,230,118,0.12); border: 1px solid rgba(0,230,118,0.3); }
+    .bud-dir-pill.bud-dir-negative { color: #ff6b6b; background: rgba(255,107,107,0.12); border: 1px solid rgba(255,107,107,0.3); }
+    .bud-dir-pill.bud-dir-neutral { color: #a8b4c0; background: rgba(168,180,192,0.1); border: 1px solid rgba(168,180,192,0.25); }
+    .bud-dir-pill.bud-dir-mixed { color: #ffd666; background: rgba(255,214,102,0.12); border: 1px solid rgba(255,214,102,0.3); }
+    .bud-stocks-block { margin-top: 4px; clear: both; width: 100%; max-width: 100%; box-sizing: border-box; }
+    .bud-stock-section { margin-bottom: 14px; }
+    .bud-section-subtitle { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #8B949E; margin: 12px 0 6px; font-weight: 700; }
+    .bud-table-wrap { overflow-x: auto; width: 100%; max-width: 100%; -webkit-overflow-scrolling: touch; }
+    .bud-table { min-width: 720px; color: #c9d1d9; }
+    .bud-table td { color: #c9d1d9; word-break: break-word; }
     .bud-impact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .bud-impact-col ul { margin: 0; padding-left: 16px; font-size: 12px; color: #c9d1d9; }
     .bud-table { width: 100%; border-collapse: collapse; font-size: 11px; }
@@ -10366,6 +10388,7 @@
     `
   }
   </script>
-  <div id="guiBuildMarker" class="gui-build-marker" aria-hidden="true">GUI_BUILD_STAGE_44AW_RESTORE_RICH_MEMORY_UI · GUI_BUILD_STAGE_44AV_KILL_OLD_MEMORY_BROKER_RENDER · GUI_BUILD_STAGE_44AU_MEMORY_API_SCAN_MIX_FIX · GUI_BUILD_STAGE_44AT_FINAL_VISIBLE_3_FIXES · GUI_BUILD_STAGE_44AS_VISIBLE_DATA_POLISH · GUI_BUILD_STAGE_44AR_DATA_TRUTH_ACTIONABILITY · GUI_BUILD_STAGE_44AQ_AIHUB_TAB_PAYLOADS · GUI_BUILD_STAGE_44AP_SCAN_FALLBACK_DISPLAY_CLEAN · GUI_BUILD_STAGE_44AO_MEMORY_ASYNC_FIX · GUI_BUILD_STAGE_44AN_FINAL_MEMORY_REDDIT_CLEANUP · GUI_BUILD_STAGE_44AM_FINAL_GUI_CLEANUP · GUI_BUILD_STAGE_44AL_AIHUB_PER_TAB_REFRESH · GUI_BUILD_STAGE_44AK_AIHUB_FALLBACK_POLISH · GUI_BUILD_STAGE_44AJ_FETCH_STORM_REPAIR · GUI_BUILD_STAGE_44AH_AI_TAB_FALLBACK_FIXED</div>
+  <!-- GUI_BUILD_STAGE_44AW_RESTORE_RICH_MEMORY_UI · GUI_BUILD_STAGE_44AV_KILL_OLD_MEMORY_BROKER_RENDER · GUI_BUILD_STAGE_44AU_MEMORY_API_SCAN_MIX_FIX · GUI_BUILD_STAGE_44AT_FINAL_VISIBLE_3_FIXES · GUI_BUILD_STAGE_44AS_VISIBLE_DATA_POLISH · GUI_BUILD_STAGE_44AR_DATA_TRUTH_ACTIONABILITY · GUI_BUILD_STAGE_44AQ_AIHUB_TAB_PAYLOADS · GUI_BUILD_STAGE_44AP_SCAN_FALLBACK_DISPLAY_CLEAN · GUI_BUILD_STAGE_44AO_MEMORY_ASYNC_FIX · GUI_BUILD_STAGE_44AN_FINAL_MEMORY_REDDIT_CLEANUP · GUI_BUILD_STAGE_44AM_FINAL_GUI_CLEANUP · GUI_BUILD_STAGE_44AL_AIHUB_PER_TAB_REFRESH · GUI_BUILD_STAGE_44AK_AIHUB_FALLBACK_POLISH · GUI_BUILD_STAGE_44AJ_FETCH_STORM_REPAIR · GUI_BUILD_STAGE_44AH_AI_TAB_FALLBACK_FIXED -->
+  <div id="guiBuildMarker" class="gui-build-marker" aria-hidden="true" hidden></div>
 </body>
 </html>
