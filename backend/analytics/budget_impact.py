@@ -18,7 +18,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48G'
+STAGE = '48H'
 ENGINE_NAME = 'Budget Impact Intelligence'
 
 CACHE_FILE = get_data_path('budget_impact_cache.json')
@@ -70,8 +70,9 @@ THEME_EVENT_HINTS: dict[str, tuple[str, ...]] = {
 POSITIVE_CATALYST_TERMS = (
     'allocation', 'order win', 'order wins', 'tender awarded', 'tender award',
     'bags order', 'wins order', 'won order', 'contract awarded', 'capex',
-    'approval', 'approved', 'project launch', 'subsidy', 'pli ', 'demand boost',
-    'highway project', 'road project', 'expressway', 'infra project', 'announces',
+    'approval', 'approved', 'project launch', 'subsidy', 'pli ', 'pli scheme',
+    'demand boost', 'highway project', 'road project', 'expressway', 'infra project',
+    'announces', 'tender', 'project launch', 'order for', 'orders for',
 )
 
 NEGATIVE_CATALYST_TERMS = (
@@ -79,6 +80,14 @@ NEGATIVE_CATALYST_TERMS = (
     'rate hike', 'repo hike', 'tax hike', 'ban', 'margin pressure', 'cost spike',
     'fraud', 'downgrade', 'project delay', 'project delayed', 'shelved',
     'cancelled', 'canceled', 'under investigation', 'margin squeeze',
+    'accounting irregular', 'financial fraud',
+)
+
+BROAD_COMMENTARY_TERMS = (
+    'supercycle', 'analyst', 'commentary', 'research note', 'brokerage',
+    "won't derail", 'wont derail', 'financial statements', 'outlook',
+    'target price', 'price target', 'reiterates', 'maintains rating',
+    'fears won', 'economy resilient', 'macro view', 'sector view',
 )
 
 HIGHWAY_DIRECT_TICKERS = ('HGINFRA', 'IRB', 'PNCINFRA', 'KNR', 'GRINFRA', 'LT')
@@ -202,7 +211,9 @@ def _build_catalyst_drilldown_payload(
     stale = freshness.get('status') in ('stale', 'cache_missing')
     themes = _detected_themes_for_headline(headline, tid)
     why = catalyst_row.get('why') or (themes[0].get('display_name') if themes else 'Theme catalyst match')
-    stance = _suggested_stance_for_ranking(direction, sections, stale=stale)
+    stance = detect_catalyst_stance(headline, direction) if _is_broad_commentary(headline) else _suggested_stance_for_ranking(
+        direction, sections, stale=stale
+    )
     return {
         'ok': True,
         'lite': True,
@@ -296,18 +307,20 @@ def build_budget_cache_indexes(
             if not headline:
                 continue
             cid = _make_catalyst_id(tid, headline)
-            row = {
+            direction = detect_catalyst_direction(headline)
+            row = enrich_catalyst_row({
                 **cat,
                 'catalyst_id': cid,
                 'theme_id': tid,
                 'display_name': display,
-                'catalyst_direction': detect_catalyst_direction(headline),
+                'catalyst_direction': direction,
+                'suggested_stance': detect_catalyst_stance(headline, direction),
                 'named_companies': extract_named_companies_strict(headline),
                 'budget_impact_score': _budget_impact_score(headline, tid).get(
                     'budget_impact_score',
                     cat.get('catalyst_score', 0),
                 ),
-            }
+            })
             enriched.append(row)
             catalysts_by_id[cid] = row
             drilldown_by_catalyst[cid] = _build_catalyst_drilldown_payload(row, freshness=freshness, theme_id=tid)
@@ -336,6 +349,7 @@ def build_budget_cache_indexes(
 
 def ensure_cache_indexes(cached: dict[str, Any]) -> dict[str, Any]:
     if cached.get('themes_by_id') and cached.get('drilldown_by_catalyst'):
+        _backfill_cache_catalyst_directions(cached)
         return cached
 
     freshness = cached.get('freshness') or {
@@ -470,8 +484,27 @@ def dedupe_catalyst_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _is_broad_commentary(text: str) -> bool:
+    lower = _sanitize_text(str(text or '')).lower()
+    if any(term in lower for term in BROAD_COMMENTARY_TERMS):
+        return True
+    if '?' in lower and not any(
+        t in lower for t in POSITIVE_CATALYST_TERMS + NEGATIVE_CATALYST_TERMS
+    ):
+        return True
+    if 'trail' in lower and 'financial statement' in lower and 'fraud' not in lower:
+        return True
+    return False
+
+
 def detect_catalyst_direction(text: str) -> str:
     lower = _sanitize_text(str(text or '')).lower()
+    if _is_broad_commentary(lower):
+        if any(t in lower for t in ('fraud', 'accounting irregular', 'financial fraud', 'probe', 'downgrade')):
+            return 'Negative'
+        if 'fear' in lower and any(t in lower for t in ('derail', "won't", 'wont', 'resilient')):
+            return 'Mixed'
+        return 'Neutral'
     pos = [t for t in POSITIVE_CATALYST_TERMS if t in lower]
     neg = [t for t in NEGATIVE_CATALYST_TERMS if t in lower]
     if pos and neg:
@@ -480,7 +513,61 @@ def detect_catalyst_direction(text: str) -> str:
         return 'Negative'
     if pos:
         return 'Positive'
-    return 'Mixed'
+    return 'Neutral'
+
+
+def detect_catalyst_stance(headline: str, direction: str) -> str:
+    if _is_broad_commentary(headline):
+        return 'Research Only'
+    if direction == 'Negative':
+        return 'Avoid / Risk'
+    if direction == 'Positive':
+        return 'Investment Watch'
+    if direction == 'Mixed':
+        return 'Wait for Confirmation'
+    return 'Research Only'
+
+
+def enrich_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
+    out = dict(row)
+    headline = str(out.get('headline') or '')
+    direction = str(out.get('catalyst_direction') or '').strip()
+    if not direction or direction == '?':
+        direction = detect_catalyst_direction(headline) if headline else 'Neutral'
+        out['catalyst_direction'] = direction
+    if not out.get('suggested_stance'):
+        out['suggested_stance'] = detect_catalyst_stance(headline, direction)
+    return out
+
+
+def enrich_catalyst_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [enrich_catalyst_row(r) for r in rows]
+
+
+def _backfill_cache_catalyst_directions(cached: dict[str, Any]) -> None:
+    if cached.get('top_catalysts'):
+        cached['top_catalysts'] = enrich_catalyst_rows(list(cached['top_catalysts']))
+    catalysts_by_theme = dict(cached.get('catalysts_by_theme') or {})
+    for tid, theme in list((cached.get('themes_by_id') or {}).items()):
+        if theme.get('catalysts'):
+            theme = dict(theme)
+            theme['catalysts'] = enrich_catalyst_rows(list(theme['catalysts']))
+            cached['themes_by_id'][tid] = theme
+            catalysts_by_theme.setdefault(tid, theme['catalysts'])
+    for tid, rows in list(catalysts_by_theme.items()):
+        enriched = enrich_catalyst_rows(list(rows))
+        catalysts_by_theme[tid] = enriched
+    cached['catalysts_by_theme'] = catalysts_by_theme
+
+    catalysts_by_id = dict(cached.get('catalysts_by_id') or {})
+    for tid, rows in catalysts_by_theme.items():
+        for row in rows:
+            headline = str(row.get('headline') or '')
+            cid = str(row.get('catalyst_id') or _make_catalyst_id(tid, headline))
+            item = enrich_catalyst_row({**row, 'catalyst_id': cid, 'theme_id': tid})
+            catalysts_by_id[cid] = item
+    if catalysts_by_id:
+        cached['catalysts_by_id'] = catalysts_by_id
 
 
 def extract_named_companies_strict(text: str) -> list[str]:
@@ -538,6 +625,7 @@ def rank_stocks_for_catalyst(
     freshness = freshness or compute_freshness_panel()
     stale = freshness.get('status') in ('stale', 'cache_missing')
     direction = detect_catalyst_direction(headline)
+    broad_neutral = _is_broad_commentary(headline) or direction == 'Neutral'
     named = extract_named_companies_strict(headline)
     lower = str(headline or '').lower()
 
@@ -674,11 +762,37 @@ def rank_stocks_for_catalyst(
                 score=45,
                 generic=True,
             )
+    elif broad_neutral:
+        for t in named:
+            add_stock(
+                t,
+                side='Research',
+                stance='Research Only',
+                reason='Named company — broad commentary without actionable catalyst',
+                score=25,
+                named_hit=True,
+                generic=True,
+            )
+        if not stocks:
+            sections['research_only'].append({
+                'ticker': '',
+                'theme_id': resolved,
+                'impact_side': 'Research',
+                'score': 20,
+                'reason': 'Broad analyst/commentary headline — research only',
+                'freshness': freshness.get('status', 'unknown'),
+                'confirmation_needed': 'Confirm with price + volume + sector breadth',
+                'stance': 'Research Only',
+                'section': 'research_only',
+                'section_label': STOCK_SECTION_LABELS['research_only'],
+                'catalyst_direction': direction,
+                'named_in_headline': False,
+            })
     else:
         for t in named:
             add_stock(
                 t,
-                side='Risk' if direction == 'Negative' else 'Beneficiary',
+                side='Beneficiary',
                 stance='Wait for Confirmation',
                 reason='Named company — mixed/unclear catalyst direction',
                 score=40,
@@ -690,12 +804,12 @@ def rank_stocks_for_catalyst(
                 'theme_id': resolved,
                 'impact_side': 'Research',
                 'score': 20,
-                'reason': 'Broad theme without price/volume confirmation',
+                'reason': 'Mixed catalyst — wait for confirmation',
                 'freshness': freshness.get('status', 'unknown'),
                 'confirmation_needed': 'Confirm with price + volume + sector breadth',
-                'stance': 'Research Only',
-                'section': 'research_only',
-                'section_label': STOCK_SECTION_LABELS['research_only'],
+                'stance': 'Wait for Confirmation',
+                'section': 'wait_confirmation',
+                'section_label': STOCK_SECTION_LABELS['wait_confirmation'],
                 'catalyst_direction': direction,
                 'named_in_headline': False,
             })
@@ -775,12 +889,27 @@ def compute_freshness_panel() -> dict[str, Any]:
         news_row['age_label'] = _age_label(combined_news_age)
         news_row['status'] = _source_freshness_status(combined_news_age)
 
+    budget_theme_ts = budget_ts
+    budget_theme_age_h = budget_cache_age_h
+    if cached.get('generated_at') or cached.get('refreshed_at'):
+        budget_theme_ts = cached.get('refreshed_at') or cached.get('generated_at')
+        try:
+            ts = datetime.fromisoformat(str(budget_theme_ts))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=IST)
+            budget_theme_age_h = (datetime.now(IST) - ts.astimezone(IST)).total_seconds() / 3600.0
+        except (TypeError, ValueError):
+            budget_theme_age_h = budget_cache_age_h
+    if budget_theme_age_h is None and theme_cache_age_h is not None:
+        budget_theme_ts = theme_ts
+        budget_theme_age_h = theme_cache_age_h
+
     theme_row = {
-        'label': 'Theme cache',
-        'timestamp': theme_ts,
-        'age_hours': theme_cache_age_h,
-        'age_label': _age_label(theme_cache_age_h),
-        'status': _source_freshness_status(theme_cache_age_h),
+        'label': 'Budget theme cache',
+        'timestamp': budget_theme_ts,
+        'age_hours': budget_theme_age_h,
+        'age_label': _age_label(budget_theme_age_h),
+        'status': _source_freshness_status(budget_theme_age_h),
     }
     scanner_row = _build_source_freshness_row(label='Scanner', path=scanner_path)
     budget_row = {
@@ -791,16 +920,35 @@ def compute_freshness_panel() -> dict[str, Any]:
         'status': _source_freshness_status(budget_cache_age_h),
     }
 
-    status = _freshness_status(combined_news_age, theme_cache_age_h, scanner_age_h, budget_cache_age_h)
+    effective_budget_theme_age = (
+        budget_theme_age_h if budget_theme_age_h is not None else theme_cache_age_h
+    )
+    status = _freshness_status(
+        combined_news_age,
+        effective_budget_theme_age,
+        scanner_age_h,
+        budget_cache_age_h,
+    )
+
+    legacy_theme_row = {
+        'label': 'Legacy theme cache',
+        'timestamp': theme_ts,
+        'age_hours': theme_cache_age_h,
+        'age_label': _age_label(theme_cache_age_h),
+        'status': _source_freshness_status(theme_cache_age_h),
+    }
 
     return {
         'status': status,
         'news': news_row,
         'theme_cache': theme_row,
+        'legacy_theme_cache': legacy_theme_row,
         'scanner': scanner_row,
         'budget_cache': budget_row,
         'latest_news_age': news_row['age_label'],
         'latest_theme_cache_age': theme_row['age_label'],
+        'latest_budget_theme_cache_age': theme_row['age_label'],
+        'latest_legacy_theme_cache_age': legacy_theme_row['age_label'],
         'latest_scanner_age': scanner_row['age_label'],
         'latest_budget_cache_age': budget_row['age_label'],
         'news_age_hours': combined_news_age,
@@ -1088,8 +1236,9 @@ def build_impact_map(theme_id: str) -> dict[str, Any]:
 
 def get_budget_overview(*, cache_only: bool = False, lite: bool = False) -> dict[str, Any]:
     if cache_only and lite:
-        cached = _load_cache()
+        cached = ensure_cache_indexes(_load_cache())
         if cached and cached.get('ok'):
+            top_catalysts = enrich_catalyst_rows((cached.get('top_catalysts') or [])[:5])
             return {
                 'ok': True,
                 'lite': True,
@@ -1105,7 +1254,7 @@ def get_budget_overview(*, cache_only: bool = False, lite: bool = False) -> dict
                     'latest_budget_cache_age': _age_label(_file_age_hours(CACHE_FILE)),
                 },
                 'top_themes': (cached.get('top_themes') or [])[:8],
-                'top_catalysts': (cached.get('top_catalysts') or [])[:5],
+                'top_catalysts': top_catalysts,
                 'beneficiary_map': cached.get('beneficiary_map') or {},
                 'risk_map': cached.get('risk_map') or {},
                 'stock_rankings': (cached.get('stock_rankings') or [])[:10],
@@ -1194,11 +1343,15 @@ def get_budget_overview(*, cache_only: bool = False, lite: bool = False) -> dict
 
     for tid in BUDGET_THEME_IDS[:6]:
         for cat in get_theme_catalysts(tid, limit=2, for_top_display=True):
-            top_catalysts.append({
+            headline = str(cat.get('headline') or '')
+            direction = detect_catalyst_direction(headline)
+            top_catalysts.append(enrich_catalyst_row({
                 'theme_id': tid,
                 'display_name': (get_basket_by_id(tid) or {}).get('display_name') or tid,
                 **{k: cat.get(k) for k in ('headline', 'impact_10', 'catalyst_score', 'why', 'action')},
-            })
+                'catalyst_direction': direction,
+                'suggested_stance': detect_catalyst_stance(headline, direction),
+            }))
     top_catalysts.sort(key=lambda r: r.get('catalyst_score', 0), reverse=True)
     top_catalysts = dedupe_catalyst_rows(top_catalysts)
 
@@ -1305,6 +1458,10 @@ def get_budget_theme_detail(
                 'summary': {},
                 'impact_map': build_impact_map(resolved or theme_id),
             }
+        else:
+            theme = dict(theme)
+            if theme.get('catalysts'):
+                theme['catalysts'] = enrich_catalyst_rows(list(theme['catalysts']))
         return {
             'ok': True,
             'lite': True,
@@ -1312,7 +1469,9 @@ def get_budget_theme_detail(
             'theme_id': resolved,
             'theme': theme,
             'freshness': cached.get('freshness') or {},
-            'catalysts': (cached.get('catalysts_by_theme') or {}).get(resolved or '', []),
+            'catalysts': enrich_catalyst_rows(
+                list((cached.get('catalysts_by_theme') or {}).get(resolved or '', []))
+            ),
             'stock_sections': (cached.get('scan_by_theme') or {}).get(resolved or '', {}).get('sections') or {},
             'summary': (cached.get('scan_by_theme') or {}).get(resolved or '', {}).get('summary') or {},
             'impact_map': theme.get('impact_map') or build_impact_map(resolved or theme_id),
@@ -1360,7 +1519,9 @@ def get_budget_theme_news(
     resolved = resolve_theme_id(theme_id)
     if cache_only and lite:
         cached = ensure_cache_indexes(_load_cache())
-        rows = list((cached.get('catalysts_by_theme') or {}).get(resolved or '', []))[:limit]
+        rows = enrich_catalyst_rows(
+            list((cached.get('catalysts_by_theme') or {}).get(resolved or '', []))[:limit]
+        )
         if not rows and not get_basket_by_id(theme_id):
             return {'ok': False, 'error': f'theme not found: {theme_id}'}
         return {
@@ -1380,14 +1541,14 @@ def get_budget_theme_news(
         headline_text = str(cat.get('headline') or '')
         cid = _make_catalyst_id(str(resolved or theme_id), headline_text)
         scored = _budget_impact_score(headline_text, str(resolved or theme_id))
-        enriched.append({
+        enriched.append(enrich_catalyst_row({
             **cat,
             'catalyst_id': cid,
             'theme_id': resolved,
             'budget_impact_score': scored.get('budget_impact_score', cat.get('catalyst_score', 0)),
             'catalyst_direction': detect_catalyst_direction(headline_text),
             'named_companies': extract_named_companies_strict(headline_text),
-        })
+        }))
     enriched = dedupe_catalyst_rows(enriched)
     return {
         'ok': True,

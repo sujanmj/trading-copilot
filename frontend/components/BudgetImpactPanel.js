@@ -1,5 +1,5 @@
 /**
- * Budget Impact Intelligence workspace (Stage 48G).
+ * Budget Impact Intelligence workspace (Stage 48H).
  * Theme + catalyst drilldown — cache-only lite loads on click.
  */
 (function (global) {
@@ -198,7 +198,7 @@
     return `<div class="bud-drilldown glass-card">
       <div class="bud-section-title">Catalyst impact drilldown</div>
       <p><b>Headline:</b> ${escapeHtml(drill.headline || state.selectedCatalystHeadline || '—')}</p>
-      <p><b>Direction:</b> ${escapeHtml(drill.direction || drill.catalyst_direction || 'Mixed')}</p>
+      <p><b>Direction:</b> ${escapeHtml(formatCatalystDirection(drill.direction || drill.catalyst_direction))}</p>
       <p><b>Detected themes:</b> ${themes || 'Unavailable'}</p>
       <p><b>Direct beneficiaries:</b> ${listTickers(drill.direct_beneficiaries)}</p>
       <p><b>Indirect beneficiaries:</b> ${listTickers(drill.indirect_beneficiaries)}</p>
@@ -238,7 +238,7 @@
       <div class="bud-section-title">Freshness</div>
       <div class="bud-freshness-grid">
         ${freshnessSourceRow('News', Object.assign({}, news, { age_label: f.latest_news_age || news.age_label }))}
-        ${freshnessSourceRow('Theme cache', Object.assign({}, theme, { age_label: f.latest_theme_cache_age || theme.age_label }))}
+        ${freshnessSourceRow('Budget theme cache', Object.assign({}, theme, { age_label: f.latest_budget_theme_cache_age || f.latest_theme_cache_age || theme.age_label }))}
         ${freshnessSourceRow('Scanner', Object.assign({}, scanner, { age_label: f.latest_scanner_age || scanner.age_label }))}
         ${freshnessSourceRow('Budget cache', Object.assign({}, budget, { age_label: f.latest_budget_cache_age || budget.age_label }))}
         <div><span class="bud-label">Status</span> ${freshnessBadge(f.status || 'unavailable')}</div>
@@ -262,6 +262,12 @@
     return `<div class="bud-categories glass-card"><div class="bud-section-title">Theme categories</div>${blocks}</div>`;
   }
 
+  function formatCatalystDirection(direction) {
+    const d = String(direction || '').trim();
+    if (!d || d === '?') return 'Neutral';
+    return d;
+  }
+
   function renderCatalystNews(catalysts) {
     const rows = catalysts || [];
     if (!rows.length) {
@@ -272,7 +278,7 @@
       const active = state.selectedCatalystId && cid === state.selectedCatalystId ? ' active' : '';
       return `<button type="button" class="bud-catalyst-row bud-catalyst-btn${active}" data-catalyst-id="${escapeHtml(cid)}" data-theme-id="${escapeHtml(cat.theme_id || state.selectedThemeId || '')}" data-headline="${escapeHtml(cat.headline || '')}">
       <div class="bud-catalyst-headline">${escapeHtml(cat.headline || '—')}</div>
-      <div class="bud-catalyst-meta">Direction ${escapeHtml(cat.catalyst_direction || '?')} · Impact ${escapeHtml(cat.impact_10 || '?')}/10 · Score ${escapeHtml(cat.budget_impact_score || cat.catalyst_score || '?')}</div>
+      <div class="bud-catalyst-meta">Direction ${escapeHtml(formatCatalystDirection(cat.catalyst_direction))} · Impact ${escapeHtml(cat.impact_10 || '?')}/10 · Score ${escapeHtml(cat.budget_impact_score || cat.catalyst_score || '?')}</div>
       <div class="bud-catalyst-why">Why: ${escapeHtml(cat.why || '—')}</div>
     </button>`;
     }).join('');

@@ -1340,7 +1340,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 48G</code>')
+        lines.append('Telegram build: <code>AstraEdge 48H</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
@@ -1405,13 +1405,21 @@ def format_status_text() -> str:
 
         lines.append(_format_feed_freshness_line('Latest scanner', get_data_path('scanner_data.json')))
         lines.append(_format_feed_freshness_line('Latest news', get_data_path('news_feed.json')))
-        lines.append(_format_feed_freshness_line('Latest theme cache', get_data_path('theme_baskets.json')))
+        lines.append(_format_feed_freshness_line('Latest budget cache', get_data_path('budget_impact_cache.json')))
+        lines.append(_format_feed_freshness_line(
+            'Latest budget theme cache',
+            get_data_path('budget_impact_cache.json'),
+        ))
+        legacy_theme_path = get_data_path('theme_baskets.json')
+        if legacy_theme_path.is_file():
+            lines.append(_format_feed_freshness_line('Legacy theme cache', legacy_theme_path))
     except Exception:
         lines.append('Market mode: unavailable')
         lines.append('Latest report: unavailable')
         lines.append('Latest scanner: unavailable')
         lines.append('Latest news: unavailable')
-        lines.append('Latest theme cache: unavailable')
+        lines.append('Latest budget cache: unavailable')
+        lines.append('Latest budget theme cache: unavailable')
 
     try:
         from backend.telegram.lazy_command_runner import (
