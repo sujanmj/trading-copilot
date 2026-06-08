@@ -48,7 +48,7 @@ def main() -> int:
         _touch(data_root / 'news_feed.json', {'updated_at': now_iso, 'articles': []})
         _touch(
             data_root / 'theme_baskets.json',
-            {'cache_refreshed_at': now_iso, 'baskets': [], 'stage': '47E'},
+            {'cache_refreshed_at': now_iso, 'baskets': [], 'stage': '47F', 'theme_schema_version': '47F'},
         )
 
         import backend.storage.data_paths as dp
@@ -65,8 +65,8 @@ def main() -> int:
             dp.get_data_root = orig_root  # type: ignore[method-assign]
             lcr.DAILY_PACK_FILE = orig_pack
 
-    if 'AstraEdge 47E' not in text:
-        return _fail('status missing AstraEdge 47E build line')
+    if 'AstraEdge 47F' not in text:
+        return _fail('status missing AstraEdge 47F build line')
     for label in (
         'Latest report:',
         'Latest scanner:',

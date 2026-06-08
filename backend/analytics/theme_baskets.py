@@ -1,5 +1,5 @@
 """
-AstraEdge Theme Baskets — thematic intelligence engine (Stage 47E).
+AstraEdge Theme Baskets — thematic intelligence engine (Stage 47F).
 
 Maps news/govt/budget headlines to theme baskets, sectors, and beneficiary stocks.
 User-facing label: Theme Wishlist. Research-only — watch/confirm, never buy now or guaranteed.
@@ -17,12 +17,23 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '47E'
+STAGE = '47F'
+THEME_SCHEMA_VERSION = '47F'
 
 # Legacy broad baskets hidden from grouped/category lists when split baskets exist.
 HIDDEN_WHEN_SPLIT: dict[str, tuple[str, ...]] = {
     'ports_logistics': ('ports_shipping', 'logistics_warehousing'),
     'banking_psu_nbfc': ('psu_banks', 'private_banks', 'nbfc', 'insurance', 'amc_brokers'),
+}
+DEPRECATED_THEME_IDS: frozenset[str] = frozenset({
+    'ports_logistics',
+    'banking_psu_nbfc',
+    'defence',
+})
+DEPRECATED_STOCK_MERGE_TARGETS: dict[str, str] = {
+    'ports_logistics': 'ports_shipping',
+    'banking_psu_nbfc': 'psu_banks',
+    'defence': 'defence_aerospace',
 }
 WISHLIST_TITLE = 'AstraEdge Theme Wishlist'
 NO_CATALYST_MESSAGE = 'No strong fresh catalyst found. Research basket only.'
@@ -140,6 +151,8 @@ BUDGET_THEME_IDS = (
 LEGACY_THEME_ID_MAP: dict[str, str] = {
     'railways': 'railways_metro',
     'defence': 'defence_aerospace',
+    'defense': 'defence_aerospace',
+    'ports_logistics': 'ports_shipping',
 }
 
 THEME_CATEGORIES: dict[str, list[str]] = {
@@ -631,7 +644,11 @@ def _default_baskets() -> list[dict[str, Any]]:
     by_id = {b['theme_id']: b for b in defs if isinstance(b, dict) and b.get('theme_id')}
     for basket in extras:
         by_id[basket['theme_id']] = basket
-    return [_normalize_basket(b) for b in by_id.values()]
+    return [
+        _normalize_basket(b)
+        for b in by_id.values()
+        if str(b.get('theme_id') or '') not in DEPRECATED_THEME_IDS
+    ]
 
 
 def _category_for_theme_id(theme_id: str) -> str:
@@ -1014,25 +1031,64 @@ def _additional_baskets() -> list[dict[str, Any]]:
     ]
 
 
+def _merge_basket_stocks(target: dict[str, Any], source: dict[str, Any]) -> None:
+    """Merge stock lists from deprecated basket into canonical target."""
+    tgt_stocks = target.setdefault('stocks', {})
+    src_stocks = source.get('stocks') or {}
+    if not isinstance(tgt_stocks, dict) or not isinstance(src_stocks, dict):
+        return
+    for bucket in ('direct', 'indirect', 'raw_material', 'avoid_or_risk'):
+        lst = tgt_stocks.setdefault(bucket, [])
+        for ticker in src_stocks.get(bucket) or []:
+            t = str(ticker).upper()
+            if t and t not in lst:
+                lst.append(t)
+
+
 def migrate_theme_baskets(data: dict[str, Any]) -> dict[str, Any]:
-    """Upgrade persisted baskets to Stage 47C schema."""
+    """Upgrade persisted baskets to Stage 47F schema."""
     canonical = {b['theme_id']: _normalize_basket(b) for b in _default_baskets()}
     existing = data.get('baskets') or []
     merged: dict[str, dict[str, Any]] = {}
+    migrated = 0
+    hidden = 0
+
     for basket in existing:
         if not isinstance(basket, dict):
             continue
-        tid = str(basket.get('theme_id') or '')
-        tid = LEGACY_THEME_ID_MAP.get(tid, tid)
+        raw_tid = str(basket.get('theme_id') or '')
+        if raw_tid in DEPRECATED_THEME_IDS:
+            target_id = DEPRECATED_STOCK_MERGE_TARGETS.get(raw_tid, '')
+            if target_id and target_id in canonical:
+                _merge_basket_stocks(canonical[target_id], basket)
+                migrated += 1
+            hidden += 1
+            continue
+        tid = LEGACY_THEME_ID_MAP.get(raw_tid, raw_tid)
         base = canonical.get(tid, {})
         row = dict(base)
         row.update(basket)
         row['theme_id'] = tid
+        if tid == 'defence_aerospace':
+            row['category'] = 'Government/Budget'
+        elif tid == 'war_geopolitics':
+            row['category'] = 'Market Risk'
         merged[tid] = _normalize_basket(row)
+
     for tid, basket in canonical.items():
+        if tid in DEPRECATED_THEME_IDS:
+            continue
         merged.setdefault(tid, basket)
+
+    prior_version = data.get('theme_schema_version')
     data['baskets'] = list(merged.values())
     data['stage'] = STAGE
+    data['theme_schema_version'] = THEME_SCHEMA_VERSION
+    if migrated or hidden or prior_version != THEME_SCHEMA_VERSION:
+        _log(
+            f'THEME_SCHEMA_MIGRATION_APPLIED version={THEME_SCHEMA_VERSION} '
+            f'hidden={hidden} migrated={migrated}'
+        )
     return data
 
 
@@ -1042,7 +1098,15 @@ def bootstrap_theme_baskets(*, force: bool = False) -> dict[str, Any]:
         try:
             data = json.loads(BASKETS_FILE.read_text(encoding='utf-8'))
             if isinstance(data, dict) and data.get('baskets'):
-                if data.get('stage') != STAGE or len(data.get('baskets') or []) < len(_default_baskets()):
+                needs_migration = (
+                    data.get('theme_schema_version') != THEME_SCHEMA_VERSION
+                    or data.get('stage') != STAGE
+                    or any(
+                        isinstance(b, dict) and str(b.get('theme_id') or '') in DEPRECATED_THEME_IDS
+                        for b in (data.get('baskets') or [])
+                    )
+                )
+                if needs_migration or len(data.get('baskets') or []) < len(_default_baskets()):
                     data = migrate_theme_baskets(data)
                     atomic_write_json(BASKETS_FILE, data)
                     _log(f'migrated to {len(data.get("baskets") or [])} baskets')
@@ -1053,6 +1117,7 @@ def bootstrap_theme_baskets(*, force: bool = False) -> dict[str, Any]:
     baskets = _default_baskets()
     payload = {
         'stage': STAGE,
+        'theme_schema_version': THEME_SCHEMA_VERSION,
         'generated_at': _now_iso(),
         'baskets': baskets,
         'catalyst_cache': {},
@@ -1075,6 +1140,8 @@ def get_basket_by_id(theme_id: str) -> Optional[dict[str, Any]]:
     resolved = resolve_theme_id(theme_id)
     if not resolved or resolved == 'budget' or str(resolved).startswith('__category__'):
         return None
+    if resolved in DEPRECATED_THEME_IDS:
+        resolved = DEPRECATED_STOCK_MERGE_TARGETS.get(resolved, resolved)
     for basket in load_theme_baskets().get('baskets') or []:
         if isinstance(basket, dict) and basket.get('theme_id') == resolved:
             return basket
@@ -1149,7 +1216,7 @@ def search_theme_baskets(keyword: str) -> list[dict[str, str]]:
                 'category': str(basket.get('category') or ''),
             })
     matches.sort(key=lambda r: (r.get('category', ''), r.get('display_name', '')))
-    return matches
+    return _filter_display_baskets(matches)
 
 
 def get_baskets_by_category(category: str) -> list[dict[str, str]]:
@@ -1573,9 +1640,11 @@ def refresh_theme_catalyst_cache(*, persist: bool = True) -> dict[str, Any]:
         cache[tid] = rows[:12]
 
     payload = load_theme_baskets()
+    payload = migrate_theme_baskets(payload)
     payload['catalyst_cache'] = cache
     payload['cache_refreshed_at'] = _now_iso()
     payload['stage'] = STAGE
+    payload['theme_schema_version'] = THEME_SCHEMA_VERSION
     if persist:
         atomic_write_json(BASKETS_FILE, payload)
 
@@ -1754,7 +1823,7 @@ def _all_basket_ids() -> set[str]:
 def _hidden_from_display_ids() -> set[str]:
     """Return legacy basket IDs to hide when split replacements exist."""
     present = _all_basket_ids()
-    hidden: set[str] = set()
+    hidden: set[str] = set(DEPRECATED_THEME_IDS & present)
     for legacy_id, replacements in HIDDEN_WHEN_SPLIT.items():
         if legacy_id in present and all(r in present for r in replacements):
             hidden.add(legacy_id)

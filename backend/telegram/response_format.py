@@ -8,7 +8,10 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo('Asia/Kolkata')
 
 RESEARCH_FOOTER = 'Research only. You decide and place trades manually.'
 SHADOW_DISCLAIMER = RESEARCH_FOOTER
@@ -1264,12 +1267,30 @@ def format_aihub_brain_full() -> str:
     return strip_stage_markers('\n'.join(lines))
 
 
+def _parse_status_timestamp(value: Any) -> Optional[datetime]:
+    """Parse ISO timestamps with +05:30, Z, or naive IST."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=IST)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
 def _format_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = '') -> str:
-    """Format Latest <label>: timestamp · age · fresh|stale."""
+    """Format Latest <label>: timestamp · age <x> · fresh|stale (single status)."""
     from backend.storage.data_paths import get_data_path
 
     file_path = path if path.is_absolute() else get_data_path(str(path))
-    ts = file_timestamp_iso(file_path)
+    ts_txt = '—'
     age_min = -1
     if file_path.is_file():
         try:
@@ -1277,7 +1298,6 @@ def _format_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = 
             age_min = max(0, int(age_sec // 60))
         except OSError:
             age_min = -1
-    if timestamp_key and file_path.is_file():
         try:
             from backend.telegram.lazy_command_runner import _load_json
             payload = _load_json(file_path)
@@ -1288,23 +1308,27 @@ def _format_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = 
                     or payload.get('cache_refreshed_at')
                     or payload.get('updated_at')
                     or payload.get('timestamp')
+                    or payload.get('last_updated')
                 )
                 if embedded:
-                    ts = str(embedded)
+                    ts_txt = str(embedded)
+                    parsed = _parse_status_timestamp(embedded)
+                    if parsed is not None:
+                        age_min = max(
+                            0,
+                            int((datetime.now(timezone.utc) - parsed).total_seconds() // 60),
+                        )
         except Exception:
             pass
+        if ts_txt == '—':
+            file_ts = file_timestamp_iso(file_path)
+            if file_ts:
+                ts_txt = file_ts
     if age_min < 0:
         return f'{label}: unavailable'
-    age_label = format_cache_age_label(age_min, timestamp=ts)
-    freshness = 'fresh' if age_min < 60 else ('stale' if age_min < STALE_CACHE_HOURS * 60 else 'stale')
-    if 'fresh ·' in age_label:
-        freshness = 'fresh'
-    elif age_min >= STALE_CACHE_HOURS * 60:
-        freshness = 'stale'
-    else:
-        freshness = 'stale' if age_min >= 60 else 'fresh'
-    ts_txt = ts or '—'
-    return f'{label}: {ts_txt} · {age_label} · {freshness}'
+    age_txt = f'{age_min}m' if age_min < 60 else f'{age_min // 60}h'
+    freshness = 'fresh' if age_min < 60 else 'stale'
+    return f'{label}: {ts_txt} · age {age_txt} · {freshness}'
 
 
 def format_status_text() -> str:
@@ -1316,7 +1340,7 @@ def format_status_text() -> str:
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 47E</code>')
+        lines.append('Telegram build: <code>AstraEdge 47F</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
@@ -1371,54 +1395,17 @@ def format_status_text() -> str:
                 if report_age >= 0
                 else 'unknown age'
             )
+            report_age_txt = f'{report_age}m' if 0 <= report_age < 60 else (
+                f'{report_age // 60}h' if report_age >= 60 else 'unknown'
+            )
             report_fresh = 'fresh' if 0 <= report_age < 60 else ('stale' if report_age >= 0 else 'unknown')
-            lines.append(f'Latest report: {report_time} · {report_age_txt} · {report_fresh}')
+            lines.append(f'Latest report: {report_time} · age {report_age_txt} · {report_fresh}')
         else:
             lines.append('Latest report: unavailable')
 
         lines.append(_format_feed_freshness_line('Latest scanner', get_data_path('scanner_data.json')))
         lines.append(_format_feed_freshness_line('Latest news', get_data_path('news_feed.json')))
-
-        theme_path = get_data_path('theme_baskets.json')
-        theme_ts = '—'
-        theme_stale = True
-        if theme_path.is_file():
-            try:
-                theme_data = json.loads(theme_path.read_text(encoding='utf-8'))
-                if isinstance(theme_data, dict):
-                    theme_ts = (
-                        theme_data.get('cache_refreshed_at')
-                        or theme_data.get('generated_at')
-                        or '—'
-                    )
-                    refreshed = theme_data.get('cache_refreshed_at') or theme_data.get('generated_at')
-                    if refreshed:
-                        from datetime import timedelta
-                        from zoneinfo import ZoneInfo
-                        ist = ZoneInfo('Asia/Kolkata')
-                        parsed = datetime.fromisoformat(str(refreshed))
-                        if parsed.tzinfo is None:
-                            parsed = parsed.replace(tzinfo=ist)
-                        age_h = (datetime.now(ist) - parsed.astimezone(ist)).total_seconds() / 3600.0
-                        theme_stale = age_h > 48
-            except (OSError, json.JSONDecodeError, TypeError, ValueError):
-                pass
-        theme_age_min = -1
-        if theme_path.is_file():
-            try:
-                theme_age_min = max(
-                    0,
-                    int((datetime.now(timezone.utc).timestamp() - theme_path.stat().st_mtime) // 60),
-                )
-            except OSError:
-                theme_age_min = -1
-        theme_age_txt = (
-            format_cache_age_label(theme_age_min, timestamp=str(theme_ts))
-            if theme_age_min >= 0
-            else 'unknown age'
-        )
-        theme_fresh = 'stale' if theme_stale else 'fresh'
-        lines.append(f'Latest theme cache: {theme_ts} · {theme_age_txt} · {theme_fresh}')
+        lines.append(_format_feed_freshness_line('Latest theme cache', get_data_path('theme_baskets.json')))
     except Exception:
         lines.append('Market mode: unavailable')
         lines.append('Latest report: unavailable')

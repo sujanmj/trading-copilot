@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -608,6 +609,29 @@ def try_close_summary() -> int:
     return 0
 
 
+_MACRO_STALE_RESEARCH_SENT: dict[str, float] = {}
+MACRO_STALE_RESEARCH_THROTTLE_SEC = 90 * 60
+
+
+def _normalize_macro_headline_key(headline: str) -> str:
+    import re
+    return re.sub(r'[^a-z0-9]+', ' ', str(headline or '').lower()).strip()[:160]
+
+
+def _should_send_macro_stale_research(headline: str) -> bool:
+    """Throttle stale macro research to once per headline per 90 minutes."""
+    key = _normalize_macro_headline_key(headline)
+    if not key:
+        return True
+    now = time.time()
+    last = _MACRO_STALE_RESEARCH_SENT.get(key, 0.0)
+    if last and (now - last) < MACRO_STALE_RESEARCH_THROTTLE_SEC:
+        _log('MACRO_STALE_RESEARCH_SUPPRESSED', 'duplicate_headline')
+        return False
+    _MACRO_STALE_RESEARCH_SENT[key] = now
+    return True
+
+
 def try_emergency_macro() -> tuple[int, int]:
     """Returns (sent, skipped). Emergency may be detected when skipped."""
     from backend.orchestration.alert_quality_filters import (
@@ -642,16 +666,18 @@ def try_emergency_macro() -> tuple[int, int]:
 
     if is_headline_source_stale(item):
         _log('EMERGENCY_MACRO_SKIPPED', 'reason=stale_cache headline_source_stale')
-        research_text = (
-            '<b>Macro research only — stale cache</b>\n'
-            f'{headline[:900]}\n'
-            '<i>Headline source stale — not Emergency Macro. Run /refresh quick.</i>'
-        )
         get_observability().record_suppressed(
             EMERGENCY_MACRO_ALERT, 'stale_cache', headline[:120],
         )
         if is_silenced():
             return 0, 1
+        if not _should_send_macro_stale_research(headline):
+            return 0, 1
+        research_text = (
+            '<b>Macro research only — stale cache</b>\n'
+            f'{headline[:900]}\n'
+            '<i>Headline source stale — not Emergency Macro. Run /refresh quick.</i>'
+        )
         _send(research_text)
         return 0, 1
 

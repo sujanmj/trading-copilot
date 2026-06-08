@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -81,30 +82,33 @@ def main() -> int:
     if LIVE_MARKET_BRIEF_TITLE not in title_full:
         return _fail(f'expected LIVE MARKET BRIEF title, got {title_full!r}')
 
-    fresh_text = format_premarket_telegram(
-        full=False,
-        report=_base_report(fresh_ok=True),
-        slot='premarket_top3',
-    )
-    for needle in (LIVE_MARKET_WATCH_TITLE, 'Live watch:', 'Confirmed', 'Wait for volume', 'no blind entry'):
-        if needle not in fresh_text:
-            return _fail(f'fresh market-hours text missing {needle!r}')
+    with patch('backend.analytics.premarket_conviction._is_after_open', return_value=True), patch(
+        'backend.analytics.premarket_conviction._is_live_market_routing', return_value=True,
+    ):
+        fresh_text = format_premarket_telegram(
+            full=False,
+            report=_base_report(fresh_ok=True),
+            slot='premarket_top3',
+        )
+        for needle in (LIVE_MARKET_WATCH_TITLE, 'Live watch:', 'Confirmed', 'Wait for volume', 'no blind entry'):
+            if needle not in fresh_text:
+                return _fail(f'fresh market-hours text missing {needle!r}')
 
-    stale_text = format_premarket_telegram(
-        full=False,
-        report=_base_report(fresh_ok=False),
-        slot='premarket_top3',
-    )
-    if PREMARKET_INCOMPLETE_HEADER not in stale_text:
-        return _fail('stale market-hours must show DATA REFRESH INCOMPLETE header')
+        stale_text = format_premarket_telegram(
+            full=False,
+            report=_base_report(fresh_ok=False),
+            slot='premarket_top3',
+        )
+        if PREMARKET_INCOMPLETE_HEADER not in stale_text:
+            return _fail('stale market-hours must show DATA REFRESH INCOMPLETE header')
 
-    full_text = format_premarket_telegram(
-        full=True,
-        report=_base_report(fresh_ok=True),
-        slot='premarket_action',
-    )
-    if LIVE_MARKET_BRIEF_TITLE not in full_text:
-        return _fail('/premarket full must use LIVE MARKET BRIEF title')
+        full_text = format_premarket_telegram(
+            full=True,
+            report=_base_report(fresh_ok=True),
+            slot='premarket_action',
+        )
+        if LIVE_MARKET_BRIEF_TITLE not in full_text:
+            return _fail('/premarket full must use LIVE MARKET BRIEF title')
 
     if _live_setup_status({'setup': 'bearish weak', 'score': 40}) != 'Rejected':
         return _fail('bearish setup should be Rejected')

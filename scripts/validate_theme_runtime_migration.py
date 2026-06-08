@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate theme dedupe and category output (Stage 47E)."""
+"""Validate runtime theme schema migration (Stage 47F)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ os.chdir(PROJECT_ROOT)
 
 
 def _fail(msg: str) -> int:
-    print(f'THEME_DEDUPE_CATEGORIES_FAIL: {msg}', file=sys.stderr)
+    print(f'THEME_RUNTIME_MIGRATION_FAIL: {msg}', file=sys.stderr)
     return 1
 
 
@@ -22,20 +22,19 @@ def main() -> int:
     src = (PROJECT_ROOT / 'backend/analytics/theme_baskets.py').read_text(encoding='utf-8')
     for needle in (
         "STAGE = '47F'",
-        'HIDDEN_WHEN_SPLIT',
+        'THEME_SCHEMA_VERSION',
+        'THEME_SCHEMA_MIGRATION_APPLIED',
+        'DEPRECATED_THEME_IDS',
         "'defence_aerospace'",
         "'ports_shipping'",
         "'logistics_warehousing'",
-        "category='Government/Budget'",
-        "'ports': 'ports_shipping'",
-        "'logistics': 'logistics_warehousing'",
     ):
         if needle not in src:
             return _fail(f'theme_baskets.py missing {needle!r}')
 
-    if os.system(f'{sys.executable} scripts/test_theme_dedupe_categories.py') != 0:
-        return _fail('test_theme_dedupe_categories.py failed')
-    print('THEME_DEDUPE_CATEGORIES_OK')
+    if os.system(f'{sys.executable} scripts/test_theme_runtime_migration.py') != 0:
+        return _fail('test_theme_runtime_migration.py failed')
+    print('THEME_RUNTIME_MIGRATION_OK')
     return 0
 
 

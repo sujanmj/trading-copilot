@@ -96,7 +96,7 @@ def main() -> int:
         PREMARKET_WATCHLIST_ONLY_NOTE,
         PREMARKET_OLD_SESSION_NOTE,
         PREMARKET_WAIT_SCANNER_NOTE,
-        'Previous-session movers',
+        'Previous-session movers (research only)',
         'Top watch',
     ):
         if needle == 'Top watch' and needle in text:

@@ -26,7 +26,7 @@ def main() -> int:
         '_is_live_market_routing',
         '_live_setup_status',
         'INDIA_MARKET_HOURS',
-        "'stage': '47E'",
+        "'stage': '47F'",
     ):
         if needle not in src:
             return _fail(f'premarket_conviction.py missing {needle!r}')

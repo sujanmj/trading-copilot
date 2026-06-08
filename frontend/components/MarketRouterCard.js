@@ -6,7 +6,8 @@
   'use strict';
 
   const ROUTER_SOURCE = '/api/debug/market-router';
-  const FETCH_MS = 10000;
+  const FETCH_MS = 15000;
+  const NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.';
 
   let config = {
     getApiBase: () => '',
@@ -139,6 +140,16 @@
     return `${base}${ROUTER_SOURCE}?_ts=${Date.now()}`;
   }
 
+  async function parseJsonResponse(res) {
+    const ct = (res.headers && res.headers.get('content-type')) || '';
+    const text = await res.text();
+    if (!String(ct).toLowerCase().includes('application/json')) {
+      const preview = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+      throw new Error(NON_JSON_ERROR + (preview ? ` Preview: ${preview}` : ''));
+    }
+    return text ? JSON.parse(text) : {};
+  }
+
   async function fetchRouter() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_MS);
@@ -154,9 +165,14 @@
         signal: controller.signal,
       });
       if (!res.ok) throw new Error(`market-router → ${res.status}`);
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       lastReport = data;
       return data;
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        throw new Error('Router request timed out or was cancelled.');
+      }
+      throw err;
     } finally {
       clearTimeout(timer);
     }

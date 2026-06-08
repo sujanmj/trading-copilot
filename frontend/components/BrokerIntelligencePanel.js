@@ -9,7 +9,36 @@
   const COLLECTOR_SOURCE = '/api/debug/broker-app-collector';
   const COVERAGE_SOURCE = '/api/debug/external-source-coverage';
   const COMPARE_SOURCE = '/api/debug/our-vs-broker';
-  const FETCH_MS = 12000;
+  const FETCH_MS = 18000;
+  const NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.';
+
+  async function parseJsonResponse(res, path) {
+    const ct = (res.headers && res.headers.get('content-type')) || '';
+    const text = await res.text();
+    if (!String(ct).toLowerCase().includes('application/json')) {
+      const preview = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+      throw new Error(NON_JSON_ERROR + (preview ? ` Preview: ${preview}` : ''));
+    }
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch (err) {
+      throw new Error(`${NON_JSON_ERROR} ${path}`);
+    }
+  }
+
+  function formatFetchError(err) {
+    if (!err) return 'Unknown error';
+    if (err.name === 'AbortError') return 'Broker request timed out or was cancelled.';
+    return err.message || String(err);
+  }
+
+  async function fetchBrokerJson(path, headers, signal) {
+    const base = (config.getApiBase() || '').replace(/\/$/, '');
+    const url = `${base}${path}?_ts=${Date.now()}`;
+    const res = await fetch(url, { headers, cache: 'no-store', signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${path}`);
+    return parseJsonResponse(res, path);
+  }
 
   let config = {
     getApiBase: () => '',
@@ -90,11 +119,13 @@
   }
 
   async function fetchJson(path) {
-    const base = config.getApiBase() || '';
-    const url = `${base.replace(/\/$/, '')}${path}${path.includes('?') ? '&' : '?'}_ts=${Date.now()}`;
-    const res = await fetch(url, { headers: config.getHeaders(), cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${path}`);
-    return res.json();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_MS);
+    try {
+      return await fetchBrokerJson(path, config.getHeaders(), controller.signal);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   function renderSourceTable(sources) {
@@ -304,27 +335,31 @@
     const host = targetEl || document.getElementById('brokersMainContent');
     if (!host) return;
     host.innerHTML = '<div class="loading">⏳ Loading broker intelligence…</div>';
-    try {
+    const loadOnce = async () => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), FETCH_MS);
-      const base = (config.getApiBase() || '').replace(/\/$/, '');
-      const headers = config.getHeaders();
-      const ts = Date.now();
-      const [dashRes, cmpRes, collectorRes, coverageRes] = await Promise.all([
-        fetch(`${base}${INTEL_SOURCE}?_ts=${ts}`, { headers, cache: 'no-store', signal: controller.signal }),
-        fetch(`${base}${COMPARE_SOURCE}?_ts=${ts}`, { headers, cache: 'no-store', signal: controller.signal }),
-        fetch(`${base}${COLLECTOR_SOURCE}?_ts=${ts}`, { headers, cache: 'no-store', signal: controller.signal }),
-        fetch(`${base}${COVERAGE_SOURCE}?_ts=${ts}`, { headers, cache: 'no-store', signal: controller.signal }),
-      ]);
-      clearTimeout(timer);
-      const dashboard = await dashRes.json();
-      const comparison = cmpRes.ok ? await cmpRes.json() : null;
-      const collector = collectorRes.ok ? await collectorRes.json() : null;
-      const coverage = coverageRes.ok ? await coverageRes.json() : null;
-      if (dashboard.ok === false) throw new Error(dashboard.error || 'broker-intelligence failed');
-      renderInto(host, dashboard, comparison, collector, coverage);
+      try {
+        const headers = config.getHeaders();
+        const [dashboard, comparison, collector, coverage] = await Promise.all([
+          fetchBrokerJson(INTEL_SOURCE, headers, controller.signal),
+          fetchBrokerJson(COMPARE_SOURCE, headers, controller.signal).catch(() => null),
+          fetchBrokerJson(COLLECTOR_SOURCE, headers, controller.signal).catch(() => null),
+          fetchBrokerJson(COVERAGE_SOURCE, headers, controller.signal).catch(() => null),
+        ]);
+        if (dashboard.ok === false) throw new Error(dashboard.error || 'broker-intelligence failed');
+        renderInto(host, dashboard, comparison, collector, coverage);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    try {
+      await loadOnce();
     } catch (err) {
-      host.innerHTML = `<div class="panel-error-card"><strong>Broker intelligence</strong>${escapeHtml(err.message || err)}</div>`;
+      try {
+        await loadOnce();
+      } catch (retryErr) {
+        host.innerHTML = `<div class="panel-error-card"><strong>Broker intelligence</strong><p>${escapeHtml(formatFetchError(retryErr))}</p></div>`;
+      }
     }
   }
 

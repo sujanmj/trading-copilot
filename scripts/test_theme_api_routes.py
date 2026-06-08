@@ -26,7 +26,7 @@ def _api_list():
     data = load_theme_baskets()
     return {
         'ok': True,
-        'stage': data.get('stage', '47E'),
+        'stage': data.get('stage', '47F'),
         'generated_at': data.get('generated_at'),
         'cache_refreshed_at': data.get('cache_refreshed_at'),
         'baskets': list_all_baskets(),

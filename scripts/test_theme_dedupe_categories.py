@@ -35,11 +35,11 @@ def main() -> int:
         tb.CATALYST_LOG_FILE = Path(tmp) / 'theme_catalyst_log.jsonl'
         tb.bootstrap_theme_baskets(force=True)
 
-        hidden = tb._hidden_from_display_ids()
-        if 'ports_logistics' not in hidden:
-            return _fail('ports_logistics should be hidden when split baskets exist')
-        if 'banking_psu_nbfc' not in hidden:
-            return _fail('banking_psu_nbfc should be hidden when finance split exists')
+        all_ids = tb._all_basket_ids()
+        if 'ports_logistics' in all_ids:
+            return _fail('ports_logistics should not remain after 47F bootstrap')
+        if 'banking_psu_nbfc' in all_ids:
+            return _fail('banking_psu_nbfc should not remain after 47F bootstrap')
 
         list_text = tb.format_theme_list_telegram()
         if 'Ports / Logistics' in list_text:

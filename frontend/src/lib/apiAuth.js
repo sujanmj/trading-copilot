@@ -97,3 +97,5 @@ export function setAstraEdgeApiKey(key) {
   } catch (_) { /* ignore */ }
   if (typeof window !== 'undefined') window.location.reload()
 }
+
+export { parseApiJsonResponse, fetchApiJson, isJsonContentType } from './apiTarget.js'

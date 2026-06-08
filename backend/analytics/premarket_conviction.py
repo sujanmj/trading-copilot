@@ -1,8 +1,8 @@
 """
-Premarket conviction pipeline (Stage 47E).
+Premarket conviction pipeline (Stage 47F).
 
 Builds premarket_conviction_report.json and Telegram message formatters.
-Research-only wording — watch for entry, confirm after 9:15 (before open), no blind entry.
+Research-only wording — watch for entry before open; confirmed setup after 9:15, no blind entry.
 Weekend/holiday/research mode uses closed-market watchlist wording and manual refresh hints.
 Hard stale lock (07:45–09:15) suppresses live conviction when feeds are stale.
 """
@@ -30,7 +30,14 @@ REQUIRED_PHRASES_WEEKEND = (
     'fresh scan required before market open',
     'confirm on next trading session after 9:15',
 )
-REQUIRED_PHRASES_OPEN = ('no blind entry', 'watch for entry')
+REQUIRED_PHRASES_OPEN = (
+    'no blind entry',
+    'watch for entry',
+    'confirmation already active',
+    'confirmed setup',
+)
+OPEN_CONFIRMED_ACTION = 'Action: confirmed setup — wait for entry discipline, pullback/risk control'
+OPEN_WATCH_ACTION = 'Action: watch for entry — confirmation already active'
 
 WEEKEND_RESEARCH_TOP_TITLE = '🧪 WEEKEND RESEARCH WATCHLIST (NOT PREMARKET TOP SETUPS)'
 WEEKEND_RESEARCH_FULL_TITLE = '🧪 WEEKEND RESEARCH BRIEF'
@@ -339,11 +346,10 @@ def _build_setup_candidates(
         else:
             setup = f"{direction} scanner signal"
             score = min(95, 55 + abs(chg) * 2 + vol_r * 4)
-        reason2 = (
-            'Wait for volume confirmation'
-            if _is_after_open()
-            else 'Watch for entry — confirm after 9:15 with volume'
-        )
+        if _is_after_open():
+            reason2 = OPEN_CONFIRMED_ACTION if score >= 70 else OPEN_WATCH_ACTION
+        else:
+            reason2 = 'Watch for entry — confirm after 9:15 with volume'
         candidates.append(_annotate_setup_row({
             'ticker': ticker,
             'setup': setup,
@@ -583,11 +589,14 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     hard_locked, hard_header, hard_stale_keys, riskoff_override = premarket_hard_stale_lock(
         now=now, try_refresh=False,
     )
-    fresh_ok, fresh_header, stale_keys = premarket_freshness_state(now=now, try_refresh=False)
+    fresh_ok, fresh_header, stale_keys, non_critical_stale = premarket_freshness_state(
+        now=now, try_refresh=False,
+    )
     if hard_locked:
         fresh_ok = False
         fresh_header = hard_header
         stale_keys = hard_stale_keys or stale_keys
+        non_critical_stale = []
 
     bullish_sectors, bearish_sectors = _sector_cues(intel)
     setups = _build_setup_candidates(scanner, watchlist, final_conf, intel)
@@ -616,7 +625,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '47E',
+        'stage': '47F',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
         'weekend_research_mode': weekend_research,
@@ -627,6 +636,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
         'freshness_ok': fresh_ok,
         'freshness_header': fresh_header if not fresh_ok else '',
         'stale_keys': stale_keys,
+        'non_critical_stale_keys': non_critical_stale,
         'hard_stale_lock': hard_locked,
         'riskoff_premarket': riskoff_override,
         'previous_session_movers': previous_session_movers,
@@ -710,7 +720,8 @@ def _action_wording(
         ]
     if _is_after_open(now):
         return [
-            '<b>Rule:</b> Market open — use Confirmed / Rejected / Wait for volume.',
+            '<b>Rule:</b> Market open — confirmed setup / watch for entry discipline.',
+            f'<i>{OPEN_WATCH_ACTION}</i>',
             '<i>No blind entry · Confirmed / Rejected / Wait for volume.</i>',
         ]
     return [
@@ -834,6 +845,7 @@ def format_premarket_telegram(
     mode_info = data.get('market_mode') or {}
     fresh_ok = data.get('freshness_ok', True)
     fresh_header = data.get('freshness_header') or ''
+    non_critical_stale = data.get('non_critical_stale_keys') or []
     hard_stale_lock = bool(data.get('hard_stale_lock'))
     riskoff_premarket = bool(data.get('riskoff_premarket'))
     previous_session_movers = data.get('previous_session_movers') or []
@@ -871,6 +883,9 @@ def format_premarket_telegram(
             if riskoff_premarket:
                 lines.append(f'<b>{PREMARKET_RISKOFF_HEADER}</b>')
         lines.append('')
+    elif fresh_ok and non_critical_stale:
+        lines.append(f'<i>Context partially stale: {", ".join(non_critical_stale)}</i>')
+        lines.append('')
     if stale_msg:
         lines.append(f'<i>{stale_msg}</i>')
         lines.append('')
@@ -884,6 +899,9 @@ def format_premarket_telegram(
     if hard_stale_lock:
         lines.append('<b>Previous-session movers (research only):</b>')
         display_setups = (previous_session_movers or setups)[:3 if not full else 5]
+    elif not fresh_ok and fresh_header:
+        lines.append('<b>Previous-session / stale research only:</b>')
+        display_setups = (setups)[:3 if not full else 5]
     else:
         watch_header = '<b>Live watch:</b>' if live_market and fresh_ok else '<b>Top watch:</b>'
         lines.append(watch_header)
@@ -892,10 +910,14 @@ def format_premarket_telegram(
 
     if display_setups:
         for idx, setup in enumerate(display_setups, 1):
-            reasons = setup.get('reasons') or []
+            row = dict(setup)
+            if not fresh_ok and fresh_header and not hard_stale_lock:
+                row['setup'] = 'stale research only'
+                row['score'] = min(int(row.get('score', 50)), 50)
+            reasons = row.get('reasons') or []
             why = reasons[0] if reasons else 'Setup candidate'
             if live_market and fresh_ok and not hard_stale_lock:
-                status = _live_setup_status(setup)
+                status = _live_setup_status(row)
                 why2 = f'{status} — no blind entry'
             elif live_market:
                 why2 = 'Wait for volume confirmation'
@@ -905,7 +927,7 @@ def format_premarket_telegram(
                     else 'Confirm only if price strength + volume + sector support'
                 )
             lines.extend([
-                f"{idx}. <b>{setup.get('ticker')}</b> — {setup.get('setup')} · Score {setup.get('score', '—')}",
+                f"{idx}. <b>{row.get('ticker')}</b> — {row.get('setup')} · Score {row.get('score', '—')}",
                 f"   Why: {why}",
                 f"   {why2}",
             ])
@@ -978,7 +1000,18 @@ def _enforce_wording(
     if weekend_research:
         return text
     if _is_after_open(now):
-        text = re.sub(r'confirm after 9:15', 'Wait for volume confirmation', text, flags=re.IGNORECASE)
+        text = re.sub(
+            r'confirm after 9:15',
+            'confirmation already active',
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r'Watch for entry — confirm after 9:15 with volume',
+            OPEN_WATCH_ACTION,
+            text,
+            flags=re.IGNORECASE,
+        )
     return text
 
 
@@ -988,7 +1021,7 @@ def send_scheduled_premarket(slot: str, *, send_fn: Optional[Callable[[str], boo
 
     now = datetime.now(IST)
     try_refresh = now.hour == 8 and now.minute == 30
-    fresh_ok, _header, _keys = premarket_freshness_state(now=now, try_refresh=try_refresh)
+    fresh_ok, _header, _keys, _non_crit = premarket_freshness_state(now=now, try_refresh=try_refresh)
 
     report = build_premarket_conviction_report(persist=True)
     if not fresh_ok and try_refresh:

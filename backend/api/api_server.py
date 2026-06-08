@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '47E',
+        'stage': '47F',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
@@ -2821,6 +2821,19 @@ def api_calibration():
 def api_journal(limit: int = Query(21, ge=1, le=60)):
     from backend.analytics.daily_journal_engine import build_intelligence_journal
     return sanitize_json_value(build_intelligence_journal(limit=limit, persist_index=False))
+
+
+@app.api_route('/api/{full_path:path}', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])
+def api_not_found(full_path: str):
+    """JSON 404 for unknown API routes — avoids HTML responses to GUI clients."""
+    return JSONResponse(
+        status_code=404,
+        content={
+            'ok': False,
+            'error': 'not_found',
+            'path': f'/api/{full_path}',
+        },
+    )
 
 
 def main():

@@ -29,6 +29,10 @@ PREMARKET_WAIT_SCANNER_NOTE = 'Wait for fresh scanner after 09:15'
 PREMARKET_RISKOFF_HEADER = 'Risk-off premarket'
 PREMARKET_SCORE_CAP = 65
 PREMARKET_HARD_STALE_SCORE_CAP = 50
+PREMARKET_INCOMPLETE_SCORE_CAP = 50
+
+CRITICAL_PREMARKET_KEYS = frozenset({'scanner', 'premarket', 'news'})
+CRITICAL_MARKET_HOURS_KEYS = frozenset({'scanner', 'market'})
 
 SOURCE_FILES = {
     'scanner': 'scanner_data.json',
@@ -143,6 +147,34 @@ def _is_market_hours(now: Optional[datetime] = None) -> bool:
 def _is_premarket_window(now: Optional[datetime] = None) -> bool:
     from backend.utils.market_hours import get_market_period
     return get_market_period(now) in ('pre_market', 'preopen')
+
+
+def _is_india_market_hours_mode(now: Optional[datetime] = None) -> bool:
+    now = now or _now_ist()
+    try:
+        from backend.analytics.market_calendar_router import get_india_telegram_mode
+        mode = str((get_india_telegram_mode() or {}).get('market_mode') or '')
+        return 'INDIA_MARKET_HOURS' in mode and now.time() >= time(9, 15)
+    except Exception:
+        return _is_market_hours(now) and now.time() >= time(9, 15)
+
+
+def _split_critical_stale_keys(
+    stale_keys: list[str],
+    *,
+    now: Optional[datetime] = None,
+) -> tuple[list[str], list[str]]:
+    """Return (critical_stale, non_critical_stale) per India session mode."""
+    now = now or _now_ist()
+    if _is_india_market_hours_mode(now):
+        critical_set = CRITICAL_MARKET_HOURS_KEYS
+    elif _is_premarket_window(now) or is_premarket_hard_stale_window(now):
+        critical_set = CRITICAL_PREMARKET_KEYS
+    else:
+        critical_set = CRITICAL_PREMARKET_KEYS | CRITICAL_MARKET_HOURS_KEYS
+    critical = [k for k in stale_keys if k in critical_set]
+    non_critical = [k for k in stale_keys if k not in critical_set]
+    return critical, non_critical
 
 
 def newest_article_age_seconds(news: dict) -> Optional[int]:
@@ -268,18 +300,20 @@ def check_core_freshness(
     """
     now = now or _now_ist()
     stale_keys = _collect_premarket_stale_keys(now)
+    critical, non_critical = _split_critical_stale_keys(stale_keys, now=now)
 
-    if not stale_keys:
-        return True, '', []
+    if not critical:
+        return True, '', non_critical
 
-    _log('ALERT_FRESHNESS_STALE', f'category={category} keys={",".join(stale_keys)}')
+    _log('ALERT_FRESHNESS_STALE', f'category={category} keys={",".join(critical)}')
     if attempt_safe_refresh():
         stale_keys_after = _collect_premarket_stale_keys(now)
-        if not stale_keys_after:
+        critical_after, non_critical_after = _split_critical_stale_keys(stale_keys_after, now=now)
+        if not critical_after:
             _log('ALERT_FRESHNESS_OK', 'refresh recovered stale feeds')
-            return True, '', []
+            return True, '', non_critical_after
 
-    return False, WATCH_ONLY_MESSAGE, stale_keys
+    return False, WATCH_ONLY_MESSAGE, critical
 
 
 def premarket_hard_stale_lock(
@@ -398,30 +432,50 @@ def gate_alert_dispatch(category: str) -> Tuple[bool, str]:
     return False, msg
 
 
-def premarket_freshness_state(*, now: Optional[datetime] = None, try_refresh: bool = False) -> Tuple[bool, str, list[str]]:
+def premarket_freshness_state(
+    *,
+    now: Optional[datetime] = None,
+    try_refresh: bool = False,
+) -> Tuple[bool, str, list[str], list[str]]:
     """
-    Premarket freshness check with optional safe refresh (Stage 47D).
+    Premarket freshness check with optional safe refresh (Stage 47F).
 
-    Returns (ok, header_or_message, stale_keys).
+    Returns (ok, header_or_message, critical_stale_keys, non_critical_stale_keys).
     """
     now = now or _now_ist()
     locked, header, keys, _riskoff = premarket_hard_stale_lock(now=now, try_refresh=try_refresh)
     if locked:
-        return False, header, keys
+        return False, header, keys, []
     if try_refresh:
         attempt_safe_refresh()
-    ok, msg, keys = check_core_freshness(category='PRE_MARKET', now=now)
+    ok, _msg, keys = check_core_freshness(category='PRE_MARKET', now=now)
+    all_stale = _collect_premarket_stale_keys(now)
+    critical, non_critical = _split_critical_stale_keys(all_stale, now=now)
     if ok:
-        return True, '', []
-    return False, PREMARKET_INCOMPLETE_HEADER, keys
+        return True, '', [], non_critical
+    return False, PREMARKET_INCOMPLETE_HEADER, critical or keys, non_critical
 
 
-def cap_premarket_scores(setups: list[dict], *, cap: int = PREMARKET_SCORE_CAP) -> list[dict]:
-    """Cap top setup scores when freshness is incomplete."""
+def cap_premarket_scores(
+    setups: list[dict],
+    *,
+    cap: int = PREMARKET_INCOMPLETE_SCORE_CAP,
+) -> list[dict]:
+    """Cap and relabel setups when freshness is incomplete."""
     capped: list[dict] = []
     for setup in setups:
         row = dict(setup)
+        setup_text = str(row.get('setup', '')).lower()
+        if (
+            'bullish' in setup_text
+            or 'scanner signal' in setup_text
+            or 'high conviction' in setup_text
+            or 'ultra' in setup_text
+            or 'strong' in setup_text
+        ):
+            row['setup'] = 'stale research only'
         row['score'] = min(int(row.get('score', 50)), cap)
         row['freshness_capped'] = True
+        row['tier_cap'] = 'not_top3'
         capped.append(row)
     return capped

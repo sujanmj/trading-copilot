@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate /status freshness detail lines (Stage 47E)."""
+"""Validate /status freshness line cleanup (Stage 47F)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ os.chdir(PROJECT_ROOT)
 
 
 def _fail(msg: str) -> int:
-    print(f'STATUS_FRESHNESS_DETAILS_FAIL: {msg}', file=sys.stderr)
+    print(f'STATUS_FRESHNESS_CLEANUP_FAIL: {msg}', file=sys.stderr)
     return 1
 
 
@@ -22,18 +22,16 @@ def main() -> int:
     src = (PROJECT_ROOT / 'backend/telegram/response_format.py').read_text(encoding='utf-8')
     for needle in (
         'AstraEdge 47F',
-        '_format_feed_freshness_line',
-        'Latest scanner:',
-        'Latest news:',
-        'Latest theme cache:',
-        'Market mode:',
+        '_parse_status_timestamp',
+        'age ',
+        "freshness = 'fresh'",
     ):
         if needle not in src:
             return _fail(f'response_format.py missing {needle!r}')
 
-    if os.system(f'{sys.executable} scripts/test_status_freshness_details.py') != 0:
-        return _fail('test_status_freshness_details.py failed')
-    print('STATUS_FRESHNESS_DETAILS_OK')
+    if os.system(f'{sys.executable} scripts/test_status_freshness_cleanup.py') != 0:
+        return _fail('test_status_freshness_cleanup.py failed')
+    print('STATUS_FRESHNESS_CLEANUP_OK')
     return 0
 
 

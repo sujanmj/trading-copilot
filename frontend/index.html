@@ -2809,6 +2809,39 @@
     return headers
   }
 
+  const API_NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.'
+
+  async function astraParseJsonResponse(res, url) {
+    const ct = (res.headers && res.headers.get('content-type')) || ''
+    const text = await res.text()
+    if (!String(ct).toLowerCase().includes('application/json')) {
+      const preview = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+      throw new Error(API_NON_JSON_ERROR + (preview ? ' Preview: ' + preview : ''))
+    }
+    try {
+      return text ? JSON.parse(text) : {}
+    } catch (e) {
+      throw new Error(API_NON_JSON_ERROR + (url ? ' ' + url : ''))
+    }
+  }
+
+  async function astraFetchJson(url, options, timeoutMs) {
+    const opts = Object.assign({ headers: astraApiHeaders(), cache: 'no-store' }, options || {})
+    const ms = timeoutMs || FETCH_TIMEOUT_MS
+    try {
+      const res = typeof fetchWithTimeout === 'function'
+        ? await fetchWithTimeout(url, opts, ms)
+        : await fetch(url, opts)
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url)
+      return await astraParseJsonResponse(res, url)
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        throw new Error('Request timed out or was cancelled.')
+      }
+      throw err
+    }
+  }
+
   async function astraFetchFeed(url) {
     const opts = { headers: astraApiHeaders(), cache: 'no-store' }
     if (typeof fetchWithTimeout === 'function') {
@@ -3163,6 +3196,7 @@
     const el = document.getElementById(PANEL_TAB_MAP[tabId] || ('tab-' + tabId))
     if (!el) return
     el.innerHTML = aihubTabToolbarHtml(tabId, true) + '<div class="loading">⏳ Loading tab…</div>'
+    el.dataset.aihubLoadError = ''
     wireAihubTabRefreshButtons()
   }
 
@@ -3348,9 +3382,7 @@
 
       async function fetchJson(url) {
         try {
-          const res = await astraFetchFeed(url)
-          if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
-          return await res.json()
+          return await astraFetchJson(url)
         } catch (e) {
           return { ok: false, error: (e && e.message) || String(e) }
         }

@@ -35,6 +35,7 @@ def main() -> int:
         '47C': (47, ord('C')),
         '47D': (47, ord('D')),
         '47E': (47, ord('E')),
+        '47F': (47, ord('F')),
         '48A': (48, ord('A')),
     }
     for stage, expected in cases.items():
@@ -61,6 +62,8 @@ def main() -> int:
         return _fail('47D should pass minimum')
     if not _stage_at_least_46e('47E'):
         return _fail('47E should pass minimum')
+    if not _stage_at_least_46e('47F'):
+        return _fail('47F should pass minimum')
     if not _stage_at_least_46e('48A'):
         return _fail('48A should pass minimum')
     if _stage_at_least_46e('46D'):
@@ -121,6 +124,12 @@ def main() -> int:
     err = _validate_build_info(payload_47e)
     if err:
         return _fail(f'47E build-info should pass strict validation, got: {err}')
+
+    payload_47f = dict(payload_47a)
+    payload_47f['stage'] = '47F'
+    err = _validate_build_info(payload_47f)
+    if err:
+        return _fail(f'47F build-info should pass strict validation, got: {err}')
 
     bad = dict(payload_47a)
     bad['stage'] = '46D'

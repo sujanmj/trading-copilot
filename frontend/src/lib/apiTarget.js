@@ -113,3 +113,45 @@ export function logApiTarget(base) {
   const mode = getApiMode(resolved)
   console.log('[API_TARGET] resolved=' + resolved + ' mode=' + mode)
 }
+
+const NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.'
+
+export function isJsonContentType(contentType) {
+  return String(contentType || '').toLowerCase().includes('application/json')
+}
+
+/** Safe JSON parser — checks content-type and avoids tab crash on HTML responses. */
+export async function parseApiJsonResponse(res, url = '') {
+  const ct = (res.headers && res.headers.get) ? res.headers.get('content-type') : ''
+  const text = await res.text()
+  if (!isJsonContentType(ct)) {
+    const preview = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+    const detail = preview ? `${NON_JSON_ERROR} Preview: ${preview}` : NON_JSON_ERROR
+    throw new Error(detail)
+  }
+  try {
+    return text ? JSON.parse(text) : {}
+  } catch (err) {
+    const preview = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+    throw new Error(`${NON_JSON_ERROR} ${url ? url + ' ' : ''}${preview}`)
+  }
+}
+
+export async function fetchApiJson(url, options = {}, timeoutMs = 18000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal })
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${url}`)
+    }
+    return await parseApiJsonResponse(res, url)
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new Error('Request timed out or was cancelled.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}

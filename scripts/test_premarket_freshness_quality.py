@@ -35,7 +35,7 @@ def main() -> int:
     )
 
     with patch('backend.orchestration.alert_freshness_gate.check_core_freshness', return_value=(False, 'stale', ['scanner'])):
-        ok, header, keys = premarket_freshness_state()
+        ok, header, keys, _non_crit = premarket_freshness_state()
     if ok:
         return _fail('stale premarket should not be ok')
     if PREMARKET_INCOMPLETE_HEADER not in header:
