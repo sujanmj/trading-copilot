@@ -442,57 +442,43 @@ def full_snapshot_consistency_warning() -> str | None:
     return None
 
 
+def _canonical_outcome_stats() -> dict[str, Any]:
+    from backend.storage.outcome_resolver import get_canonical_outcome_stats
+
+    return get_canonical_outcome_stats()
+
+
 def memory_outcome_warning(stats: dict[str, Any], overall: dict[str, Any]) -> str | None:
-    predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
-    outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
-    if predictions > 0 and outcomes == 0:
+    canonical = _canonical_outcome_stats()
+    resolved_total = int(canonical.get('resolved_total') or 0)
+    predictions_tracked = int(canonical.get('predictions_tracked') or 0)
+    if predictions_tracked <= 0:
+        predictions_tracked = int(stats.get('predictions') or overall.get('total_predictions') or 0)
+    if predictions_tracked > 0 and resolved_total == 0:
         return 'Do not trust win-rate/calibration until outcomes resolve.'
     return None
 
 
 def memory_outcome_status_lines(stats: dict[str, Any], overall: dict[str, Any]) -> list[str]:
     """Resolver status lines for /memory when outcomes are still unresolved."""
-    predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
-    outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
-    if predictions <= 0 or outcomes > 0:
+    canonical = _canonical_outcome_stats()
+    resolved_total = int(canonical.get('resolved_total') or 0)
+    predictions_tracked = int(canonical.get('predictions_tracked') or 0)
+    if predictions_tracked <= 0:
+        predictions_tracked = int(stats.get('predictions') or overall.get('total_predictions') or 0)
+    if predictions_tracked <= 0 or resolved_total > 0:
         return []
     from backend.storage.outcome_resolver import format_outcome_resolver_status_lines
 
     return format_outcome_resolver_status_lines()
 
 
-def _load_memory_calibration_stats() -> tuple[dict[str, Any], dict[str, Any], bool]:
-    """Return (stats, overall, memory_available) from market memory dashboard cache."""
-    try:
-        from backend.telegram.lazy_command_runner import MEMORY_CACHE_FILE, _load_json
-
-        if not MEMORY_CACHE_FILE.is_file():
-            return {}, {}, False
-        dash = _load_json(MEMORY_CACHE_FILE)
-        if not isinstance(dash, dict):
-            return {}, {}, False
-        stats = dash.get('stats') if isinstance(dash.get('stats'), dict) else {}
-        learning = dash.get('learning') if isinstance(dash.get('learning'), dict) else {}
-        overall = learning.get('overall') if isinstance(learning.get('overall'), dict) else {}
-        return stats, overall, True
-    except Exception:
-        return {}, {}, False
-
-
 def calibration_outcomes_unresolved(
     stats: dict[str, Any] | None = None,
     overall: dict[str, Any] | None = None,
 ) -> bool:
-    memory_available = True
-    if stats is None and overall is None:
-        stats, overall, memory_available = _load_memory_calibration_stats()
-    else:
-        stats = stats or {}
-        overall = overall or {}
-    if not memory_available and not stats and not overall:
-        return False
-    outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
-    return outcomes == 0
+    del stats, overall
+    return int(_canonical_outcome_stats().get('resolved_total') or 0) == 0
 
 
 def calibration_unresolved_message(stats: dict[str, Any] | None = None, overall: dict[str, Any] | None = None) -> list[str]:
@@ -510,12 +496,8 @@ def get_calibration_resolved_count(
     stats: dict[str, Any] | None = None,
     overall: dict[str, Any] | None = None,
 ) -> int:
-    if stats is None and overall is None:
-        stats, overall, _ = _load_memory_calibration_stats()
-    else:
-        stats = stats or {}
-        overall = overall or {}
-    return int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
+    del stats, overall
+    return int(_canonical_outcome_stats().get('resolved_total') or 0)
 
 
 def get_calibration_mode(
@@ -543,14 +525,10 @@ def calibration_warmup_message(
     stats: dict[str, Any] | None = None,
     overall: dict[str, Any] | None = None,
 ) -> list[str]:
-    from backend.storage.outcome_resolver import compute_signal_quality_metrics
-
-    resolved = get_calibration_resolved_count(stats, overall)
-    metrics = compute_signal_quality_metrics()
-    pending = int(metrics.get('pending') or 0)
-    if pending <= 0 and stats is not None:
-        predictions = int((stats or {}).get('predictions') or 0)
-        pending = max(0, predictions - resolved)
+    del stats, overall
+    canonical = _canonical_outcome_stats()
+    resolved = int(canonical.get('resolved_total') or 0)
+    pending = int(canonical.get('pending_total') or 0)
     return [
         'Calibration warming up — sample too small.',
         f'Resolved outcomes: {resolved}',
@@ -563,20 +541,19 @@ def calibration_ready_message(
     stats: dict[str, Any] | None = None,
     overall: dict[str, Any] | None = None,
 ) -> list[str]:
-    from backend.storage.outcome_resolver import compute_signal_quality_metrics
-
-    resolved = get_calibration_resolved_count(stats, overall)
-    metrics = compute_signal_quality_metrics()
-    pending = int(metrics.get('pending') or 0)
+    del stats, overall
+    canonical = _canonical_outcome_stats()
+    resolved = int(canonical.get('resolved_total') or 0)
+    pending = int(canonical.get('pending_total') or 0)
     lines = [
         f'Resolved outcomes: {resolved}',
         f'Pending outcomes: {pending}',
-        f'Hit rate: {_format_pct(metrics.get("hit_rate"))}%',
-        f'Bullish hit rate: {_format_pct(metrics.get("bullish_hit_rate"))}%',
-        f'Bearish/rejection hit rate: {_format_pct(metrics.get("bearish_hit_rate"))}%',
-        f'Neutral count: {int(metrics.get("neutral") or 0)}',
+        f'Hit rate: {_format_pct(canonical.get("hit_rate"))}%',
+        f'Bullish hit rate: {_format_pct(canonical.get("bullish_hit_rate"))}%',
+        f'Bearish/rejection hit rate: {_format_pct(canonical.get("bearish_hit_rate"))}%',
+        f'Neutral count: {int(canonical.get("neutral") or 0)}',
     ]
-    last_resolved = metrics.get('last_resolved_at')
+    last_resolved = canonical.get('last_resolved_at')
     if last_resolved:
         lines.append(f'Last resolved: {last_resolved}')
     return lines

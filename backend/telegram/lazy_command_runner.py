@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from backend.storage.data_paths import get_data_path
 from backend.utils.config import DATA_DIR
 
 STAGE_MARKER = 'TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL'
@@ -75,7 +76,7 @@ LIVE_SMOKE_REPORT = DATA_DIR / 'live_system_smoke_latest.json'
 LOCAL_READINESS_REPORT = DATA_DIR / 'local_system_readiness_latest.json'
 E2E_REPORT = DATA_DIR / 'gui_e2e_latest.json'
 DAILY_PACK_FILE = DATA_DIR / 'daily_report_pack_latest.json'
-MEMORY_CACHE_FILE = DATA_DIR / 'market_memory_dashboard_cache.json'
+MEMORY_CACHE_FILE = get_data_path('market_memory_dashboard_cache.json')
 
 
 def _now_iso() -> str:
@@ -314,22 +315,24 @@ def run_memory_only() -> dict[str, Any]:
     learning = dashboard.get('learning') or {}
     overall = learning.get('overall') or {}
     latest_outcomes = dashboard.get('latest_outcomes') or []
-    predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
-    outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
-    wins = int(overall.get('wins') or 0)
-    losses = int(overall.get('losses') or 0)
-    unresolved = int(overall.get('unresolved_predictions') or 0)
+    from backend.analytics.unified_decision_engine import get_calibration_mode
+    from backend.storage.outcome_resolver import get_canonical_outcome_stats
+
+    canonical = get_canonical_outcome_stats()
+    predictions = int(canonical.get('predictions_tracked') or 0)
+    outcomes = int(canonical.get('resolved_total') or 0)
+    unresolved = int(canonical.get('pending_total') or 0)
+    if predictions <= 0:
+        predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
     if unresolved <= 0 and predictions > outcomes:
         unresolved = predictions - outcomes
     cache_age_txt = format_cache_age_label(
         _cache_age_minutes(MEMORY_CACHE_FILE),
         timestamp=file_timestamp_iso(MEMORY_CACHE_FILE),
     )
-    from backend.analytics.unified_decision_engine import get_calibration_mode
-    from backend.storage.outcome_resolver import compute_signal_quality_metrics
 
-    calib_mode = get_calibration_mode(stats, overall)
-    sq_metrics = compute_signal_quality_metrics()
+    calib_mode = get_calibration_mode()
+    sq_metrics = canonical
     lines = ['<b>🧠 Market memory</b>']
     if calib_mode == 'unresolved':
         from backend.analytics.unified_decision_engine import memory_outcome_status_lines, memory_outcome_warning
@@ -355,8 +358,9 @@ def run_memory_only() -> dict[str, Any]:
         ])
         lines.extend(block)
     elif calib_mode == 'warmup':
-        pending = int(sq_metrics.get('pending') or unresolved)
+        pending = int(sq_metrics.get('pending_total') or unresolved)
         lines.extend([
+            f'Predictions tracked: {predictions}',
             'Calibration warming up — sample too small.',
             f'Resolved outcomes: {outcomes}',
             f'Pending outcomes: {pending}',
@@ -372,7 +376,7 @@ def run_memory_only() -> dict[str, Any]:
         else:
             lines.append('• No recent outcomes in cache.')
     else:
-        pending = int(sq_metrics.get('pending') or unresolved)
+        pending = int(sq_metrics.get('pending_total') or unresolved)
         hit_rate = sq_metrics.get('hit_rate')
         bull_rate = sq_metrics.get('bullish_hit_rate')
         bear_rate = sq_metrics.get('bearish_hit_rate')
@@ -385,6 +389,7 @@ def run_memory_only() -> dict[str, Any]:
             return f'{val * 100:.1f}'
 
         lines.extend([
+            f'Predictions tracked: {predictions}',
             f'Resolved outcomes: {outcomes}',
             f'Pending outcomes: {pending}',
             f'Hit rate: {_pct(hit_rate)}%',
@@ -403,6 +408,62 @@ def run_memory_only() -> dict[str, Any]:
         else:
             lines.append('• No recent outcomes in cache.')
     return _runner_result('memory', text='\n'.join(lines), payload=dashboard)
+
+
+def format_outcomes_status_text() -> str:
+    from backend.storage.outcome_resolver import get_canonical_outcome_stats
+
+    stats = get_canonical_outcome_stats()
+    last_run = stats.get('last_run') or 'none'
+    return '\n'.join([
+        '<b>Outcome resolver status</b>',
+        f"resolved_total={int(stats.get('resolved_total') or 0)}",
+        f"pending_total={int(stats.get('pending_total') or 0)}",
+        f"skipped_missing_reference={int(stats.get('skipped_missing_reference') or 0)}",
+        f"skipped_missing_evaluation={int(stats.get('skipped_missing_evaluation') or 0)}",
+        f'last_run={last_run}',
+        f"errors={int(stats.get('errors') or 0)}",
+        f"data_root={stats.get('data_root') or 'unknown'}",
+    ])
+
+
+def run_resolve_outcomes_admin() -> dict[str, Any]:
+    from backend.storage.outcome_resolver import run_outcome_resolver_once
+
+    try:
+        summary = run_outcome_resolver_once(refresh_cache=True)
+    except Exception as exc:
+        return _runner_result(
+            'resolve_outcomes',
+            text=(
+                'OUTCOME_RESOLVER_RUN_OK\n'
+                'pending_before=0\n'
+                'resolved_new=0\n'
+                'pending_after=0\n'
+                'skipped_missing_reference=0\n'
+                'skipped_missing_evaluation=0\n'
+                f'errors=1\n'
+                f'error_detail={str(exc)[:160]}'
+            ),
+            payload={},
+            ok=False,
+        )
+
+    lines = [
+        'OUTCOME_RESOLVER_RUN_OK',
+        f"pending_before={int(summary.get('pending_before') or 0)}",
+        f"resolved_new={int(summary.get('resolved_new') or 0)}",
+        f"pending_after={int(summary.get('pending_after') or 0)}",
+        f"skipped_missing_reference={int(summary.get('skipped_missing_reference') or 0)}",
+        f"skipped_missing_evaluation={int(summary.get('skipped_missing_evaluation') or 0)}",
+        f"errors={int(summary.get('errors') or 0)}",
+    ]
+    return _runner_result(
+        'resolve_outcomes',
+        text='\n'.join(lines),
+        payload=summary,
+        ok=int(summary.get('errors') or 0) == 0,
+    )
 
 
 def run_broker_only(*, refresh: bool = False, args: str = '') -> dict[str, Any]:

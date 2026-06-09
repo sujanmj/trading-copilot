@@ -51,6 +51,7 @@ def main() -> int:
     print(f"skipped_missing_evaluation={int(status.get('skipped_missing_evaluation') or 0)}", flush=True)
     print(f"skipped_not_due={int(status.get('skipped_not_due') or 0)}", flush=True)
     print(f"errors={int(status.get('errors') or 0)}", flush=True)
+    print(f"data_root={status.get('data_root') or 'unknown'}", flush=True)
     return 0
 
 

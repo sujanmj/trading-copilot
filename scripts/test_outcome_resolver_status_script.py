@@ -40,6 +40,7 @@ def main() -> int:
         'skipped_no_price=',
         'skipped_not_due=',
         'errors=',
+        'data_root=',
     ):
         if key not in out:
             return _fail(f'missing {key!r} in output')

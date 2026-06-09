@@ -32,13 +32,20 @@ def main() -> int:
         'latest_outcomes': [],
     }
 
+    canonical_zero = {
+        'predictions_tracked': 190,
+        'resolved_total': 0,
+        'pending_total': 190,
+    }
+
     with patch('backend.telegram.lazy_command_runner._load_json', return_value=zero_dashboard):
-        with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='unresolved'):
-            with patch(
-                'backend.storage.outcome_resolver.format_outcome_resolver_status_lines',
-                return_value=['Outcome resolver active — awaiting eligible close/reference price data.'],
-            ):
-                text = run_memory_only().get('text') or ''
+        with patch('backend.storage.outcome_resolver.get_canonical_outcome_stats', return_value=canonical_zero):
+            with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='unresolved'):
+                with patch(
+                    'backend.storage.outcome_resolver.format_outcome_resolver_status_lines',
+                    return_value=['Outcome resolver active — awaiting eligible close/reference price data.'],
+                ):
+                    text = run_memory_only().get('text') or ''
 
     if 'not active yet' in text.lower():
         return _fail('/memory must not say not active yet when resolver exists')

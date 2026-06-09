@@ -36,8 +36,10 @@ from backend.telegram.lazy_command_runner import (
     run_daily_pack_only,
     run_global_only,
     run_market_only,
+    format_outcomes_status_text,
     run_memory_only,
     run_news_only,
+    run_resolve_outcomes_admin,
     run_qa_status_only,
     run_scan_only,
     run_theme_only,
@@ -191,10 +193,24 @@ def parse_command(text: str) -> tuple[str, str]:
         return '', ''
     if raw.startswith('/'):
         raw = raw[1:]
+    lower = raw.lower()
+    if lower == 'resolve outcomes':
+        return 'resolve', 'outcomes'
+    if lower == 'outcomes':
+        return 'outcomes', ''
     parts = raw.split(maxsplit=1)
     cmd = parts[0].lower() if parts else ''
     args = parts[1] if len(parts) > 1 else ''
     return cmd, args
+
+
+def _is_telegram_admin(from_user: str) -> bool:
+    """Optional TELEGRAM_ADMIN_USER narrowing; chat is already gated by CHAT_ID."""
+    admin_user = os.environ.get('TELEGRAM_ADMIN_USER', '').strip()
+    if not admin_user:
+        return True
+    user = str(from_user or '').strip().lower().lstrip('@')
+    return user == admin_user.lower().lstrip('@')
 
 
 def _split_multiline_commands(text: str) -> list[str] | None:
@@ -385,7 +401,7 @@ def _handle_health() -> str:
 
         lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
     except Exception:
-        lines.append('Telegram build: <code>AstraEdge 49C</code>')
+        lines.append('Telegram build: <code>AstraEdge 49D</code>')
     return '\n'.join(lines)
 
 
@@ -542,6 +558,16 @@ def handle_analysis_command(
     elif cmd == 'memory':
         result = run_without_ai(run_memory_only, command='memory')
         response_text = result.get('text') or 'Memory unavailable.'
+    elif cmd == 'outcomes':
+        response_text = format_outcomes_status_text()
+    elif cmd == 'resolve':
+        if (args or '').strip().lower() != 'outcomes':
+            response_text = format_unknown_command_response(cmd, args)
+        elif not _is_telegram_admin(from_user):
+            response_text = 'Unauthorized — outcome resolver is admin-only.'
+        else:
+            result = run_without_ai(run_resolve_outcomes_admin, command='resolve_outcomes')
+            response_text = result.get('text') or 'Outcome resolver failed.'
     elif cmd == 'broker':
         refresh_broker = str(args or '').strip().lower() == 'refresh'
         result = run_without_ai(

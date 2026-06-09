@@ -18,7 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from backend.utils.config import DATA_DIR, ensure_dirs
+from backend.storage.data_paths import get_data_path
+from backend.utils.config import ensure_dirs
 
 MARKET_MEMORY_DB_NAME = 'canonical_market_memory.db'
 
@@ -116,7 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_mm_context_market_regime ON market_context_snapsh
 
 def get_market_memory_path() -> Path:
     """Return path to canonical market memory SQLite DB."""
-    return DATA_DIR / MARKET_MEMORY_DB_NAME
+    return get_data_path(MARKET_MEMORY_DB_NAME)
 
 
 def get_connection(timeout: float = 30.0) -> sqlite3.Connection:

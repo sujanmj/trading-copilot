@@ -25,13 +25,21 @@ from backend.storage.market_memory_outcomes import (
     load_latest_market_data,
     parse_prediction_raw_payload,
 )
-from backend.utils.config import DATA_DIR
+from backend.storage.data_paths import get_data_path, get_data_root, is_railway_data_mode
 
-RESOLVER_VERSION = '49C'
+RESOLVER_VERSION = '49D'
 SIGNAL_QUALITY_HOLDING_PERIOD = 'signal_quality'
 CALIBRATION_MIN_SAMPLE = 20
-OUTCOME_RESOLVER_STATE_FILE = DATA_DIR / 'outcome_resolver_last_run.json'
-MEMORY_CACHE_FILE = DATA_DIR / 'market_memory_dashboard_cache.json'
+
+
+def get_outcome_resolver_state_path() -> Path:
+    return get_data_path('outcome_resolver_last_run.json')
+
+
+def get_memory_dashboard_cache_path() -> Path:
+    return get_data_path('market_memory_dashboard_cache.json')
+
+
 
 BULLISH_HIT_PCT = 0.75
 BULLISH_MISS_PCT = -0.75
@@ -348,8 +356,9 @@ def refresh_memory_dashboard_cache(*, limit: int = 50) -> bool:
         dashboard = get_market_memory_dashboard(limit=limit)
         if not isinstance(dashboard, dict):
             return False
-        MEMORY_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        MEMORY_CACHE_FILE.write_text(json.dumps(dashboard, indent=2, default=str), encoding='utf-8')
+        cache_path = get_memory_dashboard_cache_path()
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(dashboard, indent=2, default=str), encoding='utf-8')
         return True
     except Exception as exc:
         _log_error(f'refresh_memory_dashboard_cache failed: {exc}')
@@ -572,24 +581,50 @@ def _record_resolver_run(summary: dict[str, Any]) -> None:
     _save_resolver_state(state)
 
 
-def get_outcome_resolver_status() -> dict[str, Any]:
-    """Snapshot for status script and UI — never raises."""
-    installed = is_outcome_resolver_installed()
+def get_canonical_outcome_stats() -> dict[str, Any]:
+    """Canonical resolver-store stats for /memory, /aihub calib, and status scripts."""
     metrics = compute_signal_quality_metrics()
     state = _load_resolver_state()
     last_summary = state.get('last_summary') if isinstance(state.get('last_summary'), dict) else {}
     last_run = state.get('last_run_at') or state.get('last_run_date')
+    resolved_total = int(metrics.get('resolved') or 0)
+    pending_total = int(metrics.get('pending') or 0)
     return {
-        'resolver_active': installed,
-        'last_run': last_run,
-        'resolved_total': int(metrics.get('resolved') or 0),
-        'pending_total': int(metrics.get('pending') or 0),
+        'data_root': get_data_root().as_posix(),
+        'resolver_active': is_outcome_resolver_installed(),
+        'predictions_tracked': resolved_total + pending_total,
+        'resolved_total': resolved_total,
+        'pending_total': pending_total,
         'skipped_no_price': int(last_summary.get('skipped_no_price') or 0),
         'skipped_missing_reference': int(last_summary.get('skipped_missing_reference') or 0),
         'skipped_missing_evaluation': int(last_summary.get('skipped_missing_evaluation') or 0),
         'skipped_not_due': int(last_summary.get('skipped_not_due') or 0),
         'errors': int(last_summary.get('errors') or 0),
+        'last_run': last_run,
         'last_summary': last_summary,
+        'hit_rate': metrics.get('hit_rate'),
+        'bullish_hit_rate': metrics.get('bullish_hit_rate'),
+        'bearish_hit_rate': metrics.get('bearish_hit_rate'),
+        'neutral': int(metrics.get('neutral') or 0),
+        'last_resolved_at': metrics.get('last_resolved_at'),
+    }
+
+
+def get_outcome_resolver_status() -> dict[str, Any]:
+    """Snapshot for status script and UI — never raises."""
+    stats = get_canonical_outcome_stats()
+    return {
+        'resolver_active': stats.get('resolver_active'),
+        'data_root': stats.get('data_root'),
+        'last_run': stats.get('last_run'),
+        'resolved_total': int(stats.get('resolved_total') or 0),
+        'pending_total': int(stats.get('pending_total') or 0),
+        'skipped_no_price': int(stats.get('skipped_no_price') or 0),
+        'skipped_missing_reference': int(stats.get('skipped_missing_reference') or 0),
+        'skipped_missing_evaluation': int(stats.get('skipped_missing_evaluation') or 0),
+        'skipped_not_due': int(stats.get('skipped_not_due') or 0),
+        'errors': int(stats.get('errors') or 0),
+        'last_summary': stats.get('last_summary') or {},
     }
 
 
@@ -601,9 +636,16 @@ def format_outcome_resolver_status_lines() -> list[str]:
     if not is_outcome_resolver_installed():
         return ['Outcome resolver not active yet.']
 
-    state = _load_resolver_state()
-    last_run = state.get('last_run_at') or state.get('last_run_date')
-    last_summary = state.get('last_summary') if isinstance(state.get('last_summary'), dict) else {}
+    stats = get_canonical_outcome_stats()
+    resolved_total = int(stats.get('resolved_total') or 0)
+    last_run = stats.get('last_run')
+    last_summary = stats.get('last_summary') if isinstance(stats.get('last_summary'), dict) else {}
+
+    if resolved_total == 0 and is_railway_data_mode():
+        return [
+            'Outcome resolver active — no Railway outcomes resolved yet. '
+            'Run after-close resolver or admin resolver command.',
+        ]
 
     if last_run:
         lines = ['Outcome resolver active.', f'Last resolver run: {last_run}']
@@ -622,18 +664,20 @@ def format_outcome_resolver_status_lines() -> list[str]:
 
 
 def _load_resolver_state() -> dict:
-    if not OUTCOME_RESOLVER_STATE_FILE.is_file():
+    state_path = get_outcome_resolver_state_path()
+    if not state_path.is_file():
         return {}
     try:
-        data = json.loads(OUTCOME_RESOLVER_STATE_FILE.read_text(encoding='utf-8'))
+        data = json.loads(state_path.read_text(encoding='utf-8'))
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
 
 
 def _save_resolver_state(state: dict) -> None:
-    OUTCOME_RESOLVER_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    OUTCOME_RESOLVER_STATE_FILE.write_text(json.dumps(state, indent=2), encoding='utf-8')
+    state_path = get_outcome_resolver_state_path()
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(state, indent=2), encoding='utf-8')
 
 
 def run_after_close_outcome_resolver_if_due(*, now: datetime | None = None) -> dict[str, Any]:

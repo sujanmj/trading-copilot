@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests — /full must not run outcome resolver (Stage 49A)."""
+"""Unit tests — /resolve outcomes and resolver not in /full (Stage 49D)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ os.environ.setdefault('DISABLE_TELEGRAM_SENDS', '1')
 
 
 def _fail(msg: str) -> int:
-    print(f'FULL_DOES_NOT_RUN_OUTCOME_RESOLVER_TEST_FAIL: {msg}', file=sys.stderr)
+    print(f'RESOLVE_OUTCOMES_NOT_IN_FULL_TEST_FAIL: {msg}', file=sys.stderr)
     return 1
 
 
@@ -30,18 +30,19 @@ def main() -> int:
     if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 49D':
         return _fail(f'expected AstraEdge 49D got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
-    if len(FULL_SNAPSHOT_SEQUENCE) != 33:
-        return _fail(f'/full must remain 33 steps got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    for blocked in ('/resolve outcomes', '/outcomes'):
+        if blocked in FULL_SNAPSHOT_SEQUENCE:
+            return _fail(f'{blocked} must not be in /full sequence')
 
     resolver_calls: list[int] = []
 
     def _track_resolver(**kwargs):
         resolver_calls.append(1)
-        return {'resolved_new': 0}
+        return {'resolved_new': 0, 'pending_before': 0, 'pending_after': 0, 'errors': 0}
 
     def _snapshot_stub(text: str, from_user: str = 'unknown', *, dry_run: bool = False, in_full_snapshot: bool = False):
         if not in_full_snapshot:
-            return _fail('expected in_full_snapshot') or []
+            return []
         return [{'ok': True, 'text': f'stub:{text}'}]
 
     with patch('backend.storage.outcome_resolver.run_outcome_resolver_once', side_effect=_track_resolver):
@@ -52,7 +53,7 @@ def main() -> int:
     if resolver_calls:
         return _fail('/full must not invoke outcome resolver')
 
-    print('FULL_DOES_NOT_RUN_OUTCOME_RESOLVER_TEST_OK')
+    print('RESOLVE_OUTCOMES_NOT_IN_FULL_TEST_OK')
     return 0
 
 

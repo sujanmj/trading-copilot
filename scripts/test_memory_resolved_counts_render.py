@@ -43,14 +43,38 @@ def main() -> int:
         'latest_outcomes': [{'ticker': 'XYZ', 'resolved_as': 'LOSS'}],
     }
 
-    sq_warmup = {'resolved': 8, 'pending': 22, 'hit_rate': 0.6, 'bullish_hit_rate': 0.7, 'bearish_hit_rate': 0.4, 'neutral': 1, 'last_resolved_at': '2026-05-27T10:00:00'}
-    sq_ready = {'resolved': 25, 'pending': 175, 'hit_rate': 0.56, 'bullish_hit_rate': 0.62, 'bearish_hit_rate': 0.48, 'neutral': 3, 'last_resolved_at': '2026-05-27T11:00:00'}
+    canonical_zero = {
+        'predictions_tracked': 12,
+        'resolved_total': 0,
+        'pending_total': 12,
+    }
+    canonical_warmup = {
+        'predictions_tracked': 30,
+        'resolved_total': 8,
+        'pending_total': 22,
+        'hit_rate': 0.6,
+        'bullish_hit_rate': 0.7,
+        'bearish_hit_rate': 0.4,
+        'neutral': 1,
+        'last_resolved_at': '2026-05-27T10:00:00',
+    }
+    canonical_ready = {
+        'predictions_tracked': 200,
+        'resolved_total': 25,
+        'pending_total': 175,
+        'hit_rate': 0.56,
+        'bullish_hit_rate': 0.62,
+        'bearish_hit_rate': 0.48,
+        'neutral': 3,
+        'last_resolved_at': '2026-05-27T11:00:00',
+    }
 
     with tempfile.TemporaryDirectory() as tmp:
         cache_path = Path(tmp) / 'market_memory_dashboard_cache.json'
         cache_path.write_text(json.dumps(zero_cache), encoding='utf-8')
         with patch('backend.telegram.lazy_command_runner.MEMORY_CACHE_FILE', cache_path):
-            text = run_memory_only().get('text', '')
+            with patch('backend.storage.outcome_resolver.get_canonical_outcome_stats', return_value=canonical_zero):
+                text = run_memory_only().get('text', '')
         if 'Outcomes resolved: 0' not in text:
             return _fail('zero outcomes must keep unresolved warning')
         if 'Calibration warming up' in text:
@@ -58,7 +82,7 @@ def main() -> int:
 
         cache_path.write_text(json.dumps(warmup_cache), encoding='utf-8')
         with patch('backend.telegram.lazy_command_runner.MEMORY_CACHE_FILE', cache_path):
-            with patch('backend.storage.outcome_resolver.compute_signal_quality_metrics', return_value=sq_warmup):
+            with patch('backend.storage.outcome_resolver.get_canonical_outcome_stats', return_value=canonical_warmup):
                 with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='warmup'):
                     text = run_memory_only().get('text', '')
         if 'Calibration warming up — sample too small.' not in text:
@@ -68,7 +92,7 @@ def main() -> int:
 
         cache_path.write_text(json.dumps(ready_cache), encoding='utf-8')
         with patch('backend.telegram.lazy_command_runner.MEMORY_CACHE_FILE', cache_path):
-            with patch('backend.storage.outcome_resolver.compute_signal_quality_metrics', return_value=sq_ready):
+            with patch('backend.storage.outcome_resolver.get_canonical_outcome_stats', return_value=canonical_ready):
                 with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='ready'):
                     text = run_memory_only().get('text', '')
         for needle in ('Resolved outcomes: 25', 'Bullish hit rate:', 'Avoid/rejection hit rate:', 'Last resolved:'):

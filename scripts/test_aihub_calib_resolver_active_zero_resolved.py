@@ -29,11 +29,14 @@ def main() -> int:
     stats = {'predictions': 190, 'outcomes': 0}
     overall = {'total_predictions': 190, 'resolved_outcomes': 0}
 
-    with patch(
-        'backend.storage.outcome_resolver.format_outcome_resolver_status_lines',
-        return_value=['Outcome resolver active — awaiting eligible close/reference price data.'],
-    ):
-        lines = calibration_unresolved_message(stats, overall)
+    canonical_zero = {'resolved_total': 0, 'pending_total': 190, 'predictions_tracked': 190}
+
+    with patch('backend.analytics.unified_decision_engine._canonical_outcome_stats', return_value=canonical_zero):
+        with patch(
+            'backend.storage.outcome_resolver.format_outcome_resolver_status_lines',
+            return_value=['Outcome resolver active — awaiting eligible close/reference price data.'],
+        ):
+            lines = calibration_unresolved_message(stats, overall)
 
     if 'Calibration unavailable — outcomes unresolved.' not in lines[0]:
         return _fail(f'unexpected first line: {lines!r}')
