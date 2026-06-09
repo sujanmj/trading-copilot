@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Telegram build label Stage 48Q."""
+"""Validate Telegram build label Stage 48R."""
 
 from __future__ import annotations
 

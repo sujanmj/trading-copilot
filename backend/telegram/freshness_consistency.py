@@ -119,6 +119,66 @@ def scanner_cache_age_minutes() -> int:
     return age_min
 
 
+def get_news_freshness_dual() -> dict[str, Any]:
+    """Latest news feed vs report-pack news cache — separate labels."""
+    from backend.storage.data_paths import get_data_path
+    from backend.telegram.lazy_command_runner import DAILY_PACK_FILE
+
+    latest_age, _ = compute_feed_age_minutes(get_data_path('news_feed.json'))
+    report_age, _ = compute_feed_age_minutes(DAILY_PACK_FILE)
+    pack = {}
+    if DAILY_PACK_FILE.is_file():
+        try:
+            pack = json.loads(DAILY_PACK_FILE.read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError):
+            pack = {}
+    news_block = (pack.get('news') or {}) if isinstance(pack, dict) else {}
+    if isinstance(news_block, dict):
+        embedded = news_block.get('generated_at') or news_block.get('refreshed_at')
+        if embedded:
+            parsed = parse_feed_timestamp(embedded)
+            if parsed is not None:
+                report_age = max(
+                    0,
+                    int((datetime.now(timezone.utc) - parsed).total_seconds() // 60),
+                )
+    latest_status = classify_budget_cache_freshness(latest_age)
+    report_status = classify_budget_cache_freshness(report_age)
+    return {
+        'latest_age_min': latest_age,
+        'report_age_min': report_age,
+        'latest_status': latest_status,
+        'report_status': report_status,
+        'latest_line': format_compact_freshness_line('Latest news cache', latest_age),
+        'report_line': format_compact_freshness_line('Report news cache', report_age),
+    }
+
+
+def get_unified_market_freshness() -> dict[str, Any]:
+    """Shared market freshness for /status, /aihub market, /aihub full."""
+    from backend.storage.data_paths import get_data_path
+    from backend.telegram.lazy_command_runner import DAILY_PACK_FILE
+
+    scanner_age = scanner_cache_age_minutes()
+    report_age, _ = compute_feed_age_minutes(DAILY_PACK_FILE)
+    runtime_age, _ = compute_feed_age_minutes(get_data_path('runtime_snapshot.json'))
+    age_min = scanner_age if scanner_age >= 0 else runtime_age
+    if age_min < 0:
+        age_min = report_age
+    status = classify_budget_cache_freshness(age_min)
+    is_fresh = status == 'fresh'
+    is_stale = status == 'stale'
+    reason = 'scanner-aligned' if scanner_age >= 0 and scanner_age == age_min else 'report-aligned'
+    return {
+        'age_min': age_min,
+        'status': status,
+        'is_fresh': is_fresh,
+        'is_stale': is_stale,
+        'reason': reason,
+        'line': format_compact_freshness_line('Market', age_min),
+    }
+
+
 def format_budget_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = '') -> str:
     """Format Latest <label>: timestamp · age <x> · fresh|stale|cache_missing."""
     age_min, ts_txt = compute_feed_age_minutes(path, timestamp_key=timestamp_key)

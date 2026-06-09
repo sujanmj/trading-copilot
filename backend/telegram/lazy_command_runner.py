@@ -124,7 +124,7 @@ def _runner_result(scope: str, *, text: str = '', payload: dict | None = None, *
 
 
 def run_news_only(*, refresh: bool = True) -> dict[str, Any]:
-    from backend.telegram.response_format import format_cache_age_label, file_timestamp_iso
+    from backend.telegram.freshness_consistency import get_news_freshness_dual
 
     refresh_result = None
     if refresh:
@@ -134,12 +134,12 @@ def run_news_only(*, refresh: bool = True) -> dict[str, Any]:
 
     payload = build_news_payload()
     items = payload.get('items') or []
-    cache_age = int(payload.get('cache_age_seconds') or 0)
-    age_min = cache_age // 60 if cache_age else _cache_age_minutes(DAILY_PACK_FILE)
-    age_txt = format_cache_age_label(age_min, timestamp=file_timestamp_iso(DAILY_PACK_FILE))
+    dual = get_news_freshness_dual()
     lines = [
         '<b>📰 News summary</b>',
-        f'Items: {len(items)} · cache age: {age_txt}',
+        dual.get('latest_line', 'Latest news cache: unavailable'),
+        dual.get('report_line', 'Report news cache: unavailable'),
+        f'Items: {len(items)}',
     ]
     for row in items[:8]:
         if isinstance(row, dict):

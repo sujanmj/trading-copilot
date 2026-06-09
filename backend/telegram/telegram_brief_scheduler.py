@@ -78,12 +78,35 @@ def build_morning_brief_text() -> str:
 
     lines = [
         '<b>☀️ Morning brief</b>',
+    ]
+    try:
+        from backend.analytics.unified_decision_engine import get_feed_freshness_meta, note_snapshot_pick
+
+        meta = get_feed_freshness_meta()
+        for key in ('report', 'scanner', 'news'):
+            line = (meta.get('lines') or {}).get(key)
+            if line:
+                lines.append(line)
+    except Exception:
+        pass
+    lines.extend([
         global_res.get('text', ''),
         '',
         market_res.get('text', ''),
         '',
         watch_res,
-    ]
+    ])
+    try:
+        from backend.analytics.unified_decision_engine import note_snapshot_pick
+        from backend.analytics.railway_decision_bootstrap import load_cached_stock_decision
+
+        today = load_cached_stock_decision('today') or {}
+        from backend.analytics.unified_decision_engine import apply_live_guard_to_payload
+
+        guarded = apply_live_guard_to_payload(today) if today.get('ok') else today
+        note_snapshot_pick('morning', (guarded.get('top_pick') or {}).get('ticker'))
+    except Exception:
+        pass
     from backend.telegram.response_format import strip_stage_markers
     return strip_stage_markers('\n'.join(line for line in lines if line is not None))
 
@@ -98,6 +121,20 @@ def build_close_brief_text() -> str:
 
     lines = [
         '<b>🔔 Market close summary</b>',
+    ]
+    try:
+        from backend.analytics.unified_decision_engine import STALE_CLOSE_REPORT_NOTE, get_feed_freshness_meta
+
+        meta = get_feed_freshness_meta()
+        for key in ('report', 'scanner', 'news'):
+            line = (meta.get('lines') or {}).get(key)
+            if line:
+                lines.append(line)
+        if meta.get('report_stale'):
+            lines.append(STALE_CLOSE_REPORT_NOTE)
+    except Exception:
+        pass
+    lines.extend([
         pack_res.get('text', ''),
         '',
         memory_res.get('text', ''),
@@ -105,7 +142,7 @@ def build_close_brief_text() -> str:
         market_res.get('text', ''),
         '',
         tomorrow,
-    ]
+    ])
     from backend.telegram.response_format import strip_stage_markers
     return strip_stage_markers('\n'.join(lines))
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests — memory/calib outcome warnings when unresolved (Stage 48Q)."""
+"""Unit tests — memory/calib outcome warnings when unresolved (Stage 48R)."""
 
 from __future__ import annotations
 
@@ -40,12 +40,14 @@ def main() -> int:
         return _fail('memory warning must caution against calibration trust')
 
     calib = calibration_unresolved_message(stats, overall)
-    if calib != 'Calibration unavailable — outcomes unresolved.':
+    if not isinstance(calib, list) or len(calib) < 1:
+        return _fail(f'calibration_unresolved_message must return non-empty list: {calib!r}')
+    if 'Calibration unavailable — outcomes unresolved.' not in calib[0]:
         return _fail(f'unexpected calibration_unresolved_message: {calib!r}')
 
     if memory_outcome_warning({'predictions': 4, 'outcomes': 2}, {}) is not None:
         return _fail('resolved outcomes must not emit memory warning')
-    if calibration_unresolved_message({'predictions': 4, 'outcomes': 2}) is not None:
+    if calibration_unresolved_message({'predictions': 4, 'outcomes': 2}) != []:
         return _fail('resolved outcomes must not emit calibration warning')
 
     zero_dashboard = {
@@ -68,8 +70,9 @@ def main() -> int:
         calib_text = format_calibration_section_telegram(
             summary={'live_resolved': 0, 'historical_resolved': 0},
         )
-    if calib not in calib_text:
-        return _fail('/aihub calib must surface calibration_unresolved_message')
+    for line in calib:
+        if line not in calib_text:
+            return _fail('/aihub calib must surface calibration_unresolved_message')
 
     calib_payload = {
         'source': 'cache',
@@ -82,8 +85,9 @@ def main() -> int:
         return_value=calib,
     ):
         aihub_calib_text = format_aihub_payload('calib', calib_payload)
-    if calib not in aihub_calib_text:
-        return _fail('format_aihub_payload calib must surface calibration_unresolved_message')
+    for line in calib:
+        if line not in aihub_calib_text:
+            return _fail('format_aihub_payload calib must surface calibration_unresolved_message')
 
     print('MEMORY_OUTCOME_WARNING_TEST_OK')
     return 0

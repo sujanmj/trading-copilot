@@ -471,9 +471,9 @@ def _score_candidate(
     live_avoid = sources.get('_live_avoid') or {}
     sym = _normalize_ticker(ticker)
     if sym and sym in live_avoid:
-        penalty += 80.0
-        risk.append('Rejected by live scanner / bearish confirmation')
-        why.append(f'Live avoid: {str(live_avoid[sym])[:80]}')
+        penalty += 100.0
+        risk.append('Rejected by live scanner: strong bearish / breakdown')
+        why.append(f'Live rejection: {str(live_avoid[sym])[:80]}')
 
     freshness_meta = sources.get('_freshness_meta') or {}
     if freshness_meta.get('scanner_fresh') and freshness_meta.get('report_stale'):
@@ -650,10 +650,10 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
     sources = _load_sources()
     try:
         from backend.analytics.unified_decision_engine import (
+            build_live_rejection_set,
             get_feed_freshness_meta,
             get_snapshot_cached_decision,
             is_unified_snapshot_active,
-            load_live_avoid_registry,
         )
 
         if is_unified_snapshot_active():
@@ -661,7 +661,7 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
             if cached:
                 return cached
         sources['_freshness_meta'] = get_feed_freshness_meta()
-        sources['_live_avoid'] = load_live_avoid_registry()
+        sources['_live_avoid'] = build_live_rejection_set()
     except Exception:
         sources['_freshness_meta'] = {}
         sources['_live_avoid'] = {}

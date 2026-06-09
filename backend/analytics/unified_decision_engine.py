@@ -1,28 +1,54 @@
 """
-Unified live decision snapshot — Stage 48Q.
+Unified live decision snapshot — Stage 48Q / 48R.
 
-Single guard for today/tomorrow/action plan/morning/close inside one /full run.
-Rejects live avoid / strong bearish tickers from stale report picks.
+Hard live rejection override: tickers in live_rejection_set cannot be intraday top picks.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from backend.utils.config import DATA_DIR
 
-LIVE_REJECTION_MSG = 'Rejected by live scanner / bearish confirmation'
+HARD_REJECTION_MSG = 'Rejected by live scanner: strong bearish / breakdown'
+LIVE_REJECTION_MSG = HARD_REJECTION_MSG
 SNAPSHOT_CONFLICT_WARNING = (
     'Snapshot warning: stale report conflicts with live scanner. '
     'Trust live scanner for intraday.'
 )
-STALE_REPORT_CONTEXT = 'Stale previous report context — not intraday live pick'
+FULL_SNAPSHOT_CONSISTENCY_WARNING = (
+    'Snapshot consistency warning: stale report conflicts with live scanner. '
+    'Live scanner overrides stale candidates.'
+)
+TOMORROW_LIVE_REJECTION_WARNING = (
+    'Live scanner rejected this ticker today; keep tomorrow as research only until fresh close data.'
+)
+STALE_CLOSE_REPORT_NOTE = (
+    'Close report is previous-session cache; not live intraday confirmation.'
+)
+NO_CLEAN_LIVE_CANDIDATE = 'No clean live candidate'
+
+LIVE_STRICT_MODES = frozenset({'today', 'intraday', 'postmarket', 'morning', 'close', 'action_plan'})
+
+REJECTION_TEXT_TOKENS = (
+    'STRONG BEARISH',
+    'BEARISH',
+    'SHORT',
+    'BREAKDOWN',
+    'AVOID',
+    'REJECT',
+    'BIG_MOVE',
+)
 
 INTEL_FILE = DATA_DIR / 'intelligence.json'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
+FINAL_CONF_FILE = DATA_DIR / 'final_confidence_report.json'
+WATCHLIST_FILE = DATA_DIR / 'tomorrow_watchlist_report.json'
 
+_rejection_cache: dict[str, str] | None = None
 _snapshot_active = False
 _snapshot_cache: dict[str, dict[str, Any]] = {}
 _snapshot_picks: dict[str, str | None] = {}
@@ -38,11 +64,137 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _normalize_ticker(value: object) -> str:
+    return str(value or '').strip().upper()
+
+
+def _reason_matches_rejection(text: str) -> bool:
+    upper = str(text or '').upper()
+    if not upper.strip():
+        return False
+    if any(token in upper for token in REJECTION_TEXT_TOKENS):
+        return True
+    if re.search(r'\bBEAR(ISH)?\b', upper):
+        return True
+    return False
+
+
+def _register(registry: dict[str, str], ticker: str, reason: str) -> None:
+    sym = _normalize_ticker(ticker)
+    if not sym or sym == '?':
+        return
+    reason_txt = str(reason or 'Live rejection').strip()[:120]
+    if sym not in registry or _reason_matches_rejection(reason_txt):
+        registry[sym] = reason_txt
+
+
+def build_live_rejection_set(*, force_refresh: bool = False) -> dict[str, str]:
+    """Single live rejection registry from scanner, premarket, intel, avoid lists."""
+    global _rejection_cache
+    if _rejection_cache is not None and not force_refresh:
+        return dict(_rejection_cache)
+
+    registry: dict[str, str] = {}
+    intel = _load_json(INTEL_FILE)
+    scanner = _load_json(SCANNER_FILE)
+    final_conf = _load_json(FINAL_CONF_FILE)
+    watchlist = _load_json(WATCHLIST_FILE)
+
+    try:
+        from backend.analytics.premarket_conviction import _build_avoid_list
+
+        for row in _build_avoid_list(intel, scanner):
+            _register(registry, row.get('ticker') or '', row.get('reason') or 'Avoid list')
+    except Exception:
+        pass
+
+    for row in (intel or {}).get('risks_and_avoids') or []:
+        if not isinstance(row, dict):
+            continue
+        logic = str(row.get('logic') or row.get('reason') or '')
+        ticker = row.get('symbol') or row.get('ticker')
+        if _reason_matches_rejection(logic):
+            _register(registry, ticker or '', logic)
+
+    for key in ('rejected', 'rejected_candidates', 'rejected_tickers'):
+        for row in (intel or {}).get(key) or []:
+            if isinstance(row, dict):
+                _register(
+                    registry,
+                    row.get('symbol') or row.get('ticker') or '',
+                    row.get('logic') or row.get('reason') or 'Rejected list',
+                )
+            elif isinstance(row, str):
+                _register(registry, row, 'Rejected list')
+
+    for sig in (scanner or {}).get('top_signals') or (scanner or {}).get('signals') or []:
+        if not isinstance(sig, dict):
+            continue
+        ticker = sig.get('ticker') or sig.get('symbol')
+        direction = str(sig.get('direction') or 'NEUTRAL').upper()
+        strength = str(sig.get('strength') or sig.get('signal_type') or '').upper()
+        setup = str(sig.get('setup') or sig.get('label') or sig.get('category') or '')
+        blob = f'{setup} {direction} {strength}'.upper()
+        try:
+            chg = float(sig.get('change_percent') or 0)
+        except (TypeError, ValueError):
+            chg = 0.0
+        if direction == 'BEARISH' or _reason_matches_rejection(blob):
+            _register(registry, ticker or '', blob[:120] or 'Bearish scanner signal')
+        elif 'BIG_MOVE' in strength and chg < 0:
+            _register(registry, ticker or '', f'BIG_MOVE negative {chg:+.1f}%')
+
+    try:
+        from backend.analytics.premarket_conviction import (
+            _build_setup_candidates,
+            _live_setup_status,
+            _negative_move_label,
+        )
+
+        setups = _build_setup_candidates(scanner, watchlist, final_conf, intel)
+        for setup in setups:
+            ticker = setup.get('ticker')
+            setup_text = str(setup.get('setup') or '')
+            direction = str(setup.get('direction') or '').upper()
+            if _live_setup_status(setup) == 'Rejected':
+                _register(registry, ticker or '', setup_text or 'Live setup rejected')
+            try:
+                chg = float(setup.get('change_percent') or 0)
+            except (TypeError, ValueError):
+                chg = 0.0
+            neg = _negative_move_label(chg, direction)
+            if neg and _reason_matches_rejection(neg):
+                _register(registry, ticker or '', neg)
+    except Exception:
+        pass
+
+    _rejection_cache = dict(registry)
+    return dict(registry)
+
+
+def load_live_avoid_registry() -> dict[str, str]:
+    return build_live_rejection_set()
+
+
+def clear_live_rejection_cache() -> None:
+    global _rejection_cache
+    _rejection_cache = None
+
+
+def is_live_rejected(ticker: str, registry: dict[str, str] | None = None) -> tuple[bool, str]:
+    sym = _normalize_ticker(ticker)
+    reg = registry if registry is not None else build_live_rejection_set()
+    if sym in reg:
+        return True, reg[sym]
+    return False, ''
+
+
 def begin_unified_snapshot() -> None:
     global _snapshot_active
     _snapshot_active = True
     _snapshot_cache.clear()
     _snapshot_picks.clear()
+    clear_live_rejection_cache()
 
 
 def end_unified_snapshot() -> None:
@@ -59,58 +211,94 @@ def get_snapshot_cached_decision(mode: str) -> dict[str, Any] | None:
     return _snapshot_cache.get(key)
 
 
-def load_live_avoid_registry() -> dict[str, str]:
-    from backend.analytics.premarket_conviction import _build_avoid_list
-
-    intel = _load_json(INTEL_FILE)
-    scanner = _load_json(SCANNER_FILE)
-    registry: dict[str, str] = {}
-    for row in _build_avoid_list(intel, scanner):
-        ticker = str(row.get('ticker') or '').strip().upper()
-        if not ticker or ticker == '?':
-            continue
-        registry[ticker] = str(row.get('reason') or 'Risk flagged')[:120]
-    return registry
-
-
-def is_live_rejected(ticker: str, registry: dict[str, str] | None = None) -> tuple[bool, str]:
-    sym = str(ticker or '').strip().upper()
-    reg = registry if registry is not None else load_live_avoid_registry()
-    if sym in reg:
-        return True, reg[sym]
-    return False, ''
-
-
 def get_feed_freshness_meta() -> dict[str, Any]:
     from backend.storage.data_paths import get_data_path
     from backend.telegram.freshness_consistency import (
         classify_budget_cache_freshness,
         compute_feed_age_minutes,
         format_compact_freshness_line,
+        get_news_freshness_dual,
+        get_unified_market_freshness,
     )
     from backend.telegram.lazy_command_runner import DAILY_PACK_FILE
 
     report_age, _ = compute_feed_age_minutes(DAILY_PACK_FILE)
     scanner_age, _ = compute_feed_age_minutes(get_data_path('scanner_data.json'))
-    news_age, _ = compute_feed_age_minutes(get_data_path('news_feed.json'))
+    news_dual = get_news_freshness_dual()
+    market_fresh = get_unified_market_freshness()
     report_status = classify_budget_cache_freshness(report_age)
     scanner_status = classify_budget_cache_freshness(scanner_age)
-    news_status = classify_budget_cache_freshness(news_age)
     return {
         'report_age_min': report_age,
         'scanner_age_min': scanner_age,
-        'news_age_min': news_age,
+        'news_age_min': news_dual.get('latest_age_min', -1),
         'report_status': report_status,
         'scanner_status': scanner_status,
-        'news_status': news_status,
+        'news_status': news_dual.get('latest_status', 'cache_missing'),
         'scanner_fresh': scanner_status == 'fresh',
         'report_stale': report_status == 'stale',
+        'market_fresh': market_fresh.get('is_fresh', False),
+        'market_stale': market_fresh.get('is_stale', False),
+        'market_reason': market_fresh.get('reason', ''),
         'lines': {
             'report': format_compact_freshness_line('Report', report_age),
             'scanner': format_compact_freshness_line('Scanner', scanner_age),
-            'news': format_compact_freshness_line('News', news_age),
+            'news': news_dual.get('latest_line', 'News: unavailable'),
+            'report_news': news_dual.get('report_line', 'Report news cache: unavailable'),
+            'market': market_fresh.get('line', 'Market: unavailable'),
         },
+        'news_dual': news_dual,
+        'market': market_fresh,
     }
+
+
+def pick_live_safe_top(
+    ranked: list[dict[str, Any]],
+    registry: dict[str, str],
+    *,
+    mode: str,
+) -> tuple[dict[str, Any] | None, str, list[str]]:
+    """Hard override — never return a live-rejected ticker for strict intraday modes."""
+    priority = {'BUY_CANDIDATE': 4, 'WATCH_FOR_ENTRY': 3, 'AVOID': 1}
+    ordered = sorted(
+        ranked,
+        key=lambda row: (priority.get(str(row.get('action') or ''), 0), int(row.get('score') or 0)),
+        reverse=True,
+    )
+    warnings: list[str] = []
+    strict = mode in LIVE_STRICT_MODES or mode == 'today'
+
+    for row in ordered:
+        if str(row.get('action') or '') == 'AVOID':
+            continue
+        ticker = _normalize_ticker(row.get('ticker'))
+        if not ticker:
+            continue
+        rejected, reason = is_live_rejected(ticker, registry)
+        if rejected and strict:
+            continue
+        if rejected and mode == 'tomorrow':
+            continue
+        decision = str(row.get('action') or 'WATCH_FOR_ENTRY')
+        if decision not in ('BUY_CANDIDATE', 'WATCH_FOR_ENTRY'):
+            decision = 'WATCH_FOR_ENTRY'
+        return row, decision, warnings
+
+    if mode == 'tomorrow':
+        for row in ordered:
+            ticker = _normalize_ticker(row.get('ticker'))
+            if not ticker:
+                continue
+            rejected, _ = is_live_rejected(ticker, registry)
+            if not rejected:
+                continue
+            warnings.append(TOMORROW_LIVE_REJECTION_WARNING)
+            decision = str(row.get('action') or 'WATCH_FOR_ENTRY')
+            if decision == 'AVOID':
+                decision = 'WATCH_FOR_ENTRY'
+            return row, decision, warnings
+
+    return None, 'NO_CLEAN_CANDIDATE', warnings
 
 
 def apply_live_guard_to_ranked(
@@ -120,7 +308,7 @@ def apply_live_guard_to_ranked(
     registry: dict[str, str] | None = None,
     freshness_meta: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None, list[str], str]:
-    reg = registry if registry is not None else load_live_avoid_registry()
+    reg = registry if registry is not None else build_live_rejection_set()
     meta = freshness_meta if freshness_meta is not None else get_feed_freshness_meta()
     warnings: list[str] = []
 
@@ -130,49 +318,36 @@ def apply_live_guard_to_ranked(
         rejected, reason = is_live_rejected(str(item.get('ticker') or ''), reg)
         if rejected:
             item['action'] = 'AVOID'
-            item['score'] = min(int(item.get('score') or 0), 25)
+            item['score'] = min(int(item.get('score') or 0), 20)
             risks = [str(r) for r in (item.get('risk') or [])]
-            if LIVE_REJECTION_MSG not in risks:
-                risks.insert(0, LIVE_REJECTION_MSG)
+            if HARD_REJECTION_MSG not in risks:
+                risks.insert(0, HARD_REJECTION_MSG)
             item['risk'] = risks[:6]
             why = [str(w) for w in (item.get('why') or [])]
-            why.append(f'Live avoid flagged: {reason[:80]}')
+            why.append(f'Live rejection: {reason[:80]}')
             item['why'] = why[:6]
         updated.append(item)
 
-    buy_rows = [r for r in updated if r.get('action') == 'BUY_CANDIDATE']
-    watch_rows = [r for r in updated if r.get('action') == 'WATCH_FOR_ENTRY']
-    avoid_rows = [r for r in updated if r.get('action') == 'AVOID']
+    top_pick, decision, pick_warnings = pick_live_safe_top(updated, reg, mode=mode)
+    warnings.extend(pick_warnings)
 
-    top_pick: dict[str, Any] | None = None
-    decision = 'NO_CLEAN_CANDIDATE'
-    if buy_rows:
-        top_pick = buy_rows[0]
-        decision = 'BUY_CANDIDATE'
-    elif watch_rows:
-        top_pick = watch_rows[0]
-        decision = 'WATCH_FOR_ENTRY'
-    elif updated and int(updated[0].get('score') or 0) >= 40 and updated[0].get('action') != 'AVOID':
-        top_pick = updated[0]
-        decision = str(top_pick.get('action') or 'WATCH_FOR_ENTRY')
+    if top_pick is None and decision == 'NO_CLEAN_CANDIDATE':
+        if mode in LIVE_STRICT_MODES or mode == 'today':
+            warnings.append(NO_CLEAN_LIVE_CANDIDATE)
+    elif top_pick:
+        rejected, _ = is_live_rejected(str(top_pick.get('ticker') or ''), reg)
+        if rejected and (mode in LIVE_STRICT_MODES or mode == 'today'):
+            top_pick = None
+            decision = 'NO_CLEAN_CANDIDATE'
+            warnings.append(NO_CLEAN_LIVE_CANDIDATE)
 
-    stale_report_top = next(
-        (r for r in ranked if r.get('ticker') and not (r.get('supports') or [])),
-        None,
-    )
-    if meta.get('report_stale') and meta.get('scanner_fresh'):
-        if top_pick and stale_report_top and top_pick.get('ticker') == stale_report_top.get('ticker'):
-            if not top_pick.get('supports'):
-                warnings.append(SNAPSHOT_CONFLICT_WARNING)
-        if mode == 'tomorrow' and top_pick:
-            rejected, _ = is_live_rejected(str(top_pick.get('ticker') or ''), reg)
-            if rejected:
-                warnings.append(
-                    f'Tomorrow research note: {top_pick.get("ticker")} conflicts with live rejection.'
-                )
+    if meta.get('report_stale') and meta.get('scanner_fresh') and top_pick:
+        fc_only = not (top_pick.get('supports') or [])
+        if fc_only:
+            warnings.append(SNAPSHOT_CONFLICT_WARNING)
 
     if is_unified_snapshot_active() and top_pick:
-        _snapshot_picks[mode] = str(top_pick.get('ticker') or '').upper() or None
+        _snapshot_picks[mode] = _normalize_ticker(top_pick.get('ticker')) or None
 
     return updated, top_pick, warnings, decision
 
@@ -198,14 +373,15 @@ def apply_live_guard_to_payload(payload: dict[str, Any]) -> dict[str, Any]:
     out['ranked_candidates'] = updated
     out['top_pick'] = top_pick
     out['decision'] = decision
-    out['avoid'] = [r for r in updated if r.get('action') == 'AVOID'][:10]
+    out['avoid'] = [r for r in updated if r.get('action') == 'AVOID'][:12]
     out['watch_for_entry'] = [r for r in updated if r.get('action') == 'WATCH_FOR_ENTRY'][:10]
-    out['snapshot_warnings'] = list(warnings)
+    out['snapshot_warnings'] = list(dict.fromkeys(warnings))
     out['freshness_meta'] = meta
+    out['live_rejection_set'] = sorted(build_live_rejection_set().keys())
 
     msg_parts: list[str] = []
     if warnings:
-        msg_parts.extend(warnings)
+        msg_parts.extend(out['snapshot_warnings'])
         msg_parts.append('')
     msg_parts.append(
         _build_telegram_message(
@@ -223,8 +399,21 @@ def apply_live_guard_to_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def guard_action_plan_top(top: dict[str, Any] | None, decision: str) -> tuple[dict[str, Any] | None, str, list[str]]:
+    if not top:
+        return None, 'NO_CLEAN_CANDIDATE', []
+    payload = apply_live_guard_to_payload({
+        'ok': True,
+        'mode': 'today',
+        'ranked_candidates': [top],
+        'decision': decision,
+        'top_pick': top,
+    })
+    return payload.get('top_pick'), str(payload.get('decision') or 'NO_CLEAN_CANDIDATE'), list(payload.get('snapshot_warnings') or [])
+
+
 def note_snapshot_pick(source: str, ticker: str | None) -> None:
-    _snapshot_picks[str(source)] = str(ticker or '').upper() or None
+    _snapshot_picks[str(source)] = _normalize_ticker(ticker) or None
 
 
 def snapshot_consistency_warnings() -> list[str]:
@@ -244,6 +433,15 @@ def snapshot_consistency_warnings() -> list[str]:
     return warnings
 
 
+def full_snapshot_consistency_warning() -> str | None:
+    meta = get_feed_freshness_meta()
+    if meta.get('report_stale') and meta.get('scanner_fresh'):
+        return FULL_SNAPSHOT_CONSISTENCY_WARNING
+    if snapshot_consistency_warnings():
+        return FULL_SNAPSHOT_CONSISTENCY_WARNING
+    return None
+
+
 def memory_outcome_warning(stats: dict[str, Any], overall: dict[str, Any]) -> str | None:
     predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
     outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
@@ -255,11 +453,14 @@ def memory_outcome_warning(stats: dict[str, Any], overall: dict[str, Any]) -> st
     return None
 
 
-def calibration_unresolved_message(stats: dict[str, Any] | None = None, overall: dict[str, Any] | None = None) -> str | None:
+def calibration_unresolved_message(stats: dict[str, Any] | None = None, overall: dict[str, Any] | None = None) -> list[str]:
     stats = stats or {}
     overall = overall or {}
     predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
     outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
     if predictions > 0 and outcomes == 0:
-        return 'Calibration unavailable — outcomes unresolved.'
-    return None
+        return [
+            'Calibration unavailable — outcomes unresolved.',
+            'Do not trust win-rate until outcome resolver completes.',
+        ]
+    return []

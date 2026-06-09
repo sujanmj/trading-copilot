@@ -17,7 +17,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48Q'
+STAGE = '48R'
 ENGINE_NAME = 'Broker Intelligence'
 CACHE_FILE = get_data_path('broker_intelligence_cache.json')
 COLLECTOR_CACHE = get_data_path('broker_app_collector_latest.json')
@@ -1239,7 +1239,7 @@ def format_broker_overview_telegram() -> str:
         for row in watchlist[:6]:
             ticker = row.get('ticker') or '—'
             source = row.get('source') or 'External source'
-            headline = str(row.get('headline') or '')[:90]
+            headline = _truncate_headline(str(row.get('headline') or ''))
             lines.append(f'• {ticker} — {source}')
             if headline:
                 lines.append(f'  {headline}')
@@ -1252,7 +1252,7 @@ def format_broker_overview_telegram() -> str:
         for row in external[:4]:
             ticker = row.get('ticker') or '—'
             source = row.get('source') or 'External source'
-            headline = str(row.get('headline') or '')[:80]
+            headline = _truncate_headline(str(row.get('headline') or ''))
             lines.append(f'• {ticker} · {source} · {headline}')
     else:
         lines.append('• None in cache')

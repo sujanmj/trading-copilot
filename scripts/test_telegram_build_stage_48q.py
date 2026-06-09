@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for Telegram build label Stage 48Q."""
+"""Unit tests for Telegram build label Stage 48R."""
 
 from __future__ import annotations
 
@@ -26,16 +26,16 @@ def main() -> int:
     from backend.telegram.response_format import format_status_text
     from backend.telegram.telegram_analysis_bot import _handle_health
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 48Q':
-        return _fail(f'expected AstraEdge 48Q got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 48R':
+        return _fail(f'expected AstraEdge 48R got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     status_text = format_status_text()
-    if 'Telegram build: <code>AstraEdge 48Q</code>' not in status_text:
-        return _fail('/status missing AstraEdge 48Q build label')
+    if 'Telegram build: <code>AstraEdge 48R</code>' not in status_text:
+        return _fail('/status missing AstraEdge 48R build label')
 
     health_text = _handle_health()
-    if 'Telegram build: <code>AstraEdge 48Q</code>' not in health_text:
-        return _fail('/health missing AstraEdge 48Q build label')
+    if 'Telegram build: <code>AstraEdge 48R</code>' not in health_text:
+        return _fail('/health missing AstraEdge 48R build label')
 
     print('TELEGRAM_BUILD_STAGE_48Q_TEST_OK')
     return 0

@@ -322,10 +322,11 @@ def _append_market_fallback_lines(lines: list[str], fallback: dict[str, Any]) ->
 
 
 def format_aihub_market_section(payload: dict[str, Any]) -> list[str]:
-    """Structured /aihub market body — stale clarity and daily-report fallback."""
+    """Structured /aihub market body — aligned with unified market freshness."""
     summary = payload.get('summary') or {}
     items = payload.get('items') or []
     warnings = payload.get('warnings') or []
+    from backend.telegram.freshness_consistency import get_unified_market_freshness
     from backend.telegram.india_mode_lock import resolve_telegram_market_mode
 
     mode = resolve_telegram_market_mode(
@@ -336,14 +337,23 @@ def format_aihub_market_section(payload: dict[str, Any]) -> list[str]:
     if not fallback.get('mode'):
         fallback = {**fallback, 'mode': mode}
 
-    stale_warns = _market_has_stale_warnings(warnings)
+    unified = get_unified_market_freshness()
     useful_bullets = _market_useful_bullets(summary, items)
-    lines: list[str] = []
+    lines: list[str] = [unified.get('line', 'Market: unavailable')]
 
+    if unified.get('is_fresh'):
+        lines.append(f'Mode: {mode} · fresh')
+        if useful_bullets:
+            lines.extend(useful_bullets)
+        elif fallback.get('has_data'):
+            _append_market_fallback_lines(lines, fallback)
+        return lines
+
+    stale_warns = _market_has_stale_warnings(warnings) or unified.get('is_stale')
     if stale_warns:
         lines.append(f'Mode: {mode}')
         lines.append('Status: stale market snapshot')
-        lines.append('Reason: underlying market data is old')
+        lines.append(f"Reason: {unified.get('reason') or 'underlying market data is old'}")
         if useful_bullets:
             lines.extend(useful_bullets)
         elif fallback.get('has_data'):
@@ -510,8 +520,8 @@ def format_calibration_section_telegram(
         from backend.analytics.unified_decision_engine import calibration_unresolved_message
 
         calib_warn = calibration_unresolved_message()
-        if calib_warn and (live_resolved in (None, 0) or hist_resolved in (None, 0)):
-            lines.append(calib_warn)
+        if calib_warn:
+            lines.extend(calib_warn)
     except Exception:
         pass
 
@@ -921,16 +931,17 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
 
     market = payloads.get('market') or {}
     market_summary = market.get('summary') or {}
+    from backend.telegram.freshness_consistency import get_unified_market_freshness
     from backend.telegram.india_mode_lock import resolve_telegram_market_mode
 
     mode = resolve_telegram_market_mode(
         payload_mode=market.get('market_mode'),
         summary_mode=market_summary.get('market_mode'),
     )
-    stale = market_summary.get('stale') or market_summary.get('is_stale')
+    unified = get_unified_market_freshness()
     lines.append('<b>📊 Market</b>')
-    lines.append(f'- mode: {mode}')
-    lines.append(f"- {'stale' if stale else 'fresh'}")
+    lines.append(f"- {unified.get('line', 'Market: unavailable')}")
+    lines.append(f"- mode: {mode} · {'fresh' if unified.get('is_fresh') else 'stale'}")
     india = market_summary.get('india_context') or market_summary.get('context') or {}
     us_ctx = market_summary.get('us_context') or market_summary.get('global_context') or {}
     if isinstance(india, dict) and india:
@@ -1071,7 +1082,7 @@ def format_action_plan_telegram() -> str:
 
         today = apply_live_guard_to_payload(today)
         tomorrow = apply_live_guard_to_payload(tomorrow)
-        note_snapshot_pick('action_plan', (today.get('top_pick') or {}).get('ticker'))
+        note_snapshot_pick('action_plan', (top or {}).get('ticker') if isinstance(top, dict) else None)
         freshness_lines = get_feed_freshness_meta().get('lines') or {}
     except Exception:
         freshness_lines = {}
@@ -1126,27 +1137,41 @@ def format_action_plan_telegram() -> str:
 
     top = today.get('top_pick') if today.get('ok') else None
     decision = today.get('decision') if today.get('ok') else 'NO_CLEAN_CANDIDATE'
+    action_warnings: list[str] = list(today.get('snapshot_warnings') or [])
 
-    if (not top or not today.get('ok')) and pack:
+    if (not top or decision == 'NO_CLEAN_CANDIDATE') and pack:
         actionable = (brain.get('summary') or {}).get('actionable_candidates') or {}
         buy_rows = actionable.get('buy_candidate') or []
         watch_rows = actionable.get('watch_for_entry') or actionable.get('watch') or []
-        if buy_rows and isinstance(buy_rows[0], dict):
-            top = buy_rows[0]
-            decision = 'BUY_CANDIDATE'
-        elif watch_rows and isinstance(watch_rows[0], dict):
-            top = watch_rows[0]
-            decision = 'WATCH_FOR_ENTRY'
+        fallback_rows = [r for r in buy_rows + watch_rows if isinstance(r, dict)]
+        if fallback_rows:
+            from backend.analytics.unified_decision_engine import apply_live_guard_to_payload
+
+            guarded = apply_live_guard_to_payload({
+                'ok': True,
+                'mode': 'today',
+                'ranked_candidates': fallback_rows,
+                'decision': decision,
+            })
+            top = guarded.get('top_pick')
+            decision = guarded.get('decision') or decision
+            action_warnings.extend(guarded.get('snapshot_warnings') or [])
 
     lines = [
         '<b>📌 AstraEdge Action Plan</b>',
         '',
+    ]
+    if action_warnings:
+        for warn in dict.fromkeys(action_warnings):
+            lines.append(str(warn))
+        lines.append('')
+    lines.extend([
         '<b>Market state:</b>',
         *market_state_lines,
         f'• Main risk: {main_risk}',
         '',
         '<b>Top candidate:</b>',
-    ]
+    ])
 
     if top and decision == 'BUY_CANDIDATE':
         action = str(top.get('action') or '').replace('_', ' ')
@@ -1173,6 +1198,8 @@ def format_action_plan_telegram() -> str:
             '• Score: —',
             '• Confidence: —',
         ])
+        if decision == 'NO_CLEAN_CANDIDATE':
+            lines.append('• No clean live candidate')
 
     lines.extend(['', '<b>Why:</b>'])
     why_items = (top.get('why') or [])[:4] if top else []

@@ -385,7 +385,7 @@ def _handle_health() -> str:
 
         lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
     except Exception:
-        lines.append('Telegram build: <code>AstraEdge 48Q</code>')
+        lines.append('Telegram build: <code>AstraEdge 48R</code>')
     return '\n'.join(lines)
 
 
@@ -466,6 +466,15 @@ def _handle_full_snapshot_steps(*, dry_run: bool = False) -> list[dict[str, Any]
     total = len(FULL_SNAPSHOT_SEQUENCE)
     results: list[dict[str, Any]] = []
     for step, command_text in enumerate(FULL_SNAPSHOT_SEQUENCE, start=1):
+        if step == 2:
+            try:
+                from backend.analytics.unified_decision_engine import full_snapshot_consistency_warning
+
+                warn = full_snapshot_consistency_warning()
+                if warn:
+                    results.append(send_analysis_message(warn, command='full', dry_run=dry_run))
+            except Exception:
+                pass
         prefix = _full_snapshot_step_prefix(step, total, command_text)
         results.append(send_analysis_message(prefix, command='full', dry_run=dry_run))
         try:
