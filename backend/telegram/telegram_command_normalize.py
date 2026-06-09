@@ -1,8 +1,10 @@
 """
-Telegram command normalization — slashless aliases, typo fixes, suggestions (Stage 48J).
+Telegram command normalization — slashless aliases, typo fixes, suggestions (Stage 48J+).
 """
 
 from __future__ import annotations
+
+import re
 
 THEME_RESERVED_WORDS = frozenset({
     'overview', 'list', 'search', 'category', 'news', 'scan', 'budget', 'refresh',
@@ -49,6 +51,44 @@ def normalize_parsed_command(cmd: str, args: str) -> tuple[str, str]:
     if cmd_norm == 'action' and (not args_norm or args_norm.lower() == 'plan'):
         return 'action', 'plan'
     return cmd_norm, args_norm
+
+
+def resolve_natural_command(text: str) -> tuple[str, str] | None:
+    """
+    Map natural-language phrases to canonical Telegram commands.
+    Keeps research/watch wording in downstream handlers — routing only.
+    """
+    raw = str(text or '').strip()
+    if not raw:
+        return None
+    lower = re.sub(r'\s+', ' ', raw.lower()).rstrip('?.!')
+
+    if re.match(r'^broker\s+[a-z0-9][a-z0-9&.-]*$', lower):
+        return 'broker', lower.split(maxsplit=1)[1].upper()
+
+    tomorrow_patterns = (
+        r'stocks?\s+to\s+buy\s+tomorrow',
+        r'which\s+stock(?:s)?\s+(?:to\s+buy\s+)?tomorrow',
+        r'stock\s+for\s+tomorrow',
+        r'tomorrow\s+stock',
+        r'what\s+stock(?:s)?\s+(?:for\s+)?tomorrow',
+    )
+    for pattern in tomorrow_patterns:
+        if re.search(pattern, lower):
+            return 'tomorrow', ''
+
+    today_patterns = (
+        r'stocks?\s+to\s+buy\s+today',
+        r'which\s+stock(?:s)?\s+(?:to\s+buy\s+)?today',
+        r'stock\s+for\s+today',
+        r'today\s+stock',
+        r'what\s+stock(?:s)?\s+(?:for\s+)?today',
+    )
+    for pattern in today_patterns:
+        if re.search(pattern, lower):
+            return 'today', ''
+
+    return None
 
 
 def normalize_aihub_tab(tab: str) -> str:

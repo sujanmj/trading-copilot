@@ -311,10 +311,9 @@ def _handle_ask(args: str) -> str:
         use_case='telegram_ask',
     )
     if result.get('success'):
-        provider = result.get('provider') or 'groq'
         answer = str(result.get('text') or '').strip()[:3500]
         return (
-            f'<b>🤖 AI answer</b> ({provider})\n'
+            f'<b>🤖 AI answer</b>\n'
             f'<i>Context: {context_note}</i>\n\n{answer}'
         )
     fallback = result.get('text') or result.get('user_message') or 'AI temporarily unavailable.'
@@ -376,7 +375,7 @@ def _handle_health() -> str:
         )
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append('Telegram build: <code>AstraEdge 48L</code>')
+    lines.append('Telegram build: <code>AstraEdge 48M</code>')
     return '\n'.join(lines)
 
 
@@ -427,9 +426,14 @@ def handle_analysis_command(
     from backend.telegram.telegram_command_normalize import (
         format_unknown_command_response,
         normalize_parsed_command,
+        resolve_natural_command,
     )
 
-    cmd, args = normalize_parsed_command(*parse_command(text))
+    natural = resolve_natural_command(text)
+    if natural:
+        cmd, args = normalize_parsed_command(*natural)
+    else:
+        cmd, args = normalize_parsed_command(*parse_command(text))
     if not cmd:
         return []
 
@@ -470,7 +474,7 @@ def handle_analysis_command(
             if dry_run:
                 log_ai_usage(command='ask', provider='dry_run', used_llm=True, reason='dry_run_simulation')
                 response_text = (
-                    '<b>🤖 AI answer</b> (dry_run/groq)\n'
+                    '<b>🤖 AI answer</b>\n'
                     '<i>Context: cached payloads.</i>\n\nSimulated AI response for dry-run.'
                 )
             else:

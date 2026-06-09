@@ -45,7 +45,7 @@ def main() -> int:
             'ok': True,
             'generated_at': fresh_iso,
             'refreshed_at': fresh_iso,
-            'stage': '48K',
+            'stage': '48M',
         })
 
         import backend.analytics.budget_impact as bi

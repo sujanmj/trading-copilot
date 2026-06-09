@@ -1,10 +1,10 @@
 {
   "ok": true,
   "tab": "scan",
-  "generated_at": "2026-06-08T21:17:37+00:00",
+  "generated_at": "2026-06-09T05:12:40+00:00",
   "market_mode": "USA_MODE",
   "source": "runtime",
-  "cache_age_seconds": 556476,
+  "cache_age_seconds": 584979,
   "items": [
     {
       "ticker": "NEWGEN",

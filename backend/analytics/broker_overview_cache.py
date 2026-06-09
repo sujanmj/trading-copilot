@@ -16,7 +16,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48L'
+STAGE = '48M'
 ENGINE_NAME = 'Broker Overview Cache'
 CACHE_FILE = get_data_path('broker_overview_cache.json')
 INTEL_CACHE_FILE = get_data_path('broker_intelligence_cache.json')
@@ -302,4 +302,25 @@ def get_broker_status(*, lite: bool = False) -> dict[str, Any]:
 
 
 def refresh_broker_intel(*, persist: bool = True) -> dict[str, Any]:
-    return _build_full_overview(persist=persist)
+    from backend.analytics.broker_intelligence import refresh_broker_intelligence, verify_broker_cache_write
+
+    result = refresh_broker_intelligence(persist=persist)
+    verify = result.get('cache_verify') or verify_broker_cache_write()
+    evidence_count = int(verify.get('evidence_count') or len(result.get('evidence_items') or []))
+    ticker_count = int(verify.get('ticker_count') or result.get('tracked_tickers') or 0)
+    ok = bool(result.get('ok') and verify.get('ok'))
+    if not ok:
+        message = f"Broker refresh failed: {verify.get('error') or result.get('stale_reason') or 'cache_write_failed'}"
+    elif evidence_count <= 0:
+        message = 'Broker refresh completed but no fresh broker evidence found.'
+    else:
+        message = 'Broker refresh completed.'
+    return {
+        **result,
+        'ok': ok,
+        'stage': STAGE,
+        'cache_verify': verify,
+        'evidence_count': evidence_count,
+        'ticker_count': ticker_count,
+        'message': message,
+    }

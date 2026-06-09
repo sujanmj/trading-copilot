@@ -1,5 +1,5 @@
 """
-AstraEdge Broker Intelligence — Stage 48L.
+AstraEdge Broker Intelligence — Stage 48M.
 
 Full broker consensus, upgrades/downgrades, target prices, freshness.
 Research-only — watch/confirm stances, never buy now or guaranteed.
@@ -17,7 +17,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48L'
+STAGE = '48M'
 ENGINE_NAME = 'Broker Intelligence'
 CACHE_FILE = get_data_path('broker_intelligence_cache.json')
 COLLECTOR_CACHE = get_data_path('broker_app_collector_latest.json')
@@ -158,7 +158,40 @@ def _load_json_file(path) -> dict[str, Any]:
 
 
 def _load_cache() -> dict[str, Any]:
-    return _load_json_file(CACHE_FILE)
+    raw = _load_json_file(CACHE_FILE)
+    if not raw:
+        return {}
+    if raw.get('generated_at') or raw.get('consensus_by_ticker') is not None:
+        normalized = dict(raw)
+        normalized.setdefault('ok', True)
+        return normalized
+    return raw
+
+
+def verify_broker_cache_write() -> dict[str, Any]:
+    """Verify broker_intelligence_cache.json exists and has required fields."""
+    if not CACHE_FILE.is_file():
+        return {'ok': False, 'error': 'cache_file_missing'}
+    cached = _load_json_file(CACHE_FILE)
+    if not cached:
+        return {'ok': False, 'error': 'cache_empty_or_invalid'}
+    generated_at = cached.get('generated_at')
+    if not generated_at:
+        return {'ok': False, 'error': 'missing_generated_at'}
+    evidence_items = cached.get('evidence_items') or []
+    consensus = cached.get('consensus_by_ticker') or {}
+    return {
+        'ok': True,
+        'generated_at': generated_at,
+        'evidence_count': len(evidence_items),
+        'ticker_count': len(consensus),
+        'tracked_tickers': cached.get('tracked_tickers') or len(consensus),
+    }
+
+
+def _cache_exists_on_disk() -> bool:
+    cached = _load_cache()
+    return bool(cached.get('generated_at') or cached.get('ok'))
 
 
 def _save_cache(payload: dict[str, Any]) -> None:
@@ -299,20 +332,121 @@ def extract_broker_evidence_item(raw: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _append_unique_items(items: list[dict[str, Any]], rows: list[dict[str, Any]], *, source: str) -> None:
+    seen: set[str] = {
+        f"{_normalize_ticker(r.get('ticker') or r.get('symbol'))}|{str(r.get('headline') or r.get('title') or '')[:80]}"
+        for r in items
+        if isinstance(r, dict)
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        payload = dict(row)
+        payload.setdefault('collector_source', source)
+        key = (
+            f"{_normalize_ticker(payload.get('ticker') or payload.get('symbol'))}|"
+            f"{str(payload.get('headline') or payload.get('title') or '')[:80]}"
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(payload)
+
+
 def _collect_raw_items() -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     collector = _load_json_file(COLLECTOR_CACHE)
-    for row in collector.get('items') or []:
-        if isinstance(row, dict):
-            items.append(row)
+    _append_unique_items(items, [r for r in (collector.get('items') or []) if isinstance(r, dict)], source='collector')
     inbox = _load_json_file(INBOX_FILE)
-    for row in inbox.get('items') or []:
-        if isinstance(row, dict):
-            items.append(row)
+    _append_unique_items(items, [r for r in (inbox.get('items') or []) if isinstance(r, dict)], source='inbox')
     consensus = _load_json_file(CONSENSUS_INBOX)
-    for row in consensus.get('items') or []:
-        if isinstance(row, dict):
-            items.append(row)
+    _append_unique_items(items, [r for r in (consensus.get('items') or []) if isinstance(r, dict)], source='consensus_inbox')
+
+    try:
+        from backend.collectors.broker_app_collector import (
+            collect_from_existing_news,
+            collect_from_latest_market_data,
+            get_external_evidence_dashboard,
+        )
+
+        _append_unique_items(items, collect_from_existing_news(limit=80), source='news_feed')
+        _append_unique_items(items, collect_from_latest_market_data(limit=40), source='market_data')
+        ext = get_external_evidence_dashboard() or {}
+        _append_unique_items(
+            items,
+            [r for r in (ext.get('broker_candidates') or []) if isinstance(r, dict)],
+            source='external_evidence',
+        )
+    except Exception as exc:
+        _log(f'news/external collect fallback failed: {exc}')
+
+    try:
+        from backend.collectors.tv_intelligence_collector import load_cached_tv_intelligence
+
+        tv = load_cached_tv_intelligence() or {}
+        tv_rows = []
+        for video in (tv.get('videos') or tv.get('items') or [])[:40]:
+            if not isinstance(video, dict):
+                continue
+            tv_rows.append({
+                'ticker': video.get('ticker') or video.get('symbol'),
+                'headline': video.get('title') or video.get('headline'),
+                'title': video.get('title'),
+                'description': video.get('description'),
+                'published_at': video.get('published_at') or video.get('date'),
+                'source': video.get('channel') or 'TV Intelligence',
+                'collector_source': 'tv',
+            })
+        _append_unique_items(items, tv_rows, source='tv')
+    except Exception as exc:
+        _log(f'tv collect fallback failed: {exc}')
+
+    budget_cache = _load_json_file(get_data_path('budget_impact_cache.json'))
+    budget_rows: list[dict[str, Any]] = []
+    for row in (budget_cache.get('top_catalysts') or [])[:30]:
+        if not isinstance(row, dict):
+            continue
+        headline = str(row.get('headline') or row.get('title') or '')
+        if not headline:
+            continue
+        tickers = row.get('tickers') or row.get('named_companies') or []
+        ticker = None
+        if isinstance(tickers, list) and tickers:
+            ticker = _normalize_ticker(tickers[0])
+        budget_rows.append({
+            'ticker': ticker,
+            'headline': headline,
+            'title': headline,
+            'published_at': row.get('published_at') or budget_cache.get('generated_at'),
+            'source': 'Budget catalyst',
+            'collector_source': 'budget_news',
+        })
+    _append_unique_items(items, budget_rows, source='budget_news')
+
+    existing = _load_json_file(CACHE_FILE)
+    _append_unique_items(
+        items,
+        [r for r in (existing.get('evidence_items') or []) if isinstance(r, dict)],
+        source='broker_cache_fallback',
+    )
+
+    for rel in ('news_feed.json', 'live_news_feed.json', 'govt_intelligence.json'):
+        feed = _load_json_file(get_data_path(rel))
+        articles = feed.get('articles') or feed.get('high_impact_items') or feed.get('items') or []
+        feed_rows = []
+        for art in articles[:40]:
+            if not isinstance(art, dict):
+                continue
+            feed_rows.append({
+                'ticker': art.get('ticker') or art.get('symbol'),
+                'headline': art.get('title') or art.get('english_headline') or art.get('headline'),
+                'title': art.get('title') or art.get('english_headline'),
+                'published_at': art.get('published_at') or art.get('date'),
+                'source': art.get('source') or rel.replace('.json', ''),
+                'collector_source': 'news_cache',
+            })
+        _append_unique_items(items, feed_rows, source='news_cache')
+
     return items
 
 
@@ -556,13 +690,59 @@ def _impact_candidates(scored_list: list[dict[str, Any]], *, mode: str) -> list[
 
 def refresh_broker_intelligence(*, persist: bool = True) -> dict[str, Any]:
     payload = build_broker_intelligence_cache()
+    payload['ok'] = True
     if persist:
         _save_cache(payload)
+        verify = verify_broker_cache_write()
+        payload['cache_verify'] = verify
+        if not verify.get('ok'):
+            payload['ok'] = False
+            payload['stale_reason'] = verify.get('error')
         _log(
             f"refreshed tickers={payload.get('tracked_tickers')} "
-            f"evidence={len(payload.get('evidence_items') or [])}"
+            f"evidence={len(payload.get('evidence_items') or [])} "
+            f"verify={verify.get('ok')}"
         )
     return payload
+
+
+def format_broker_refresh_telegram(result: dict[str, Any] | None = None) -> str:
+    result = result or {}
+    verify = result.get('cache_verify') or {}
+    if result.get('ok') is False or (verify and not verify.get('ok')):
+        err = verify.get('error') or result.get('stale_reason') or 'cache_write_failed'
+        return _sanitize_text(
+            '<b>🏦 Broker refresh</b>\n\n'
+            f'Broker refresh failed ({err}).\n'
+            '<i>Research only — retry /broker refresh.</i>'
+        )
+
+    evidence_count = int(
+        (verify or {}).get('evidence_count')
+        or len(result.get('evidence_items') or [])
+    )
+    ticker_count = int(
+        (verify or {}).get('ticker_count')
+        or len(result.get('consensus_by_ticker') or {})
+        or result.get('tracked_tickers')
+        or 0
+    )
+
+    if evidence_count <= 0:
+        return _sanitize_text(
+            '<b>🏦 Broker refresh</b>\n\n'
+            'Broker refresh completed but no fresh broker evidence found.\n'
+            '<i>Research only.</i>'
+        )
+
+    return _sanitize_text(
+        '<b>🏦 Broker refresh</b>\n\n'
+        'Broker refresh completed.\n'
+        f'Tracked tickers: {ticker_count}\n'
+        f'Evidence: {evidence_count}\n'
+        'Use /broker for overview.\n'
+        '<i>Research only — confirm with price + volume.</i>'
+    )
 
 
 def _missing_lite() -> dict[str, Any]:
@@ -616,17 +796,14 @@ def _lite_from_cache(cached: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_broker_intel_overview(*, cache_only: bool = False, lite: bool = False) -> dict[str, Any]:
-    if cache_only and lite:
-        cached = _load_cache()
-        if cached and cached.get('ok'):
-            return _lite_from_cache(cached)
-        return _missing_lite()
-
     if cache_only:
         cached = _load_cache()
-        if cached and cached.get('ok'):
+        if cached and (_cache_exists_on_disk() or cached.get('ok')):
+            if lite:
+                return _lite_from_cache(cached)
             out = dict(cached)
             out['from_cache'] = True
+            out['cache_missing'] = False
             return out
         return _missing_lite()
 
@@ -639,7 +816,7 @@ def get_broker_intel_ticker(ticker: str, *, cache_only: bool = True, lite: bool 
         return {'ok': False, 'error': 'invalid_ticker', 'ticker': ticker}
 
     cached = _load_cache()
-    if not cached or not cached.get('ok'):
+    if not cached or not (_cache_exists_on_disk() or cached.get('ok')):
         if cache_only:
             return {
                 'ok': True,
@@ -686,7 +863,7 @@ def get_broker_intel_ticker(ticker: str, *, cache_only: bool = True, lite: bool 
 
 def get_broker_intel_evidence(*, cache_only: bool = True, lite: bool = False) -> dict[str, Any]:
     cached = _load_cache()
-    if not cached or not cached.get('ok'):
+    if not cached or not (_cache_exists_on_disk() or cached.get('ok')):
         if cache_only:
             return {
                 'ok': True,
@@ -713,27 +890,35 @@ def get_broker_intel_evidence(*, cache_only: bool = True, lite: bool = False) ->
 
 def format_broker_overview_telegram() -> str:
     overview = get_broker_intel_overview(cache_only=True, lite=False)
-    if overview.get('cache_missing'):
-        cached = _load_cache()
-        if not cached:
-            return _sanitize_text(
-                '<b>🏦 Broker intelligence</b>\n\n'
-                'Freshness: <code>missing</code>\n'
-                'Tracked tickers: 0\n\n'
-                'Broker cache unavailable.\n'
-                '<i>Research only — use /broker refresh to rebuild.</i>'
-            )
-        overview = cached
+    if overview.get('cache_missing') and not _cache_exists_on_disk():
+        return _sanitize_text(
+            '<b>🏦 Broker intelligence</b>\n\n'
+            'Freshness: <code>missing</code>\n'
+            'Tracked tickers: 0\n\n'
+            'Broker cache unavailable.\n'
+            '<i>Research only — use /broker refresh to rebuild.</i>'
+        )
 
     fresh = overview.get('freshness') or {}
+    tracked = overview.get('tracked_tickers') or len(overview.get('consensus_by_ticker') or {})
+    evidence_count = len(overview.get('evidence_items') or [])
+    fresh_status = fresh.get('status') or ('fresh' if evidence_count or tracked else 'unknown')
     lines = [
         '<b>🏦 Broker intelligence</b>',
         '',
-        f"Freshness: <code>{fresh.get('status', 'unknown')}</code>",
-        f"Tracked tickers: {overview.get('tracked_tickers') or len(overview.get('consensus_by_ticker') or {})}",
+        f"Freshness: <code>{fresh_status}</code>",
+        f"Tracked tickers: {tracked}",
     ]
     if overview.get('stale_reason'):
         lines.append(f"Note: {overview.get('stale_reason')}")
+
+    if tracked <= 0 and evidence_count <= 0:
+        lines.extend([
+            '',
+            'No fresh broker evidence found.',
+            '<i>Research only.</i>',
+        ])
+        return _sanitize_text('\n'.join(lines))
 
     lines.extend(['', '<b>Top positive:</b>'])
     top_pos = overview.get('top_positive') or []
@@ -835,11 +1020,8 @@ def handle_broker_command(args: str) -> str:
     if sub in {'overview', 'summary'}:
         return format_broker_overview_telegram()
     if sub == 'refresh':
-        refresh_broker_intelligence(persist=True)
-        return _sanitize_text(
-            '<b>🏦 Broker refresh</b>\n\nBroker intelligence cache rebuild started/completed.\n'
-            '<i>Research only — use /broker for overview.</i>'
-        )
+        result = refresh_broker_intelligence(persist=True)
+        return format_broker_refresh_telegram(result)
     return format_broker_ticker_telegram(sub.upper() if sub.isalpha() else parts[0])
 
 
@@ -847,6 +1029,12 @@ def broker_decision_bullets(ticker: str, *, mode: str = 'today') -> list[str]:
     """Evidence-only bullets for /today and /tomorrow — not trade signals."""
     sym = _normalize_ticker(ticker)
     if not sym:
+        return []
+    cached = _load_cache()
+    if not cached or not (_cache_exists_on_disk() or cached.get('ok')):
+        return []
+    evidence_items = cached.get('evidence_items') or []
+    if not evidence_items and not (cached.get('consensus_by_ticker') or {}):
         return []
     detail = get_broker_intel_ticker(sym, cache_only=True, lite=True)
     if not detail.get('found'):
@@ -856,13 +1044,13 @@ def broker_decision_bullets(ticker: str, *, mode: str = 'today') -> list[str]:
     score = int(c.get('confidence_score') or 0)
     bullets: list[str] = []
     if score >= 60 and label in {'Strong Positive', 'Positive'}:
-        bullets.append(
-            f'Broker evidence supports {sym} ({label}, score {score}) — watch for confirmation'
-        )
+        bullets.append(f'Broker consensus supports {sym}')
     elif score < 40 or label in {'Negative', 'Avoid-Risk'}:
         action = c.get('latest_action')
-        suffix = f' ({action})' if action in {'downgrade', 'target_cut', 'negative_rating'} else ''
-        bullets.append(f'Broker conflict/risk on {sym}{suffix} — {c.get("suggested_action", "Wait")}')
+        if action in {'downgrade', 'target_cut', 'negative_rating'}:
+            bullets.append(f'Broker consensus conflict / downgrade risk on {sym}')
+        else:
+            bullets.append(f'Broker consensus conflict / downgrade risk on {sym}')
     return bullets
 
 
