@@ -80,6 +80,12 @@ def build_morning_brief_text() -> str:
         '<b>☀️ Morning brief</b>',
     ]
     try:
+        from backend.telegram.india_mode_lock import resolve_telegram_market_phase
+
+        lines.append(f'Market mode: <code>{resolve_telegram_market_phase()}</code>')
+    except Exception:
+        pass
+    try:
         from backend.analytics.unified_decision_engine import get_feed_freshness_meta, note_snapshot_pick
 
         meta = get_feed_freshness_meta()
@@ -122,6 +128,12 @@ def build_close_brief_text() -> str:
     lines = [
         '<b>🔔 Market close summary</b>',
     ]
+    try:
+        from backend.telegram.india_mode_lock import resolve_telegram_market_phase
+
+        lines.append(f'Market mode: <code>{resolve_telegram_market_phase()}</code>')
+    except Exception:
+        pass
     try:
         from backend.analytics.unified_decision_engine import STALE_CLOSE_REPORT_NOTE, get_feed_freshness_meta
 

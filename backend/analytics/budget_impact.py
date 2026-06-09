@@ -18,7 +18,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48R'
+STAGE = '48S'
 ENGINE_NAME = 'Budget Impact Intelligence'
 
 CACHE_FILE = get_data_path('budget_impact_cache.json')

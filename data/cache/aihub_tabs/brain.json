@@ -1,10 +1,10 @@
 {
   "ok": true,
   "tab": "brain",
-  "generated_at": "2026-06-09T08:42:13+00:00",
+  "generated_at": "2026-06-09T11:51:23+00:00",
   "market_mode": "USA_MODE",
   "source": "runtime",
-  "cache_age_seconds": 588080,
+  "cache_age_seconds": 599430,
   "items": [
     {
       "kind": "executive_summary",

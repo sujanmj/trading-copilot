@@ -189,6 +189,55 @@ def _stale_aihub_prefix_lines() -> list[str]:
     ]
 
 
+def _append_manual_refresh_suggestion(lines: list[str]) -> None:
+    """Append closed-market refresh hint once — avoids duplicate with stale prefix."""
+    from backend.analytics.premarket_conviction import MANUAL_REFRESH_SUGGESTION
+
+    if any(MANUAL_REFRESH_SUGGESTION in line for line in lines):
+        return
+    try:
+        from backend.analytics.market_calendar_router import is_manual_refresh_suggested_mode
+
+        if is_manual_refresh_suggested_mode():
+            lines.append(f'<i>{MANUAL_REFRESH_SUGGESTION}</i>')
+    except Exception:
+        pass
+
+
+def _aihub_full_calib_lines(
+    cal: dict[str, Any],
+    cal_summary: dict[str, Any],
+) -> list[str]:
+    """Calib section lines for /aihub full — never say 'no warnings' when unresolved."""
+    from backend.analytics.unified_decision_engine import calibration_unresolved_message
+
+    recs = cal_summary.get('calibration_recommendations') or cal.get('recommendations') or []
+    lines = ['<b>📊 Calib</b>']
+    calib_warn = calibration_unresolved_message()
+    if calib_warn:
+        lines.append('- live resolved: 0')
+        lines.append('- historical resolved: 0')
+        lines.append('- calibration unavailable — outcomes unresolved')
+        return lines
+    lines.append(f"- live resolved: {cal.get('live_resolved', cal.get('resolved_live', '—'))}")
+    lines.append(f"- historical resolved: {cal.get('historical_resolved', cal.get('resolved_historical', '—'))}")
+    if recs:
+        first = recs[0]
+        msg = first.get('message') if isinstance(first, dict) else str(first)
+        lines.append(f"- warning: {str(msg)[:100]}")
+    else:
+        lines.append('- no calibration warnings')
+    return lines
+
+
+def _after_hours_today_banner() -> str | None:
+    from backend.telegram.india_mode_lock import is_after_hours_phase
+
+    if is_after_hours_phase():
+        return 'Market closed/after-hours — treat as research watchlist.'
+    return None
+
+
 def _global_item_display_label(row: dict[str, Any]) -> str:
     """Label global items — mark SpaceX/crypto-only noise unless India equity link."""
     title = str(row.get('label') or row.get('name') or row.get('title') or '—')[:120]
@@ -494,7 +543,16 @@ def format_calibration_section_telegram(
     if recs is None:
         recs = cal.get('recommendations') or cal_summary.get('calibration_recommendations') or []
 
+    from backend.analytics.unified_decision_engine import calibration_unresolved_message
+
+    calib_warn = calibration_unresolved_message()
     lines = ['<b>📊 Calibration</b>']
+    if calib_warn:
+        lines.append('Live resolved: 0')
+        lines.append('Historical resolved: 0')
+        lines.extend(calib_warn)
+        return '\n'.join(lines)
+
     if live_resolved is not None:
         lines.append(f'Live resolved: {live_resolved}')
     if hist_resolved is not None:
@@ -516,14 +574,6 @@ def format_calibration_section_telegram(
         val is not None for val in (live_resolved, hist_resolved, watch, avoid)
     ):
         lines.append('No calibration data cached.')
-    try:
-        from backend.analytics.unified_decision_engine import calibration_unresolved_message
-
-        calib_warn = calibration_unresolved_message()
-        if calib_warn:
-            lines.extend(calib_warn)
-    except Exception:
-        pass
 
     return '\n'.join(lines)
 
@@ -650,6 +700,10 @@ def format_stock_decision_payload(
     if warnings:
         prefix = '\n'.join(str(w) for w in warnings)
         body = f'{prefix}\n\n{body}' if body else prefix
+    if normalized == 'today':
+        banner = _after_hours_today_banner()
+        if banner and banner not in body:
+            body = f'{banner}\n\n{body}' if body else banner
     if rebuilt:
         prefix = f'<b>📋 {label}</b>\n\n{rebuilt_cache_message()}'
         if body.startswith('<b>AstraEdge'):
@@ -767,14 +821,7 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
         warn_tokens = {str(w) for w in (payload.get('warnings') or [])}
         if 'Runtime snapshot missing; using report cache.' in warn_tokens:
             lines.append('Runtime snapshot missing; using report cache.')
-        try:
-            from backend.analytics.market_calendar_router import is_manual_refresh_suggested_mode
-            from backend.analytics.premarket_conviction import MANUAL_REFRESH_SUGGESTION
-
-            if is_manual_refresh_suggested_mode():
-                lines.append(f'<i>{MANUAL_REFRESH_SUGGESTION}</i>')
-        except Exception:
-            pass
+        _append_manual_refresh_suggestion(lines)
         stock_sd = summary.get('stock_decision_today') or {}
         top_pick = stock_sd.get('top_pick') if isinstance(stock_sd, dict) else None
         if isinstance(top_pick, dict) and top_pick.get('ticker'):
@@ -998,16 +1045,7 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     cal = cal_summary.get('confidence_calibration') or {}
     if isinstance(cal, dict) and cal.get('summary'):
         cal = cal.get('summary') or cal
-    recs = cal_summary.get('calibration_recommendations') or cal.get('recommendations') or []
-    lines.append('<b>📊 Calib</b>')
-    lines.append(f"- live resolved: {cal.get('live_resolved', cal.get('resolved_live', '—'))}")
-    lines.append(f"- historical resolved: {cal.get('historical_resolved', cal.get('resolved_historical', '—'))}")
-    if recs:
-        first = recs[0]
-        msg = first.get('message') if isinstance(first, dict) else str(first)
-        lines.append(f"- warning: {str(msg)[:100]}")
-    else:
-        lines.append('- no calibration warnings')
+    lines.extend(_aihub_full_calib_lines(cal if isinstance(cal, dict) else {}, cal_summary))
 
     journal = payloads.get('journal') or {}
     journal_summary = journal.get('summary') or {}
@@ -1282,15 +1320,9 @@ def format_aihub_brain_full() -> str:
     exec_summary = intel.get('executive_summary') or intel.get('summary') or ''
 
     lines = ['<b>🧠 AstraEdge Brain — Full</b>', '']
-    try:
-        from backend.analytics.market_calendar_router import is_manual_refresh_suggested_mode
-        from backend.analytics.premarket_conviction import MANUAL_REFRESH_SUGGESTION
-
-        if is_manual_refresh_suggested_mode():
-            lines.append(f'<i>{MANUAL_REFRESH_SUGGESTION}</i>')
-            lines.append('')
-    except Exception:
-        pass
+    _append_manual_refresh_suggestion(lines)
+    if lines[-1]:
+        lines.append('')
 
     lines.extend(['<b>1. Market read</b>', f'• Mode: {mode} · {stale}', f'• Risk: {risk}'])
     if exec_summary:
@@ -1361,15 +1393,22 @@ def format_aihub_brain_full() -> str:
     calib = sources.get('calibration') or {}
     recs = calib.get('recommendations') or []
     lines.extend(['', '<b>7. Calibration</b>'])
-    calib_lines: list[str] = []
-    for rec in recs[:3]:
-        formatted = format_calibration_rec_readable(rec)
-        if formatted:
-            calib_lines.append(formatted)
-    if calib_lines:
-        lines.extend(calib_lines)
+    from backend.analytics.unified_decision_engine import calibration_unresolved_message
+
+    calib_warn = calibration_unresolved_message()
+    if calib_warn:
+        for line in calib_warn:
+            lines.append(f'• {line}')
     else:
-        lines.append('• No calibration warnings')
+        calib_lines: list[str] = []
+        for rec in recs[:3]:
+            formatted = format_calibration_rec_readable(rec)
+            if formatted:
+                calib_lines.append(formatted)
+        if calib_lines:
+            lines.extend(calib_lines)
+        else:
+            lines.append('• No calibration warnings')
 
     memory = sources.get('memory') or {}
     learning = memory.get('learning') or {}

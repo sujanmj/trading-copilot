@@ -26,16 +26,16 @@ def main() -> int:
     from backend.telegram.response_format import format_status_text
     from backend.telegram.telegram_analysis_bot import _handle_health
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 48R':
-        return _fail(f'expected AstraEdge 48R got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 48S':
+        return _fail(f'expected AstraEdge 48S got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     status_text = format_status_text()
-    if 'Telegram build: <code>AstraEdge 48R</code>' not in status_text:
-        return _fail('/status missing AstraEdge 48R build label')
+    if 'Telegram build: <code>AstraEdge 48S</code>' not in status_text:
+        return _fail('/status missing AstraEdge 48S build label')
 
     health_text = _handle_health()
-    if 'Telegram build: <code>AstraEdge 48R</code>' not in health_text:
-        return _fail('/health missing AstraEdge 48R build label')
+    if 'Telegram build: <code>AstraEdge 48S</code>' not in health_text:
+        return _fail('/health missing AstraEdge 48S build label')
 
     print('TELEGRAM_BUILD_STAGE_48Q_TEST_OK')
     return 0

@@ -68,6 +68,8 @@ DATA_FILES = {
 
 LIVE_MARKET_WATCH_TITLE = '🔎 LIVE MARKET WATCH'
 LIVE_MARKET_BRIEF_TITLE = '📊 LIVE MARKET BRIEF'
+AFTER_HOURS_WATCH_TITLE = '🌙 AFTER-HOURS WATCH'
+AFTER_HOURS_FULL_TITLE = '🌙 AFTER-HOURS FULL BRIEF'
 
 SLOT_TITLES = {
     'premarket_top3': '🌅 PREMARKET TOP SETUPS',
@@ -86,11 +88,19 @@ def _log(msg: str) -> None:
 
 def _is_india_market_hours(mode_info: dict) -> bool:
     mode = str(mode_info.get('market_mode') or mode_info.get('mode_code') or '')
-    return 'INDIA_MARKET_HOURS' in mode
+    return 'INDIA_MARKET_HOURS' in mode and 'AFTER_HOURS' not in mode.upper()
+
+
+def _is_after_hours_mode(mode_info: dict) -> bool:
+    label = str(mode_info.get('market_mode') or '').upper()
+    code = str(mode_info.get('mode_code') or '').upper()
+    return 'AFTER_HOURS' in label or code == 'INDIA_AFTER_HOURS_MODE'
 
 
 def _is_live_market_routing(mode_info: dict, now: Optional[datetime] = None) -> bool:
     """After 09:15 during INDIA_MARKET_HOURS — live watch/brief routing."""
+    if _is_after_hours_mode(mode_info):
+        return False
     now = now or datetime.now(IST)
     return _is_india_market_hours(mode_info) and _is_after_open(now)
 
@@ -635,7 +645,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '48R',
+        'stage': '48S',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
         'weekend_research_mode': weekend_research,
@@ -702,6 +712,8 @@ def _title_for_slot(
 ) -> str:
     now = now or datetime.now(IST)
     mode_info = mode_info or {}
+    if _is_after_hours_mode(mode_info):
+        return AFTER_HOURS_FULL_TITLE if full else AFTER_HOURS_WATCH_TITLE
     if _is_live_market_routing(mode_info, now):
         return LIVE_MARKET_BRIEF_TITLE if full else LIVE_MARKET_WATCH_TITLE
     if slot in SLOT_TITLES:
@@ -717,9 +729,17 @@ def _action_wording(
     now: Optional[datetime] = None,
     *,
     weekend_research: bool = False,
+    mode_info: Optional[dict] = None,
 ) -> list[str]:
     """Time-aware rule/footer lines — no confirm-after-9:15 after open."""
     now = now or datetime.now(IST)
+    mode_info = mode_info or {}
+    if _is_after_hours_mode(mode_info):
+        return [
+            '<b>Rule:</b> Market closed/after-hours — research only, no live entry.',
+            'Prepare watchlist for next session; confirm tomorrow with price + volume.',
+            '<i>Research only · no blind entry · watch for entry · next-session watch.</i>',
+        ]
     if weekend_research:
         return [
             '<b>Rule:</b> Weekend/holiday research — no live premarket signal.',
@@ -728,7 +748,7 @@ def _action_wording(
             f'{NEXT_SESSION_CONFIRM} with price strength + volume + sector support.',
             '<i>Research only · no blind entry · watch for entry · next-session watch.</i>',
         ]
-    if _is_after_open(now):
+    if _is_after_open(now) and _is_live_market_routing(mode_info, now):
         return [
             '<b>Rule:</b> Market open — confirmed setup / watch for entry discipline.',
             f'<i>{OPEN_WATCH_ACTION}</i>',
@@ -991,7 +1011,7 @@ def format_premarket_telegram(
         lines.extend(['', refresh_line])
 
     lines.append('')
-    lines.extend(_action_wording(now))
+    lines.extend(_action_wording(now, mode_info=mode_info))
 
     text = '\n'.join(lines)
     return _enforce_wording(text, now=now)

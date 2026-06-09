@@ -453,12 +453,42 @@ def memory_outcome_warning(stats: dict[str, Any], overall: dict[str, Any]) -> st
     return None
 
 
-def calibration_unresolved_message(stats: dict[str, Any] | None = None, overall: dict[str, Any] | None = None) -> list[str]:
-    stats = stats or {}
-    overall = overall or {}
-    predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
+def _load_memory_calibration_stats() -> tuple[dict[str, Any], dict[str, Any], bool]:
+    """Return (stats, overall, memory_available) from market memory dashboard cache."""
+    try:
+        from backend.telegram.lazy_command_runner import MEMORY_CACHE_FILE, _load_json
+
+        if not MEMORY_CACHE_FILE.is_file():
+            return {}, {}, False
+        dash = _load_json(MEMORY_CACHE_FILE)
+        if not isinstance(dash, dict):
+            return {}, {}, False
+        stats = dash.get('stats') if isinstance(dash.get('stats'), dict) else {}
+        learning = dash.get('learning') if isinstance(dash.get('learning'), dict) else {}
+        overall = learning.get('overall') if isinstance(learning.get('overall'), dict) else {}
+        return stats, overall, True
+    except Exception:
+        return {}, {}, False
+
+
+def calibration_outcomes_unresolved(
+    stats: dict[str, Any] | None = None,
+    overall: dict[str, Any] | None = None,
+) -> bool:
+    memory_available = True
+    if stats is None and overall is None:
+        stats, overall, memory_available = _load_memory_calibration_stats()
+    else:
+        stats = stats or {}
+        overall = overall or {}
+    if not memory_available and not stats and not overall:
+        return False
     outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
-    if predictions > 0 and outcomes == 0:
+    return outcomes == 0
+
+
+def calibration_unresolved_message(stats: dict[str, Any] | None = None, overall: dict[str, Any] | None = None) -> list[str]:
+    if calibration_outcomes_unresolved(stats, overall):
         return [
             'Calibration unavailable — outcomes unresolved.',
             'Do not trust win-rate until outcome resolver completes.',
