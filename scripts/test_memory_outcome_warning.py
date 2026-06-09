@@ -34,8 +34,16 @@ def main() -> int:
     overall = {'total_predictions': 9, 'resolved_outcomes': 0}
 
     warn = memory_outcome_warning(stats, overall)
-    if not warn or 'Outcome resolver not active yet' not in warn:
+    if warn != 'Do not trust win-rate/calibration until outcomes resolve.':
         return _fail(f'unexpected memory_outcome_warning: {warn!r}')
+
+    from backend.analytics.unified_decision_engine import memory_outcome_status_lines
+
+    status_lines = memory_outcome_status_lines(stats, overall)
+    if not status_lines:
+        return _fail('memory_outcome_status_lines must return resolver status when unresolved')
+    if 'not active yet' in ' '.join(status_lines).lower():
+        return _fail('must not say not active yet when resolver installed')
     if 'Do not trust win-rate/calibration until outcomes resolve' not in warn:
         return _fail('memory warning must caution against calibration trust')
 
@@ -59,7 +67,9 @@ def main() -> int:
     with patch('backend.telegram.lazy_command_runner._load_json', return_value=zero_dashboard):
         memory_text = run_memory_only().get('text') or ''
     if warn not in memory_text:
-        return _fail('/memory must surface memory_outcome_warning text')
+        return _fail('/memory must surface trust warning text')
+    if 'Outcome resolver active' not in memory_text:
+        return _fail('/memory must surface resolver active status')
 
     from backend.telegram.response_format import format_calibration_section_telegram
 

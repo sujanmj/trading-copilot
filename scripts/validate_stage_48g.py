@@ -39,8 +39,8 @@ VALIDATORS = [
 
 def main() -> int:
     for rel, needle in (
-        ('backend/config/local_safe_mode.py', 'AstraEdge 49A'),
-        ('backend/api/api_server.py', "'stage': '49A'"),
+        ('backend/config/local_safe_mode.py', 'AstraEdge 49B'),
+        ('backend/api/api_server.py', "'stage': '49B'"),
         ('backend/analytics/budget_impact.py', "STAGE = '48U'"),
         ('backend/analytics/broker_intelligence.py', "STAGE = '48U'"),
     ):

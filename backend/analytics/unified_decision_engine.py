@@ -446,11 +446,19 @@ def memory_outcome_warning(stats: dict[str, Any], overall: dict[str, Any]) -> st
     predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
     outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
     if predictions > 0 and outcomes == 0:
-        return (
-            'Outcome resolver not active yet or awaiting close data. '
-            'Do not trust win-rate/calibration until outcomes resolve.'
-        )
+        return 'Do not trust win-rate/calibration until outcomes resolve.'
     return None
+
+
+def memory_outcome_status_lines(stats: dict[str, Any], overall: dict[str, Any]) -> list[str]:
+    """Resolver status lines for /memory when outcomes are still unresolved."""
+    predictions = int(stats.get('predictions') or overall.get('total_predictions') or 0)
+    outcomes = int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
+    if predictions <= 0 or outcomes > 0:
+        return []
+    from backend.storage.outcome_resolver import format_outcome_resolver_status_lines
+
+    return format_outcome_resolver_status_lines()
 
 
 def _load_memory_calibration_stats() -> tuple[dict[str, Any], dict[str, Any], bool]:
@@ -488,12 +496,14 @@ def calibration_outcomes_unresolved(
 
 
 def calibration_unresolved_message(stats: dict[str, Any] | None = None, overall: dict[str, Any] | None = None) -> list[str]:
-    if calibration_outcomes_unresolved(stats, overall):
-        return [
-            'Calibration unavailable — outcomes unresolved.',
-            'Do not trust win-rate until outcome resolver completes.',
-        ]
-    return []
+    if not calibration_outcomes_unresolved(stats, overall):
+        return []
+    from backend.storage.outcome_resolver import format_outcome_resolver_status_lines
+
+    lines = ['Calibration unavailable — outcomes unresolved.']
+    lines.extend(format_outcome_resolver_status_lines())
+    lines.append('Do not trust win-rate until outcome resolver completes.')
+    return lines
 
 
 def get_calibration_resolved_count(

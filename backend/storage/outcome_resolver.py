@@ -484,7 +484,88 @@ def run_outcome_resolver_once(
     if not dry_run and summary['resolved_new'] > 0 and refresh_cache:
         refresh_memory_dashboard_cache()
 
+    if not dry_run:
+        _record_resolver_run(summary)
+
     return summary
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def is_outcome_resolver_installed() -> bool:
+    """True when resolver module, entrypoint script, and scheduler hook exist."""
+    try:
+        script = _project_root() / 'scripts' / 'resolve_outcomes_once.py'
+        scheduler = _project_root() / 'backend' / 'telegram' / 'telegram_brief_scheduler.py'
+        if not script.is_file() or not scheduler.is_file():
+            return False
+        scheduler_text = scheduler.read_text(encoding='utf-8')
+        return (
+            'run_after_close_outcome_resolver_if_due' in scheduler_text
+            or '_maybe_run_after_close_outcome_resolver' in scheduler_text
+        )
+    except OSError:
+        return False
+
+
+def _record_resolver_run(summary: dict[str, Any]) -> None:
+    state = _load_resolver_state()
+    state['last_run_at'] = datetime.now(timezone.utc).isoformat()
+    state['last_summary'] = {
+        'resolved_new': int(summary.get('resolved_new') or 0),
+        'pending_after': int(summary.get('pending_after') or 0),
+        'skipped_no_price': int(summary.get('skipped_no_price') or 0),
+        'skipped_not_due': int(summary.get('skipped_not_due') or 0),
+        'errors': int(summary.get('errors') or 0),
+    }
+    _save_resolver_state(state)
+
+
+def get_outcome_resolver_status() -> dict[str, Any]:
+    """Snapshot for status script and UI — never raises."""
+    installed = is_outcome_resolver_installed()
+    metrics = compute_signal_quality_metrics()
+    state = _load_resolver_state()
+    last_summary = state.get('last_summary') if isinstance(state.get('last_summary'), dict) else {}
+    last_run = state.get('last_run_at') or state.get('last_run_date')
+    return {
+        'resolver_active': installed,
+        'last_run': last_run,
+        'resolved_total': int(metrics.get('resolved') or 0),
+        'pending_total': int(metrics.get('pending') or 0),
+        'skipped_no_price': int(last_summary.get('skipped_no_price') or 0),
+        'skipped_not_due': int(last_summary.get('skipped_not_due') or 0),
+        'errors': int(last_summary.get('errors') or 0),
+        'last_summary': last_summary,
+    }
+
+
+def format_outcome_resolver_status_lines() -> list[str]:
+    """
+    Human-readable resolver status for /memory and /aihub calib.
+    Never claims inactive when resolver is installed.
+    """
+    if not is_outcome_resolver_installed():
+        return ['Outcome resolver not active yet.']
+
+    state = _load_resolver_state()
+    last_run = state.get('last_run_at') or state.get('last_run_date')
+    last_summary = state.get('last_summary') if isinstance(state.get('last_summary'), dict) else {}
+
+    if last_run:
+        lines = ['Outcome resolver active.', f'Last resolver run: {last_run}']
+        lines.append(
+            'Last run: '
+            f"resolved_new={int(last_summary.get('resolved_new') or 0)} · "
+            f"skipped_no_price={int(last_summary.get('skipped_no_price') or 0)} · "
+            f"skipped_not_due={int(last_summary.get('skipped_not_due') or 0)} · "
+            f"errors={int(last_summary.get('errors') or 0)}"
+        )
+        return lines
+
+    return ['Outcome resolver active — awaiting eligible close/reference price data.']
 
 
 def _load_resolver_state() -> dict:
@@ -523,9 +604,12 @@ def run_after_close_outcome_resolver_if_due(*, now: datetime | None = None) -> d
 
         summary = run_outcome_resolver_once(refresh_cache=True)
         state['last_run_date'] = day_key
+        state['last_run_at'] = now.isoformat()
         state['last_summary'] = {
             'resolved_new': summary.get('resolved_new', 0),
             'pending_after': summary.get('pending_after', 0),
+            'skipped_no_price': summary.get('skipped_no_price', 0),
+            'skipped_not_due': summary.get('skipped_not_due', 0),
             'errors': summary.get('errors', 0),
         }
         _save_resolver_state(state)

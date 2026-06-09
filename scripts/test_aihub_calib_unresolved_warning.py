@@ -32,12 +32,14 @@ def main() -> int:
     calib_lines = calibration_unresolved_message(stats, overall)
     if not isinstance(calib_lines, list):
         return _fail(f'calibration_unresolved_message must return list got {type(calib_lines)!r}')
-    if len(calib_lines) < 2:
-        return _fail(f'expected at least 2 calibration warning lines got {calib_lines!r}')
+    if len(calib_lines) < 3:
+        return _fail(f'expected at least 3 calibration warning lines got {calib_lines!r}')
     if 'Calibration unavailable — outcomes unresolved.' not in calib_lines[0]:
         return _fail(f'unexpected first calibration line: {calib_lines[0]!r}')
     if 'Do not trust win-rate until outcome resolver completes.' not in ' '.join(calib_lines):
         return _fail('calibration warnings must caution against win-rate trust')
+    if 'Outcome resolver active' not in ' '.join(calib_lines):
+        return _fail('calibration unresolved must include resolver active status')
 
     if calibration_unresolved_message({'predictions': 3, 'outcomes': 2}) != []:
         return _fail('resolved outcomes must return empty calibration warning list')

@@ -332,17 +332,19 @@ def run_memory_only() -> dict[str, Any]:
     sq_metrics = compute_signal_quality_metrics()
     lines = ['<b>🧠 Market memory</b>']
     if calib_mode == 'unresolved':
-        from backend.analytics.unified_decision_engine import memory_outcome_warning
+        from backend.analytics.unified_decision_engine import memory_outcome_status_lines, memory_outcome_warning
 
-        outcome_warn = memory_outcome_warning(stats, overall)
+        resolver_lines = memory_outcome_status_lines(stats, overall)
+        trust_line = memory_outcome_warning(stats, overall)
         block = [
             f'Predictions tracked: {predictions}',
             'Outcomes resolved: 0',
             f'Pending resolution: {unresolved if unresolved > 0 else predictions}',
         ]
-        if outcome_warn:
-            block.append(outcome_warn)
-        else:
+        block.extend(resolver_lines)
+        if trust_line:
+            block.append(trust_line)
+        elif not resolver_lines:
             block.append('Reason: awaiting close-price/outcome resolver or next market session')
         block.extend([
             'Source: cloud/runtime cache',

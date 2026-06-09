@@ -33,8 +33,8 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.response_format import format_aihub_full, strip_stage_markers
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 49A':
-        return _fail(f'expected AstraEdge 49A got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 49B':
+        return _fail(f'expected AstraEdge 49B got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     if len(FULL_SNAPSHOT_SEQUENCE) != 33:
         return _fail(f'/full must stay 33 steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
 
