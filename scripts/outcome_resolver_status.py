@@ -33,6 +33,8 @@ def main() -> int:
             'resolved_total': 0,
             'pending_total': 0,
             'skipped_no_price': 0,
+            'skipped_missing_reference': 0,
+            'skipped_missing_evaluation': 0,
             'skipped_not_due': 0,
             'errors': 0,
         }
@@ -45,6 +47,8 @@ def main() -> int:
     print(f"resolved_total={int(status.get('resolved_total') or 0)}", flush=True)
     print(f"pending_total={int(status.get('pending_total') or 0)}", flush=True)
     print(f"skipped_no_price={int(status.get('skipped_no_price') or 0)}", flush=True)
+    print(f"skipped_missing_reference={int(status.get('skipped_missing_reference') or 0)}", flush=True)
+    print(f"skipped_missing_evaluation={int(status.get('skipped_missing_evaluation') or 0)}", flush=True)
     print(f"skipped_not_due={int(status.get('skipped_not_due') or 0)}", flush=True)
     print(f"errors={int(status.get('errors') or 0)}", flush=True)
     return 0

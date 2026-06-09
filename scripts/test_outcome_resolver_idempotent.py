@@ -21,6 +21,7 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
+    from backend.storage.outcome_price_lookup import PriceHit
     from backend.storage.market_memory_db import get_connection, init_market_memory_db, upsert_prediction
     from backend.storage.outcome_resolver import run_outcome_resolver_once
 
@@ -51,15 +52,17 @@ def main() -> int:
     try:
         row = conn.execute('SELECT * FROM predictions WHERE prediction_id = ?', (pid,)).fetchone()
         pending = [dict(row)]
+        eval_hit = PriceHit(51.0, 'latest_market_data', datetime.now(timezone.utc))
         with patch(
             'backend.storage.outcome_resolver.get_pending_predictions',
             return_value=pending,
         ):
-            first = run_outcome_resolver_once(limit=20, market_data=market_data, refresh_cache=False)
-            if int(first.get('resolved_new') or 0) != 1:
-                return _fail(f'first run expected resolved_new=1 got {first!r}')
+            with patch('backend.storage.outcome_price_lookup.lookup_evaluation_price', return_value=eval_hit):
+                first = run_outcome_resolver_once(limit=20, market_data=market_data, refresh_cache=False)
+                if int(first.get('resolved_new') or 0) != 1:
+                    return _fail(f'first run expected resolved_new=1 got {first!r}')
 
-            second = run_outcome_resolver_once(limit=20, market_data=market_data, refresh_cache=False)
+                second = run_outcome_resolver_once(limit=20, market_data=market_data, refresh_cache=False)
         if int(second.get('resolved_new') or 0) != 0:
             return _fail(f'second run must be idempotent got {second!r}')
     finally:

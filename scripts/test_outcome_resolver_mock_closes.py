@@ -33,6 +33,7 @@ def main() -> int:
         resolve_single_prediction,
         run_outcome_resolver_once,
     )
+    from backend.storage.outcome_price_lookup import PriceHit
     from backend.storage.market_memory_db import get_connection, init_market_memory_db, upsert_prediction
 
     hit, _ = evaluate_return_outcome(BULLISH_HIT_PCT + 0.1, bearish=False)
@@ -87,15 +88,17 @@ def main() -> int:
             row = conn.execute('SELECT * FROM predictions WHERE prediction_id = ?', (pid,)).fetchone()
             pending_rows.append(dict(row))
 
+        eval_hit = PriceHit(101.0, 'latest_market_data', datetime.now(timezone.utc))
         with patch(
             'backend.storage.outcome_resolver.get_pending_predictions',
             return_value=pending_rows,
         ):
-            summary = run_outcome_resolver_once(
-                limit=50,
-                market_data=market_data,
-                refresh_cache=False,
-            )
+            with patch('backend.storage.outcome_price_lookup.lookup_evaluation_price', return_value=eval_hit):
+                summary = run_outcome_resolver_once(
+                    limit=50,
+                    market_data=market_data,
+                    refresh_cache=False,
+                )
         if int(summary.get('resolved_new') or 0) < 1:
             return _fail(f'expected resolved predictions got {summary!r}')
 

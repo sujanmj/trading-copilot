@@ -42,6 +42,8 @@ def main() -> int:
     print(f"resolved_new={summary.get('resolved_new', 0)}", flush=True)
     print(f"pending_after={summary.get('pending_after', 0)}", flush=True)
     print(f"skipped_no_price={summary.get('skipped_no_price', 0)}", flush=True)
+    print(f"skipped_missing_reference={summary.get('skipped_missing_reference', 0)}", flush=True)
+    print(f"skipped_missing_evaluation={summary.get('skipped_missing_evaluation', 0)}", flush=True)
     print(f"skipped_not_due={summary.get('skipped_not_due', 0)}", flush=True)
     print(f"errors={summary.get('errors', 0)}", flush=True)
     return 0 if int(summary.get('errors') or 0) == 0 else 1

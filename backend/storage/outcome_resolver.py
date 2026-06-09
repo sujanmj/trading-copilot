@@ -22,14 +22,12 @@ from backend.storage.market_memory_db import (
 from backend.storage.market_memory_outcomes import (
     _parse_signal_stack,
     _parse_timestamp,
-    _to_float,
     load_latest_market_data,
-    lookup_latest_price,
     parse_prediction_raw_payload,
 )
 from backend.utils.config import DATA_DIR
 
-RESOLVER_VERSION = '49A'
+RESOLVER_VERSION = '49C'
 SIGNAL_QUALITY_HOLDING_PERIOD = 'signal_quality'
 CALIBRATION_MIN_SAMPLE = 20
 OUTCOME_RESOLVER_STATE_FILE = DATA_DIR / 'outcome_resolver_last_run.json'
@@ -131,16 +129,36 @@ def map_outcome_to_resolved_as(outcome: str) -> str:
     return 'UNRESOLVED'
 
 
-def _reference_price(prediction: dict) -> float | None:
-    raw = parse_prediction_raw_payload(prediction.get('raw_payload'))
-    stack = _parse_signal_stack(prediction)
-    merged = {**stack, **raw}
-    return _to_float(
-        merged.get('entry_price')
-        or merged.get('reference_price')
-        or merged.get('current_price')
-        or merged.get('price')
-        or merged.get('close'),
+def _lookup_reference_hit(
+    prediction: dict,
+    signal_time: datetime | None = None,
+    store: Any | None = None,
+) -> Any | None:
+    from backend.storage.outcome_price_lookup import OutcomePriceStore, lookup_reference_price
+
+    if signal_time is None:
+        signal_time = _signal_time(prediction)
+    price_store = store if store is not None else OutcomePriceStore.load()
+    return lookup_reference_price(prediction, signal_time, price_store)
+
+
+def _lookup_evaluation_hit(
+    prediction: dict,
+    signal_time: datetime,
+    horizon: str,
+    *,
+    store: Any | None = None,
+    now: datetime | None = None,
+) -> Any | None:
+    from backend.storage.outcome_price_lookup import OutcomePriceStore, lookup_evaluation_price
+
+    price_store = store if store is not None else OutcomePriceStore.load()
+    return lookup_evaluation_price(
+        prediction,
+        signal_time,
+        horizon,
+        store=price_store,
+        now=now,
     )
 
 
@@ -237,8 +255,9 @@ def _count_pending() -> int:
 
 def resolve_single_prediction(
     prediction: dict,
-    market_data: dict,
+    market_data: dict | None = None,
     *,
+    store: Any | None = None,
     now: datetime | None = None,
 ) -> tuple[dict | None, str | None]:
     """
@@ -262,13 +281,22 @@ def resolve_single_prediction(
     if not _horizon_due(signal_time, horizon, now=now):
         return None, 'not_due'
 
-    ref_price = _reference_price(prediction)
-    if ref_price is None or ref_price <= 0:
+    ref_hit = _lookup_reference_hit(prediction, signal_time, store)
+    if ref_hit is None or ref_hit.price <= 0:
         return None, 'missing_reference_price'
 
-    eval_price = lookup_latest_price(market_data, ticker)
-    if eval_price is None or eval_price <= 0:
+    eval_hit = _lookup_evaluation_hit(prediction, signal_time, horizon, store=store, now=now)
+    if eval_hit is None or eval_hit.price <= 0:
         return None, 'missing_evaluation_price'
+
+    from backend.storage.outcome_price_lookup import validate_resolution_price_pair
+
+    horizon_hours = float(HORIZON_MIN_HOURS.get(horizon, HORIZON_MIN_HOURS['UNKNOWN']))
+    if not validate_resolution_price_pair(ref_hit, eval_hit, signal_time, horizon_hours):
+        return None, 'missing_evaluation_price'
+
+    ref_price = ref_hit.price
+    eval_price = eval_hit.price
 
     return_pct = ((eval_price - ref_price) / ref_price) * 100.0
     bearish = is_bearish_signal(prediction)
@@ -287,7 +315,11 @@ def resolve_single_prediction(
         'signal_time': signal_time.isoformat(),
         'horizon': horizon,
         'reference_price': ref_price,
+        'reference_price_source': ref_hit.source,
+        'reference_price_timestamp': ref_hit.timestamp.isoformat() if ref_hit.timestamp else None,
         'evaluation_price': eval_price,
+        'evaluation_price_source': eval_hit.source,
+        'evaluation_price_timestamp': eval_hit.timestamp.isoformat() if eval_hit.timestamp else None,
         'benchmark_return': None,
         'return_pct': round(return_pct, 4),
         'outcome': outcome,
@@ -432,6 +464,8 @@ def run_outcome_resolver_once(
         'resolved_new': 0,
         'pending_after': pending_before,
         'skipped_no_price': 0,
+        'skipped_missing_reference': 0,
+        'skipped_missing_evaluation': 0,
         'skipped_not_due': 0,
         'skipped_already_resolved': 0,
         'skipped_other': 0,
@@ -440,9 +474,13 @@ def run_outcome_resolver_once(
         'resolved_ids': [],
     }
 
+    from backend.storage.outcome_price_lookup import OutcomePriceStore
+
+    price_store = OutcomePriceStore.load()
     data = market_data if market_data is not None else load_latest_market_data(market_data_path)
     if not data:
-        summary['errors'] = 0
+        summary['skipped_missing_reference'] = pending_before
+        summary['skipped_missing_evaluation'] = pending_before
         summary['skipped_no_price'] = pending_before
         summary['pending_after'] = pending_before
         summary['stats_after'] = get_market_memory_stats()
@@ -450,14 +488,23 @@ def run_outcome_resolver_once(
 
     predictions = get_pending_predictions(limit=limit)
     for prediction in predictions:
-        payload, skip = resolve_single_prediction(prediction, data)
+        payload, skip = resolve_single_prediction(prediction, data, store=price_store)
         if skip == 'already_resolved':
             summary['skipped_already_resolved'] += 1
             continue
         if skip == 'not_due':
             summary['skipped_not_due'] += 1
             continue
-        if skip in ('missing_reference_price', 'missing_evaluation_price', 'missing_signal_time'):
+        if skip == 'missing_reference_price':
+            summary['skipped_missing_reference'] += 1
+            summary['skipped_no_price'] += 1
+            continue
+        if skip == 'missing_evaluation_price':
+            summary['skipped_missing_evaluation'] += 1
+            summary['skipped_no_price'] += 1
+            continue
+        if skip == 'missing_signal_time':
+            summary['skipped_missing_reference'] += 1
             summary['skipped_no_price'] += 1
             continue
         if payload is None:
@@ -517,6 +564,8 @@ def _record_resolver_run(summary: dict[str, Any]) -> None:
         'resolved_new': int(summary.get('resolved_new') or 0),
         'pending_after': int(summary.get('pending_after') or 0),
         'skipped_no_price': int(summary.get('skipped_no_price') or 0),
+        'skipped_missing_reference': int(summary.get('skipped_missing_reference') or 0),
+        'skipped_missing_evaluation': int(summary.get('skipped_missing_evaluation') or 0),
         'skipped_not_due': int(summary.get('skipped_not_due') or 0),
         'errors': int(summary.get('errors') or 0),
     }
@@ -536,6 +585,8 @@ def get_outcome_resolver_status() -> dict[str, Any]:
         'resolved_total': int(metrics.get('resolved') or 0),
         'pending_total': int(metrics.get('pending') or 0),
         'skipped_no_price': int(last_summary.get('skipped_no_price') or 0),
+        'skipped_missing_reference': int(last_summary.get('skipped_missing_reference') or 0),
+        'skipped_missing_evaluation': int(last_summary.get('skipped_missing_evaluation') or 0),
         'skipped_not_due': int(last_summary.get('skipped_not_due') or 0),
         'errors': int(last_summary.get('errors') or 0),
         'last_summary': last_summary,
@@ -560,6 +611,8 @@ def format_outcome_resolver_status_lines() -> list[str]:
             'Last run: '
             f"resolved_new={int(last_summary.get('resolved_new') or 0)} · "
             f"skipped_no_price={int(last_summary.get('skipped_no_price') or 0)} · "
+            f"skipped_missing_reference={int(last_summary.get('skipped_missing_reference') or 0)} · "
+            f"skipped_missing_evaluation={int(last_summary.get('skipped_missing_evaluation') or 0)} · "
             f"skipped_not_due={int(last_summary.get('skipped_not_due') or 0)} · "
             f"errors={int(last_summary.get('errors') or 0)}"
         )
@@ -609,6 +662,8 @@ def run_after_close_outcome_resolver_if_due(*, now: datetime | None = None) -> d
             'resolved_new': summary.get('resolved_new', 0),
             'pending_after': summary.get('pending_after', 0),
             'skipped_no_price': summary.get('skipped_no_price', 0),
+            'skipped_missing_reference': summary.get('skipped_missing_reference', 0),
+            'skipped_missing_evaluation': summary.get('skipped_missing_evaluation', 0),
             'skipped_not_due': summary.get('skipped_not_due', 0),
             'errors': summary.get('errors', 0),
         }
