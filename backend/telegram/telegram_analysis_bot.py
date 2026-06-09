@@ -27,6 +27,7 @@ from backend.telegram.ai_usage_guard import (
     run_without_ai,
 )
 from backend.telegram.lazy_command_runner import (
+    FULL_SNAPSHOT_SEQUENCE,
     STAGE_MARKER,
     run_action_plan_only,
     run_aihub_brain_full_only,
@@ -105,6 +106,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /news — news only
 /morning — pre-market brief
 /close — market close summary
+
+<b>Snapshot:</b>
+/full — run all read-only AstraEdge commands one by one
 
 <b>Theme Wishlist:</b>
 /theme — overview · list · search · category
@@ -397,7 +401,7 @@ def _handle_close() -> str:
     return build_close_brief_text()
 
 
-def _handle_stock_decision_command(mode: str) -> str:
+def _handle_stock_decision_command(mode: str, *, cache_only: bool = False) -> str:
     from backend.analytics.railway_decision_bootstrap import (
         decision_rebuilding_reply,
         start_background_bootstrap_reports,
@@ -412,8 +416,64 @@ def _handle_stock_decision_command(mode: str) -> str:
     payload = build_stock_decision(mode=normalized)
     if stock_decision_payload_ready(payload):
         return format_stock_decision_payload(payload, normalized)
+    if cache_only:
+        return decision_rebuilding_reply(normalized)
     start_background_bootstrap_reports(force=True, railway_only=False)
     return decision_rebuilding_reply(normalized)
+
+
+def _sanitize_full_snapshot_error(reason: str) -> str:
+    text = str(reason or 'unknown error')[:120]
+    for token in (
+        'TELEGRAM_BOT_TOKEN',
+        'TELEGRAM_CHAT_ID',
+        'OPENAI',
+        'ANTHROPIC',
+        'GROQ',
+        'anthropic',
+        'openai',
+        'groq',
+        'claude',
+        'sonnet',
+    ):
+        text = text.replace(token, 'redacted')
+    return text
+
+
+def _full_snapshot_step_prefix(step: int, total: int, command: str) -> str:
+    return f'📦 AstraEdge Full\nStep {step:02d}/{total:02d} — {command}'
+
+
+def _handle_full_snapshot(*, dry_run: bool = False) -> list[dict[str, Any]]:
+    """Run read-only snapshot sequence — one prefix + output per command."""
+    total = len(FULL_SNAPSHOT_SEQUENCE)
+    results: list[dict[str, Any]] = []
+    for step, command_text in enumerate(FULL_SNAPSHOT_SEQUENCE, start=1):
+        prefix = _full_snapshot_step_prefix(step, total, command_text)
+        results.append(send_analysis_message(prefix, command='full', dry_run=dry_run))
+        try:
+            step_results = handle_analysis_command(
+                command_text,
+                from_user='full_snapshot',
+                dry_run=dry_run,
+                in_full_snapshot=True,
+            )
+            if step_results:
+                results.extend(step_results)
+            else:
+                results.append(send_analysis_message(
+                    f'{prefix}\nSection unavailable: no response',
+                    command='full',
+                    dry_run=dry_run,
+                ))
+        except Exception as exc:
+            safe_reason = _sanitize_full_snapshot_error(str(exc))
+            results.append(send_analysis_message(
+                f'{prefix}\nSection unavailable: {safe_reason}',
+                command='full',
+                dry_run=dry_run,
+            ))
+    return results
 
 
 def handle_analysis_command(
@@ -421,6 +481,7 @@ def handle_analysis_command(
     from_user: str = 'unknown',
     *,
     dry_run: bool = False,
+    in_full_snapshot: bool = False,
 ) -> list[dict[str, Any]]:
     """Process one command; returns list of send results (supports dry_run)."""
     from backend.telegram.telegram_command_normalize import (
@@ -443,6 +504,9 @@ def handle_analysis_command(
         trade_text = BLOCKED_TRADE_RESPONSE
         return [send_analysis_message(trade_text, command=cmd, dry_run=dry_run)]
 
+    if cmd == 'full' and not in_full_snapshot:
+        return _handle_full_snapshot(dry_run=dry_run)
+
     response_text = ''
     if cmd in ('start', 'help', 'h', 'commands'):
         response_text = HELP_TEXT
@@ -462,7 +526,8 @@ def handle_analysis_command(
     elif cmd == 'aihub':
         response_text = run_without_ai(lambda: {'text': _handle_aihub(args)}, command='aihub').get('text') or _handle_aihub(args)
     elif cmd == 'news':
-        result = run_without_ai(lambda: run_news_only(refresh=True), command='news')
+        refresh_news = not in_full_snapshot
+        result = run_without_ai(lambda: run_news_only(refresh=refresh_news), command='news')
         response_text = result.get('text') or 'News unavailable.'
     elif cmd == 'qa':
         result = run_without_ai(run_qa_status_only, command='qa')
@@ -492,9 +557,9 @@ def handle_analysis_command(
         start_background_bootstrap_reports(force=True, railway_only=False)
         response_text = bootstrap_started_reply()
     elif cmd == 'today':
-        response_text = _handle_stock_decision_command('today')
+        response_text = _handle_stock_decision_command('today', cache_only=in_full_snapshot)
     elif cmd == 'tomorrow':
-        response_text = _handle_stock_decision_command('tomorrow')
+        response_text = _handle_stock_decision_command('tomorrow', cache_only=in_full_snapshot)
     elif cmd == 'why':
         if not args.strip():
             response_text = 'Usage: /why &lt;ticker&gt;\nExample: /why TATASTEEL'

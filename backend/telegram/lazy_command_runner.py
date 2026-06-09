@@ -16,6 +16,60 @@ from backend.utils.config import DATA_DIR
 
 STAGE_MARKER = 'TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL'
 
+FULL_SNAPSHOT_SEQUENCE: tuple[str, ...] = (
+    '/status',
+    '/health',
+    '/schedule',
+    '/memory',
+    '/broker',
+    '/broker evidence',
+    '/qa',
+    '/action plan',
+    '/today',
+    '/tomorrow',
+    '/premarket',
+    '/premarket full',
+    '/aihub full',
+    '/aihub brain',
+    '/aihub govt',
+    '/aihub scan',
+    '/aihub market',
+    '/aihub global',
+    '/aihub news',
+    '/aihub tv',
+    '/aihub reddit',
+    '/aihub calib',
+    '/aihub journal',
+    '/news',
+    '/morning',
+    '/close',
+    '/theme',
+    '/theme list',
+    '/theme budget',
+    '/theme news infra',
+    '/theme scan infra',
+    '/budget',
+    '/budget theme infra',
+)
+
+FULL_SNAPSHOT_EXCLUDED: frozenset[str] = frozenset({
+    '/bootstrap',
+    '/refresh',
+    '/refresh quick',
+    '/refresh full',
+    '/theme refresh',
+    '/broker refresh',
+})
+
+FULL_SNAPSHOT_FORBIDDEN_ALIASES: frozenset[str] = frozenset({
+    'full compact',
+    '/full compact',
+    'full refresh',
+    '/full refresh',
+    'snapshot full',
+    '/snapshot full',
+})
+
 QA_REPORT_PATH = DATA_DIR / 'telegram_qa_status_latest.json'
 LIVE_SMOKE_REPORT = DATA_DIR / 'live_system_smoke_latest.json'
 LOCAL_READINESS_REPORT = DATA_DIR / 'local_system_readiness_latest.json'
