@@ -385,7 +385,7 @@ def _handle_health() -> str:
 
         lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
     except Exception:
-        lines.append('Telegram build: <code>AstraEdge 48S</code>')
+        lines.append('Telegram build: <code>AstraEdge 48T</code>')
     return '\n'.join(lines)
 
 

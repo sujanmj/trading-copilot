@@ -182,8 +182,6 @@ def run_scan_only() -> dict[str, Any]:
 
 
 def run_market_only(*, force: bool = False) -> dict[str, Any]:
-    from backend.telegram.response_format import format_cache_age_label, file_timestamp_iso
-
     from backend.analytics.aihub_tab_payloads import build_market_payload
 
     from backend.telegram.india_mode_lock import resolve_telegram_market_mode
@@ -194,14 +192,23 @@ def run_market_only(*, force: bool = False) -> dict[str, Any]:
         payload_mode=payload.get('market_mode'),
         summary_mode=summary.get('market_mode'),
     )
-    stale = summary.get('stale') or summary.get('is_stale')
     age_min = int(payload.get('cache_age_seconds') or 0) // 60
-    age_txt = format_cache_age_label(age_min, timestamp=file_timestamp_iso(DAILY_PACK_FILE))
+    from backend.analytics.unified_decision_engine import get_feed_freshness_meta
+
+    meta = get_feed_freshness_meta()
+    freshness_lines = meta.get('lines') or {}
     lines = [
         '<b>📈 Market payload</b>',
         f'Mode: <code>{mode}</code>',
-        f"Stale: {'yes' if stale else 'no'} · cache age: {age_txt}",
     ]
+    for key in ('report', 'scanner', 'news'):
+        line = freshness_lines.get(key)
+        if line:
+            lines.append(line)
+    if not any(freshness_lines.get(k) for k in ('report', 'scanner', 'news')):
+        from backend.telegram.response_format import format_cache_age_label
+
+        lines.append(format_cache_age_label(age_min))
     ctx = summary.get('india_context') or summary.get('context') or {}
     if isinstance(ctx, dict) and ctx:
         lines.append(f"India: {str(ctx.get('headline') or ctx.get('status') or '—')[:120]}")

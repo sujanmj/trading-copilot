@@ -99,10 +99,8 @@ def main() -> int:
     old = format_cache_age_label(4379, timestamp='2026-06-01T08:00:00+00:00')
     if '4379m' in old:
         return _fail('cache age formatter must not emit huge minute values')
-    if 'old cache' not in old:
-        return _fail('cache age formatter must mark old caches')
-    if '2026-06-01T08:00:00+00:00' not in old:
-        return _fail('old cache formatter must include last report timestamp')
+    if not old.startswith('stale ·'):
+        return _fail(f'cache age formatter must use stale label for old caches, got {old!r}')
 
     risk = resolve_global_risk_text({'summary': {}, 'items': []})
     if risk in ('—', '-', ''):

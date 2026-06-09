@@ -39,8 +39,8 @@ def main() -> int:
         build_broker_intelligence_cache,
     )
 
-    if STAGE != '48S':
-        return _fail(f'expected stage 48S got {STAGE}')
+    if STAGE != '48T':
+        return _fail(f'expected stage 48T got {STAGE}')
     if CACHE_FILE.name != 'broker_intelligence_cache.json':
         return _fail('wrong cache filename')
 

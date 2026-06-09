@@ -69,11 +69,7 @@ def format_cache_age_label(
     if age_minutes < 60:
         return f'fresh · {age_minutes}m'
     hours = age_minutes // 60
-    if hours < stale_hours:
-        return f'stale · {hours}h'
-    if timestamp:
-        return f'old cache · last report {timestamp}'
-    return 'old cache'
+    return f'stale · {hours}h'
 
 
 def file_timestamp_iso(path: Path) -> str | None:
@@ -361,11 +357,52 @@ def _market_useful_bullets(summary: dict[str, Any], items: list[Any]) -> list[st
     return _bullet_lines_from_rows(items, limit=6)
 
 
+def _split_top_watch_by_live_rejection(rows: list[Any]) -> tuple[list[str], list[str]]:
+    """Separate clean top-watch tickers from live-rejected ones."""
+    from backend.analytics.unified_decision_engine import build_live_rejection_set
+
+    registry = build_live_rejection_set()
+    clean: list[str] = []
+    rejected: list[str] = []
+    for row in rows:
+        if isinstance(row, dict):
+            ticker = str(row.get('ticker') or row.get('symbol') or '').strip().upper()
+        else:
+            ticker = str(row or '').strip().upper()
+        if not ticker:
+            continue
+        if ticker in registry:
+            if ticker not in rejected:
+                rejected.append(ticker)
+        elif ticker not in clean:
+            clean.append(ticker)
+    return clean, rejected
+
+
+def _format_journal_watchlist_lines(top_watch: list[Any]) -> list[str]:
+    clean, rejected = _split_top_watch_by_live_rejection(top_watch)
+    lines: list[str] = []
+    if clean:
+        lines.append(f"- top watch: {', '.join(clean[:5])}")
+    else:
+        lines.append('- top watch: —')
+    if rejected:
+        lines.append(f"- rejected today: {', '.join(rejected[:5])}")
+    return lines
+
+
 def _append_market_fallback_lines(lines: list[str], fallback: dict[str, Any]) -> None:
     if fallback.get('watch_count') is not None or fallback.get('avoid_count') is not None:
         lines.append(f"Watch: {fallback.get('watch_count', 0)} · Avoid: {fallback.get('avoid_count', 0)}")
-    if fallback.get('top_watch'):
-        lines.append(f"Top watch: {', '.join(fallback['top_watch'])}")
+    top_rows = fallback.get('top_watch') or []
+    if top_rows:
+        clean, rejected = _split_top_watch_by_live_rejection(
+            [{'ticker': t} if isinstance(t, str) else t for t in top_rows]
+        )
+        if clean:
+            lines.append(f"Top watch: {', '.join(clean)}")
+        if rejected:
+            lines.append(f"Rejected today: {', '.join(rejected)}")
     if fallback.get('risk_notes_count'):
         lines.append(f"Risk notes: {fallback['risk_notes_count']}")
 
@@ -1059,11 +1096,7 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
         summary_mode=journal_summary.get('market_mode'),
     )
     lines.append(f'- mode: {journal_mode}')
-    if top_watch:
-        names = [_ticker_from_row(r) for r in top_watch[:3] if isinstance(r, dict)]
-        lines.append(f"- top watch: {', '.join(names)}")
-    else:
-        lines.append('- top watch: —')
+    lines.extend(_format_journal_watchlist_lines(top_watch))
     lines.append(f"- risk notes: {len(failed) if isinstance(failed, list) else 0}")
 
     lines.extend([

@@ -38,6 +38,7 @@ REQUIRED_PHRASES_OPEN = (
 )
 OPEN_CONFIRMED_ACTION = 'Action: confirmed setup — wait for entry discipline, pullback/risk control'
 OPEN_WATCH_ACTION = 'Action: watch for entry — confirmation already active'
+AFTER_HOURS_SCANNER_ACTION = 'Action: next-session watch — confirm tomorrow with price + volume'
 
 WEEKEND_RESEARCH_TOP_TITLE = '🧪 WEEKEND RESEARCH WATCHLIST (NOT PREMARKET TOP SETUPS)'
 WEEKEND_RESEARCH_FULL_TITLE = '🧪 WEEKEND RESEARCH BRIEF'
@@ -366,16 +367,21 @@ def _build_setup_candidates(
         else:
             setup = f"{direction} scanner signal"
             score = min(95, 55 + abs(chg) * 2 + vol_r * 4)
-        if _is_after_open():
+        if _is_after_hours_mode(_india_mode_info()):
+            reason2 = AFTER_HOURS_SCANNER_ACTION
+            move_label = f"prior-session scanner move {chg:+.1f}% · vol {vol_r:.1f}x"
+        elif _is_after_open():
             reason2 = OPEN_CONFIRMED_ACTION if score >= 70 else OPEN_WATCH_ACTION
+            move_label = f"Overnight/scanner move {chg:+.1f}% · vol {vol_r:.1f}x"
         else:
             reason2 = 'Watch for entry — confirm after 9:15 with volume'
+            move_label = f"Overnight/scanner move {chg:+.1f}% · vol {vol_r:.1f}x"
         candidates.append(_annotate_setup_row({
             'ticker': ticker,
             'setup': setup,
             'score': round(score),
             'reasons': [
-                f"Overnight/scanner move {chg:+.1f}% · vol {vol_r:.1f}x",
+                move_label,
                 reason2,
             ],
             'sector': sig.get('sector') or '?',
@@ -645,7 +651,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '48S',
+        'stage': '48T',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
         'weekend_research_mode': weekend_research,
@@ -696,6 +702,33 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
         atomic_write_json(REPORT_FILE, report)
         _log(f'report written {REPORT_FILE.name} setups={len(setups)} fresh={fresh_ok}')
     return report
+
+
+def _setup_detail_lines(
+    row: dict,
+    *,
+    mode_info: dict,
+    now: Optional[datetime],
+    live_market: bool,
+    fresh_ok: bool,
+    hard_stale_lock: bool,
+) -> tuple[str, str]:
+    reasons = row.get('reasons') or []
+    why = reasons[0] if reasons else 'Setup candidate'
+    why2 = reasons[1] if len(reasons) > 1 else 'Confirm only if price strength + volume + sector support'
+    if _is_after_hours_mode(mode_info):
+        if row.get('source') == 'scanner':
+            why = why.replace('Overnight/scanner move', 'prior-session scanner move')
+        why2 = AFTER_HOURS_SCANNER_ACTION
+        return why, why2
+    if live_market and fresh_ok and not hard_stale_lock:
+        status = _live_setup_status(row)
+        return why, f'{status} — no blind entry'
+    if live_market:
+        return why, 'Wait for volume confirmation'
+    if _is_after_open(now):
+        return why, 'Wait for volume confirmation'
+    return why, why2
 
 
 def _slot_label(now: Optional[datetime] = None) -> str:
@@ -944,18 +977,14 @@ def format_premarket_telegram(
             if not fresh_ok and fresh_header and not hard_stale_lock:
                 row['setup'] = 'stale research only'
                 row['score'] = min(int(row.get('score', 50)), 50)
-            reasons = row.get('reasons') or []
-            why = reasons[0] if reasons else 'Setup candidate'
-            if live_market and fresh_ok and not hard_stale_lock:
-                status = _live_setup_status(row)
-                why2 = f'{status} — no blind entry'
-            elif live_market:
-                why2 = 'Wait for volume confirmation'
-            else:
-                why2 = reasons[1] if len(reasons) > 1 else (
-                    'Wait for volume confirmation' if _is_after_open(now)
-                    else 'Confirm only if price strength + volume + sector support'
-                )
+            why, why2 = _setup_detail_lines(
+                row,
+                mode_info=mode_info,
+                now=now,
+                live_market=live_market,
+                fresh_ok=fresh_ok,
+                hard_stale_lock=hard_stale_lock,
+            )
             lines.extend([
                 f"{idx}. <b>{row.get('ticker')}</b> — {row.get('setup')} · Score {row.get('score', '—')}",
                 f"   Why: {why}",
@@ -1014,7 +1043,7 @@ def format_premarket_telegram(
     lines.extend(_action_wording(now, mode_info=mode_info))
 
     text = '\n'.join(lines)
-    return _enforce_wording(text, now=now)
+    return _enforce_wording(text, now=now, mode_info=mode_info)
 
 
 def _enforce_wording(
@@ -1022,12 +1051,16 @@ def _enforce_wording(
     *,
     now: Optional[datetime] = None,
     weekend_research: bool = False,
+    mode_info: Optional[dict] = None,
 ) -> str:
     lower = text.lower()
     for bad in FORBIDDEN_WORDS:
         if bad in lower:
             text = re.sub(re.escape(bad), 'watch for entry', text, flags=re.IGNORECASE)
     if weekend_research:
+        return text
+    mode_info = mode_info or _india_mode_info()
+    if _is_after_hours_mode(mode_info):
         return text
     if _is_after_open(now):
         text = re.sub(
