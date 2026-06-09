@@ -60,9 +60,9 @@ def main() -> int:
             lcr.DAILY_PACK_FILE = orig_pack
 
     required = (
-        'Latest budget cache:',
-        'Latest budget theme cache:',
-        'Telegram build: <code>AstraEdge 48O</code>',
+        'budget cache:',
+        'budget theme cache:',
+        'Telegram build: <code>AstraEdge 48Q</code>',
     )
     for label in required:
         if label not in text_no_legacy:
@@ -96,7 +96,7 @@ def main() -> int:
             dp.get_data_root = orig_root  # type: ignore[method-assign]
             lcr.DAILY_PACK_FILE = orig_pack
 
-    if 'Legacy theme cache:' not in text_with_legacy:
+    if 'legacy theme cache:' not in text_with_legacy.lower():
         return _fail('Legacy theme cache label expected when theme_baskets exists')
 
     print('TELEGRAM_STATUS_THEME_CACHE_LABELS_TEST_OK')

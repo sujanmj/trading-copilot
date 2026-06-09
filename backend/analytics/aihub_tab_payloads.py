@@ -852,6 +852,9 @@ def build_scan_payload() -> dict[str, Any]:
         'memory_signal_count': len(memory_signals),
         'mode': pack.get('market_mode') or fc.get('active_mode') or market_mode,
         'memory_fallback_count': len(memory_signals),
+        'scanner_cache_age_minutes': (
+            max(0, _cache_age_seconds(path=SCANNER_FILE, data=scanner) // 60) if scanner else 0
+        ),
     }
     if not items:
         warnings.append('no_scan_items')

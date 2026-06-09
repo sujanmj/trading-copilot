@@ -1,10 +1,10 @@
 {
   "ok": true,
   "tab": "calib",
-  "generated_at": "2026-06-09T06:39:03+00:00",
+  "generated_at": "2026-06-09T08:13:56+00:00",
   "market_mode": "USA_MODE",
   "source": "report_cache",
-  "cache_age_seconds": 561822,
+  "cache_age_seconds": 567515,
   "items": [
     {
       "kind": "calibration_rec",

@@ -55,7 +55,7 @@ def main() -> int:
             'ok': True,
             'generated_at': stale_iso,
             'refreshed_at': stale_iso,
-            'stage': '48O',
+            'stage': '48Q',
             'top_catalysts': [],
             'top_themes': [],
         })
@@ -92,7 +92,7 @@ def main() -> int:
             bi.get_data_path = orig_get_data_path  # type: ignore[method-assign]
 
     budget_line = next(
-        (ln for ln in status_text.splitlines() if ln.startswith('Latest budget cache:')),
+        (ln for ln in status_text.splitlines() if ln.lower().startswith('budget cache:')),
         '',
     )
     if 'stale' not in budget_line.lower():

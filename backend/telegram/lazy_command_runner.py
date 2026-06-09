@@ -320,17 +320,26 @@ def run_memory_only() -> dict[str, Any]:
     )
     lines = ['<b>🧠 Market memory</b>']
     if outcomes == 0:
-        lines.extend([
+        from backend.analytics.unified_decision_engine import memory_outcome_warning
+
+        outcome_warn = memory_outcome_warning(stats, overall)
+        block = [
             f'Predictions tracked: {predictions}',
             'Outcomes resolved: 0',
             f'Pending resolution: {unresolved if unresolved > 0 else predictions}',
-            'Reason: awaiting close-price/outcome resolver or next market session',
+        ]
+        if outcome_warn:
+            block.append(outcome_warn)
+        else:
+            block.append('Reason: awaiting close-price/outcome resolver or next market session')
+        block.extend([
             'Source: cloud/runtime cache',
             f'Cache age: {cache_age_txt}',
             '',
             '<b>Latest outcomes:</b>',
             '• None resolved yet — memory is tracking predictions for the next session.',
         ])
+        lines.extend(block)
     else:
         lines.extend([
             f'Predictions: {predictions} · Outcomes: {outcomes}',

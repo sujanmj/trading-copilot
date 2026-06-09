@@ -506,6 +506,14 @@ def format_calibration_section_telegram(
         val is not None for val in (live_resolved, hist_resolved, watch, avoid)
     ):
         lines.append('No calibration data cached.')
+    try:
+        from backend.analytics.unified_decision_engine import calibration_unresolved_message
+
+        calib_warn = calibration_unresolved_message()
+        if calib_warn and (live_resolved in (None, 0) or hist_resolved in (None, 0)):
+            lines.append(calib_warn)
+    except Exception:
+        pass
 
     return '\n'.join(lines)
 
@@ -628,6 +636,10 @@ def format_stock_decision_payload(
         return strip_stage_markers(format_watchlist_fallback_telegram(normalized, rebuilt=rebuilt))
 
     body = strip_stage_markers(str(payload.get('telegram_message') or ''))
+    warnings = payload.get('snapshot_warnings') or []
+    if warnings:
+        prefix = '\n'.join(str(w) for w in warnings)
+        body = f'{prefix}\n\n{body}' if body else prefix
     if rebuilt:
         prefix = f'<b>📋 {label}</b>\n\n{rebuilt_cache_message()}'
         if body.startswith('<b>AstraEdge'):
@@ -658,6 +670,12 @@ def format_stock_decision_telegram(mode: str) -> str:
         if used_fallback:
             return strip_stage_markers(format_watchlist_fallback_telegram(normalized, rebuilt=rebuilt))
         payload = build_stock_decision(mode=normalized)
+    try:
+        from backend.analytics.unified_decision_engine import apply_live_guard_to_payload
+
+        payload = apply_live_guard_to_payload(payload)
+    except Exception:
+        pass
     if payload.get('ok') is not True:
         retry_cached = load_cached_stock_decision(normalized)
         if retry_cached:
@@ -762,6 +780,10 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
         else:
             lines.append('No useful cached item found.')
     elif key == 'scan':
+        from backend.telegram.freshness_consistency import format_compact_freshness_line, scanner_cache_age_minutes
+
+        scan_age = int(summary.get('scanner_cache_age_minutes') or scanner_cache_age_minutes())
+        lines[1] = format_compact_freshness_line('Scanner', scan_age)
         lines.append(
             f"Live: {summary.get('live_scanner_count', 0)} · "
             f"watchlist: {summary.get('watchlist_count', 0)} · "
@@ -1040,17 +1062,26 @@ def format_action_plan_telegram() -> str:
     if not tomorrow or tomorrow.get('ok') is not True:
         tomorrow = build_stock_decision(mode='tomorrow')
 
+    try:
+        from backend.analytics.unified_decision_engine import (
+            apply_live_guard_to_payload,
+            get_feed_freshness_meta,
+            note_snapshot_pick,
+        )
+
+        today = apply_live_guard_to_payload(today)
+        tomorrow = apply_live_guard_to_payload(tomorrow)
+        note_snapshot_pick('action_plan', (today.get('top_pick') or {}).get('ticker'))
+        freshness_lines = get_feed_freshness_meta().get('lines') or {}
+    except Exception:
+        freshness_lines = {}
+
     brain = build_brain_payload()
     market = build_market_payload(force=False)
     global_p = build_global_payload()
     pack = _load_json(DAILY_PACK_FILE)
 
-    from backend.telegram.freshness_consistency import (
-        classify_budget_cache_freshness,
-        compute_feed_age_minutes,
-    )
     from backend.telegram.india_mode_lock import resolve_telegram_market_mode
-    from backend.storage.data_paths import get_data_path
 
     market_summary = (market.get('summary') or {})
     mode = resolve_telegram_market_mode(
@@ -1059,29 +1090,21 @@ def format_action_plan_telegram() -> str:
         pack_mode=pack.get('market_mode') if pack else None,
         active_mode=(pack.get('final_confidence') or {}).get('active_mode') if pack else None,
     )
-    report_age_min = -1
-    if DAILY_PACK_FILE.is_file():
-        report_age_min, _ = compute_feed_age_minutes(DAILY_PACK_FILE)
-    scanner_age_min, _ = compute_feed_age_minutes(get_data_path('scanner_data.json'))
-    news_age_min, _ = compute_feed_age_minutes(get_data_path('news_feed.json'))
-    report_fresh = classify_budget_cache_freshness(report_age_min)
-    scanner_fresh = classify_budget_cache_freshness(scanner_age_min)
-    news_fresh = classify_budget_cache_freshness(news_age_min)
-    stale_flag = market_summary.get('stale') or market_summary.get('is_stale')
-    if report_fresh == 'stale' and scanner_fresh == 'fresh' and news_fresh == 'fresh':
+    if freshness_lines:
         market_state_lines = [
             'Market state: Research mode',
-            f'Report: {report_fresh}',
-            f'Scanner: {scanner_fresh}',
-            f'News: {news_fresh}',
+            freshness_lines.get('report', 'Report: unavailable'),
+            freshness_lines.get('scanner', 'Scanner: unavailable'),
+            freshness_lines.get('news', 'News: unavailable'),
             'Action: watch only, refresh before live entry.',
         ]
     else:
-        fresh_stale = 'Stale' if stale_flag or report_fresh == 'stale' else 'Fresh'
+        stale_flag = market_summary.get('stale') or market_summary.get('is_stale')
         market_state_lines = [
             f'• Mode: {mode}',
-            f'• Fresh/Stale: {fresh_stale}',
+            f'• Fresh/Stale: {"Stale" if stale_flag else "Fresh"}',
         ]
+
     main_risk = resolve_global_risk_text(global_p)
 
     brain_summary = brain.get('summary') or {}
@@ -1398,12 +1421,13 @@ def format_status_text() -> str:
     lines = ['<b>📡 Status</b>']
     telegram_enabled = False
     try:
+        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
         from backend.utils.config import IS_LOCAL_DEV, LOCAL_ONLY
         from backend.utils.telegram_guard import is_telegram_listener_enabled, is_telegram_send_enabled
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append('Telegram build: <code>AstraEdge 48O</code>')
+        lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on
@@ -1453,22 +1477,17 @@ def format_status_text() -> str:
                     )
                 except OSError:
                     report_age = -1
-            report_age_txt = (
-                format_cache_age_label(report_age, timestamp=str(report_time))
-                if report_age >= 0
-                else 'unknown age'
+            from backend.telegram.freshness_consistency import (
+                classify_budget_cache_freshness,
+                format_compact_freshness_line,
             )
-            report_age_txt = f'{report_age}m' if 0 <= report_age < 60 else (
-                f'{report_age // 60}h' if report_age >= 60 else 'unknown'
-            )
-            from backend.telegram.freshness_consistency import classify_budget_cache_freshness
 
             report_fresh = (
                 classify_budget_cache_freshness(report_age)
                 if report_age >= 0
                 else 'cache_missing'
             )
-            lines.append(f'Latest report: {report_time} · age {report_age_txt} · {report_fresh}')
+            lines.append(format_compact_freshness_line('Report', report_age))
         else:
             lines.append('Latest report: unavailable')
 

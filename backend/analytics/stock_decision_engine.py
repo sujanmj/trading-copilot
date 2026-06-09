@@ -468,6 +468,22 @@ def _score_candidate(
         penalty += 18.0
         risk.append('Recent failed or weakened strong signal')
 
+    live_avoid = sources.get('_live_avoid') or {}
+    sym = _normalize_ticker(ticker)
+    if sym and sym in live_avoid:
+        penalty += 80.0
+        risk.append('Rejected by live scanner / bearish confirmation')
+        why.append(f'Live avoid: {str(live_avoid[sym])[:80]}')
+
+    freshness_meta = sources.get('_freshness_meta') or {}
+    if freshness_meta.get('scanner_fresh') and freshness_meta.get('report_stale'):
+        if fc_row and not entry.get('scanner_rows'):
+            penalty += 12.0
+            risk.append('Stale overnight report context only')
+        if entry.get('scanner_rows') and not fc_row:
+            boost += 6.0
+            why.append('Live scanner fresh — prioritized over stale report')
+
     if stale_market:
         penalty += 8.0
         risk.append('Market context stale')
@@ -632,6 +648,23 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         }
 
     sources = _load_sources()
+    try:
+        from backend.analytics.unified_decision_engine import (
+            get_feed_freshness_meta,
+            get_snapshot_cached_decision,
+            is_unified_snapshot_active,
+            load_live_avoid_registry,
+        )
+
+        if is_unified_snapshot_active():
+            cached = get_snapshot_cached_decision(normalized_mode)
+            if cached:
+                return cached
+        sources['_freshness_meta'] = get_feed_freshness_meta()
+        sources['_live_avoid'] = load_live_avoid_registry()
+    except Exception:
+        sources['_freshness_meta'] = {}
+        sources['_live_avoid'] = {}
     fc = sources.get('final_confidence') or {}
     if not fc.get('ok') and not fc.get('top_candidates'):
         return {
@@ -675,7 +708,7 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         avoid=avoid_rows,
     )
 
-    return {
+    payload = {
         'ok': True,
         'mode': normalized_mode,
         'generated_at': _now_iso(),
@@ -697,6 +730,15 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
             'buy_cap_active': fc.get('buy_cap_active'),
         },
     }
+
+    try:
+        from backend.analytics.unified_decision_engine import apply_live_guard_to_payload
+
+        payload = apply_live_guard_to_payload(payload)
+    except Exception:
+        pass
+
+    return payload
 
 
 def lookup_ticker_in_decision(ticker: str, *, mode: str = 'today') -> dict[str, Any]:

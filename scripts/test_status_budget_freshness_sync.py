@@ -46,7 +46,7 @@ def main() -> int:
             'ok': True,
             'generated_at': now_iso,
             'refreshed_at': now_iso,
-            'stage': '48O',
+            'stage': '48Q',
             'top_catalysts': [],
             'top_themes': [],
         })
@@ -70,22 +70,22 @@ def main() -> int:
             dp.get_data_root = orig_root  # type: ignore[method-assign]
             lcr.DAILY_PACK_FILE = orig_pack
 
-    if 'Latest budget cache:' not in text:
-        return _fail('status missing Latest budget cache line')
-    if 'Latest budget theme cache:' not in text:
-        return _fail('status missing Latest budget theme cache line')
+    if 'budget cache:' not in text.lower():
+        return _fail('status missing budget cache line')
+    if 'budget theme cache:' not in text.lower():
+        return _fail('status missing budget theme cache line')
     if 'Latest theme cache:' in text:
         return _fail('status must not use legacy Latest theme cache label')
 
-    budget_lines = [ln for ln in text.splitlines() if ln.startswith('Latest budget')]
+    budget_lines = [ln for ln in text.splitlines() if 'budget' in ln.lower() and 'cache:' in ln.lower()]
     fresh_budget = [ln for ln in budget_lines if 'fresh' in ln.lower()]
     if len(fresh_budget) < 2:
         return _fail(f'expected fresh budget cache lines after refresh: {budget_lines!r}')
 
-    if 'Legacy theme cache:' not in text:
+    if 'legacy theme cache:' not in text.lower():
         return _fail('status should show Legacy theme cache when theme_baskets exists')
 
-    legacy_line = next((ln for ln in text.splitlines() if ln.startswith('Legacy theme cache:')), '')
+    legacy_line = next((ln for ln in text.splitlines() if 'legacy theme cache:' in ln.lower()), '')
     if 'stale' not in legacy_line.lower():
         return _fail(f'legacy theme cache should be stale: {legacy_line!r}')
 

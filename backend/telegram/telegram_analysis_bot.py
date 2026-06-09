@@ -367,6 +367,7 @@ def _handle_refresh(scope: str) -> str:
 def _handle_health() -> str:
     lines = ['<b>🩺 Health</b>']
     try:
+        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
         from backend.storage.data_paths import data_preserved, get_data_root
         from backend.utils.telegram_guard import is_telegram_listener_enabled, is_telegram_send_enabled
 
@@ -379,7 +380,12 @@ def _handle_health() -> str:
         )
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append('Telegram build: <code>AstraEdge 48O</code>')
+    try:
+        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+
+        lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
+    except Exception:
+        lines.append('Telegram build: <code>AstraEdge 48Q</code>')
     return '\n'.join(lines)
 
 
@@ -445,6 +451,17 @@ def _full_snapshot_step_prefix(step: int, total: int, command: str) -> str:
 
 
 def _handle_full_snapshot(*, dry_run: bool = False) -> list[dict[str, Any]]:
+    """Run read-only snapshot sequence — one prefix + output per command."""
+    from backend.analytics.unified_decision_engine import begin_unified_snapshot, end_unified_snapshot
+
+    begin_unified_snapshot()
+    try:
+        return _handle_full_snapshot_steps(dry_run=dry_run)
+    finally:
+        end_unified_snapshot()
+
+
+def _handle_full_snapshot_steps(*, dry_run: bool = False) -> list[dict[str, Any]]:
     """Run read-only snapshot sequence — one prefix + output per command."""
     total = len(FULL_SNAPSHOT_SEQUENCE)
     results: list[dict[str, Any]] = []

@@ -1,7 +1,7 @@
 """
-Shared Telegram / budget cache freshness — Stage 48K.
+Shared Telegram / budget cache freshness — Stage 48K / 48Q.
 
-/status and /budget must agree on budget cache + theme cache labels (90 min threshold).
+/status, /budget, /aihub scan, and decision surfaces share the same 90 min threshold.
 """
 
 from __future__ import annotations
@@ -96,11 +96,35 @@ def compute_feed_age_minutes(
     return age_min, ts_txt
 
 
+def format_age_short(age_minutes: int) -> str:
+    if age_minutes < 0:
+        return '—'
+    if age_minutes < 60:
+        return f'{age_minutes}m'
+    return f'{age_minutes // 60}h'
+
+
+def format_compact_freshness_line(name: str, age_minutes: int) -> str:
+    """Compact label — e.g. Scanner: fresh · 2m / Report: stale · 11h."""
+    if age_minutes < 0:
+        return f'{name}: unavailable'
+    status = classify_budget_cache_freshness(age_minutes)
+    return f'{name}: {status} · {format_age_short(age_minutes)}'
+
+
+def scanner_cache_age_minutes() -> int:
+    from backend.storage.data_paths import get_data_path
+
+    age_min, _ = compute_feed_age_minutes(get_data_path('scanner_data.json'))
+    return age_min
+
+
 def format_budget_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = '') -> str:
     """Format Latest <label>: timestamp · age <x> · fresh|stale|cache_missing."""
     age_min, ts_txt = compute_feed_age_minutes(path, timestamp_key=timestamp_key)
     if age_min < 0:
         return f'{label}: unavailable'
-    age_txt = f'{age_min}m' if age_min < 60 else f'{age_min // 60}h'
+    age_txt = format_age_short(age_min)
     freshness = classify_budget_cache_freshness(age_min)
-    return f'{label}: {ts_txt} · age {age_txt} · {freshness}'
+    short_name = str(label).replace('Latest ', '').strip()
+    return f'{short_name}: {freshness} · {age_txt}'

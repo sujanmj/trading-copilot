@@ -75,7 +75,7 @@ def main() -> int:
     status = strip_stage_markers(format_status_text())
     if 'Mode:' not in status or 'Telegram:' not in status:
         return _fail('/status missing mode or telegram line')
-    if 'Market mode:' not in status or 'Latest report:' not in status:
+    if 'Market mode:' not in status or 'Report:' not in status:
         return _fail('/status missing market mode or latest report from daily pack')
 
     full = run_aihub_full_only()

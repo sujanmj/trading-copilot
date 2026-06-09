@@ -1,5 +1,5 @@
 """
-AstraEdge Broker Intelligence — Stage 48O.
+AstraEdge Broker Intelligence — Stage 48Q.
 
 Full broker consensus, upgrades/downgrades, target prices, freshness.
 Research-only — watch/confirm stances, never buy now or guaranteed.
@@ -17,7 +17,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48O'
+STAGE = '48Q'
 ENGINE_NAME = 'Broker Intelligence'
 CACHE_FILE = get_data_path('broker_intelligence_cache.json')
 COLLECTOR_CACHE = get_data_path('broker_app_collector_latest.json')
@@ -159,6 +159,35 @@ def _parse_date(value: object) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+def _evidence_timestamp(row: dict[str, Any]) -> datetime | None:
+    for key in ('published_at', 'extracted_at', 'prediction_date', 'date', 'generated_at'):
+        parsed = _parse_date(row.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _freshness_from_timestamp(ts: datetime | None) -> str:
+    if ts is None:
+        return 'unknown'
+    age = datetime.now(IST) - ts
+    if age <= timedelta(hours=24):
+        return 'fresh'
+    if age <= timedelta(days=7):
+        return 'aging'
+    return 'stale'
+
+
+def _truncate_headline(text: str, max_len: int = 110) -> str:
+    raw = ' '.join(str(text or '').split())
+    if len(raw) <= max_len:
+        return raw
+    trimmed = raw[: max_len - 1].rsplit(' ', 1)[0]
+    if len(trimmed) < max_len // 2:
+        trimmed = raw[: max_len - 1]
+    return trimmed.rstrip(' ,;:') + '…'
 
 
 def _combined_text(item: dict[str, Any]) -> str:
@@ -490,8 +519,11 @@ def extract_broker_evidence_item(raw: dict[str, Any]) -> dict[str, Any] | None:
         or extract_broker_house(text)
         or 'External source'
     )
-    headline = str(raw.get('headline') or raw.get('title') or text[:160])
+    headline = _truncate_headline(str(raw.get('headline') or raw.get('title') or text[:160]))
     pub = raw.get('published_at') or raw.get('prediction_date') or raw.get('date')
+    extracted_at = raw.get('extracted_at') or raw.get('collected_at') or _now_iso()
+    if not pub:
+        pub = extracted_at
     evidence_type = classify_evidence_type(
         raw, text=text, action=action, rating=rating, target_price=target_price,
     )
@@ -502,8 +534,9 @@ def extract_broker_evidence_item(raw: dict[str, Any]) -> dict[str, Any] | None:
         'action': action,
         'target_price': target_price,
         'previous_target': prev_target,
-        'headline': headline[:200],
+        'headline': headline,
         'published_at': pub,
+        'extracted_at': extracted_at,
         'url': raw.get('url') or raw.get('link'),
         'classification': raw.get('classification') or 'broker_evidence',
         'source_type': raw.get('collector_source') or raw.get('source_type') or 'news',
@@ -656,7 +689,7 @@ def score_ticker_consensus(evidence: list[dict[str, Any]]) -> dict[str, Any]:
     houses: set[str] = set()
     latest = sorted(
         evidence,
-        key=lambda r: _parse_date(r.get('published_at')) or datetime.min.replace(tzinfo=IST),
+        key=lambda r: _evidence_timestamp(r) or datetime.min.replace(tzinfo=IST),
         reverse=True,
     )
     stale_penalty = 0.0
@@ -682,7 +715,7 @@ def score_ticker_consensus(evidence: list[dict[str, Any]]) -> dict[str, Any]:
         house = str(row.get('broker_house') or '').strip().lower()
         if house:
             houses.add(house)
-        pub = _parse_date(row.get('published_at'))
+        pub = _evidence_timestamp(row)
         if pub and (datetime.now(IST) - pub) > timedelta(days=7):
             stale_penalty += 5
 
@@ -695,13 +728,8 @@ def score_ticker_consensus(evidence: list[dict[str, Any]]) -> dict[str, Any]:
     suggested = suggested_action_from_label(label, score)
 
     latest_row = latest[0]
-    pub = _parse_date(latest_row.get('published_at'))
-    if pub and (datetime.now(IST) - pub) <= timedelta(hours=24):
-        freshness = 'fresh'
-    elif pub and (datetime.now(IST) - pub) <= timedelta(days=7):
-        freshness = 'aging'
-    else:
-        freshness = 'stale'
+    pub = _evidence_timestamp(latest_row)
+    freshness = _freshness_from_timestamp(pub)
 
     return {
         'confidence_score': score,
@@ -1262,8 +1290,12 @@ def format_broker_evidence_telegram() -> str:
         c_row = consensus.get(str(ticker).upper()) or {}
         label = c_row.get('consensus_label') or row.get('rating') or row.get('evidence_type') or 'Unknown'
         source = row.get('broker_house') or row.get('source') or 'External source'
-        headline = str(row.get('headline') or row.get('title') or '—')[:90]
-        freshness = c_row.get('freshness') or row.get('freshness') or 'unknown'
+        headline = _truncate_headline(str(row.get('headline') or row.get('title') or '—'))
+        freshness = (
+            c_row.get('freshness')
+            or row.get('freshness')
+            or _freshness_from_timestamp(_evidence_timestamp(row))
+        )
         etype = row.get('evidence_type') or 'unknown'
         lines.append(f'• {ticker} · {label} · {source}')
         lines.append(f'  {headline}')

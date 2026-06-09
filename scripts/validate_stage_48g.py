@@ -39,10 +39,10 @@ VALIDATORS = [
 
 def main() -> int:
     for rel, needle in (
-        ('backend/config/local_safe_mode.py', 'AstraEdge 48O'),
-        ('backend/api/api_server.py', "'stage': '48O'"),
-        ('backend/analytics/budget_impact.py', "STAGE = '48O'"),
-        ('backend/telegram/response_format.py', 'AstraEdge 48O'),
+        ('backend/config/local_safe_mode.py', 'AstraEdge 48Q'),
+        ('backend/api/api_server.py', "'stage': '48Q'"),
+        ('backend/analytics/budget_impact.py', "STAGE = '48Q'"),
+        ('backend/analytics/broker_intelligence.py', "STAGE = '48Q'"),
     ):
         if needle not in (PROJECT_ROOT / rel).read_text(encoding='utf-8'):
             print(f'STAGE_48G_FAIL: {rel} missing build', file=sys.stderr)
