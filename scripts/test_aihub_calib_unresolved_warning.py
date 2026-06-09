@@ -42,13 +42,11 @@ def main() -> int:
     if calibration_unresolved_message({'predictions': 3, 'outcomes': 2}) != []:
         return _fail('resolved outcomes must return empty calibration warning list')
 
-    with patch(
-        'backend.analytics.unified_decision_engine.calibration_unresolved_message',
-        return_value=calib_lines,
-    ):
-        calib_text = format_calibration_section_telegram(
-            summary={'live_resolved': 0, 'historical_resolved': 0},
-        )
+    with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='unresolved'):
+        with patch('backend.analytics.unified_decision_engine.calibration_render_lines', return_value=calib_lines):
+            calib_text = format_calibration_section_telegram(
+                summary={'live_resolved': 0, 'historical_resolved': 0},
+            )
     for line in calib_lines:
         if line not in calib_text:
             return _fail(f'format_calibration_section_telegram missing {line!r}')
@@ -59,11 +57,9 @@ def main() -> int:
         'summary': {'live_resolved': 0, 'historical_resolved': 0},
         'items': [],
     }
-    with patch(
-        'backend.analytics.unified_decision_engine.calibration_unresolved_message',
-        return_value=calib_lines,
-    ):
-        aihub_calib_text = format_aihub_payload('calib', calib_payload)
+    with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='unresolved'):
+        with patch('backend.analytics.unified_decision_engine.calibration_render_lines', return_value=calib_lines):
+            aihub_calib_text = format_aihub_payload('calib', calib_payload)
     for line in calib_lines:
         if line not in aihub_calib_text:
             return _fail(f'format_aihub_payload calib missing {line!r}')

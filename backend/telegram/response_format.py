@@ -204,25 +204,24 @@ def _aihub_full_calib_lines(
     cal: dict[str, Any],
     cal_summary: dict[str, Any],
 ) -> list[str]:
-    """Calib section lines for /aihub full — never say 'no warnings' when unresolved."""
-    from backend.analytics.unified_decision_engine import calibration_unresolved_message
+    """Calib section lines for /aihub full — never say 'no warnings' when unresolved or warming up."""
+    from backend.analytics.unified_decision_engine import calibration_render_lines, get_calibration_mode
 
-    recs = cal_summary.get('calibration_recommendations') or cal.get('recommendations') or []
     lines = ['<b>📊 Calib</b>']
-    calib_warn = calibration_unresolved_message()
-    if calib_warn:
+    mode = get_calibration_mode()
+    calib_lines = calibration_render_lines()
+    if mode == 'unresolved':
         lines.append('- live resolved: 0')
         lines.append('- historical resolved: 0')
-        lines.append('- calibration unavailable — outcomes unresolved')
+        for line in calib_lines:
+            lines.append(f'- {line.lower() if line[0].isupper() else line}')
         return lines
-    lines.append(f"- live resolved: {cal.get('live_resolved', cal.get('resolved_live', '—'))}")
-    lines.append(f"- historical resolved: {cal.get('historical_resolved', cal.get('resolved_historical', '—'))}")
-    if recs:
-        first = recs[0]
-        msg = first.get('message') if isinstance(first, dict) else str(first)
-        lines.append(f"- warning: {str(msg)[:100]}")
-    else:
-        lines.append('- no calibration warnings')
+    if mode == 'warmup':
+        for line in calib_lines:
+            lines.append(f'- {line}')
+        return lines
+    for line in calib_lines:
+        lines.append(f'- {line}')
     return lines
 
 
@@ -639,24 +638,26 @@ def format_calibration_section_telegram(
     if recs is None:
         recs = cal.get('recommendations') or cal_summary.get('calibration_recommendations') or []
 
-    from backend.analytics.unified_decision_engine import calibration_unresolved_message
+    from backend.analytics.unified_decision_engine import calibration_render_lines, get_calibration_mode
 
-    calib_warn = calibration_unresolved_message()
+    calib_mode = get_calibration_mode()
+    calib_lines = calibration_render_lines()
     lines = ['<b>📊 Calibration</b>']
-    if calib_warn:
+    if calib_mode == 'unresolved':
         lines.append('Live resolved: 0')
         lines.append('Historical resolved: 0')
-        lines.extend(calib_warn)
+        lines.extend(calib_lines)
         return '\n'.join(lines)
 
-    if live_resolved is not None:
-        lines.append(f'Live resolved: {live_resolved}')
-    if hist_resolved is not None:
-        lines.append(f'Historical resolved: {hist_resolved}')
+    if calib_mode == 'warmup':
+        lines.extend(calib_lines)
+        return '\n'.join(lines)
+
+    lines.extend(calib_lines)
     if watch is not None:
-        lines.append(f'Watch: {watch}')
+        lines.append(f'Watch confidence: {watch}')
     if avoid is not None:
-        lines.append(f'Avoid: {avoid}')
+        lines.append(f'Avoid confidence: {avoid}')
 
     detail_lines: list[str] = []
     if isinstance(recs, list):
@@ -666,10 +667,6 @@ def format_calibration_section_telegram(
     if detail_lines:
         lines.append('Recommendations:')
         lines.extend(detail_lines)
-    elif not any(
-        val is not None for val in (live_resolved, hist_resolved, watch, avoid)
-    ):
-        lines.append('No calibration data cached.')
 
     return '\n'.join(lines)
 
@@ -1487,22 +1484,15 @@ def format_aihub_brain_full() -> str:
     calib = sources.get('calibration') or {}
     recs = calib.get('recommendations') or []
     lines.extend(['', '<b>7. Calibration</b>'])
-    from backend.analytics.unified_decision_engine import calibration_unresolved_message
+    from backend.analytics.unified_decision_engine import calibration_render_lines, get_calibration_mode
 
-    calib_warn = calibration_unresolved_message()
-    if calib_warn:
-        for line in calib_warn:
+    calib_mode = get_calibration_mode()
+    calib_lines = calibration_render_lines()
+    if calib_mode in ('unresolved', 'warmup', 'ready'):
+        for line in calib_lines:
             lines.append(f'• {line}')
     else:
-        calib_lines: list[str] = []
-        for rec in recs[:3]:
-            formatted = format_calibration_rec_readable(rec)
-            if formatted:
-                calib_lines.append(formatted)
-        if calib_lines:
-            lines.extend(calib_lines)
-        else:
-            lines.append('• No calibration warnings')
+        lines.append('• Calibration unavailable — outcomes unresolved.')
 
     memory = sources.get('memory') or {}
     learning = memory.get('learning') or {}

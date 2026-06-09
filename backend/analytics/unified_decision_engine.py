@@ -494,3 +494,91 @@ def calibration_unresolved_message(stats: dict[str, Any] | None = None, overall:
             'Do not trust win-rate until outcome resolver completes.',
         ]
     return []
+
+
+def get_calibration_resolved_count(
+    stats: dict[str, Any] | None = None,
+    overall: dict[str, Any] | None = None,
+) -> int:
+    if stats is None and overall is None:
+        stats, overall, _ = _load_memory_calibration_stats()
+    else:
+        stats = stats or {}
+        overall = overall or {}
+    return int(stats.get('outcomes') or overall.get('resolved_outcomes') or 0)
+
+
+def get_calibration_mode(
+    stats: dict[str, Any] | None = None,
+    overall: dict[str, Any] | None = None,
+) -> str:
+    """Return unresolved | warmup | ready."""
+    from backend.storage.outcome_resolver import CALIBRATION_MIN_SAMPLE
+
+    resolved = get_calibration_resolved_count(stats, overall)
+    if resolved == 0:
+        return 'unresolved'
+    if resolved < CALIBRATION_MIN_SAMPLE:
+        return 'warmup'
+    return 'ready'
+
+
+def _format_pct(value: float | None) -> str:
+    if value is None:
+        return '—'
+    return f'{value * 100:.1f}'
+
+
+def calibration_warmup_message(
+    stats: dict[str, Any] | None = None,
+    overall: dict[str, Any] | None = None,
+) -> list[str]:
+    from backend.storage.outcome_resolver import compute_signal_quality_metrics
+
+    resolved = get_calibration_resolved_count(stats, overall)
+    metrics = compute_signal_quality_metrics()
+    pending = int(metrics.get('pending') or 0)
+    if pending <= 0 and stats is not None:
+        predictions = int((stats or {}).get('predictions') or 0)
+        pending = max(0, predictions - resolved)
+    return [
+        'Calibration warming up — sample too small.',
+        f'Resolved outcomes: {resolved}',
+        f'Pending outcomes: {pending}',
+        'Do not trust win-rate yet.',
+    ]
+
+
+def calibration_ready_message(
+    stats: dict[str, Any] | None = None,
+    overall: dict[str, Any] | None = None,
+) -> list[str]:
+    from backend.storage.outcome_resolver import compute_signal_quality_metrics
+
+    resolved = get_calibration_resolved_count(stats, overall)
+    metrics = compute_signal_quality_metrics()
+    pending = int(metrics.get('pending') or 0)
+    lines = [
+        f'Resolved outcomes: {resolved}',
+        f'Pending outcomes: {pending}',
+        f'Hit rate: {_format_pct(metrics.get("hit_rate"))}%',
+        f'Bullish hit rate: {_format_pct(metrics.get("bullish_hit_rate"))}%',
+        f'Bearish/rejection hit rate: {_format_pct(metrics.get("bearish_hit_rate"))}%',
+        f'Neutral count: {int(metrics.get("neutral") or 0)}',
+    ]
+    last_resolved = metrics.get('last_resolved_at')
+    if last_resolved:
+        lines.append(f'Last resolved: {last_resolved}')
+    return lines
+
+
+def calibration_render_lines(
+    stats: dict[str, Any] | None = None,
+    overall: dict[str, Any] | None = None,
+) -> list[str]:
+    mode = get_calibration_mode(stats, overall)
+    if mode == 'unresolved':
+        return calibration_unresolved_message(stats, overall)
+    if mode == 'warmup':
+        return calibration_warmup_message(stats, overall)
+    return calibration_ready_message(stats, overall)

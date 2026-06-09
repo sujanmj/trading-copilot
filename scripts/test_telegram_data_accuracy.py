@@ -45,19 +45,27 @@ def main() -> int:
     memory_text = strip_stage_markers(str(memory.get('text') or ''))
     if 'Win rate: 0.3%' in memory_text or 'Win rate: 0.33%' in memory_text:
         return _fail('/memory win rate must be percent not decimal')
-    if not re.search(r'Win rate: \d+\.\d+%', memory_text):
-        return _fail('/memory missing percent win rate')
-    if 'Predictions:' not in memory_text or 'Outcomes:' not in memory_text:
-        return _fail('/memory missing prediction/outcome counts')
-    if 'Unresolved:' not in memory_text:
-        return _fail('/memory missing unresolved count')
-    if 'Latest outcomes:' in memory_text:
-        if '—' in memory_text and 'TEXRAIL' not in memory_text and 'LOSS' not in memory_text:
-            if 'No recent outcomes' not in memory_text:
-                pass
-        if re.search(r'• [A-Z0-9]+ — (WIN|LOSS)', memory_text):
-            if not re.search(r'— [+-]?\d+\.\d+%', memory_text):
-                return _fail('/memory outcome lines missing move percent')
+    if 'Outcomes resolved: 0' in memory_text:
+        if 'Pending resolution:' not in memory_text and 'Predictions tracked:' not in memory_text:
+            return _fail('/memory unresolved block missing prediction/pending counts')
+    elif 'Calibration warming up' in memory_text:
+        if 'do not trust yet' not in memory_text.lower():
+            return _fail('/memory warmup must caution against trusting hit rate')
+        if 'Resolved outcomes:' not in memory_text or 'Pending outcomes:' not in memory_text:
+            return _fail('/memory warmup missing resolved/pending counts')
+    else:
+        if not re.search(r'(Hit rate|Win rate): [\d.—]+%', memory_text):
+            return _fail('/memory missing percent hit/win rate')
+        if 'Resolved outcomes:' not in memory_text or 'Pending outcomes:' not in memory_text:
+            return _fail('/memory ready sample missing resolved/pending counts')
+    if 'Latest outcomes:' not in memory_text:
+        return _fail('/memory missing latest outcomes section')
+    if '—' in memory_text and 'TEXRAIL' not in memory_text and 'LOSS' not in memory_text:
+        if 'No recent outcomes' not in memory_text:
+            pass
+    if re.search(r'• [A-Z0-9]+ — (WIN|LOSS)', memory_text):
+        if not re.search(r'— [+-]?\d+\.\d+%', memory_text):
+            return _fail('/memory outcome lines missing move percent')
 
     if re.search(r'cache age: \d{4,}m', memory_text):
         return _fail('/memory cache age must not show huge minute values')
@@ -87,8 +95,12 @@ def main() -> int:
     if not results:
         return _fail('bot /memory returned no response')
     bot_memory = strip_stage_markers(str(results[0].get('text') or ''))
-    if 'Win rate:' not in bot_memory:
-        return _fail('bot /memory missing win rate')
+    if (
+        'Win rate:' not in bot_memory
+        and 'Hit rate:' not in bot_memory
+        and 'Outcomes resolved: 0' not in bot_memory
+    ):
+        return _fail('bot /memory missing win/hit rate or unresolved block')
 
     print('TELEGRAM_DATA_ACCURACY_TEST_OK')
     return 0

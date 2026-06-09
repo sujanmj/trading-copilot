@@ -325,8 +325,13 @@ def run_memory_only() -> dict[str, Any]:
         _cache_age_minutes(MEMORY_CACHE_FILE),
         timestamp=file_timestamp_iso(MEMORY_CACHE_FILE),
     )
+    from backend.analytics.unified_decision_engine import get_calibration_mode
+    from backend.storage.outcome_resolver import compute_signal_quality_metrics
+
+    calib_mode = get_calibration_mode(stats, overall)
+    sq_metrics = compute_signal_quality_metrics()
     lines = ['<b>🧠 Market memory</b>']
-    if outcomes == 0:
+    if calib_mode == 'unresolved':
         from backend.analytics.unified_decision_engine import memory_outcome_warning
 
         outcome_warn = memory_outcome_warning(stats, overall)
@@ -347,11 +352,44 @@ def run_memory_only() -> dict[str, Any]:
             '• None resolved yet — memory is tracking predictions for the next session.',
         ])
         lines.extend(block)
-    else:
+    elif calib_mode == 'warmup':
+        pending = int(sq_metrics.get('pending') or unresolved)
         lines.extend([
-            f'Predictions: {predictions} · Outcomes: {outcomes}',
-            f'Win rate: {format_memory_win_rate(overall)}',
-            f'W/L: {wins}/{losses} · Unresolved: {unresolved}',
+            'Calibration warming up — sample too small.',
+            f'Resolved outcomes: {outcomes}',
+            f'Pending outcomes: {pending}',
+            'Hit rate: early sample only, do not trust yet.',
+            f'Source: {source} · cache age: {cache_age_txt}',
+            '',
+            '<b>Latest outcomes:</b>',
+        ])
+        if latest_outcomes:
+            for row in latest_outcomes[:3]:
+                if isinstance(row, dict):
+                    lines.append(format_memory_outcome_line(row))
+        else:
+            lines.append('• No recent outcomes in cache.')
+    else:
+        pending = int(sq_metrics.get('pending') or unresolved)
+        hit_rate = sq_metrics.get('hit_rate')
+        bull_rate = sq_metrics.get('bullish_hit_rate')
+        bear_rate = sq_metrics.get('bearish_hit_rate')
+        neutral = int(sq_metrics.get('neutral') or 0)
+        last_resolved = sq_metrics.get('last_resolved_at') or '—'
+
+        def _pct(val: float | None) -> str:
+            if val is None:
+                return '—'
+            return f'{val * 100:.1f}'
+
+        lines.extend([
+            f'Resolved outcomes: {outcomes}',
+            f'Pending outcomes: {pending}',
+            f'Hit rate: {_pct(hit_rate)}%',
+            f'Bullish hit rate: {_pct(bull_rate)}%',
+            f'Avoid/rejection hit rate: {_pct(bear_rate)}%',
+            f'Neutral count: {neutral}',
+            f'Last resolved: {last_resolved}',
             f'Source: {source} · cache age: {cache_age_txt}',
             '',
             '<b>Latest outcomes:</b>',

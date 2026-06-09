@@ -233,6 +233,27 @@ def _due_slots(now: datetime) -> list[str]:
     return due
 
 
+def _maybe_run_after_close_outcome_resolver(now: datetime) -> None:
+    """Safe once-per-day resolver hook after Indian market close."""
+    try:
+        from datetime import timezone
+
+        from backend.storage.outcome_resolver import run_after_close_outcome_resolver_if_due
+
+        summary = run_after_close_outcome_resolver_if_due(now=now.astimezone(timezone.utc))
+        if summary.get('skipped'):
+            return
+        print(
+            '[TG_BRIEF] outcome_resolver '
+            f"resolved_new={summary.get('resolved_new', 0)} "
+            f"pending_after={summary.get('pending_after', 0)} "
+            f"errors={summary.get('errors', 0)}",
+            flush=True,
+        )
+    except Exception as exc:
+        print(f'[TG_BRIEF] outcome_resolver hook failed: {exc}', flush=True)
+
+
 def run_scheduler_loop(*, send_fn: Callable[[str], bool] | None = None, stop_event: threading.Event | None = None) -> None:
     stop = stop_event or threading.Event()
     while not stop.is_set():
@@ -241,6 +262,8 @@ def run_scheduler_loop(*, send_fn: Callable[[str], bool] | None = None, stop_eve
             try:
                 send_brief(slot, send_fn=send_fn)
                 _mark_sent(slot, now)
+                if slot == 'close':
+                    _maybe_run_after_close_outcome_resolver(now)
             except Exception as exc:
                 print(f'[TG_BRIEF] {slot} failed: {exc}', flush=True)
         stop.wait(30)

@@ -63,13 +63,11 @@ def main() -> int:
 
     from backend.telegram.response_format import format_calibration_section_telegram
 
-    with patch(
-        'backend.analytics.unified_decision_engine.calibration_unresolved_message',
-        return_value=calib,
-    ):
-        calib_text = format_calibration_section_telegram(
-            summary={'live_resolved': 0, 'historical_resolved': 0},
-        )
+    with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='unresolved'):
+        with patch('backend.analytics.unified_decision_engine.calibration_render_lines', return_value=calib):
+            calib_text = format_calibration_section_telegram(
+                summary={'live_resolved': 0, 'historical_resolved': 0},
+            )
     for line in calib:
         if line not in calib_text:
             return _fail('/aihub calib must surface calibration_unresolved_message')
@@ -80,11 +78,9 @@ def main() -> int:
         'summary': {'live_resolved': 0, 'historical_resolved': 0},
         'items': [],
     }
-    with patch(
-        'backend.analytics.unified_decision_engine.calibration_unresolved_message',
-        return_value=calib,
-    ):
-        aihub_calib_text = format_aihub_payload('calib', calib_payload)
+    with patch('backend.analytics.unified_decision_engine.get_calibration_mode', return_value='unresolved'):
+        with patch('backend.analytics.unified_decision_engine.calibration_render_lines', return_value=calib):
+            aihub_calib_text = format_aihub_payload('calib', calib_payload)
     for line in calib:
         if line not in aihub_calib_text:
             return _fail('format_aihub_payload calib must surface calibration_unresolved_message')
