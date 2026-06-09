@@ -24,7 +24,12 @@ def main() -> int:
     sample_cache = {
         'ok': True,
         'generated_at': '2026-05-27T10:00:00+05:30',
-        'evidence_items': [{'ticker': 'RELIANCE', 'headline': 'Broker upgrade'}],
+        'evidence_items': [{
+            'ticker': 'RELIANCE',
+            'headline': 'Broker upgrade',
+            'evidence_type': 'upgrade_downgrade',
+            'counts_toward_consensus': True,
+        }],
         'consensus_by_ticker': {
             'RELIANCE': {
                 'consensus_label': 'Positive',
@@ -42,33 +47,34 @@ def main() -> int:
     }
 
     with patch('backend.analytics.broker_intelligence._load_cache', return_value=sample_cache):
-        support = broker_decision_bullets('RELIANCE', mode='today')
-        if not support or 'broker consensus supports' not in support[0].lower():
-            return _fail('expected support bullet for RELIANCE')
-        if 'buy' in support[0].lower() and 'confirmation' not in support[0].lower():
-            return _fail('support bullet must not be buy signal')
+        with patch('backend.analytics.broker_intelligence._cache_exists_on_disk', return_value=True):
+            support = broker_decision_bullets('RELIANCE', mode='today')
+            if not support or 'broker consensus supports' not in support[0].lower():
+                return _fail('expected support bullet for RELIANCE')
+            if 'buy' in support[0].lower() and 'confirmation' not in support[0].lower():
+                return _fail('support bullet must not be buy signal')
 
-        risk = broker_decision_bullets('MCX', mode='tomorrow')
-        if not risk or 'broker consensus conflict' not in risk[0].lower():
-            return _fail('expected risk bullet for MCX')
+            risk = broker_decision_bullets('MCX', mode='tomorrow')
+            if not risk or 'broker consensus conflict' not in risk[0].lower():
+                return _fail('expected risk bullet for MCX')
 
-        msg = _build_telegram_message(
-            mode='today',
-            decision='WATCH_FOR_ENTRY',
-            top_pick={
-                'ticker': 'RELIANCE',
-                'action': 'WATCH_FOR_ENTRY',
-                'score': 55,
-                'why': ['test reason'],
-                'confirmation_needed': ['volume'],
-                'risk': [],
-            },
-            avoid=[{'ticker': 'MCX', 'risk': ['weak signal'], 'why': []}],
-        )
-        if 'Broker consensus supports' not in msg:
-            return _fail('today message missing broker support bullet')
-        if 'Broker consensus conflict' not in msg:
-            return _fail('today message missing broker risk bullet')
+            msg = _build_telegram_message(
+                mode='today',
+                decision='WATCH_FOR_ENTRY',
+                top_pick={
+                    'ticker': 'RELIANCE',
+                    'action': 'WATCH_FOR_ENTRY',
+                    'score': 55,
+                    'why': ['test reason'],
+                    'confirmation_needed': ['volume'],
+                    'risk': [],
+                },
+                avoid=[{'ticker': 'MCX', 'risk': ['weak signal'], 'why': []}],
+            )
+            if 'Broker consensus supports' not in msg:
+                return _fail('today message missing broker support bullet')
+            if 'Broker consensus conflict' not in msg:
+                return _fail('today message missing broker risk bullet')
 
     sde_src = (PROJECT_ROOT / 'backend/analytics/stock_decision_engine.py').read_text(encoding='utf-8')
     if 'broker_decision_bullets' not in sde_src:

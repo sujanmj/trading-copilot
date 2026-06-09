@@ -22,14 +22,16 @@ def main() -> int:
     text = format_broker_refresh_telegram({
         'ok': True,
         'cache_verify': {'ok': True, 'evidence_count': 1, 'ticker_count': 1},
-        'consensus_by_ticker': {'NIFTY50': {}},
-        'tracked_ticker_names': ['NIFTY50'],
+        'consensus_by_ticker': {},
+        'tracked_ticker_names': ['BHARTIARTL'],
+        'broker_rated_tickers': 0,
+        'market_mention_count': 1,
         'evidence_items': [{}],
     })
-    if 'Tickers: NIFTY50' not in text:
+    if 'Tickers: BHARTIARTL' not in text:
         return _fail('refresh must list ticker names')
-    if 'Use /broker NIFTY50 for drilldown' not in text:
-        return _fail('refresh must suggest drilldown ticker')
+    if 'Broker-rated tickers: 0' not in text:
+        return _fail('refresh must show broker-rated count')
 
     print('BROKER_REFRESH_LISTS_TICKERS_TEST_OK')
     return 0

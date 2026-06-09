@@ -635,7 +635,7 @@ def build_premarket_conviction_report(*, persist: bool = True) -> dict:
     report = {
         'generated_at': now.isoformat(),
         'date': now.date().isoformat(),
-        'stage': '48N',
+        'stage': '48O',
         'market_bias': _market_bias(intel, final_conf, global_m),
         'market_mode': india_mode,
         'weekend_research_mode': weekend_research,

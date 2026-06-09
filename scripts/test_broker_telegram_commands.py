@@ -34,16 +34,28 @@ def _text(cmd: str) -> str:
 def main() -> int:
     from unittest.mock import patch
 
-    from backend.analytics.broker_intelligence import handle_broker_command
+    from backend.analytics.broker_intelligence import format_broker_ticker_telegram, handle_broker_command
 
     overview = handle_broker_command('')
-    for needle in ('Broker intelligence', 'Freshness', 'Research only'):
+    for needle in ('Broker Intelligence', 'Freshness', 'Research only'):
         if needle not in overview:
             return _fail(f'overview missing {needle!r}')
 
-    refresh = handle_broker_command('refresh')
-    if 'refresh' not in refresh.lower():
-        return _fail('refresh command missing refresh wording')
+    with patch('backend.analytics.broker_intelligence.get_broker_intel_ticker', return_value={
+        'ok': True,
+        'cache_missing': False,
+        'found': True,
+        'watchlist_only': True,
+        'has_broker_consensus': False,
+        'ticker': 'BHARTIARTL',
+        'market_mentions': [{
+            'source': 'LiveMint',
+            'headline': 'Stocks to watch: Bharti Airtel',
+        }],
+    }):
+        bharti = format_broker_ticker_telegram('BHARTIARTL')
+    if 'not a broker rating' not in bharti.lower():
+        return _fail('BHARTIARTL watchlist drilldown must say not a broker rating')
 
     with patch('backend.telegram.lazy_command_runner._scoped_refresh', return_value={'ok': True}):
         for cmd in ('/broker', 'broker', '/broker RELIANCE', 'broker RELIANCE', '/broker refresh', 'broker refresh'):

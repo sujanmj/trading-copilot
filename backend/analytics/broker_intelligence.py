@@ -1,5 +1,5 @@
 """
-AstraEdge Broker Intelligence — Stage 48N.
+AstraEdge Broker Intelligence — Stage 48O.
 
 Full broker consensus, upgrades/downgrades, target prices, freshness.
 Research-only — watch/confirm stances, never buy now or guaranteed.
@@ -17,7 +17,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48N'
+STAGE = '48O'
 ENGINE_NAME = 'Broker Intelligence'
 CACHE_FILE = get_data_path('broker_intelligence_cache.json')
 COLLECTOR_CACHE = get_data_path('broker_app_collector_latest.json')
@@ -85,6 +85,34 @@ BROKER_HOUSE_RE = re.compile(
     r'nomura|macquarie|axis\s+cap|edelweiss|prabhudas|sharekhan|angel\s+one)\b',
     re.IGNORECASE,
 )
+WATCHLIST_MENTION_RE = re.compile(
+    r'\b(stocks?\s+to\s+watch|shares?\s+to\s+watch|key\s+stocks?|buzzing\s+stocks?|'
+    r'top\s+gainers?|top\s+losers?|market\s+movers?|in\s+focus)\b',
+    re.IGNORECASE,
+)
+TRUE_BROKER_SIGNAL_RE = re.compile(
+    r'\b(brokerage|analyst|rating|target\s+price|upgrade|downgrade|'
+    r'buy|add|hold|sell|reduce|overweight|outperform|underperform|'
+    r'initiated\s+coverage|maintained\s+rating|reiterate)\b',
+    re.IGNORECASE,
+)
+ANALYST_RE = re.compile(r'\banalyst\b', re.IGNORECASE)
+
+EVIDENCE_TYPES = (
+    'broker_rating',
+    'analyst_rating',
+    'target_price_change',
+    'upgrade_downgrade',
+    'market_watchlist_mention',
+    'news_mention',
+    'external_context',
+)
+CONSENSUS_EVIDENCE_TYPES = frozenset({
+    'broker_rating',
+    'analyst_rating',
+    'target_price_change',
+    'upgrade_downgrade',
+})
 
 
 def _log(msg: str) -> None:
@@ -215,7 +243,8 @@ def should_reject_item(item: dict[str, Any]) -> tuple[bool, str | None]:
     if not text.strip():
         return True, 'empty_text'
     if GENERIC_NEWS_RE.search(text):
-        return True, 'generic_news'
+        if not (WATCHLIST_MENTION_RE.search(text) and not TRUE_BROKER_SIGNAL_RE.search(text)):
+            return True, 'generic_news'
     if CRYPTO_ONLY_RE.search(text) and not INDIA_CONTEXT_RE.search(text):
         return True, 'crypto_only'
     if US_ONLY_RE.search(text) and not INDIA_CONTEXT_RE.search(text):
@@ -291,6 +320,152 @@ def classify_rating(item: dict[str, Any]) -> str:
     return 'unknown'
 
 
+    return 'unknown'
+
+
+def classify_evidence_type(
+    raw: dict[str, Any],
+    *,
+    text: str | None = None,
+    action: str | None = None,
+    rating: str | None = None,
+    target_price: float | None = None,
+) -> str:
+    """Classify broker evidence — only true ratings count toward consensus."""
+    body = str(text if text is not None else _combined_text(raw))
+    act = action if action is not None else detect_action(body)
+    rate = rating if rating is not None else classify_rating(raw)
+    tp = target_price
+    if tp is None and raw.get('target_price') is not None:
+        tp = _parse_float(raw.get('target_price'))
+    if tp is None:
+        tp, _ = extract_target_prices(body)
+
+    has_true_broker = bool(TRUE_BROKER_SIGNAL_RE.search(body) or BROKER_HOUSE_RE.search(body))
+    has_watchlist = bool(WATCHLIST_MENTION_RE.search(body))
+
+    if act in {'upgrade', 'downgrade'} and has_true_broker:
+        return 'upgrade_downgrade'
+    if act in {'target_raised', 'target_cut'} or (tp is not None and has_true_broker):
+        return 'target_price_change'
+    if has_watchlist and not has_true_broker:
+        return 'market_watchlist_mention'
+    if has_true_broker:
+        if ANALYST_RE.search(body) and not BROKER_HOUSE_RE.search(body):
+            return 'analyst_rating'
+        if act in {'upgrade', 'downgrade'}:
+            return 'upgrade_downgrade'
+        if act in {'target_raised', 'target_cut'} or tp is not None:
+            return 'target_price_change'
+        if rate in {'positive', 'negative', 'neutral'}:
+            return 'broker_rating'
+        return 'analyst_rating'
+    if raw.get('collector_source') in {'news_cache', 'news_feed', 'external_evidence', 'tv'}:
+        return 'news_mention'
+    return 'external_context'
+
+
+def _mention_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'ticker': row.get('ticker'),
+        'source': row.get('broker_house') or row.get('source') or 'External source',
+        'headline': row.get('headline') or row.get('title'),
+        'evidence_type': row.get('evidence_type'),
+        'published_at': row.get('published_at'),
+    }
+
+
+def _apply_evidence_views(cached: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild consensus/market/external views from evidence_items."""
+    out = dict(cached)
+    evidence_items: list[dict[str, Any]] = []
+    for row in out.get('evidence_items') or []:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        if not item.get('evidence_type'):
+            text = _combined_text(item)
+            item['evidence_type'] = classify_evidence_type(
+                item,
+                text=text,
+                action=item.get('action'),
+                rating=item.get('rating'),
+                target_price=item.get('target_price'),
+            )
+        if item.get('evidence_type') == 'market_watchlist_mention':
+            item['counts_toward_consensus'] = False
+        else:
+            item['counts_toward_consensus'] = item.get('evidence_type') in CONSENSUS_EVIDENCE_TYPES
+        evidence_items.append(item)
+    out['evidence_items'] = evidence_items
+
+    market_watchlist_mentions: list[dict[str, Any]] = []
+    external_evidence: list[dict[str, Any]] = []
+    by_ticker: dict[str, list[dict[str, Any]]] = {}
+    for row in evidence_items:
+        ticker = str(row.get('ticker') or '').upper()
+        if not ticker:
+            continue
+        by_ticker.setdefault(ticker, []).append(row)
+        et = row.get('evidence_type')
+        if et == 'market_watchlist_mention':
+            market_watchlist_mentions.append(_mention_row(row))
+        elif et in {'news_mention', 'external_context'}:
+            external_evidence.append(_mention_row(row))
+
+    consensus_by_ticker: dict[str, Any] = {}
+    for ticker, rows in by_ticker.items():
+        rated = [r for r in rows if r.get('evidence_type') in CONSENSUS_EVIDENCE_TYPES]
+        if not rated:
+            continue
+        consensus_by_ticker[ticker] = {
+            'ticker': ticker,
+            **score_ticker_consensus(rated),
+            'has_broker_consensus': True,
+            'evidence': rated[:12],
+        }
+
+    scored_list = sorted(
+        consensus_by_ticker.values(),
+        key=lambda r: r.get('confidence_score', 0),
+        reverse=True,
+    )
+    top_positive, top_negative, top_neutral = _split_consensus_buckets(scored_list)
+    top_upgrades = [
+        r for r in evidence_items
+        if r.get('evidence_type') in CONSENSUS_EVIDENCE_TYPES
+        and r.get('action') in {'upgrade', 'target_raised', 'positive_rating'}
+    ][:8]
+    top_downgrades = [
+        r for r in evidence_items
+        if r.get('evidence_type') in CONSENSUS_EVIDENCE_TYPES
+        and r.get('action') in {'downgrade', 'target_cut', 'negative_rating'}
+    ][:8]
+
+    out.update({
+        'consensus_by_ticker': consensus_by_ticker,
+        'market_watchlist_mentions': market_watchlist_mentions[:12],
+        'external_evidence': external_evidence[:12],
+        'broker_rated_tickers': len(consensus_by_ticker),
+        'market_mention_count': len(market_watchlist_mentions),
+        'tracked_tickers': len(by_ticker),
+        'tracked_ticker_names': sorted(by_ticker.keys()),
+        'top_positive': top_positive,
+        'top_negative': top_negative,
+        'top_neutral': top_neutral,
+        'top_upgrades': top_upgrades,
+        'top_downgrades': top_downgrades,
+        'target_price_changes': [
+            r for r in evidence_items
+            if r.get('evidence_type') in CONSENSUS_EVIDENCE_TYPES and r.get('target_price') is not None
+        ][:12],
+        'broker_mentions': evidence_items[:20],
+        'impact_today': _impact_candidates(scored_list, mode='today'),
+        'impact_tomorrow': _impact_candidates(scored_list, mode='tomorrow'),
+    })
+    return out
+
+
 def extract_broker_evidence_item(raw: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         return None
@@ -317,6 +492,9 @@ def extract_broker_evidence_item(raw: dict[str, Any]) -> dict[str, Any] | None:
     )
     headline = str(raw.get('headline') or raw.get('title') or text[:160])
     pub = raw.get('published_at') or raw.get('prediction_date') or raw.get('date')
+    evidence_type = classify_evidence_type(
+        raw, text=text, action=action, rating=rating, target_price=target_price,
+    )
     return {
         'ticker': ticker,
         'broker_house': str(broker_house)[:80],
@@ -329,6 +507,8 @@ def extract_broker_evidence_item(raw: dict[str, Any]) -> dict[str, Any] | None:
         'url': raw.get('url') or raw.get('link'),
         'classification': raw.get('classification') or 'broker_evidence',
         'source_type': raw.get('collector_source') or raw.get('source_type') or 'news',
+        'evidence_type': evidence_type,
+        'counts_toward_consensus': evidence_type in CONSENSUS_EVIDENCE_TYPES,
     }
 
 
@@ -451,6 +631,11 @@ def _collect_raw_items() -> list[dict[str, Any]]:
 
 
 def score_ticker_consensus(evidence: list[dict[str, Any]]) -> dict[str, Any]:
+    evidence = [
+        row for row in evidence
+        if row.get('evidence_type') in CONSENSUS_EVIDENCE_TYPES
+        or row.get('counts_toward_consensus')
+    ]
     if not evidence:
         return {
             'confidence_score': 0,
@@ -645,20 +830,7 @@ def _split_consensus_buckets(
 def _enrich_cache_buckets(cached: dict[str, Any]) -> dict[str, Any]:
     if not cached:
         return cached
-    out = dict(cached)
-    scored_list = sorted(
-        (out.get('consensus_by_ticker') or {}).values(),
-        key=lambda r: r.get('confidence_score', 0),
-        reverse=True,
-    )
-    if scored_list:
-        pos, neg, neu = _split_consensus_buckets(scored_list)
-        out.setdefault('top_positive', pos)
-        out.setdefault('top_negative', neg)
-        if not out.get('top_neutral'):
-            out['top_neutral'] = neu
-    out['tracked_ticker_names'] = out.get('tracked_ticker_names') or _tracked_ticker_names(out)
-    return out
+    return _apply_evidence_views(cached)
 
 
 def _format_neutral_overview_lines(rows: list[dict[str, Any]], *, limit: int = 6) -> list[str]:
@@ -693,34 +865,12 @@ def build_broker_intelligence_cache() -> dict[str, Any]:
     for row in evidence_items:
         by_ticker.setdefault(row['ticker'], []).append(row)
 
-    consensus_by_ticker: dict[str, Any] = {}
-    for ticker, rows in by_ticker.items():
-        consensus_by_ticker[ticker] = {'ticker': ticker, **score_ticker_consensus(rows)}
-
-    scored_list = sorted(
-        consensus_by_ticker.values(),
-        key=lambda r: r.get('confidence_score', 0),
-        reverse=True,
-    )
-    top_upgrades = [
-        r for r in evidence_items if r.get('action') in {'upgrade', 'target_raised', 'positive_rating'}
-    ][:8]
-    top_downgrades = [
-        r for r in evidence_items if r.get('action') in {'downgrade', 'target_cut', 'negative_rating'}
-    ][:8]
-    target_price_changes = [
-        r for r in evidence_items if r.get('target_price') is not None
-    ][:12]
-
-    top_positive, top_negative, top_neutral = _split_consensus_buckets(scored_list)
-    tracked_names = _tracked_ticker_names({'consensus_by_ticker': consensus_by_ticker, 'evidence_items': evidence_items})
-
+    freshness = _freshness_meta()
     source_counts: dict[str, int] = {}
     for row in evidence_items:
         src = str(row.get('broker_house') or 'unknown')
         source_counts[src] = source_counts.get(src, 0) + 1
 
-    freshness = _freshness_meta()
     payload: dict[str, Any] = {
         'ok': True,
         'stage': STAGE,
@@ -729,23 +879,11 @@ def build_broker_intelligence_cache() -> dict[str, Any]:
         'refreshed_at': _now_iso(),
         'freshness': freshness,
         'source_counts': source_counts,
-        'consensus_by_ticker': consensus_by_ticker,
-        'top_upgrades': top_upgrades,
-        'top_downgrades': top_downgrades,
-        'target_price_changes': target_price_changes,
-        'broker_mentions': evidence_items[:20],
         'evidence_items': evidence_items,
         'stale_reason': freshness.get('stale_reason'),
-        'tracked_tickers': len(consensus_by_ticker),
-        'tracked_ticker_names': tracked_names,
-        'top_positive': top_positive,
-        'top_negative': sorted(top_negative, key=lambda r: r.get('confidence_score', 0)),
-        'top_neutral': top_neutral,
-        'impact_today': _impact_candidates(scored_list, mode='today'),
-        'impact_tomorrow': _impact_candidates(scored_list, mode='tomorrow'),
         'disclaimer': 'External broker/app evidence — not our final prediction.',
     }
-    return payload
+    return _apply_evidence_views(payload)
 
 
 def _impact_candidates(scored_list: list[dict[str, Any]], *, mode: str) -> list[dict[str, Any]]:
@@ -811,10 +949,13 @@ def format_broker_refresh_telegram(result: dict[str, Any] | None = None) -> str:
     )
     ticker_count = int(
         (verify or {}).get('ticker_count')
-        or len(result.get('consensus_by_ticker') or {})
         or result.get('tracked_tickers')
+        or len(result.get('tracked_ticker_names') or [])
+        or len(result.get('consensus_by_ticker') or {})
         or 0
     )
+    broker_rated = int(result.get('broker_rated_tickers') or len(result.get('consensus_by_ticker') or {}))
+    market_mentions = int(result.get('market_mention_count') or len(result.get('market_watchlist_mentions') or []))
 
     if evidence_count <= 0:
         return _sanitize_text(
@@ -823,17 +964,18 @@ def format_broker_refresh_telegram(result: dict[str, Any] | None = None) -> str:
             '<i>Research only.</i>'
         )
 
-    tickers = _tracked_ticker_names(result)
+    tickers = result.get('tracked_ticker_names') or _tracked_ticker_names(result)
     ticker_line = ', '.join(tickers[:8]) if tickers else '—'
     drill = tickers[0] if tickers else 'TICKER'
     return _sanitize_text(
         '<b>🏦 Broker refresh</b>\n\n'
         'Broker refresh completed.\n'
-        f'Tracked tickers: {ticker_count}\n'
+        f'Broker-rated tickers: {broker_rated}\n'
+        f'Market/news mentions: {market_mentions}\n'
         f'Evidence: {evidence_count}\n'
         f'Tickers: {ticker_line}\n'
         f'Use /broker {drill} for drilldown.\n'
-        '<i>Research only — confirm with price + volume.</i>'
+        '<i>Research only — market mentions are not broker ratings.</i>'
     )
 
 
@@ -879,6 +1021,10 @@ def _lite_from_cache(cached: dict[str, Any]) -> dict[str, Any]:
         'top_negative': (cached.get('top_negative') or [])[:8],
         'top_neutral': (cached.get('top_neutral') or [])[:8],
         'tracked_ticker_names': (cached.get('tracked_ticker_names') or _tracked_ticker_names(cached))[:12],
+        'market_watchlist_mentions': (cached.get('market_watchlist_mentions') or [])[:12],
+        'external_evidence': (cached.get('external_evidence') or [])[:12],
+        'broker_rated_tickers': cached.get('broker_rated_tickers') or len(cached.get('consensus_by_ticker') or {}),
+        'market_mention_count': cached.get('market_mention_count') or len(cached.get('market_watchlist_mentions') or []),
         'top_upgrades': (cached.get('top_upgrades') or [])[:6],
         'top_downgrades': (cached.get('top_downgrades') or [])[:6],
         'target_price_changes': (cached.get('target_price_changes') or [])[:6],
@@ -925,6 +1071,36 @@ def get_broker_intel_ticker(ticker: str, *, cache_only: bool = True, lite: bool 
         cached = refresh_broker_intelligence(persist=True)
 
     consensus = (cached.get('consensus_by_ticker') or {}).get(sym)
+    all_rows = [
+        r for r in (cached.get('evidence_items') or [])
+        if _normalize_ticker(r.get('ticker')) == sym
+    ]
+    watchlist_rows = [r for r in all_rows if r.get('evidence_type') == 'market_watchlist_mention']
+
+    if not consensus and not all_rows:
+        return {
+            'ok': True,
+            'cache_missing': False,
+            'lite': lite,
+            'ticker': sym,
+            'found': False,
+            'message': f'No broker intelligence for {sym}.',
+        }
+
+    if not consensus and watchlist_rows:
+        return {
+            'ok': True,
+            'lite': lite,
+            'from_cache': True,
+            'ticker': sym,
+            'found': True,
+            'watchlist_only': True,
+            'has_broker_consensus': False,
+            'market_mentions': [_mention_row(r) for r in watchlist_rows[:6]],
+            'freshness': cached.get('freshness') or {},
+            'disclaimer': cached.get('disclaimer') or 'External broker/app evidence — not our final prediction.',
+        }
+
     if not consensus:
         return {
             'ok': True,
@@ -941,6 +1117,8 @@ def get_broker_intel_ticker(ticker: str, *, cache_only: bool = True, lite: bool 
         'from_cache': True,
         'ticker': sym,
         'found': True,
+        'has_broker_consensus': True,
+        'watchlist_only': False,
         'consensus': consensus,
         'freshness': cached.get('freshness') or {},
         'impact_today': next(
@@ -989,98 +1167,71 @@ def format_broker_overview_telegram() -> str:
     overview = get_broker_intel_overview(cache_only=True, lite=False)
     if overview.get('cache_missing') and not _cache_exists_on_disk():
         return _sanitize_text(
-            '<b>🏦 Broker intelligence</b>\n\n'
+            '<b>🏦 Broker Intelligence</b>\n\n'
             'Freshness: <code>missing</code>\n'
-            'Tracked tickers: 0\n\n'
+            'Broker-rated tickers: 0\n\n'
             'Broker cache unavailable.\n'
             '<i>Research only — use /broker refresh to rebuild.</i>'
         )
 
     fresh = overview.get('freshness') or {}
-    tracked = overview.get('tracked_tickers') or len(overview.get('consensus_by_ticker') or {})
-    tracked_names = overview.get('tracked_ticker_names') or _tracked_ticker_names(overview)
-    evidence_count = len(overview.get('evidence_items') or [])
-    fresh_status = fresh.get('status') or ('fresh' if evidence_count or tracked else 'unknown')
-    tracked_label = str(tracked)
-    if tracked_names:
-        tracked_label = f"{tracked} ({', '.join(tracked_names[:6])})"
+    broker_rated = int(overview.get('broker_rated_tickers') or len(overview.get('consensus_by_ticker') or {}))
+    market_mentions = int(overview.get('market_mention_count') or len(overview.get('market_watchlist_mentions') or []))
+    fresh_status = fresh.get('status') or 'unknown'
     lines = [
-        '<b>🏦 Broker intelligence</b>',
+        '<b>🏦 Broker Intelligence</b>',
         '',
         f"Freshness: <code>{fresh_status}</code>",
-        f"Tracked tickers: {tracked_label}",
+        f"Broker-rated tickers: {broker_rated}",
+        f"Market/news mentions: {market_mentions}",
     ]
     if overview.get('stale_reason'):
         lines.append(f"Note: {overview.get('stale_reason')}")
 
-    if tracked <= 0 and evidence_count <= 0:
-        lines.extend([
-            '',
-            'No fresh broker evidence found.',
-            '<i>Research only.</i>',
-        ])
-        return _sanitize_text('\n'.join(lines))
-
-    lines.extend(['', '<b>Top positive:</b>'])
+    lines.extend(['', '<b>Broker/Analyst consensus:</b>'])
     top_pos = overview.get('top_positive') or []
-    if top_pos:
-        for row in top_pos[:5]:
-            lines.append(
-                f"• {row.get('ticker')} · {row.get('consensus_label')} "
-                f"({row.get('confidence_score')}) · {row.get('suggested_action')}"
-            )
-    else:
-        lines.append('• None flagged')
-
-    lines.extend(['', '<b>Top negative / risk:</b>'])
     top_neg = overview.get('top_negative') or []
-    if top_neg:
-        for row in top_neg[:5]:
+    if top_pos or top_neg:
+        for row in top_pos[:4]:
+            lines.append(
+                f"• {row.get('ticker')} · {row.get('consensus_label')} "
+                f"({row.get('confidence_score')}) · {row.get('suggested_action')}"
+            )
+        for row in top_neg[:4]:
             lines.append(
                 f"• {row.get('ticker')} · {row.get('consensus_label')} "
                 f"({row.get('confidence_score')}) · {row.get('suggested_action')}"
             )
     else:
-        lines.append('• None flagged')
+        lines.append('• No broker/analyst ratings found.')
 
-    top_neutral = overview.get('top_neutral') or []
-    if not top_neutral and tracked_names:
-        consensus = overview.get('consensus_by_ticker') or {}
-        scored = sorted(consensus.values(), key=lambda r: r.get('confidence_score', 0), reverse=True)
-        _, _, top_neutral = _split_consensus_buckets(scored)
-    if top_neutral or (tracked > 0 and not top_pos and not top_neg):
-        lines.extend(['', '<b>Neutral / Other evidence:</b>'])
-        if top_neutral:
-            lines.extend(_format_neutral_overview_lines(top_neutral, limit=6))
-        elif tracked_names:
-            for name in tracked_names[:6]:
-                row = (overview.get('consensus_by_ticker') or {}).get(name) or {}
-                if row:
-                    lines.extend(_format_neutral_overview_lines([row], limit=1))
-                else:
-                    lines.append(f'• {name} — tracked · see /broker evidence')
-        else:
-            lines.append('• None in cache')
+    lines.extend(['', '<b>Market watchlist mentions:</b>'])
+    watchlist = overview.get('market_watchlist_mentions') or []
+    if watchlist:
+        for row in watchlist[:6]:
+            ticker = row.get('ticker') or '—'
+            source = row.get('source') or 'External source'
+            headline = str(row.get('headline') or '')[:90]
+            lines.append(f'• {ticker} — {source}')
+            if headline:
+                lines.append(f'  {headline}')
+    else:
+        lines.append('• None in cache')
 
-    impact = overview.get('impact_today') or []
-    if impact:
-        lines.extend(['', '<b>Impact on today:</b>'])
-        for row in impact[:3]:
-            lines.append(
-                f"• {row.get('ticker')} · {row.get('impact')} · {row.get('suggested_action')}"
-            )
-
-    impact_t = overview.get('impact_tomorrow') or []
-    if impact_t:
-        lines.extend(['', '<b>Impact on tomorrow:</b>'])
-        for row in impact_t[:3]:
-            lines.append(
-                f"• {row.get('ticker')} · {row.get('impact')} · {row.get('suggested_action')}"
-            )
+    lines.extend(['', '<b>External evidence:</b>'])
+    external = overview.get('external_evidence') or []
+    if external:
+        for row in external[:4]:
+            ticker = row.get('ticker') or '—'
+            source = row.get('source') or 'External source'
+            headline = str(row.get('headline') or '')[:80]
+            lines.append(f'• {ticker} · {source} · {headline}')
+    else:
+        lines.append('• None in cache')
 
     lines.extend([
         '',
-        '<i>Research only — watch/confirm. Use /broker evidence or /broker TICKER.</i>',
+        '<i>Research only — market mentions are not broker ratings.</i>',
     ])
     return _sanitize_text('\n'.join(lines))
 
@@ -1109,13 +1260,14 @@ def format_broker_evidence_telegram() -> str:
             continue
         ticker = row.get('ticker') or '—'
         c_row = consensus.get(str(ticker).upper()) or {}
-        label = c_row.get('consensus_label') or row.get('rating') or 'Unknown'
+        label = c_row.get('consensus_label') or row.get('rating') or row.get('evidence_type') or 'Unknown'
         source = row.get('broker_house') or row.get('source') or 'External source'
         headline = str(row.get('headline') or row.get('title') or '—')[:90]
         freshness = c_row.get('freshness') or row.get('freshness') or 'unknown'
+        etype = row.get('evidence_type') or 'unknown'
         lines.append(f'• {ticker} · {label} · {source}')
         lines.append(f'  {headline}')
-        lines.append(f'  Freshness: {freshness}')
+        lines.append(f'  Type: {etype} · Freshness: {freshness}')
 
     lines.extend(['', '<i>Research only — not a trade signal.</i>'])
     return _sanitize_text('\n'.join(lines))
@@ -1142,6 +1294,24 @@ def format_broker_ticker_telegram(ticker: str) -> str:
         else:
             lines.append('Use /broker refresh to rebuild cache.')
         lines.append('<i>Research only.</i>')
+        return _sanitize_text('\n'.join(lines))
+
+    if detail.get('watchlist_only'):
+        mention = (detail.get('market_mentions') or [{}])[0]
+        headline = str(mention.get('headline') or '')[:120]
+        source = mention.get('source') or 'External source'
+        lines = [
+            f'<b>🏦 Broker — {sym}</b>',
+            '',
+            'Evidence type: Market watchlist mention',
+            'Broker consensus: Not available',
+            'This is not a broker rating.',
+            'Stance: Research Only',
+            f'Source: {source}',
+        ]
+        if headline:
+            lines.append(f'Headline: {headline[:90]}')
+        lines.extend(['', '<i>Research only — confirm with price + volume.</i>'])
         return _sanitize_text('\n'.join(lines))
 
     c = detail.get('consensus') or {}
@@ -1211,6 +1381,8 @@ def broker_decision_bullets(ticker: str, *, mode: str = 'today') -> list[str]:
         return []
     detail = get_broker_intel_ticker(sym, cache_only=True, lite=True)
     if not detail.get('found'):
+        return []
+    if detail.get('watchlist_only') or not detail.get('has_broker_consensus'):
         return []
     c = detail.get('consensus') or {}
     label = c.get('consensus_label') or 'Unknown'

@@ -879,7 +879,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '48N',
+        'stage': '48O',
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',

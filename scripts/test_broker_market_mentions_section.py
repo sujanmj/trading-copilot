@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for broker neutral evidence display (Stage 48N)."""
+"""Unit tests for market mentions section in /broker (Stage 48O)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def _fail(msg: str) -> int:
-    print(f'BROKER_NEUTRAL_EVIDENCE_DISPLAY_TEST_FAIL: {msg}', file=sys.stderr)
+    print(f'BROKER_MARKET_MENTIONS_SECTION_TEST_FAIL: {msg}', file=sys.stderr)
     return 1
 
 
@@ -25,38 +25,29 @@ def main() -> int:
         'freshness': {'status': 'fresh'},
         'broker_rated_tickers': 0,
         'market_mention_count': 1,
-        'tracked_tickers': 1,
-        'tracked_ticker_names': ['BHARTIARTL'],
-        'evidence_items': [{
-            'ticker': 'BHARTIARTL',
-            'headline': 'Stocks to watch: Bharti Airtel',
-            'broker_house': 'LiveMint',
-            'evidence_type': 'market_watchlist_mention',
-        }],
+        'top_positive': [],
+        'top_negative': [],
         'market_watchlist_mentions': [{
             'ticker': 'BHARTIARTL',
             'source': 'LiveMint',
-            'headline': 'Stocks to watch: Bharti Airtel',
+            'headline': 'Stocks to watch: Bharti Airtel, RVNL',
         }],
-        'consensus_by_ticker': {},
-        'top_positive': [],
-        'top_negative': [],
-        'top_neutral': [],
         'external_evidence': [],
     }
-
     with patch('backend.analytics.broker_intelligence.get_broker_intel_overview', return_value=overview):
         with patch('backend.analytics.broker_intelligence._cache_exists_on_disk', return_value=True):
             text = format_broker_overview_telegram()
 
     if 'Market watchlist mentions' not in text:
         return _fail('overview must include Market watchlist mentions section')
+    if 'No broker/analyst ratings found' not in text:
+        return _fail('watchlist-only cache must say no broker ratings found')
     if 'BHARTIARTL' not in text:
-        return _fail('overview must show tracked ticker BHARTIARTL')
-    if 'Top positive' in text:
-        return _fail('watchlist-only overview must not show Top positive section')
+        return _fail('watchlist ticker must be visible')
+    if 'market mentions are not broker ratings' not in text.lower():
+        return _fail('must clarify market mentions are not broker ratings')
 
-    print('BROKER_NEUTRAL_EVIDENCE_DISPLAY_TEST_OK')
+    print('BROKER_MARKET_MENTIONS_SECTION_TEST_OK')
     return 0
 
 

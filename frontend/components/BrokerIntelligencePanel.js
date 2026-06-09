@@ -211,6 +211,49 @@
     </div>`;
   }
 
+  function renderMarketWatchlistSection(overview) {
+    const rows = overview.market_watchlist_mentions || [];
+    if (!rows.length) return '';
+    const body = rows.map((row) => {
+      const ticker = row.ticker || '—';
+      const source = row.source || '—';
+      const headline = row.headline || '';
+      return `<div class="bi-impact-row bi-ticker-link" data-ticker="${escapeHtml(ticker)}">• ${escapeHtml(ticker)} — ${escapeHtml(source)}<br><span class="bi-muted">${escapeHtml(headline)}</span></div>`;
+    }).join('');
+    return `<div class="bi-section">
+      <div class="bi-section-title">Market Watchlist Mentions</div>
+      <p class="bi-muted">Not broker/analyst ratings — research context only.</p>
+      ${body}
+    </div>`;
+  }
+
+  function renderBrokerConsensusSection(overview) {
+    const pos = overview.top_positive || [];
+    const neg = overview.top_negative || [];
+    if (!pos.length && !neg.length) {
+      return `<div class="bi-section">
+        <div class="bi-section-title">Broker/Analyst Consensus</div>
+        <div class="bi-empty">No broker/analyst ratings found.</div>
+      </div>`;
+    }
+    return `<div class="bi-section">
+      <div class="bi-section-title">Broker/Analyst Consensus</div>
+      <div class="bi-section-subtitle">Positive</div>
+      ${renderConsensusTable(pos, true)}
+      <div class="bi-section-subtitle">Negative / Risk</div>
+      ${renderConsensusTable(neg, true)}
+    </div>`;
+  }
+
+  function renderExternalEvidenceSection(overview) {
+    const rows = overview.external_evidence || [];
+    return `<div class="bi-section external-evidence">
+      <div class="bi-section-title">External Evidence</div>
+      <p class="bi-muted">External context — not broker consensus.</p>
+      ${renderEvidenceTable(rows.length ? rows : (overview.evidence_items || []), { limit: 8 })}
+    </div>`;
+  }
+
   function renderNeutralSection(overview) {
     const rows = overview.top_neutral || [];
     if (!rows.length) return '';
@@ -276,21 +319,11 @@
         <p class="bi-disclaimer">${escapeHtml(disclaimer)}</p>
         ${renderFreshnessSection(overview)}
         ${renderTrackedTickerChips(overview.tracked_ticker_names || [])}
-        <div class="bi-section">
-          <div class="bi-section-title">Top Positive</div>
-          ${renderConsensusTable(overview.top_positive || [], true)}
-        </div>
-        <div class="bi-section">
-          <div class="bi-section-title">Top Negative</div>
-          ${renderConsensusTable(overview.top_negative || [], true)}
-        </div>
+        ${renderBrokerConsensusSection(overview)}
+        ${renderMarketWatchlistSection(overview)}
         ${renderNeutralSection(overview)}
         ${renderDrilldownSection(drilldown)}
-        <div class="bi-section external-evidence">
-          <div class="bi-section-title">External Evidence</div>
-          <p class="bi-muted">External evidence is separated from our final prediction.</p>
-          ${renderEvidenceTable(overview.evidence_items || overview.broker_mentions || [], { limit: 8 })}
-        </div>
+        ${renderExternalEvidenceSection(overview)}
         ${renderImpactSection(overview)}
         <div class="bi-debug-line">GET ${escapeHtml(OVERVIEW_LITE_PATH)} · POST ${escapeHtml(REFRESH_PATH)}</div>
       </div>`;
