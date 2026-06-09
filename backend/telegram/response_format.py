@@ -311,6 +311,9 @@ def _load_market_fallback_context() -> dict[str, Any]:
                 ticker = str(row.get('ticker') or row.get('symbol') or '').strip().upper()
                 if ticker and ticker not in top_watch:
                     top_watch.append(ticker)
+    watch_split = format_watchlist_with_rejections(top_watch)
+    top_watch = watch_split['clean']
+    rejected_today = watch_split['rejected']
 
     risk_notes = pack.get('risk_notes') if pack else []
     risk_count = len(risk_notes) if isinstance(risk_notes, list) else 0
@@ -339,6 +342,7 @@ def _load_market_fallback_context() -> dict[str, Any]:
         'watch_count': watch_count,
         'avoid_count': avoid_count,
         'top_watch': top_watch[:5],
+        'rejected_today': rejected_today[:5],
         'risk_notes_count': risk_count,
     }
 
@@ -357,38 +361,91 @@ def _market_useful_bullets(summary: dict[str, Any], items: list[Any]) -> list[st
     return _bullet_lines_from_rows(items, limit=6)
 
 
-def _split_top_watch_by_live_rejection(rows: list[Any]) -> tuple[list[str], list[str]]:
-    """Separate clean top-watch tickers from live-rejected ones."""
-    from backend.analytics.unified_decision_engine import build_live_rejection_set
+REJECTED_TODAY_DETAIL = 'live scanner rejection'
 
-    registry = build_live_rejection_set()
+
+def format_watchlist_with_rejections(
+    watchlist: list[Any] | None,
+    live_rejection_set: dict[str, str] | None = None,
+) -> dict[str, list[str]]:
+    """Split watchlist tickers into clean vs live-rejected buckets."""
+    if live_rejection_set is None:
+        from backend.analytics.unified_decision_engine import build_live_rejection_set
+
+        registry = build_live_rejection_set()
+    else:
+        registry = live_rejection_set
     clean: list[str] = []
     rejected: list[str] = []
-    for row in rows:
+    for row in watchlist or []:
         if isinstance(row, dict):
             ticker = str(row.get('ticker') or row.get('symbol') or '').strip().upper()
         else:
             ticker = str(row or '').strip().upper()
-        if not ticker:
+        if not ticker or ticker == '?':
             continue
         if ticker in registry:
             if ticker not in rejected:
                 rejected.append(ticker)
         elif ticker not in clean:
             clean.append(ticker)
-    return clean, rejected
+    return {'clean': clean, 'rejected': rejected}
 
 
-def _format_journal_watchlist_lines(top_watch: list[Any]) -> list[str]:
-    clean, rejected = _split_top_watch_by_live_rejection(top_watch)
-    lines: list[str] = []
-    if clean:
-        lines.append(f"- top watch: {', '.join(clean[:5])}")
-    else:
-        lines.append('- top watch: —')
-    if rejected:
-        lines.append(f"- rejected today: {', '.join(rejected[:5])}")
+def format_watchlist_summary_lines(
+    watchlist: list[Any] | None,
+    *,
+    top_prefix: str = '- top watchlist: ',
+    rejected_prefix: str = '- rejected today: ',
+    limit: int = 5,
+    live_rejection_set: dict[str, str] | None = None,
+) -> list[str]:
+    split = format_watchlist_with_rejections(watchlist, live_rejection_set)
+    lines = [f"{top_prefix}{', '.join(split['clean'][:limit]) if split['clean'] else '—'}"]
+    if split['rejected']:
+        lines.append(f"{rejected_prefix}{', '.join(split['rejected'][:limit])}")
     return lines
+
+
+def format_journal_items_lines(
+    items: list[Any] | None,
+    *,
+    prediction_count: int | None = None,
+    item_limit: int = 6,
+    live_rejection_set: dict[str, str] | None = None,
+) -> list[str]:
+    """Journal tab/detail lines — rejected tickers in a separate section."""
+    split = format_watchlist_with_rejections(items, live_rejection_set)
+    lines: list[str] = []
+    if prediction_count is not None:
+        lines.append(f'Journal predictions: {prediction_count}')
+    for ticker in split['clean'][:item_limit]:
+        lines.append(f'• {ticker}')
+    if split['rejected']:
+        lines.append('Rejected today:')
+        for ticker in split['rejected'][:item_limit]:
+            lines.append(f'• {ticker} — {REJECTED_TODAY_DETAIL}')
+    return lines
+
+
+def _split_top_watch_by_live_rejection(
+    rows: list[Any],
+    live_rejection_set: dict[str, str] | None = None,
+) -> tuple[list[str], list[str]]:
+    split = format_watchlist_with_rejections(rows, live_rejection_set)
+    return split['clean'], split['rejected']
+
+
+def _format_journal_watchlist_lines(
+    top_watch: list[Any],
+    live_rejection_set: dict[str, str] | None = None,
+) -> list[str]:
+    return format_watchlist_summary_lines(
+        top_watch,
+        top_prefix='- top watch: ',
+        rejected_prefix='- rejected today: ',
+        live_rejection_set=live_rejection_set,
+    )
 
 
 def _append_market_fallback_lines(lines: list[str], fallback: dict[str, Any]) -> None:
@@ -396,13 +453,15 @@ def _append_market_fallback_lines(lines: list[str], fallback: dict[str, Any]) ->
         lines.append(f"Watch: {fallback.get('watch_count', 0)} · Avoid: {fallback.get('avoid_count', 0)}")
     top_rows = fallback.get('top_watch') or []
     if top_rows:
-        clean, rejected = _split_top_watch_by_live_rejection(
-            [{'ticker': t} if isinstance(t, str) else t for t in top_rows]
+        lines.extend(
+            format_watchlist_summary_lines(
+                top_rows,
+                top_prefix='Top watch: ',
+                rejected_prefix='Rejected today: ',
+            )
         )
-        if clean:
-            lines.append(f"Top watch: {', '.join(clean)}")
-        if rejected:
-            lines.append(f"Rejected today: {', '.join(rejected)}")
+    elif fallback.get('rejected_today'):
+        lines.append(f"Rejected today: {', '.join(fallback['rejected_today'])}")
     if fallback.get('risk_notes_count'):
         lines.append(f"Risk notes: {fallback['risk_notes_count']}")
 
@@ -945,11 +1004,8 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
             lines.append('No useful cached item found.')
     elif key == 'journal':
         hist = summary.get('history') or {}
-        lines.append(f"Journal predictions: {hist.get('count', len(items))}")
-        for row in items[:6]:
-            if isinstance(row, dict):
-                ticker = row.get('ticker') or row.get('symbol') or '?'
-                lines.append(f"• {ticker}")
+        prediction_count = hist.get('count', len(items))
+        lines.extend(format_journal_items_lines(items, prediction_count=prediction_count))
     else:
         bullets = _bullet_lines_from_rows(items, limit=6)
         if bullets:
@@ -1007,11 +1063,10 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     lines.append('<b>📈 Scan</b>')
     lines.append(f"- live count: {scan_summary.get('live_scanner_count', len(live_scanner))}")
     scanner_names = [_ticker_from_row(r) for r in live_scanner[:3] if isinstance(r, dict)]
-    watch_names = [_ticker_from_row(r) for r in watchlist[:3] if isinstance(r, dict)]
     if not scanner_names:
         scanner_names = [_ticker_from_row(r) for r in scan_items[:3] if isinstance(r, dict)]
     lines.append(f"- top scanner: {', '.join(scanner_names) if scanner_names else '—'}")
-    lines.append(f"- top watchlist: {', '.join(watch_names) if watch_names else '—'}")
+    lines.extend(format_watchlist_summary_lines(watchlist, limit=3))
 
     market = payloads.get('market') or {}
     market_summary = market.get('summary') or {}
@@ -1086,6 +1141,7 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
 
     journal = payloads.get('journal') or {}
     journal_summary = journal.get('summary') or {}
+    journal_items = journal.get('items') or []
     top_watch = journal_summary.get('top_watch') or []
     failed = journal_summary.get('failed_strong_warnings') or []
     lines.append('<b>📜 Journal</b>')
@@ -1096,7 +1152,12 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
         summary_mode=journal_summary.get('market_mode'),
     )
     lines.append(f'- mode: {journal_mode}')
-    lines.extend(_format_journal_watchlist_lines(top_watch))
+    hist = journal_summary.get('history') or {}
+    detail_rows = journal_items or top_watch
+    if detail_rows:
+        lines.extend(format_journal_items_lines(detail_rows, prediction_count=hist.get('count', len(journal_items))))
+    else:
+        lines.extend(_format_journal_watchlist_lines(top_watch))
     lines.append(f"- risk notes: {len(failed) if isinstance(failed, list) else 0}")
 
     lines.extend([

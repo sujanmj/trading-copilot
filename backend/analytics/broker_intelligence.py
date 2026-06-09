@@ -17,7 +17,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48T'
+STAGE = '48U'
 ENGINE_NAME = 'Broker Intelligence'
 CACHE_FILE = get_data_path('broker_intelligence_cache.json')
 COLLECTOR_CACHE = get_data_path('broker_app_collector_latest.json')

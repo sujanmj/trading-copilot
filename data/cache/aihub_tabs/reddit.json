@@ -1,10 +1,10 @@
 {
   "ok": true,
   "tab": "reddit",
-  "generated_at": "2026-06-09T12:19:16+00:00",
+  "generated_at": "2026-06-09T12:51:22+00:00",
   "market_mode": "RESEARCH_MODE",
   "source": "fallback",
-  "cache_age_seconds": 610600,
+  "cache_age_seconds": 612527,
   "items": [],
   "summary": {
     "empty_message": "No Reddit cache yet",

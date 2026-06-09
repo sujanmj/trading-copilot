@@ -33,7 +33,11 @@ def main() -> int:
             ],
             'failed_strong_warnings': [],
         },
-        'items': [],
+        'items': [
+            {'ticker': 'RELIANCE'},
+            {'ticker': 'AMBER'},
+            {'ticker': 'AVANTIFEED'},
+        ],
     }
 
     with patch(
@@ -42,11 +46,11 @@ def main() -> int:
     ):
         text = strip_stage_markers(format_aihub_full({'calib': {'summary': {}}, 'journal': journal_payload}))
 
-    if '- top watch: RELIANCE, AMBER, AVANTIFEED' in text:
-        return _fail('rejected ticker must not appear in plain top watch list')
-    if 'top watch: RELIANCE, AMBER' not in text:
-        return _fail('clean top watch tickers missing from journal section')
-    if 'rejected today: avantifeed' not in text.lower():
+    if 'top watchlist: RELIANCE, AMBER, AVANTIFEED' in text:
+        return _fail('rejected ticker must not appear in plain top watchlist')
+    if '• RELIANCE' not in text or '• AMBER' not in text:
+        return _fail('clean journal items missing from full summary')
+    if 'rejected today:' not in text.lower() and 'Rejected today:' not in text:
         return _fail('journal must label rejected today ticker separately')
 
     print('AIHUB_REJECTED_WATCHLIST_CLARITY_TEST_OK')
