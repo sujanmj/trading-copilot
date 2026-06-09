@@ -40,6 +40,8 @@ def main() -> int:
         return _fail('successful refresh must say completed with counts')
     if 'Evidence: 3' not in ok:
         return _fail('successful refresh must show evidence count')
+    if 'Tickers:' not in ok:
+        return _fail('successful refresh must list tickers')
 
     print('BROKER_REFRESH_HONEST_MESSAGE_TEST_OK')
     return 0

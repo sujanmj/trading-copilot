@@ -16,7 +16,7 @@ from backend.storage.data_paths import get_data_path
 from backend.storage.json_io import atomic_write_json
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '48M'
+STAGE = '48N'
 ENGINE_NAME = 'Broker Overview Cache'
 CACHE_FILE = get_data_path('broker_overview_cache.json')
 INTEL_CACHE_FILE = get_data_path('broker_intelligence_cache.json')
@@ -122,6 +122,8 @@ def _merge_intel_lite(intel: dict[str, Any], legacy: dict[str, Any] | None = Non
         'source_counts': intel.get('source_counts') or {},
         'top_positive': (intel.get('top_positive') or [])[:8],
         'top_negative': (intel.get('top_negative') or [])[:8],
+        'top_neutral': (intel.get('top_neutral') or [])[:8],
+        'tracked_ticker_names': (intel.get('tracked_ticker_names') or [])[:12],
         'top_upgrades': (intel.get('top_upgrades') or [])[:6],
         'top_downgrades': (intel.get('top_downgrades') or [])[:6],
         'target_price_changes': (intel.get('target_price_changes') or [])[:6],

@@ -200,6 +200,26 @@
     </div>`;
   }
 
+  function renderTrackedTickerChips(tickers) {
+    if (!tickers || !tickers.length) return '';
+    const chips = tickers.map((t) =>
+      `<button type="button" class="bi-ticker-chip bi-ticker-link" data-ticker="${escapeHtml(t)}">${escapeHtml(t)}</button>`
+    ).join('');
+    return `<div class="bi-section">
+      <div class="bi-section-title">Tracked Tickers</div>
+      <div class="bi-ticker-chips">${chips}</div>
+    </div>`;
+  }
+
+  function renderNeutralSection(overview) {
+    const rows = overview.top_neutral || [];
+    if (!rows.length) return '';
+    return `<div class="bi-section">
+      <div class="bi-section-title">Neutral / Other Evidence</div>
+      ${renderConsensusTable(rows, true)}
+    </div>`;
+  }
+
   function renderDrilldownSection(detail) {
     if (!detail || !detail.found) {
       return `<div class="bi-section" id="biDrilldownSection">
@@ -255,6 +275,7 @@
         ${staleBanner}
         <p class="bi-disclaimer">${escapeHtml(disclaimer)}</p>
         ${renderFreshnessSection(overview)}
+        ${renderTrackedTickerChips(overview.tracked_ticker_names || [])}
         <div class="bi-section">
           <div class="bi-section-title">Top Positive</div>
           ${renderConsensusTable(overview.top_positive || [], true)}
@@ -263,6 +284,7 @@
           <div class="bi-section-title">Top Negative</div>
           ${renderConsensusTable(overview.top_negative || [], true)}
         </div>
+        ${renderNeutralSection(overview)}
         ${renderDrilldownSection(drilldown)}
         <div class="bi-section external-evidence">
           <div class="bi-section-title">External Evidence</div>

@@ -1,10 +1,10 @@
 {
   "ok": true,
   "tab": "global",
-  "generated_at": "2026-06-09T05:12:40+00:00",
+  "generated_at": "2026-06-09T05:45:39+00:00",
   "market_mode": "USA_MODE",
   "source": "runtime",
-  "cache_age_seconds": 581422,
+  "cache_age_seconds": 583401,
   "items": [
     {
       "kind": "global_snapshot",
