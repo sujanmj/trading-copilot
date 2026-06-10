@@ -72,7 +72,7 @@ def register_myfeed_routes(
 
         text = str((body or {}).get('text') or '').strip()
         source = str((body or {}).get('source') or 'gui_text').strip() or 'gui_text'
-        if source not in {'gui_text', 'telegram_text', 'telegram_screenshot', 'gui_screenshot'}:
+        if source not in {'gui_text', 'telegram_text'}:
             source = 'gui_text'
         result = ingest_text(text, source=source)
         item = sanitize_item_for_api(result.get('record') or {})
@@ -112,26 +112,15 @@ def register_myfeed_routes(
 
     @app.post('/api/myfeed/screenshot', dependencies=auth)
     async def api_myfeed_screenshot(file: UploadFile = File(...)):
-        from backend.my_feed.feed_processor import ingest_screenshot_bytes, sanitize_item_for_api
-
-        image_bytes = await file.read()
-        result = ingest_screenshot_bytes(image_bytes, source='gui_screenshot')
-        item = sanitize_item_for_api(result.get('record') or {})
-        saved_count = int(result.get('saved_count') or 0)
-        saved = bool(result.get('ok')) and saved_count > 0
-        message = str(result.get('message') or '')
-        if not message and saved:
-            message = f'Saved {saved_count} item{"s" if saved_count != 1 else ""}'
-        if not message and not saved:
-            message = 'Could not read market news clearly. Paste text instead.'
+        await file.read()
         return sanitize_json_value({
-            'ok': bool(result.get('ok')),
-            'saved': saved,
-            'saved_count': saved_count,
-            'message': message,
-            'feed_id': item.get('feed_id') if item else None,
-            'item': item if item else None,
-            'reply': result.get('reply'),
-            'duplicate': bool(result.get('duplicate')),
+            'ok': False,
+            'saved': False,
+            'saved_count': 0,
+            'message': 'My Feed is text-only. Paste news text and save.',
+            'feed_id': None,
+            'item': None,
+            'reply': None,
+            'duplicate': False,
             **_base_payload(),
         })

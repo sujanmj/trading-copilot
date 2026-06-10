@@ -107,8 +107,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /aihub brain full — full brain details
 
 <b>My Feed:</b>
-/feed — add market news text or screenshot
-/myfeed — latest saved feed (same as /myfeed list)
+/feed &lt;market news text&gt; — save text to My Feed
 /myfeed list — latest saved feed
 /myfeed today — today's feed
 /myfeed scan — tickers/themes impact
@@ -221,7 +220,7 @@ def parse_command(text: str) -> tuple[str, str]:
     if lower.startswith('feed '):
         return 'feed', raw[5:].strip()
     if lower == 'myfeed':
-        return 'myfeed', 'list'
+        return 'myfeed', ''
     if lower == 'myfeed list':
         return 'myfeed', 'list'
     if lower == 'myfeed today':
@@ -282,40 +281,14 @@ def handle_incoming_telegram_message(
     dry_run: bool = False,
     chat_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    from backend.telegram.feed_pending_state import is_feed_pending
-    from backend.telegram.my_feed_intake import (
-        handle_feed_photo_or_fail,
-        message_has_image,
-        process_feed_message,
-        route_my_feed_telegram_media_first,
-        should_process_feed_photo,
-    )
-
-    resolved_chat_id = chat_id or str((message.get('chat') or {}).get('id') or 'default')
-
-    # Media-first: feed photo/document before text-only command routing.
-    media_reply = route_my_feed_telegram_media_first(
-        message,
-        dry_run=dry_run,
-        chat_id=resolved_chat_id,
-    )
-    if media_reply is not None:
-        return [send_analysis_message(media_reply, command='feed', dry_run=dry_run)]
-
-    if message_has_image(message) and should_process_feed_photo(message, resolved_chat_id):
-        feed_reply = handle_feed_photo_or_fail(message, dry_run=dry_run, chat_id=resolved_chat_id)
-        return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
-
-    feed_reply = process_feed_message(message, dry_run=dry_run, chat_id=resolved_chat_id)
-    if feed_reply is not None:
-        return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
+    from backend.telegram.my_feed_intake import format_feed_text_only_image_reply, message_has_image
 
     if message_has_image(message):
-        if should_process_feed_photo(message, resolved_chat_id) or is_feed_pending(resolved_chat_id):
-            feed_reply = handle_feed_photo_or_fail(message, dry_run=dry_run, chat_id=resolved_chat_id)
-            return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
-        if not is_feed_pending(resolved_chat_id):
-            return []
+        return [send_analysis_message(
+            format_feed_text_only_image_reply(),
+            command='feed',
+            dry_run=dry_run,
+        )]
 
     msg_text = str(message.get('text') or '').strip()
     if not msg_text:
@@ -325,7 +298,7 @@ def handle_incoming_telegram_message(
         msg_text,
         from_user,
         dry_run=dry_run,
-        chat_id=resolved_chat_id,
+        chat_id=chat_id or str((message.get('chat') or {}).get('id') or 'default'),
     )
 
 
@@ -652,7 +625,9 @@ def handle_analysis_command(
         return [send_analysis_message(trade_text, command=cmd, dry_run=dry_run)]
 
     if cmd == 'removed_feed_alias':
-        response_text = 'Use /feed <market news text> or send /feed then a screenshot.'
+        from backend.telegram.my_feed_intake import FEED_TEXT_ONLY_USAGE
+
+        response_text = FEED_TEXT_ONLY_USAGE
         return [send_analysis_message(response_text, command='feed', dry_run=dry_run)]
 
     if cmd == 'full' and not in_full_snapshot:
@@ -741,17 +716,17 @@ def handle_analysis_command(
     elif cmd == 'theme':
         response_text = run_without_ai(lambda: run_theme_only(args), command='theme').get('text') or run_theme_only(args).get('text') or 'Theme baskets unavailable.'
     elif cmd == 'feed':
-        from backend.telegram.feed_pending_state import set_feed_pending
-        from backend.telegram.my_feed_intake import FEED_PENDING_REPLY
+        from backend.telegram.my_feed_intake import FEED_TEXT_ONLY_USAGE
 
         text_blob = str(args or '').strip()
         if not text_blob:
-            set_feed_pending(str(chat_id or 'default'))
-            response_text = FEED_PENDING_REPLY
+            response_text = FEED_TEXT_ONLY_USAGE
         else:
             result = run_without_ai(lambda: run_feed_text_only(args), command='feed_text')
             response_text = result.get('text') or 'MY_FEED_NEEDS_TEXT'
     elif cmd == 'myfeed':
+        from backend.telegram.my_feed_intake import MYFEED_SUBCOMMAND_USAGE
+
         sub = (args or '').strip().lower()
         if sub == 'reprocess':
             if not _is_telegram_admin(from_user):
@@ -764,9 +739,11 @@ def handle_analysis_command(
                     command='myfeed_reprocess',
                 )
                 response_text = result.get('text') or 'MYFEED_REPROCESS_OK'
-        else:
-            result = run_without_ai(lambda: run_myfeed_only(args), command='myfeed')
+        elif sub in ('list', 'today', 'scan'):
+            result = run_without_ai(lambda: run_myfeed_only(sub), command='myfeed')
             response_text = result.get('text') or 'My Feed unavailable.'
+        else:
+            response_text = MYFEED_SUBCOMMAND_USAGE
     elif cmd == 'budget':
         response_text = run_without_ai(lambda: run_budget_only(args), command='budget').get('text') or run_budget_only(args).get('text') or 'Budget impact unavailable.'
     else:
@@ -854,31 +831,7 @@ def listen_forever(*, on_command: Callable[[str, str], None] | None = None) -> N
                     safe_print(f'[TG_ANALYSIS] ignored chat {msg_chat_id}')
                     continue
                 from_user = str((message.get('from') or {}).get('username') or 'unknown')
-                has_media = bool(message.get('photo') or message.get('document'))
-                msg_text = str(message.get('text') or '').strip()
-                caption = str(message.get('caption') or '').strip()
-                is_feed_media = has_media and (
-                    caption.startswith('/feed')
-                    or caption.startswith('/ feed')
-                    or caption.lower().startswith('/feed@')
-                )
-                if has_media or not on_command:
-                    results = handle_incoming_telegram_message(
-                        message,
-                        from_user,
-                        chat_id=msg_chat_id,
-                    )
-                    if not results and is_feed_media:
-                        from backend.telegram.my_feed_intake import handle_feed_photo_or_fail
-
-                        feed_reply = handle_feed_photo_or_fail(message, chat_id=msg_chat_id)
-                        send_analysis_message(feed_reply, command='feed')
-                    elif results:
-                        for item in results:
-                            if item.get('text') and not item.get('sent') and not item.get('dry_run'):
-                                send_analysis_message(str(item['text']), command='feed')
-                elif msg_text:
-                    on_command(msg_text, from_user)
+                handle_incoming_telegram_message(message, from_user, chat_id=msg_chat_id)
             if not updates:
                 time.sleep(1)
         except KeyboardInterrupt:

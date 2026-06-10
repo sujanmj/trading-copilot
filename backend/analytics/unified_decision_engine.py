@@ -399,6 +399,18 @@ def apply_live_guard_to_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+MYFEED_DECISION_LAYER_ORDER: tuple[str, ...] = (
+    'market_mode_time_safety',
+    'freshness',
+    'scanner_price_volume',
+    'watchlist_report_candidates',
+    'news_govt_global_broker_myfeed_catalysts',
+    'memory_calibration',
+    'avoid_rejection_filters',
+    'final_score',
+    'watch_for_entry_avoid_wait',
+)
+
 MY_FEED_SCORE_BUMP_CAP = 8
 MY_FEED_MAX_SCORE = 60
 
@@ -409,6 +421,9 @@ def apply_my_feed_evidence(
 ) -> list[dict[str, Any]]:
     """
     My Feed evidence only — catalyst/risk notes and small watch-priority bump.
+
+    Layer order (see MYFEED_DECISION_LAYER_ORDER): market safety → freshness → scanner →
+    watchlist → catalysts (incl. My Feed) → memory → avoid filters → final score → WATCH/AVOID/WAIT.
 
     Never creates BUY/SELL alone; never overrides live rejection or stale safety.
     """
@@ -443,19 +458,22 @@ def apply_my_feed_evidence(
         for feed in matches[:2]:
             summary = str(feed.get('cleaned_summary') or '')[:120]
             action = str(feed.get('suggested_action') or 'NEWS ONLY')
-            if action == 'WATCH FOR CONFIRMATION':
+            if action in ('WATCH FOR CONFIRMATION', 'WAIT FOR CONFIRMATION'):
                 why = [str(w) for w in (item.get('why') or [])]
                 note = f'user_feed catalyst: {summary}' if summary else 'user_feed catalyst noted'
                 if note not in why:
                     why.insert(0, note)
                 item['why'] = why[:6]
-            elif action in ('RISK ALERT', 'AVOID', 'MARKET RISK ALERT', 'RISK WATCH'):
+            elif action in (
+                'RISK ALERT', 'AVOID', 'MARKET RISK ALERT', 'RISK WATCH',
+                'AVOID / RISK WATCH', 'COMMODITY RISK ALERT', 'OIL RISK WATCH',
+            ):
                 risk = [str(r) for r in (item.get('risk') or [])]
                 note = f'user_feed risk: {summary}' if summary else f'user_feed {action.lower()}'
                 if note not in risk:
                     risk.insert(0, note)
                 item['risk'] = risk[:6]
-            elif action == 'WAIT':
+            elif action == 'WAIT FOR CONFIRMATION':
                 confirm = [str(c) for c in (item.get('confirmation_needed') or [])]
                 confirm.append('My Feed suggests waiting for confirmation')
                 item['confirmation_needed'] = confirm[:5]

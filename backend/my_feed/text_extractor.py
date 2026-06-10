@@ -286,6 +286,8 @@ def correct_fuzzy_tickers(candidates: list[str] | tuple[str, ...], text: str = '
                 found.append(raw)
             continue
         if raw in ALLOWED_ENTITY_WORDS:
+            if raw not in found:
+                found.append(raw)
             continue
         best_sym = ''
         best_dist = 999
@@ -313,27 +315,36 @@ def split_entity_tokens(candidates: list[str] | tuple[str, ...], text: str = '')
     return entities[:12]
 
 
-def extract_tickers(text: str) -> list[str]:
+def extract_entities(text: str) -> list[str]:
+    """Commodity/index entities from market words — not NSE stock tickers."""
+    return _extract_entity_hints(text)[:12]
+
+
+def extract_stock_tickers(text: str) -> list[str]:
+    """Real stock symbols from known universe only."""
     blob = str(text or '')
     upper_text = blob.upper()
     found: list[str] = []
     known = _known_stock_tickers()
 
-    for symbol in _extract_entity_hints(blob):
-        if symbol not in found:
-            found.append(symbol)
-
     for match in TICKER_RE.findall(upper_text):
         if match in REJECT_TICKER_WORDS:
             continue
         if match in ALLOWED_ENTITY_WORDS:
-            if match not in found:
-                found.append(match)
             continue
         if match in known or match in EXTRA_KNOWN_TICKERS:
             if match not in found:
                 found.append(match)
     return correct_fuzzy_tickers(found, blob)[:8]
+
+
+def extract_tickers(text: str) -> list[str]:
+    """Stock tickers plus commodity/index entities for My Feed storage."""
+    merged: list[str] = []
+    for symbol in extract_entities(text) + extract_stock_tickers(text):
+        if symbol not in merged:
+            merged.append(symbol)
+    return merged[:8]
 
 
 def filter_market_text(raw_text: str) -> dict[str, Any]:
