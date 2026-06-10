@@ -41,6 +41,9 @@ def main() -> int:
         fake_ocr = {
             'ok': True,
             'text': 'NIFTY opens higher on strong global cues across banking sector today',
+            'notifications': ['NIFTY opens higher on strong global cues across banking sector today'],
+            'ignored_private_count': 0,
+            'needs_text': False,
             'cleaned_summary': 'NIFTY opens higher on strong global cues across banking sector today',
             'confidence': 0.85,
             'extracted': {},

@@ -64,7 +64,7 @@ def reprocess_my_feed_items(*, apply: bool = False, limit: int = 500) -> dict[st
         except Exception as exc:
             errors.append(f'{feed_id}: {str(exc)[:80]}')
 
-    return {
+    result = {
         'ok': not errors,
         'apply': apply,
         'total': len(items),
@@ -72,6 +72,14 @@ def reprocess_my_feed_items(*, apply: bool = False, limit: int = 500) -> dict[st
         'unchanged': unchanged,
         'errors': errors,
     }
+    if apply and updated > 0:
+        try:
+            from backend.my_feed.cache_invalidation import invalidate_myfeed_caches
+
+            invalidate_myfeed_caches()
+        except Exception:
+            pass
+    return result
 
 
 def format_reprocess_reply(result: dict[str, Any]) -> str:

@@ -10,9 +10,9 @@ from typing import Any
 import requests
 
 from backend.telegram.feed_pending_state import (
-    chat_key_from_message,
     clear_feed_pending,
     is_feed_pending,
+    set_feed_pending,
 )
 
 FEED_PENDING_REPLY = 'Send market news text or screenshot now.'
@@ -47,6 +47,20 @@ def extract_feed_caption_text(text: str) -> str:
     return ''
 
 
+def resolve_feed_chat_id(message: dict[str, Any], chat_id: str | None = None) -> str:
+    if chat_id:
+        return str(chat_id)
+    chat = message.get('chat') or {}
+    return str(chat.get('id') or 'default')
+
+
+def should_process_feed_photo(message: dict[str, Any], chat_id: str) -> bool:
+    if not message_has_image(message):
+        return False
+    caption = str(message.get('caption') or '').strip()
+    return is_feed_caption(caption) or is_feed_pending(chat_id)
+
+
 def download_telegram_file(file_id: str, *, bot_token: str | None = None) -> bytes:
     token = str(bot_token or os.environ.get('TELEGRAM_BOT_TOKEN') or '').strip()
     if not token or not file_id:
@@ -78,7 +92,11 @@ def pick_largest_photo_file_id(message: dict[str, Any]) -> str:
 
 
 def message_has_image(message: dict[str, Any]) -> bool:
-    return bool(pick_largest_photo_file_id(message))
+    if message.get('photo'):
+        return True
+    doc = message.get('document') or {}
+    mime = str(doc.get('mime_type') or '').lower()
+    return mime.startswith('image/')
 
 
 def ingest_telegram_feed(
@@ -107,6 +125,9 @@ def _ingest_photo_message(message: dict[str, Any], *, dry_run: bool = False) -> 
         return format_needs_text_reply()
 
     if dry_run:
+        image_bytes = download_telegram_file(file_id) if file_id else b''
+        if not image_bytes:
+            return format_needs_text_reply()
         from backend.my_feed.feed_processor import ingest_text
 
         result = ingest_text(
@@ -119,12 +140,19 @@ def _ingest_photo_message(message: dict[str, Any], *, dry_run: bool = False) -> 
     if not image_bytes:
         return format_needs_text_reply()
 
-    result = ingest_telegram_feed(
-        text=extra_text,
-        image_bytes=image_bytes,
-        source='telegram_screenshot',
-    )
-    return str(result.get('reply') or format_needs_text_reply())
+    try:
+        result = ingest_telegram_feed(
+            text=extra_text,
+            image_bytes=image_bytes,
+            source='telegram_screenshot',
+        )
+        reply = str(result.get('reply') or '')
+        if reply.startswith('MY_FEED_'):
+            return reply
+    except Exception:
+        return format_needs_text_reply()
+
+    return format_needs_text_reply()
 
 
 def _ingest_text_message(text: str, *, dry_run: bool = False) -> str:
@@ -133,32 +161,56 @@ def _ingest_text_message(text: str, *, dry_run: bool = False) -> str:
     blob = str(text or '').strip()
     if not blob:
         return format_needs_text_reply()
-    if dry_run:
-        result = ingest_text(blob, source='telegram_text')
-    else:
-        result = ingest_text(blob, source='telegram_text')
+    result = ingest_text(blob, source='telegram_text')
     return str(result.get('reply') or format_needs_text_reply())
 
 
-def process_feed_message(message: dict[str, Any], *, dry_run: bool = False) -> str | None:
+def process_feed_message(
+    message: dict[str, Any],
+    *,
+    dry_run: bool = False,
+    chat_id: str | None = None,
+) -> str | None:
     """Return feed reply when message is consumed by My Feed intake, else None."""
-    chat_id = chat_key_from_message(message)
+    from backend.my_feed.feed_processor import format_needs_text_reply
+
+    resolved_chat_id = resolve_feed_chat_id(message, chat_id)
     caption = str(message.get('caption') or '').strip()
     text = str(message.get('text') or '').strip()
     has_image = message_has_image(message)
 
-    if has_image and is_feed_caption(caption):
-        return _ingest_photo_message(message, dry_run=dry_run)
+    if has_image and should_process_feed_photo(message, resolved_chat_id):
+        if is_feed_pending(resolved_chat_id):
+            clear_feed_pending(resolved_chat_id)
+        reply = _ingest_photo_message(message, dry_run=dry_run)
+        if reply.startswith('MY_FEED_'):
+            return reply
+        return format_needs_text_reply()
 
-    if has_image and is_feed_pending(chat_id):
-        clear_feed_pending(chat_id)
-        return _ingest_photo_message(message, dry_run=dry_run)
-
-    if text and is_feed_pending(chat_id) and not text.startswith('/'):
-        clear_feed_pending(chat_id)
-        return _ingest_text_message(text, dry_run=dry_run)
+    if text and is_feed_pending(resolved_chat_id) and not text.startswith('/'):
+        clear_feed_pending(resolved_chat_id)
+        reply = _ingest_text_message(text, dry_run=dry_run)
+        if reply.startswith('MY_FEED_'):
+            return reply
+        return format_needs_text_reply()
 
     return None
+
+
+def handle_feed_photo_or_fail(
+    message: dict[str, Any],
+    *,
+    dry_run: bool = False,
+    chat_id: str | None = None,
+) -> str | None:
+    """Process pending/caption feed photos; never return None for eligible photos."""
+    from backend.my_feed.feed_processor import format_needs_text_reply
+
+    resolved_chat_id = resolve_feed_chat_id(message, chat_id)
+    if not should_process_feed_photo(message, resolved_chat_id):
+        return None
+    reply = process_feed_message(message, dry_run=dry_run, chat_id=resolved_chat_id)
+    return reply or format_needs_text_reply()
 
 
 def handle_telegram_feed_message(message: dict[str, Any], *, dry_run: bool = False) -> str | None:

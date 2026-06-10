@@ -17,7 +17,7 @@ import os
 os.chdir(PROJECT_ROOT)
 
 CONTRACT_KEYS = frozenset({
-    'ok', 'saved', 'feed_id', 'item', 'reply', 'source', 'data_root',
+    'ok', 'saved', 'saved_count', 'message', 'feed_id', 'item', 'reply', 'source', 'data_root',
 })
 
 
@@ -44,6 +44,9 @@ def main() -> int:
     fake_ocr = {
         'ok': True,
         'text': 'NIFTY surges on strong FII inflows across banking sector today',
+        'notifications': ['NIFTY surges on strong FII inflows across banking sector today'],
+        'ignored_private_count': 0,
+        'needs_text': False,
         'cleaned_summary': 'NIFTY surges on strong FII inflows across banking sector today',
         'confidence': 0.85,
         'extracted': {},

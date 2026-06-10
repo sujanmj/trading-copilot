@@ -59,13 +59,14 @@ def main() -> int:
                 return _fail('/ feed during pending must not create feed item')
 
             handle_analysis_command('/feed', chat_id=chat_id, dry_run=True)
-            photo_results = handle_incoming_telegram_message(
-                {
-                    'chat': {'id': chat_id},
-                    'photo': [{'file_id': 'dry-photo', 'file_size': 1000}],
-                },
-                dry_run=True,
-            )
+            with patch('backend.telegram.my_feed_intake.download_telegram_file', return_value=b'\x89PNGfake'):
+                photo_results = handle_incoming_telegram_message(
+                    {
+                        'chat': {'id': chat_id},
+                        'photo': [{'file_id': 'dry-photo', 'file_size': 1000}],
+                    },
+                    dry_run=True,
+                )
             if not photo_results:
                 return _fail('pending screenshot must be ingested without caption')
             photo_text = str(photo_results[0].get('text') or '')

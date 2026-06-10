@@ -9450,7 +9450,10 @@
       const textInput = document.getElementById('myFeedTextInput')
       const uploadScreenshotFile = async (file) => {
         if (!file) return
-        container.innerHTML = '<div class="loading">⏳ Extracting screenshot…</div>'
+        const statusEl = document.createElement('div')
+        statusEl.className = 'myfeed-inline-status loading'
+        statusEl.textContent = 'Extracting screenshot...'
+        container.prepend(statusEl)
         const form = new FormData()
         form.append('file', file)
         try {
@@ -9461,11 +9464,17 @@
           })
           const body = await upRes.json().catch(() => ({}))
           if (!upRes.ok || body.ok === false) {
-            alert(String(body.reply || 'Could not read screenshot clearly. Paste text instead.'))
+            statusEl.className = 'myfeed-inline-status error'
+            statusEl.textContent = String(body.message || 'Could not read market news clearly. Paste text instead.')
+          } else {
+            const count = Number(body.saved_count || 1)
+            statusEl.className = 'myfeed-inline-status success'
+            statusEl.textContent = String(body.message || `Saved ${count} item${count === 1 ? '' : 's'}`)
           }
           await loadMyFeedMain()
         } catch (err) {
-          alert('Screenshot ingest failed: ' + err.message)
+          statusEl.className = 'myfeed-inline-status error'
+          statusEl.textContent = 'Could not read market news clearly. Paste text instead.'
           await loadMyFeedMain()
         }
       }

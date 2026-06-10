@@ -572,11 +572,11 @@ def run_aihub_full_only() -> dict[str, Any]:
                 'warnings': [str(exc)[:120]],
             }
     try:
-        from backend.my_feed.feed_processor import list_feed_items, sanitize_item_for_api
+        from backend.my_feed.cache_invalidation import load_myfeed_items_for_telegram
 
         payloads['myfeed'] = {
             'ok': True,
-            'items': [sanitize_item_for_api(row) for row in list_feed_items(limit=5)],
+            'items': load_myfeed_items_for_telegram(limit=5),
         }
     except Exception as exc:
         payloads['myfeed'] = {'ok': True, 'items': [], 'warnings': [str(exc)[:120]]}
@@ -629,15 +629,18 @@ def run_feed_text_only(args: str = '') -> dict[str, Any]:
 
 
 def run_myfeed_only(args: str = '') -> dict[str, Any]:
-    from backend.my_feed.feed_processor import archive_feed_item, list_feed_items, scan_feed_summary
+    from backend.my_feed.cache_invalidation import load_myfeed_items_for_telegram
+    from backend.my_feed.feed_processor import archive_feed_item, scan_feed_summary
     from backend.my_feed.telegram_handlers import format_myfeed_list, format_myfeed_scan
 
     sub = str(args or '').strip().lower()
     if sub in ('', 'list'):
-        items = list_feed_items(limit=12, today_only=False)
+        items = load_myfeed_items_for_telegram(limit=12)
         text = format_myfeed_list(items, title='My Feed (latest)')
     elif sub == 'today':
-        items = list_feed_items(limit=12, today_only=True)
+        from backend.my_feed.feed_processor import list_feed_items, sanitize_item_for_api
+
+        items = [sanitize_item_for_api(row) for row in list_feed_items(limit=12, today_only=True)]
         text = format_myfeed_list(items, title='My Feed (today)')
     elif sub == 'scan':
         summary = scan_feed_summary(today_only=True)

@@ -283,15 +283,24 @@ def handle_incoming_telegram_message(
     chat_id: str | None = None,
 ) -> list[dict[str, Any]]:
     from backend.telegram.feed_pending_state import is_feed_pending
-    from backend.telegram.my_feed_intake import is_feed_caption, message_has_image, process_feed_message
+    from backend.telegram.my_feed_intake import (
+        handle_feed_photo_or_fail,
+        message_has_image,
+        process_feed_message,
+        should_process_feed_photo,
+    )
 
     resolved_chat_id = chat_id or str((message.get('chat') or {}).get('id') or 'default')
-    feed_reply = process_feed_message(message, dry_run=dry_run)
+
+    if message_has_image(message) and should_process_feed_photo(message, resolved_chat_id):
+        feed_reply = handle_feed_photo_or_fail(message, dry_run=dry_run, chat_id=resolved_chat_id)
+        return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
+
+    feed_reply = process_feed_message(message, dry_run=dry_run, chat_id=resolved_chat_id)
     if feed_reply is not None:
         return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
 
-    caption = str(message.get('caption') or '').strip()
-    if message_has_image(message) and not is_feed_caption(caption) and not is_feed_pending(resolved_chat_id):
+    if message_has_image(message) and not is_feed_pending(resolved_chat_id):
         return []
 
     msg_text = str(message.get('text') or '').strip()
@@ -831,12 +840,12 @@ def listen_forever(*, on_command: Callable[[str, str], None] | None = None) -> N
                     safe_print(f'[TG_ANALYSIS] ignored chat {msg_chat_id}')
                     continue
                 from_user = str((message.get('from') or {}).get('username') or 'unknown')
-                if on_command:
-                    msg_text = str(message.get('text') or '').strip()
-                    if msg_text:
-                        on_command(msg_text, from_user)
-                else:
+                has_media = bool(message.get('photo') or message.get('document'))
+                msg_text = str(message.get('text') or '').strip()
+                if has_media or not on_command:
                     handle_incoming_telegram_message(message, from_user, chat_id=msg_chat_id)
+                elif msg_text:
+                    on_command(msg_text, from_user)
             if not updates:
                 time.sleep(1)
         except KeyboardInterrupt:

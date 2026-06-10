@@ -28,8 +28,16 @@ def main() -> int:
             from backend.my_feed.my_feed_db import list_items
 
             with patch(
-                'backend.my_feed.screenshot_ocr.extract_text_from_image_bytes',
-                return_value={'ok': False, 'text': '', 'confidence': 0.0, 'error': 'low_confidence'},
+                'backend.my_feed.image_extraction.extract_market_text_from_image_bytes',
+                return_value={
+                    'ok': False,
+                    'text': '',
+                    'notifications': [],
+                    'ignored_private_count': 0,
+                    'needs_text': True,
+                    'error': 'low_confidence',
+                    'extracted': {},
+                },
             ):
                 result = ingest_screenshot_bytes(b'bytes')
             if result.get('ok'):

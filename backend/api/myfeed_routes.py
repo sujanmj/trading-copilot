@@ -77,9 +77,12 @@ def register_myfeed_routes(
         result = ingest_text(text, source=source)
         item = sanitize_item_for_api(result.get('record') or {})
         saved = bool(result.get('ok')) and bool(item)
+        saved_count = int(result.get('saved_count') or (1 if saved else 0))
         return sanitize_json_value({
             'ok': bool(result.get('ok')),
             'saved': saved,
+            'saved_count': saved_count,
+            'message': str(result.get('message') or ('Saved 1 item' if saved else '')),
             'feed_id': item.get('feed_id') if item else None,
             'item': item if item else None,
             'reply': result.get('reply'),
@@ -114,9 +117,18 @@ def register_myfeed_routes(
         image_bytes = await file.read()
         result = ingest_screenshot_bytes(image_bytes, source='gui_screenshot')
         item = sanitize_item_for_api(result.get('record') or {})
+        saved_count = int(result.get('saved_count') or 0)
+        saved = bool(result.get('ok')) and saved_count > 0
+        message = str(result.get('message') or '')
+        if not message and saved:
+            message = f'Saved {saved_count} item{"s" if saved_count != 1 else ""}'
+        if not message and not saved:
+            message = 'Could not read market news clearly. Paste text instead.'
         return sanitize_json_value({
             'ok': bool(result.get('ok')),
-            'saved': bool(result.get('ok')) and bool(item),
+            'saved': saved,
+            'saved_count': saved_count,
+            'message': message,
             'feed_id': item.get('feed_id') if item else None,
             'item': item if item else None,
             'reply': result.get('reply'),

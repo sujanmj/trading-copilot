@@ -49,6 +49,29 @@ MARKET_HINTS = (
     'silver', 'silverm', 'moil', 'commodity', 'geopolitical', 'wipro',
     'inflation', 'gdp', 'budget', 'fed', 'rate cut', 'rate hike', 'index',
     'bse', 'nse', 'mutual fund', 'bond', 'yield', 'rupee', 'dollar', 'jv',
+    'surge', 'surges', 'rally', 'attack', 'attacks', 'iran', 'kuwait',
+    'jordan', 'bahrain', 'oil', 'defence', 'airline', 'bases', 'war',
+)
+
+EXTRA_KNOWN_TICKERS = frozenset({
+    'CHAMBLFERT', 'COROMANDEL', 'GNFC', 'RCF', 'NFL',
+})
+
+GEO_COUNTRY_HINTS: tuple[tuple[str, str], ...] = (
+    ('iran', 'IRAN'),
+    ('kuwait', 'KUWAIT'),
+    ('jordan', 'JORDAN'),
+    ('bahrain', 'BAHRAIN'),
+    ('israel', 'ISRAEL'),
+    ('ukraine', 'UKRAINE'),
+    ('russia', 'RUSSIA'),
+    ('china', 'CHINA'),
+    ('united states', 'US'),
+)
+
+APP_NOTIFICATION_PREFIXES = (
+    'inshorts:', 'moneycontrol:', 'et markets:', 'indmoney:', 'tickertape:',
+    'tradingview:', 'zerodha:', 'groww:',
 )
 
 APP_HINTS = {
@@ -164,7 +187,71 @@ def _extract_entity_hints(text: str) -> list[str]:
     for hint, symbol in ENTITY_HINTS:
         if hint in lower and symbol not in found:
             found.append(symbol)
+    padded = f' {lower} '
+    for hint, symbol in GEO_COUNTRY_HINTS:
+        if hint in padded and symbol not in found:
+            found.append(symbol)
+    if re.search(r'\bUS\b', str(text or '').upper()) and 'US' not in found:
+        if any(w in lower for w in ('base', 'bases', 'attack', 'attacks', 'sanction', 'tariff', 'fed')):
+            found.append('US')
     return found
+
+
+def _split_notification_blocks(raw_text: str) -> list[str]:
+    text = str(raw_text or '').strip()
+    if not text:
+        return []
+    lines = [ln.strip() for ln in text.splitlines()]
+    blocks: list[str] = []
+    current: list[str] = []
+    for line in lines:
+        if not line:
+            if current:
+                blocks.append('\n'.join(current).strip())
+                current = []
+            continue
+        lower = line.lower()
+        starts_new = any(lower.startswith(prefix) for prefix in APP_NOTIFICATION_PREFIXES)
+        if starts_new and current:
+            blocks.append('\n'.join(current).strip())
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        blocks.append('\n'.join(current).strip())
+    if len(blocks) <= 1 and '\n\n' in text:
+        blocks = [chunk.strip() for chunk in text.split('\n\n') if chunk.strip()]
+    return blocks or [text]
+
+
+def split_market_notifications(raw_text: str) -> dict[str, Any]:
+    """Split OCR blob into separate market notifications; drop private lines."""
+    blocks = _split_notification_blocks(raw_text)
+    notifications: list[str] = []
+    ignored_private_count = 0
+    for block in blocks:
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        if len(lines) == 1:
+            extracted = filter_market_text(block)
+            ignored_private_count += int(extracted.get('ignored_private_items') or 0)
+            cleaned = str(extracted.get('cleaned_summary') or '').strip()
+            if cleaned:
+                notifications.append(cleaned)
+            continue
+        for line in lines:
+            if _is_private_line(line):
+                ignored_private_count += 1
+                continue
+            if _is_market_line(line):
+                notifications.append(line)
+            else:
+                ignored_private_count += 1
+    combined = '\n'.join(notifications).strip()
+    return {
+        'notifications': notifications,
+        'ignored_private_count': ignored_private_count,
+        'combined': combined,
+    }
 
 
 def extract_tickers(text: str) -> list[str]:
@@ -184,7 +271,7 @@ def extract_tickers(text: str) -> list[str]:
             if match not in found:
                 found.append(match)
             continue
-        if match in known:
+        if match in known or match in EXTRA_KNOWN_TICKERS:
             if match not in found:
                 found.append(match)
     return found[:8]

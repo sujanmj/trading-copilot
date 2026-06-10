@@ -37,10 +37,26 @@ def main() -> int:
         def __exit__(self, *args):
             return False
 
+    fake_image = MagicMock()
+    fake_image.mode = 'RGB'
+    fake_image.size = (1200, 800)
+    fake_image.convert.return_value = fake_image
+    fake_image.resize.return_value = fake_image
+    fake_image.crop.return_value = fake_image
+
+    fake_enhance = MagicMock()
+    fake_enhance.enhance.return_value = fake_image
     fake_image_mod = types.ModuleType('PIL.Image')
-    fake_image_mod.open = MagicMock(return_value=MagicMock())
+    fake_image_mod.open = MagicMock(return_value=fake_image)
+    fake_image_ops = types.ModuleType('PIL.ImageOps')
+    fake_image_ops.exif_transpose = MagicMock(return_value=fake_image)
+    fake_image_enhance = types.ModuleType('PIL.ImageEnhance')
+    fake_image_enhance.Contrast = MagicMock(return_value=fake_enhance)
+    fake_image_enhance.Sharpness = MagicMock(return_value=fake_enhance)
     fake_pil = types.ModuleType('PIL')
     fake_pil.Image = fake_image_mod
+    fake_pil.ImageOps = fake_image_ops
+    fake_pil.ImageEnhance = fake_image_enhance
     fake_tess = types.ModuleType('pytesseract')
     fake_tess.image_to_string = MagicMock(
         return_value='NIFTY futures rise on strong FII inflows across banking sector today',
@@ -48,7 +64,13 @@ def main() -> int:
 
     with patch('tempfile.NamedTemporaryFile', _FakeTmp):
         with patch.object(image_extraction.os, 'remove', side_effect=lambda p: removed_paths.append(str(p))):
-            with patch.dict(sys.modules, {'PIL': fake_pil, 'PIL.Image': fake_image_mod, 'pytesseract': fake_tess}):
+            with patch.dict(sys.modules, {
+                'PIL': fake_pil,
+                'PIL.Image': fake_image_mod,
+                'PIL.ImageOps': fake_image_ops,
+                'PIL.ImageEnhance': fake_image_enhance,
+                'pytesseract': fake_tess,
+            }):
                 result = image_extraction.extract_market_text_from_image_bytes(b'\x89PNG')
 
     if not result.get('ok'):
