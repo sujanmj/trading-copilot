@@ -60,7 +60,7 @@ def main() -> int:
             reset_feed_pending_state()
             set_feed_pending(chat_id)
             with patch('backend.telegram.my_feed_intake.download_telegram_file', return_value=b''):
-                fail_results = handle_incoming_telegram_message(_photo(chat_id), chat_id=chat_id, dry_run=True)
+                fail_results = handle_incoming_telegram_message(_photo(chat_id), chat_id=chat_id, dry_run=False)
             if not fail_results:
                 return _fail('download failure must still produce a Telegram response')
             fail_text = str(fail_results[0].get('text') or '')

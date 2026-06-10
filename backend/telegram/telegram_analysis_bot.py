@@ -287,10 +287,20 @@ def handle_incoming_telegram_message(
         handle_feed_photo_or_fail,
         message_has_image,
         process_feed_message,
+        route_my_feed_telegram_media_first,
         should_process_feed_photo,
     )
 
     resolved_chat_id = chat_id or str((message.get('chat') or {}).get('id') or 'default')
+
+    # Media-first: feed photo/document before text-only command routing.
+    media_reply = route_my_feed_telegram_media_first(
+        message,
+        dry_run=dry_run,
+        chat_id=resolved_chat_id,
+    )
+    if media_reply is not None:
+        return [send_analysis_message(media_reply, command='feed', dry_run=dry_run)]
 
     if message_has_image(message) and should_process_feed_photo(message, resolved_chat_id):
         feed_reply = handle_feed_photo_or_fail(message, dry_run=dry_run, chat_id=resolved_chat_id)
@@ -300,8 +310,12 @@ def handle_incoming_telegram_message(
     if feed_reply is not None:
         return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
 
-    if message_has_image(message) and not is_feed_pending(resolved_chat_id):
-        return []
+    if message_has_image(message):
+        if should_process_feed_photo(message, resolved_chat_id) or is_feed_pending(resolved_chat_id):
+            feed_reply = handle_feed_photo_or_fail(message, dry_run=dry_run, chat_id=resolved_chat_id)
+            return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
+        if not is_feed_pending(resolved_chat_id):
+            return []
 
     msg_text = str(message.get('text') or '').strip()
     if not msg_text:
@@ -842,8 +856,27 @@ def listen_forever(*, on_command: Callable[[str, str], None] | None = None) -> N
                 from_user = str((message.get('from') or {}).get('username') or 'unknown')
                 has_media = bool(message.get('photo') or message.get('document'))
                 msg_text = str(message.get('text') or '').strip()
+                caption = str(message.get('caption') or '').strip()
+                is_feed_media = has_media and (
+                    caption.startswith('/feed')
+                    or caption.startswith('/ feed')
+                    or caption.lower().startswith('/feed@')
+                )
                 if has_media or not on_command:
-                    handle_incoming_telegram_message(message, from_user, chat_id=msg_chat_id)
+                    results = handle_incoming_telegram_message(
+                        message,
+                        from_user,
+                        chat_id=msg_chat_id,
+                    )
+                    if not results and is_feed_media:
+                        from backend.telegram.my_feed_intake import handle_feed_photo_or_fail
+
+                        feed_reply = handle_feed_photo_or_fail(message, chat_id=msg_chat_id)
+                        send_analysis_message(feed_reply, command='feed')
+                    elif results:
+                        for item in results:
+                            if item.get('text') and not item.get('sent') and not item.get('dry_run'):
+                                send_analysis_message(str(item['text']), command='feed')
                 elif msg_text:
                     on_command(msg_text, from_user)
             if not updates:

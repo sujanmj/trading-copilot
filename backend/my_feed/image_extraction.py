@@ -58,14 +58,34 @@ def _run_tesseract(image: Any) -> str:
     return str(pytesseract.image_to_string(image) or '').strip()
 
 
-def _ocr_image(image: Any) -> tuple[str, float]:
+def is_local_tesseract_available() -> bool:
+    try:
+        import pytesseract  # type: ignore  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def is_vision_ocr_fallback_available() -> bool:
+    try:
+        from backend.my_feed import vision_ocr_fallback
+
+        return bool(vision_ocr_fallback.is_vision_ocr_fallback_available())
+    except (ImportError, AttributeError, Exception):
+        return False
+
+
+def _ocr_image(image: Any, *, tesseract_available: bool = True) -> tuple[str, float]:
     processed = _preprocess_image(image)
-    raw_text = _run_tesseract(processed)
+    raw_text = _run_tesseract(processed) if tesseract_available else ''
     confidence = 0.85 if len(raw_text) >= 40 else 0.55
     if len(raw_text) < _MIN_OCR_CHARS:
         fallback = _optional_vision_ocr_fallback(processed)
         if len(fallback) >= _MIN_OCR_CHARS:
             return fallback, 0.75
+    if not tesseract_available and len(raw_text) < _MIN_OCR_CHARS:
+        return raw_text, 0.0
     return raw_text, confidence
 
 
@@ -115,6 +135,19 @@ def extract_market_text_from_image_temp(image_path: str | Path) -> dict[str, Any
             'extracted': {},
         }
 
+    tesseract_available = is_local_tesseract_available()
+    vision_available = is_vision_ocr_fallback_available()
+    if not tesseract_available and not vision_available:
+        return {
+            'ok': False,
+            'text': '',
+            'notifications': [],
+            'ignored_private_count': 0,
+            'needs_text': True,
+            'error': 'ocr_unavailable',
+            'extracted': {},
+        }
+
     try:
         from PIL import Image  # type: ignore
     except ImportError:
@@ -129,21 +162,8 @@ def extract_market_text_from_image_temp(image_path: str | Path) -> dict[str, Any
         }
 
     try:
-        import pytesseract  # type: ignore
-    except ImportError:
-        return {
-            'ok': False,
-            'text': '',
-            'notifications': [],
-            'ignored_private_count': 0,
-            'needs_text': True,
-            'error': 'tesseract_unavailable',
-            'extracted': {},
-        }
-
-    try:
         image = Image.open(path)
-        raw_text, confidence = _ocr_image(image)
+        raw_text, confidence = _ocr_image(image, tesseract_available=tesseract_available)
     except Exception as exc:
         return {
             'ok': False,

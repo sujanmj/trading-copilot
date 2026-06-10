@@ -49,28 +49,30 @@ def main() -> int:
             if not caption_reply or 'MY_FEED_SAVED' not in caption_reply:
                 return _fail(f'caption text merge failed: {caption_reply!r}')
 
-            ingest_calls: list[dict] = []
+            ocr_calls: list[str] = []
 
-            def _track_ingest(**kwargs):
-                ingest_calls.append(kwargs)
-                from backend.my_feed.feed_processor import ingest_text
+            def _track_ocr(path):
+                ocr_calls.append(str(path))
+                return {
+                    'ok': True,
+                    'text': 'NIFTY gains on banking sector rally today',
+                    'notifications': ['NIFTY gains on banking sector rally today'],
+                    'ignored_private_count': 0,
+                    'needs_text': False,
+                }
 
-                return ingest_text(
-                    kwargs.get('text') or 'NIFTY gains on banking sector rally today',
-                    source=kwargs.get('source') or 'telegram_screenshot',
-                )
-
-            with patch('backend.telegram.my_feed_intake.ingest_telegram_feed', side_effect=_track_ingest):
+            with patch(
+                'backend.my_feed.image_extraction.extract_market_text_from_image_temp',
+                side_effect=_track_ocr,
+            ):
                 with patch(
                     'backend.telegram.my_feed_intake.download_telegram_file',
                     return_value=b'\x89PNGfake',
                 ):
                     live_reply = process_feed_message(_photo_message('/feed'), dry_run=False)
 
-            if not ingest_calls:
-                return _fail('photo /feed must call ingest_telegram_feed')
-            if ingest_calls[0].get('image_bytes') != b'\x89PNGfake':
-                return _fail('photo /feed must pass downloaded image bytes to intake')
+            if not ocr_calls:
+                return _fail('photo /feed must call extract_market_text_from_image_temp')
             if not live_reply or 'MY_FEED_SAVED' not in live_reply:
                 return _fail(f'live photo /feed reply missing MY_FEED_SAVED: {live_reply!r}')
 
