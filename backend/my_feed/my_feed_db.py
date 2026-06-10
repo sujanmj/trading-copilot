@@ -214,6 +214,37 @@ def archive_item(feed_id: str) -> bool:
         return cur.rowcount > 0
 
 
+def update_feed_item_metadata(feed_id: str, fields: dict[str, Any]) -> bool:
+    init_my_feed_db()
+    allowed = {
+        'tickers', 'sectors', 'themes', 'event_type', 'sentiment', 'impact_score',
+        'urgency', 'suggested_action', 'confirmation_required', 'detected_source_app',
+    }
+    patch: dict[str, Any] = {}
+    for key, value in (fields or {}).items():
+        if key not in allowed:
+            continue
+        if key in {'tickers', 'sectors', 'themes'}:
+            patch[key] = _json_dump(value)
+        elif key == 'confirmation_required':
+            patch[key] = 1 if value else 0
+        elif key == 'impact_score':
+            patch[key] = float(value or 0)
+        else:
+            patch[key] = value
+    if not patch:
+        return False
+    set_clause = ', '.join(f'{key} = ?' for key in patch)
+    params = list(patch.values()) + [feed_id]
+    with _connect() as conn:
+        cur = conn.execute(
+            f'UPDATE feed_items SET {set_clause} WHERE feed_id = ?',
+            params,
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def find_recent_duplicate(cleaned_summary: str, *, hours: int = 6) -> dict[str, Any] | None:
     text = str(cleaned_summary or '').strip().lower()
     if not text:

@@ -104,6 +104,31 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def recompute_item_metadata_from_text(
+    cleaned_summary: str,
+    raw_market_text: str = '',
+) -> dict[str, Any]:
+    """Recompute tickers/themes/action from stored text without altering summary body."""
+    text = str(cleaned_summary or raw_market_text or '').strip()
+    extracted = {
+        'cleaned_summary': text,
+        'items_found': 1,
+        'tickers': extract_tickers(text),
+    }
+    classified = _classify_item(extracted)
+    return {
+        'tickers': extracted['tickers'],
+        'themes': classified['themes'],
+        'sectors': classified['sectors'],
+        'event_type': classified['event_type'],
+        'sentiment': classified['sentiment'],
+        'impact_score': classified['impact_score'],
+        'urgency': classified['urgency'],
+        'suggested_action': classified['suggested_action'],
+        'confirmation_required': classified['confirmation_required'],
+    }
+
+
 def format_saved_reply(record: dict[str, Any], *, ignored_private_items: int = 0, items_found: int = 0) -> str:
     tickers = ', '.join(record.get('tickers') or []) or '—'
     return '\n'.join([

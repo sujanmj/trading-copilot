@@ -15,6 +15,12 @@ import os
 STAGE_MARKER = 'LOCAL_STAGE_46C_SAFE_RAILWAY_CONTROL'
 RAILWAY_TELEGRAM_HANDLER_STAGE = 'RAILWAY_STAGE_46E_MONOLITH_TELEGRAM'
 ASTRAEDGE_TELEGRAM_BUILD = 'AstraEdge 50C'
+ASTRAEDGE_BUILD_STAGE = '50C'
+
+
+def get_astraedge_build_stage() -> str:
+    """Short deployment stage id shared by /status, build-info, and smoke checks."""
+    return ASTRAEDGE_BUILD_STAGE
 
 LOCAL_SAFE_DEFAULTS: dict[str, str] = {
     'DISABLE_TELEGRAM': '1',

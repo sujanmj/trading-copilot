@@ -228,6 +228,8 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'myfeed', 'today'
     if lower == 'myfeed scan':
         return 'myfeed', 'scan'
+    if lower == 'myfeed reprocess':
+        return 'myfeed', 'reprocess'
     if lower.startswith('myfeed archive'):
         return 'myfeed', raw[len('myfeed archive'):].strip()
     parts = raw.split(maxsplit=1)
@@ -727,8 +729,21 @@ def handle_analysis_command(
             result = run_without_ai(lambda: run_feed_text_only(args), command='feed_text')
             response_text = result.get('text') or 'MY_FEED_NEEDS_TEXT'
     elif cmd == 'myfeed':
-        result = run_without_ai(lambda: run_myfeed_only(args), command='myfeed')
-        response_text = result.get('text') or 'My Feed unavailable.'
+        sub = (args or '').strip().lower()
+        if sub == 'reprocess':
+            if not _is_telegram_admin(from_user):
+                response_text = 'Unauthorized — My Feed reprocess is admin-only.'
+            else:
+                from backend.my_feed.feed_reprocessor import format_reprocess_reply, reprocess_my_feed_items
+
+                result = run_without_ai(
+                    lambda: {'text': format_reprocess_reply(reprocess_my_feed_items(apply=True))},
+                    command='myfeed_reprocess',
+                )
+                response_text = result.get('text') or 'MYFEED_REPROCESS_OK'
+        else:
+            result = run_without_ai(lambda: run_myfeed_only(args), command='myfeed')
+            response_text = result.get('text') or 'My Feed unavailable.'
     elif cmd == 'budget':
         response_text = run_without_ai(lambda: run_budget_only(args), command='budget').get('text') or run_budget_only(args).get('text') or 'Budget impact unavailable.'
     else:

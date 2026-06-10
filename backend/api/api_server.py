@@ -874,7 +874,7 @@ def health():
 @app.get("/api/debug/build-info")
 def api_debug_build_info():
     """Deployment build identity — handler selection and data root."""
-    from backend.config.local_safe_mode import is_railway_mode
+    from backend.config.local_safe_mode import get_astraedge_build_stage, is_railway_mode
     from backend.storage.data_paths import data_preserved, get_data_root
     from backend.telegram.telegram_analysis_bot import is_astraedge_telegram_started
 
@@ -884,7 +884,7 @@ def api_debug_build_info():
     data_root = get_data_root()
     return sanitize_json_value({
         'app': 'AstraEdge',
-        'stage': '49C',
+        'stage': get_astraedge_build_stage(),
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',
