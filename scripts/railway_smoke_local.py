@@ -55,6 +55,19 @@ def _import_module_from_path(module_name: str, path: Path):
     return module
 
 
+def _check_api_server_import() -> str | None:
+    try:
+        from backend.api import api_server
+    except Exception as exc:
+        return f'api_server import failed: {exc}'
+    if not hasattr(api_server, 'app'):
+        return 'api_server.app missing after import'
+    route_paths = {getattr(r, 'path', None) for r in api_server.app.routes}
+    if '/api/myfeed' not in route_paths:
+        return '/api/myfeed route missing after api_server import'
+    return None
+
+
 def _check_runner_imports() -> str | None:
     for rel in RAILWAY_SCRIPTS:
         path = PROJECT_ROOT / rel
@@ -123,6 +136,7 @@ def _check_stock_decision_engine() -> str | None:
 
 def main() -> int:
     checks = (
+        ('api_server_import', _check_api_server_import),
         ('runner_imports', _check_runner_imports),
         ('health_route', _check_health_route),
         ('data_path_writable', _check_data_path_writable),

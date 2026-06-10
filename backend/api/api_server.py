@@ -92,19 +92,19 @@ _orchestrator_recovery_started = False
 try:
     from backend.ai.ai_router import ask_ai
     AI_AVAILABLE = True
-except ImportError:
+except Exception:
     AI_AVAILABLE = False
 
 try:
     from backend.analyzers.postmortem import analyze_postmortem
     POSTMORTEM_AVAILABLE = True
-except ImportError:
+except Exception:
     POSTMORTEM_AVAILABLE = False
 
 try:
     from backend.storage.history_exporter import build_custom_period
     CUSTOM_HISTORY_AVAILABLE = True
-except ImportError:
+except Exception:
     CUSTOM_HISTORY_AVAILABLE = False
 
 
@@ -728,10 +728,6 @@ def start_background_processes():
 
 app = FastAPI(title="Trading Copilot API + Scheduler + Telegram", version="5.0.0")
 
-from backend.api.myfeed_routes import register_myfeed_routes
-
-register_myfeed_routes(app, verify_api_key, sanitize_json_value)
-
 
 def _local_browser_cors_origins() -> list[str]:
     return [
@@ -783,6 +779,11 @@ def sanitize_json_value(obj):
             return None
         return obj
     return obj
+
+
+from backend.api.myfeed_routes import register_myfeed_routes
+
+register_myfeed_routes(app, verify_api_key, sanitize_json_value)
 
 
 def _safe_debug_response(endpoint: str, builder, cycle_id: Optional[str] = None):
