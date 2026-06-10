@@ -18,11 +18,10 @@ from backend.utils.config import (
 )
 
 SOURCE_TIMEOUT_SEC = 3.0
-REDDIT_SOURCE_URL = 'https://www.reddit.com/r/IndianStockMarket/'
 MEMORY_DISPLAY_NOTE = 'Memory signal — no live price attached'
 
 VALID_TABS = frozenset({
-    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'reddit', 'calib', 'journal',
+    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'calib', 'journal',
 })
 
 TAB_ALIASES: dict[str, str] = {
@@ -31,7 +30,6 @@ TAB_ALIASES: dict[str, str] = {
     'mkt': 'market',
     'stats': 'calib',
     'history': 'journal',
-    'rdt': 'reddit',
 }
 
 TIMESTAMP_KEYS = (
@@ -48,7 +46,6 @@ TIMESTAMP_KEYS = (
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 GOVT_FILE = DATA_DIR / 'govt_intelligence.json'
 GLOBAL_FILE = DATA_DIR / 'global_markets.json'
-REDDIT_FILE = DATA_DIR / 'reddit_data.json'
 HISTORY_FILE = DATA_DIR / 'history_data.json'
 STATS_FILE = DATA_DIR / 'stats_data.json'
 PACK_FILE = DATA_DIR / 'daily_report_pack_latest.json'
@@ -1303,41 +1300,6 @@ def build_tv_payload() -> dict[str, Any]:
     )
 
 
-def build_reddit_payload() -> dict[str, Any]:
-    warnings: list[str] = []
-    items, feed_warns = _feed_items_for_sources(['Reddit'], limit=50)
-    warnings.extend(feed_warns)
-
-    reddit = _load_json(REDDIT_FILE)
-    if not items and reddit:
-        for row in reddit.get('posts') or reddit.get('top_posts') or []:
-            if isinstance(row, dict) and row.get('title'):
-                items.append({
-                    'title': row.get('title'),
-                    'url': row.get('url'),
-                    'source': f"Reddit / {row.get('subreddit') or 'social'}",
-                    'direction': row.get('sentiment') or 'NEUTRAL',
-                    'published_at': reddit.get('last_updated'),
-                })
-
-    summary: dict[str, Any] = {
-        'empty_message': 'No Reddit cache yet',
-        'source_url': REDDIT_SOURCE_URL,
-        'reddit_file': {'last_updated': reddit.get('last_updated')} if reddit else {},
-    }
-    if not items:
-        warnings.append('no_reddit_cache')
-    return _payload_shell(
-        'reddit',
-        items=items,
-        summary=summary,
-        source='runtime' if items else 'fallback',
-        cache_age_seconds=_cache_age_seconds(path=REDDIT_FILE, data=reddit) if reddit else 0,
-        market_mode='RESEARCH_MODE',
-        warnings=warnings,
-    )
-
-
 def build_calib_payload() -> dict[str, Any]:
     warnings: list[str] = []
     calibration = _load_json(CALIBRATION_FILE)
@@ -1450,7 +1412,6 @@ _TAB_BUILDERS: dict[str, Callable[[], dict[str, Any]]] = {
     'global': build_global_payload,
     'news': build_news_payload,
     'tv': build_tv_payload,
-    'reddit': build_reddit_payload,
     'calib': build_calib_payload,
     'journal': build_journal_payload,
 }

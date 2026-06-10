@@ -34,18 +34,18 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_EXCLUDED, FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.response_format import format_status_text, strip_stage_markers
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 49C':
-        return _fail(f'expected AstraEdge 49C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50A':
+        return _fail(f'expected AstraEdge 50A got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     status = strip_stage_markers(format_status_text())
-    if 'Telegram build: <code>AstraEdge 49C</code>' not in status:
-        return _fail('/status missing AstraEdge 49C build label')
+    if 'Telegram build: <code>AstraEdge 50A</code>' not in status:
+        return _fail('/status missing AstraEdge 50A build label')
     for needle in FORBIDDEN:
         if needle in status:
             return _fail(f'/status contains forbidden stale wording: {needle!r}')
 
-    if len(FULL_SNAPSHOT_SEQUENCE) != 33:
-        return _fail(f'/full sequence must have 33 steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    if len(FULL_SNAPSHOT_SEQUENCE) != 32:
+        return _fail(f'/full sequence must have 32 steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
     for cmd in FULL_SNAPSHOT_SEQUENCE:
         if cmd.lstrip('/') in {'refresh', 'bootstrap'} or cmd in FULL_SNAPSHOT_EXCLUDED:
             return _fail(f'/full must stay read-only; found {cmd!r}')

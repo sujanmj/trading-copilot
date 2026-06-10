@@ -96,18 +96,11 @@ def main() -> int:
         if token not in patch_block:
             return _fail(f'historical learning fallback missing: {token!r}')
 
-    # Fix 4 — Reddit clean empty states
-    if 'No Reddit cache yet' not in src:
-        return _fail('Reddit empty title missing')
-    if 'Use Refresh Tab or Open Reddit Source.' not in src:
-        return _fail('Reddit empty guidance missing')
-    if 'Open Reddit Source' not in src:
-        return _fail('Open Reddit Source button missing')
-    if REDDIT_URL not in src:
-        return _fail(f'Reddit source URL missing: {REDDIT_URL}')
-    reddit_empty_fn = _section(src, 'function astraRenderEmptyStateCard', 'async function astraFetchSourceFeedPayload')
-    if 'reddit' not in reddit_empty_fn.lower():
-        return _fail('astraRenderEmptyStateCard must handle Reddit empty state')
+    # Fix 4 — Reddit tab removed in Stage 50A (My Feed replaces personal screenshot ingest)
+    if 'data-tab="reddit"' in src:
+        return _fail('Reddit AI Hub tab must be removed in Stage 50A')
+    if 'myFeedMainContent' not in src:
+        return _fail('My Feed panel missing after Reddit removal')
 
     # Fix 5 — single tab cache badge
     if 'dedupeAihubTabCacheBadges' not in src:

@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-# Core export feeds surfaced in /status and intelligence header (8 feeds)
+# Core export feeds surfaced in /status and intelligence header (7 feeds)
 CANONICAL_FEEDS: Dict[str, Dict[str, str]] = {
     'scanner': {'filename': 'scanner_data.json', 'label': 'Scanner'},
-    'reddit': {'filename': 'reddit_data.json', 'label': 'Reddit'},
     'govt': {'filename': 'govt_intelligence.json', 'label': 'Govt'},
     'news': {'filename': 'news_feed.json', 'label': 'News'},
     'global': {'filename': 'global_markets.json', 'label': 'Global'},
@@ -29,7 +28,6 @@ ANALYZER_SOURCE_MAP: Dict[str, str] = {
     'india_markets': 'india',
     'news': 'news',
     'govt': 'govt',
-    'reddit': 'reddit',
     'scanner': 'scanner',
     'youtube': 'news',
     'inshorts': 'news',

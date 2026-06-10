@@ -76,12 +76,12 @@ def main() -> int:
                 return _fail('/theme scan infra missing title')
 
             health = handle_analysis_command('/health', 'test', dry_run=True)
-            if 'AstraEdge 48C' not in _text(health):
-                return _fail('/health missing AstraEdge 48C')
+            if 'AstraEdge 50A' not in _text(health):
+                return _fail('/health missing AstraEdge 50A')
 
             status = handle_analysis_command('/status', 'test', dry_run=True)
-            if 'AstraEdge 48C' not in _text(status):
-                return _fail('/status missing AstraEdge 48C build line')
+            if 'AstraEdge 50A' not in _text(status):
+                return _fail('/status missing AstraEdge 50A build line')
         finally:
             tb.BASKETS_FILE = orig_baskets
             tb.CATALYST_LOG_FILE = orig_log

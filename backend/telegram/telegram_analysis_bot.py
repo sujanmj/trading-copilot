@@ -44,6 +44,8 @@ from backend.telegram.lazy_command_runner import (
     run_scan_only,
     run_theme_only,
     run_budget_only,
+    run_feed_news_only,
+    run_myfeed_only,
 )
 from backend.telegram.response_format import (
     BLOCKED_TRADE_COMMANDS,
@@ -101,8 +103,15 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 <b>AI Hub:</b>
 /aihub — tab menu
 /aihub full — full AI Hub summary
-/aihub brain · govt · scan · market · global · news · tv · reddit · calib · journal
+/aihub brain · govt · scan · market · global · news · tv · calib · journal
 /aihub brain full — full brain details
+
+<b>My Feed:</b>
+/feed news &lt;text&gt; — store market text
+/myfeed — list recent
+/myfeed today — today only
+/myfeed scan — scan/triage summary
+/myfeed archive &lt;feed_id&gt;
 
 <b>Briefs:</b>
 /news — news only
@@ -198,6 +207,21 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'resolve', 'outcomes'
     if lower == 'outcomes':
         return 'outcomes', ''
+    if lower.startswith('feed news'):
+        parts = raw.split(maxsplit=2)
+        return 'feed', parts[2] if len(parts) >= 3 else 'news'
+    if lower.startswith('feed '):
+        return 'feed', raw[5:].strip()
+    if lower == 'myfeed today':
+        return 'myfeed', 'today'
+    if lower == 'myfeed scan':
+        return 'myfeed', 'scan'
+    if lower.startswith('myfeed archive'):
+        return 'myfeed', raw[len('myfeed archive'):].strip()
+    if lower.startswith('myfeed '):
+        return 'myfeed', raw.split(maxsplit=1)[1].strip()
+    if lower == 'myfeed':
+        return 'myfeed', ''
     parts = raw.split(maxsplit=1)
     cmd = parts[0].lower() if parts else ''
     args = parts[1] if len(parts) > 1 else ''
@@ -401,7 +425,7 @@ def _handle_health() -> str:
 
         lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
     except Exception:
-        lines.append('Telegram build: <code>AstraEdge 49D</code>')
+        lines.append('Telegram build: <code>AstraEdge 50A</code>')
     return '\n'.join(lines)
 
 
@@ -631,6 +655,16 @@ def handle_analysis_command(
         response_text = run_without_ai(lambda: {'text': _handle_schedule()}, command='schedule').get('text') or _handle_schedule()
     elif cmd == 'theme':
         response_text = run_without_ai(lambda: run_theme_only(args), command='theme').get('text') or run_theme_only(args).get('text') or 'Theme baskets unavailable.'
+    elif cmd == 'feed':
+        sub = (args or '').strip().lower()
+        if not sub.startswith('news') and not sub:
+            response_text = 'Usage: /feed news &lt;market text&gt;'
+        else:
+            result = run_without_ai(lambda: run_feed_news_only(args), command='feed_news')
+            response_text = result.get('text') or 'MY_FEED_NEEDS_TEXT'
+    elif cmd == 'myfeed':
+        result = run_without_ai(lambda: run_myfeed_only(args), command='myfeed')
+        response_text = result.get('text') or 'My Feed unavailable.'
     elif cmd == 'budget':
         response_text = run_without_ai(lambda: run_budget_only(args), command='budget').get('text') or run_budget_only(args).get('text') or 'Budget impact unavailable.'
     else:

@@ -28,37 +28,29 @@ def main() -> int:
 
     required_tabs = (
         'data-tab="brain"', 'data-tab="govt"', 'data-tab="scanner"', 'data-tab="markets"',
-        'data-tab="global"', 'data-tab="news"', 'data-tab="tv"', 'data-tab="reddit"',
+        'data-tab="global"', 'data-tab="news"', 'data-tab="tv"',
         'data-tab="stats"', 'data-tab="history"',
     )
     for tab in required_tabs:
         if tab not in src:
             return _fail(f'missing tab {tab}')
 
+    if 'myFeedMainContent' not in src or 'myFeedNavBtn' not in src:
+        return _fail('My Feed workspace panel/nav missing')
+
     if re.search(r'data-tab=["\']memory["\']', src):
         return _fail('AI Hub must not include Mem tab (memory workspace only)')
     if 'id="tab-memory"' in src or '📚 Mem' in src:
         return _fail('AI Hub must not include Mem tab (memory workspace only)')
+    if re.search(r'data-tab=["\']reddit["\']', src):
+        return _fail('AI Hub must not include Reddit tab (replaced by My Feed)')
 
-    refresh_scopes = (
-        'data-refresh-scope="runtime"', 'data-refresh-scope="govt"', 'data-refresh-scope="scanner"',
-        'data-refresh-scope="prices"', 'data-refresh-scope="global"', 'data-refresh-scope="news"',
-        'data-refresh-scope="tv"', 'data-refresh-scope="reddit"', 'data-refresh-scope="calibration"',
-        'data-refresh-scope="journal"',
-    )
-    for scope in refresh_scopes:
-        if scope not in src:
-            return _fail(f'missing per-tab refresh {scope}')
-
-    if 'dry_run: false' not in src.replace(' ', ''):
-        if "dry_run: false" not in src and "'dry_run': false" not in src and '"dry_run": false' not in src:
-            return _fail('tab refresh must POST dry_run: false')
-
-    if 'tabTimestampHtml' not in src:
-        return _fail('index.html must define tabTimestampHtml for per-tab freshness')
-
+    if 'data-aihub-refresh-tab="${escapeHtml(tabId)}"' not in src and "data-aihub-refresh-tab=\"${escapeHtml(tabId)}\"" not in src:
+        return _fail('missing dynamic per-tab refresh wiring')
     if 'refreshTabByPanel' not in src:
         return _fail('index.html must wire refreshTabByPanel')
+    if 'tabTimestampHtml' not in src:
+        return _fail('index.html must define tabTimestampHtml for per-tab freshness')
 
     if not re.search(r'font-size:\s*1[2-9]px', src):
         return _fail('expected +15% font scale (body/tabs >= 12px)')

@@ -17,10 +17,10 @@ API_SERVER = PROJECT_ROOT / 'backend' / 'api' / 'api_server.py'
 
 MARKER = 'GUI_BUILD_STAGE_44AQ_AIHUB_TAB_PAYLOADS'
 API_TABS = (
-    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'reddit', 'calib', 'journal',
+    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'calib', 'journal',
 )
 FRONTEND_TAB_KEYS = (
-    'brain', 'govt', 'scanner', 'markets', 'global', 'news', 'tv', 'reddit', 'stats', 'history',
+    'brain', 'govt', 'scanner', 'markets', 'global', 'news', 'tv', 'stats', 'history',
 )
 
 
@@ -53,7 +53,6 @@ def main() -> int:
         'build_global_payload',
         'build_news_payload',
         'build_tv_payload',
-        'build_reddit_payload',
         'build_calib_payload',
         'build_journal_payload',
     ):

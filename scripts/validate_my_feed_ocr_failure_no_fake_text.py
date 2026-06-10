@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Validate My Feed OCR failure handling (Stage 50A)."""
+
+from __future__ import annotations
+
+import os
+import sys
+
+
+def main() -> int:
+    if os.system(f'{sys.executable} scripts/test_my_feed_ocr_failure_no_fake_text.py') != 0:
+        return 1
+    print('MY_FEED_OCR_FAILURE_NO_FAKE_TEXT_OK')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

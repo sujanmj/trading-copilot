@@ -681,6 +681,12 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         for ticker, entry in universe.items()
     ]
     ranked = _rank_candidates(scored)
+    try:
+        from backend.analytics.unified_decision_engine import apply_my_feed_evidence, build_live_rejection_set
+
+        ranked = apply_my_feed_evidence(ranked, build_live_rejection_set())
+    except Exception:
+        pass
     watch_rows = [r for r in ranked if r.get('action') == 'WATCH_FOR_ENTRY']
     avoid_rows = [r for r in ranked if r.get('action') == 'AVOID']
     buy_rows = [r for r in ranked if r.get('action') == 'BUY_CANDIDATE']

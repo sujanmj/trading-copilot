@@ -93,7 +93,6 @@
       global: stableHash({ m: exports.markets, o: snapshot && snapshot.overnight_impact, i: snapshot && snapshot.india_next_open }),
       news: stableHash({ n: exports.news, inshorts: exports.inshorts }),
       tv: stableHash(exports.youtube),
-      reddit: stableHash(exports.reddit),
       stats: stableHash(exports.stats),
       history: stableHash(exports.history),
     };
@@ -359,7 +358,6 @@
     cache.youtube = exports.youtube != null ? exports.youtube : unwrapExportPayload((snapshot.exports || snapshot.data || {}).youtube);
     cache.govt = exports.govt != null ? exports.govt : unwrapExportPayload((snapshot.exports || snapshot.data || {}).govt);
     cache.inshorts = exports.inshorts != null ? exports.inshorts : unwrapExportPayload((snapshot.exports || snapshot.data || {}).inshorts);
-    cache.reddit = exports.reddit != null ? exports.reddit : unwrapExportPayload((snapshot.exports || snapshot.data || {}).reddit);
     cache.scanner = exports.scanner != null ? exports.scanner : unwrapExportPayload((snapshot.exports || snapshot.data || {}).scanner);
     cache.stats = exports.stats != null ? exports.stats : unwrapExportPayload((snapshot.exports || snapshot.data || {}).stats);
     const msMetrics = ms.metrics || {};
@@ -500,7 +498,7 @@
     if (!cache) return;
     const keys = [
       'intelligence', 'indiaMarket', 'globalMarket', 'news', 'youtube', 'govt',
-      'inshorts', 'reddit', 'scanner', 'stats', 'history', 'activePredictions',
+      'inshorts', 'scanner', 'stats', 'history', 'activePredictions',
       'predictionHistory', 'lifecycleState', 'runtime', 'marketSnapshot', 'actionPlan',
     ];
     keys.forEach((k) => { cache[k] = null; });
@@ -1348,7 +1346,7 @@
     const panel = getPanelState(panelId);
     const op = state && state.operational;
     const fresh = getFreshnessState();
-    const isIdle = panel.status === 'idle' || (op && op.expect_quiet_collectors && panel.status === 'ready' && sourceKey in { scanner: 1, news: 1, reddit: 1, youtube: 1, inshorts: 1 });
+    const isIdle = panel.status === 'idle' || (op && op.expect_quiet_collectors && panel.status === 'ready' && sourceKey in { scanner: 1, news: 1, youtube: 1, inshorts: 1 });
     const panelStale = isIdle ? false : !!panel.stale;
     const orchValidated = state && state.panels && state.panels.orchestrator && state.panels.orchestrator.gui_sync_validated;
     const statsHealthy = panelId === 'stats' && orchValidated && fresh.collectorsActive;

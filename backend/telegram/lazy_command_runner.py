@@ -38,7 +38,6 @@ FULL_SNAPSHOT_SEQUENCE: tuple[str, ...] = (
     '/aihub global',
     '/aihub news',
     '/aihub tv',
-    '/aihub reddit',
     '/aihub calib',
     '/aihub journal',
     '/news',
@@ -572,6 +571,15 @@ def run_aihub_full_only() -> dict[str, Any]:
                 'summary': {},
                 'warnings': [str(exc)[:120]],
             }
+    try:
+        from backend.my_feed.feed_processor import list_feed_items, sanitize_item_for_api
+
+        payloads['myfeed'] = {
+            'ok': True,
+            'items': [sanitize_item_for_api(row) for row in list_feed_items(limit=5)],
+        }
+    except Exception as exc:
+        payloads['myfeed'] = {'ok': True, 'items': [], 'warnings': [str(exc)[:120]]}
     text = format_aihub_full(payloads)
     return _runner_result('aihub_full', text=text, payload=payloads)
 
@@ -610,3 +618,38 @@ def run_budget_only(args: str = '') -> dict[str, Any]:
 
     text = handle_budget_command(args)
     return _runner_result('budget', text=text)
+
+
+def run_feed_news_only(args: str = '') -> dict[str, Any]:
+    from backend.my_feed.feed_processor import ingest_text
+
+    text_blob = str(args or '').strip()
+    if text_blob.lower().startswith('news'):
+        text_blob = text_blob[4:].strip()
+    result = ingest_text(text_blob, source='telegram_text')
+    return _runner_result('feed_news', text=result.get('reply') or 'MY_FEED_NEEDS_TEXT', payload=result)
+
+
+def run_myfeed_only(args: str = '') -> dict[str, Any]:
+    from backend.my_feed.feed_processor import archive_feed_item, list_feed_items, scan_feed_summary
+    from backend.my_feed.telegram_handlers import format_myfeed_list, format_myfeed_scan
+
+    sub = str(args or '').strip().lower()
+    if sub == 'today':
+        items = list_feed_items(limit=12, today_only=True)
+        text = format_myfeed_list(items, title='My Feed (today)')
+    elif sub == 'scan':
+        summary = scan_feed_summary(today_only=True)
+        text = format_myfeed_scan(summary)
+    elif sub.startswith('archive'):
+        feed_id = sub.replace('archive', '', 1).strip()
+        if not feed_id:
+            text = 'Usage: /myfeed archive <feed_id>'
+        elif archive_feed_item(feed_id):
+            text = f'My Feed item archived: <code>{feed_id}</code>'
+        else:
+            text = f'My Feed item not found: <code>{feed_id}</code>'
+    else:
+        items = list_feed_items(limit=12, today_only=False)
+        text = format_myfeed_list(items)
+    return _runner_result('myfeed', text=text)

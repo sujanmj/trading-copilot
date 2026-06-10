@@ -24,7 +24,7 @@ except Exception:
     pass
 
 try:
-    from fastapi import FastAPI, HTTPException, Body, Header, Depends, Query, Request
+    from fastapi import FastAPI, HTTPException, Body, Header, Depends, Query, Request, UploadFile, File
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import FileResponse, JSONResponse
     import uvicorn
@@ -728,6 +728,10 @@ def start_background_processes():
 
 app = FastAPI(title="Trading Copilot API + Scheduler + Telegram", version="5.0.0")
 
+from backend.api.myfeed_routes import register_myfeed_routes
+
+register_myfeed_routes(app, verify_api_key, sanitize_json_value)
+
 
 def _local_browser_cors_origins() -> list[str]:
     return [
@@ -966,8 +970,8 @@ def _panel_state_from_source(
 
 
 def _collectors_recently_active(source_status: dict, operational: dict) -> bool:
-    """True when scanner/news/reddit or market feeds refreshed within watchdog cadence."""
-    cadence_keys = ('scanner', 'news', 'reddit', 'youtube', 'inshorts', 'markets', 'india')
+    """True when scanner/news or market feeds refreshed within watchdog cadence."""
+    cadence_keys = ('scanner', 'news', 'youtube', 'inshorts', 'markets', 'india')
     threshold = int(operational.get('watchdog_stale_threshold_seconds') or STALE_THRESHOLD_SECONDS)
     for key in cadence_keys:
         src = source_status.get(key) or {}
@@ -992,7 +996,6 @@ def _build_runtime_snapshot() -> dict:
         'scanner': load_json_file('scanner_data.json'),
         'govt': load_json_file('govt_intelligence.json'),
         'news': load_json_file('news_feed.json'),
-        'reddit': load_json_file('reddit_data.json'),
         'markets': load_json_file('global_markets.json'),
         'india': load_json_file('latest_market_data.json'),
         'youtube': load_tv_intelligence(),
@@ -1456,7 +1459,6 @@ def _build_health_payload() -> dict:
             "scanner": "scanner_data.json",
             "govt": "govt_intelligence.json",
             "news": "news_feed.json",
-            "reddit": "reddit_data.json",
             "markets": "global_markets.json",
             "india": "latest_market_data.json",
             "youtube": "tv_intelligence.json",
@@ -1883,9 +1885,6 @@ def get_govt(): return load_json_file("govt_intelligence.json")
 
 @app.get("/api/news", dependencies=[Depends(verify_api_key)])
 def get_news(): return load_json_file("news_feed.json")
-
-@app.get("/api/reddit", dependencies=[Depends(verify_api_key)])
-def get_reddit(): return load_json_file("reddit_data.json")
 
 @app.get("/api/markets", dependencies=[Depends(verify_api_key)])
 def get_markets(): return load_json_file("global_markets.json")

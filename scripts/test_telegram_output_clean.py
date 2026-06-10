@@ -61,7 +61,7 @@ AIHUB_FULL_SECTIONS = (
     '🌐 Global',
     '📰 News',
     '📺 TV',
-    '🤖 Reddit',
+    '🗞 My Feed',
     '📊 Calib',
     '📜 Journal',
 )
@@ -105,6 +105,8 @@ def main() -> int:
                 for section in AIHUB_FULL_SECTIONS:
                     if section not in text:
                         return _fail(f'{cmd} missing section {section!r}')
+                if '🤖 Reddit' in text or 'Reddit /' in text:
+                    return _fail(f'{cmd} must not include removed Reddit section')
                 if 'Use /today or /tomorrow for the short action list.' not in text:
                     return _fail(f'{cmd} missing action list hint')
 

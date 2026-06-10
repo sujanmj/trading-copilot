@@ -130,6 +130,7 @@
     .main[data-workspace="placeholder"] .workspace-browser { display: flex; }
     .main[data-workspace="memory"] .workspace-memory { display: flex; }
     .main[data-workspace="budget"] .workspace-budget { display: flex; }
+    .main[data-workspace="myfeed"] .workspace-myfeed { display: flex; }
     .main[data-workspace="brokers"] .workspace-brokers { display: flex; }
     .main[data-workspace="aihub"] .workspace-aihub { display: flex; }
     .main[data-workspace="router"] .workspace-router { display: flex; }
@@ -1416,6 +1417,17 @@
       font-size: 10px;
     }
     .api-target-controls button:hover { border-color: #00ff88; color: #00ff88; }
+    .myfeed-panel { padding: 12px; }
+    .myfeed-note { color: #8B949E; font-size: 11px; margin-bottom: 10px; }
+    .myfeed-ingest-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: flex-start; }
+    .myfeed-text-input { flex: 1 1 320px; min-height: 72px; background: rgba(0,0,0,0.45); border: 1px solid #30363d; color: #c9d1d9; border-radius: 6px; padding: 8px; font-size: 12px; }
+    .myfeed-upload-label { font-size: 11px; color: #8B949E; cursor: pointer; border: 1px dashed #30363d; padding: 8px 10px; border-radius: 6px; }
+    .myfeed-list { display: grid; gap: 10px; }
+    .myfeed-card { border-left: 3px solid #ffaa00; background: rgba(255,255,255,0.03); border-radius: 6px; padding: 10px; }
+    .myfeed-card-head { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; font-size: 12px; }
+    .myfeed-impact, .myfeed-urgency { color: #8B949E; font-size: 10px; }
+    .myfeed-summary { color: #E0E6ED; font-size: 12px; line-height: 1.45; margin-bottom: 6px; }
+    .myfeed-meta { display: flex; flex-wrap: wrap; gap: 8px; color: #8B949E; font-size: 10px; }
   </style>
 </head>
 <body>
@@ -1451,6 +1463,7 @@
           <span class="btn-group-label">AI:</span>
           <button type="button" class="primary-nav-btn" id="memoryNavBtn" title="Canonical Market Memory">🧠 Memory</button>
           <button type="button" class="primary-nav-btn" id="budgetNavBtn" title="Budget Impact Intelligence">🏛️ Budget</button>
+          <button type="button" class="primary-nav-btn" id="myFeedNavBtn" title="My Feed — text-only market ingest">📥 My Feed</button>
           <button type="button" class="primary-nav-btn" id="brokersNavBtn" title="Broker prediction intelligence">🏦 Brokers</button>
           <button type="button" class="primary-nav-btn" id="aiHubNavBtn" title="AI Intelligence Hub">🤖 AI Hub</button>
         </div>
@@ -1470,7 +1483,6 @@
           <button type="button" class="news-btn" data-source="Mint" data-url="https://www.livemint.com/market">Mint</button>
           <button type="button" class="news-btn" data-source="NDTV" data-url="https://www.ndtvprofit.com">NDTV</button>
           <button type="button" class="news-btn" data-source="Inshorts" data-url="https://inshorts.com/en/read">📱 Inshorts</button>
-          <button type="button" class="news-btn" data-source="Reddit" data-url="https://www.reddit.com/r/IndianStockMarket">🤖 Reddit</button>
           <button type="button" class="news-btn" data-source="ET Now" data-url="https://www.youtube.com/@etnow">ET Now</button>
           <button type="button" class="news-btn" data-source="CNBC" data-url="https://www.youtube.com/@CNBC-TV18">CNBC</button>
           <button type="button" class="news-btn" data-source="NSE" data-url="https://www.nseindia.com">NSE</button>
@@ -1507,6 +1519,10 @@
       <div id="budgetMainContent"><div class="loading">⏳ Loading Budget Impact Intelligence…</div></div>
     </div>
 
+    <div class="workspace-panel workspace-myfeed myfeed-main-panel" id="myFeedMainPanel" aria-label="My Feed">
+      <div id="myFeedMainContent"><div class="loading">⏳ Loading My Feed…</div></div>
+    </div>
+
     <div class="workspace-panel workspace-brokers brokers-main-panel" id="brokersMainPanel" aria-label="Broker prediction intelligence">
       <div id="brokersMainContent"><div class="loading">⏳ Loading broker intelligence…</div></div>
     </div>
@@ -1530,7 +1546,7 @@
         <div class="tab" data-tab="global"><span class="tab-label">🌐 Global</span></div>
         <div class="tab" data-tab="news"><span class="tab-label">📰 News</span></div>
         <div class="tab" data-tab="tv"><span class="tab-label">📺 TV</span></div>
-        <div class="tab" data-tab="reddit"><span class="tab-label">🤖 Rdt</span></div>
+        <div class="tab" data-tab="myfeed"><span class="tab-label">My Feed</span></div>
         <div class="tab" data-tab="stats"><span class="tab-label">📊 Calib</span></div>
         <div class="tab" data-tab="history"><span class="tab-label">📜 Journal</span></div>
       </div>
@@ -1548,7 +1564,7 @@
         <div class="tab-content" id="tab-global"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-news"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-tv"><div class="loading">⏳ Loading...</div></div>
-        <div class="tab-content" id="tab-reddit"><div class="loading">⏳ Loading...</div></div>
+        <div class="tab-content" id="tab-myfeed"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-stats"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-history"><div class="loading">⏳ Loading...</div></div>
       </div>
@@ -2018,7 +2034,6 @@
     scanner: REFRESH_TIMEOUT_DEFAULT_MS,
     calibration: REFRESH_TIMEOUT_DEFAULT_MS,
     journal: REFRESH_TIMEOUT_DEFAULT_MS,
-    reddit: REFRESH_TIMEOUT_SLOW_MS,
     tv: REFRESH_TIMEOUT_SLOW_MS,
     global: REFRESH_TIMEOUT_SLOW_MS,
   }
@@ -2060,7 +2075,7 @@
   let apiCache = {
     intelligence: null, indiaMarket: null, globalMarket: null,
     news: null, youtube: null, govt: null, inshorts: null,
-    reddit: null, scanner: null, stats: null, history: null,
+    scanner: null, stats: null, history: null, myfeed: null,
     activePredictions: null, predictionHistory: null, lifecycleState: null,
     runtime: null, lastFetch: 0, connected: false
   }
@@ -2074,7 +2089,6 @@
     youtube: path.join(dataDir, 'tv_intelligence.json'),
     govt: path.join(dataDir, 'govt_intelligence.json'),
     inshorts: path.join(dataDir, 'inshorts_feed.json'),
-    reddit: path.join(dataDir, 'reddit_data.json'),
     scanner: path.join(dataDir, 'scanner_data.json'),
     stats: path.join(dataDir, 'stats_data.json'),
     history: path.join(dataDir, 'history_data.json'),
@@ -2083,7 +2097,7 @@
 
   const TAB_REFRESH_SCOPES = {
     brain: 'runtime', govt: 'govt', scanner: 'scanner', markets: 'prices',
-    global: 'global', news: 'news', tv: 'tv', reddit: 'reddit',
+    global: 'global', news: 'news', tv: 'tv', myfeed: 'myfeed',
     stats: 'calibration', history: 'journal',
   }
 
@@ -2100,14 +2114,14 @@
       { path: '/api/inshorts', cacheKey: 'inshorts' },
     ],
     tv: [{ path: '/api/youtube', cacheKey: 'youtube' }],
-    reddit: [{ path: '/api/reddit', cacheKey: 'reddit' }],
+    myfeed: [{ path: '/api/myfeed', cacheKey: 'myfeed' }],
     stats: [{ path: '/api/stats', cacheKey: 'stats' }],
     history: [{ path: '/api/history', cacheKey: 'history' }],
   }
 
   const TAB_PANEL_LOADERS = {
     brain: loadBrain, govt: loadGovt, scanner: loadScanner, markets: loadMarkets,
-    global: loadGlobal, news: loadNews, tv: loadTV, reddit: loadReddit,
+    global: loadGlobal, news: loadNews, tv: loadTV, myfeed: loadMyFeed,
     stats: loadStats, history: loadHistory,
   }
 
@@ -2248,7 +2262,6 @@
       apiCache.youtube = payload.youtube
       apiCache.govt = payload.govt
       apiCache.inshorts = payload.inshorts
-      apiCache.reddit = payload.reddit
       apiCache.scanner = payload.scanner
       apiCache.stats = payload.stats
       apiCache.history = payload.history
@@ -2497,7 +2510,7 @@
   const panelHydrationState = {}
   const PANEL_TAB_MAP = {
     brain: 'tab-brain', govt: 'tab-govt', scanner: 'tab-scanner', markets: 'tab-markets',
-    global: 'tab-global', news: 'tab-news', tv: 'tab-tv', reddit: 'tab-reddit',
+    global: 'tab-global', news: 'tab-news', tv: 'tab-tv', myfeed: 'tab-myfeed',
     stats: 'tab-stats', history: 'tab-history',
   }
 
@@ -2703,7 +2716,7 @@
     maybeLoad('global', loadGlobal)
     maybeLoad('news', loadNews)
     maybeLoad('tv', loadTV)
-    maybeLoad('reddit', loadReddit)
+    maybeLoad('myfeed', loadMyFeed)
     maybeLoad('stats', loadStats)
     maybeLoad('history', loadHistory)
 
@@ -2814,7 +2827,6 @@
     Mint: { type: 'news', url: 'https://www.livemint.com/market', label: 'LiveMint' },
     NDTV: { type: 'news', url: 'https://www.ndtvprofit.com/', label: 'NDTV Profit' },
     Inshorts: { type: 'news', url: 'https://inshorts.com/en/read/business', label: 'Inshorts', category: 'news/social' },
-    Reddit: { type: 'social', url: 'https://www.reddit.com/r/IndianStockMarket/', label: 'Reddit' },
     'ET Now': { type: 'tv', url: 'https://www.etnownews.com/markets', label: 'ET Now', category: 'tv/news' },
     CNBC: { type: 'tv', url: 'https://www.cnbctv18.com/market/', label: 'CNBC', category: 'tv/news' },
     NSE: { type: 'market', url: 'https://www.nseindia.com/', label: 'NSE' },
@@ -2976,7 +2988,7 @@
     global: 'global',
     news: 'news',
     tv: 'tv',
-    reddit: 'reddit',
+    myfeed: 'myfeed',
     stats: 'calib',
     history: 'journal',
   }
@@ -2991,7 +3003,7 @@
     global: ['/api/debug/external-source-coverage', '/api/debug/daily-report-pack', '/api/runtime/snapshot'],
     news: ['/api/debug/source-feed?source=ET', '/api/debug/source-feed?source=MC', '/api/debug/source-feed?source=NDTV', '/api/debug/external-source-coverage'],
     tv: ['/api/debug/source-feed?source=ET%20Now', '/api/debug/source-feed?source=CNBC', '/api/debug/source-feed?source=NDTV', '/api/debug/external-source-coverage'],
-    reddit: ['/api/debug/source-feed?source=Reddit', '/api/debug/external-source-coverage'],
+    myfeed: ['/api/myfeed'],
     stats: ['/api/debug/confidence-calibration', '/api/debug/final-confidence/report', '/api/debug/market-memory/dashboard', '/api/debug/daily-report-pack'],
     history: ['/api/debug/daily-report-pack', '/api/debug/final-confidence/report', '/api/debug/market-memory/dashboard'],
   }
@@ -3148,6 +3160,42 @@
   async function loadAihubTabData(tabId, force = false) {
     const cfg = AIHUB_TAB_CONFIG[tabId]
     if (!cfg) return {}
+    if (tabId === 'myfeed') {
+      const now = Date.now()
+      const cached = ASTRA_GUI.aihubTabCache[tabId]
+      if (!force && cached && now - cached.loadedAt < cfg.ttlMs) {
+        return cached.data
+      }
+      if (!force && ASTRA_GUI.aihubTabPromises[tabId]) {
+        return ASTRA_GUI.aihubTabPromises[tabId]
+      }
+      ASTRA_GUI.aihubTabPromises[tabId] = (async () => {
+        let data = { ok: false, tabId, items: [], count: 0, errors: [] }
+        try {
+          const payload = await astraFetchJson(`/api/myfeed?limit=50&_ts=${Date.now()}`)
+          if (payload && payload.ok !== false) {
+            data = Object.assign({ tabId }, payload)
+            apiCache.myfeed = payload
+          } else {
+            throw new Error((payload && payload.error) || 'myfeed_unavailable')
+          }
+        } catch (e) {
+          data = {
+            ok: true,
+            tabId,
+            items: [],
+            count: 0,
+            message: 'No My Feed items yet. Add news from Telegram or GUI.',
+            errors: [],
+          }
+        }
+        ASTRA_GUI.aihubTabCache[tabId] = { loadedAt: Date.now(), data }
+        return data
+      })().finally(() => {
+        delete ASTRA_GUI.aihubTabPromises[tabId]
+      })
+      return ASTRA_GUI.aihubTabPromises[tabId]
+    }
     const apiTab = cfg.apiTab || AIHUB_TAB_API_MAP[tabId]
     if (!apiTab) return {}
     const now = Date.now()
@@ -3356,9 +3404,10 @@
         const data = buildBrainDataFromSnapshot()
         return !!(data && brainHasRenderableContent(data))
       }
-      case 'reddit': {
-        const data = loadJson(files.reddit)
-        return !!(data && !runtimeRedditEmpty(data))
+      case 'myfeed': {
+        const cached = ASTRA_GUI.aihubTabCache.myfeed
+        if (cached && cached.data && Array.isArray(cached.data.items) && cached.data.items.length) return true
+        return !!(apiCache.myfeed && Array.isArray(apiCache.myfeed.items) && apiCache.myfeed.items.length)
       }
       case 'news': {
         const newsData = loadJson(files.news)
@@ -3398,8 +3447,8 @@
     switch (pid) {
       case 'brain':
         return !!(fb.dailyReportPack || fb.finalConfidence)
-      case 'reddit':
-        return aihubCollectRedditFallbackItems(fb).length > 0
+      case 'myfeed':
+        return !!(apiCache.myfeed && Array.isArray(apiCache.myfeed.items) && apiCache.myfeed.items.length)
       case 'news':
         return aihubCollectNewsFallbackItems(fb).length > 0
       case 'tv':
@@ -9293,94 +9342,161 @@
   }
 
   // ============================================================
-  // TAB 7: REDDIT
+  // MY FEED (text-only — no image thumbnails)
   // ============================================================
-  function loadReddit() {
-    const data = loadJson(files.reddit)
-    const container = document.getElementById('tab-reddit')
-    const banner = panelStatusBannerHtml('reddit', 'reddit')
-    const fb = getAihubFallback()
-    if (!data || runtimeRedditEmpty(data)) {
-      const redditFallback = aihubCollectRedditFallbackItems(fb)
-      if (redditFallback.length) {
-        container.innerHTML = renderAihubFallbackRedditPanel(fb, banner)
-        wireRedditEmptyStateActions(container)
-        markPanelFallback(container)
-        dedupePanelBanners(container)
-        return
-      }
-      container.innerHTML = banner + redditEmptyStateHtml()
-      wireRedditEmptyStateActions(container)
+  function renderMyFeedAihubHtml(items) {
+    const rows = Array.isArray(items) ? items : []
+    if (!rows.length) {
+      return `<div class="empty-state-panel compact myfeed-empty-state">
+        <p>No My Feed items yet. Add news from Telegram or GUI.</p>
+        <small>Send market text via Telegram: /feed news &lt;text&gt;</small>
+      </div>`
+    }
+    let html = `<div class="glass-card"><h2>📥 My Feed (${rows.length})</h2>`
+    rows.forEach((item) => {
+      const tickers = (item.tickers || []).join(', ') || '—'
+      const themes = (item.themes || []).join(', ') || '—'
+      html += `<div class="news-item myfeed-item">
+        <div class="news-source">${escapeHtml(item.detected_source_app || '—')} · ${escapeHtml(item.suggested_action || '—')} · impact ${escapeHtml(String(item.impact_score != null ? item.impact_score : '—'))}</div>
+        <div class="glass-text">${escapeHtml(item.cleaned_summary || '')}</div>
+        <div class="myfeed-meta" style="display:flex;flex-wrap:wrap;gap:8px;font-size:10px;color:#8B949E;margin-top:8px;">
+          <span>Tickers: ${escapeHtml(tickers)}</span>
+          <span>Themes: ${escapeHtml(themes)}</span>
+          <span>Urgency: ${escapeHtml(item.urgency || '—')}</span>
+          <span>${escapeHtml(item.created_at || '—')}</span>
+        </div>
+      </div>`
+    })
+    html += '</div>'
+    return html
+  }
+
+  function myFeedItemsFromCache() {
+    const cached = ASTRA_GUI.aihubTabCache.myfeed
+    if (cached && cached.data && Array.isArray(cached.data.items)) return cached.data.items
+    if (apiCache.myfeed && Array.isArray(apiCache.myfeed.items)) return apiCache.myfeed.items
+    return null
+  }
+
+  function loadMyFeed() {
+    const container = document.getElementById('tab-myfeed')
+    if (!container) return
+    const banner = panelStatusBannerHtml('myfeed', 'myfeed')
+    const cachedItems = myFeedItemsFromCache()
+    if (cachedItems) {
+      container.innerHTML = banner + renderMyFeedAihubHtml(cachedItems)
+      injectAihubTabToolbar(container, 'myfeed')
       dedupePanelBanners(container)
       dedupeAihubTabCacheBadges(container)
       return
     }
-
-    const mood = data.market_mood || {}
-    const moodSent = (mood.sentiment || 'neutral').toLowerCase()
-    const moodConf = mood.confidence || 0
-    const moodSummary = mood.summary || ''
-    
-    let leftHtml = '';
-    const trending = data.trending_tickers || []
-    if (trending.length > 0) {
-      leftHtml += '<div class="glass-card"><h2>🔥 Trending Retail Tickers</h2>'
-      trending.slice(0, 8).forEach((t, idx) => {
-        const ticker = t.ticker || '?'
-        const sent = (t.sentiment || 'neutral').toLowerCase()
-        const score = t.sentiment_score || 0.5
-        const topPost = t.top_post || {}
-        leftHtml += `
-          <div class="reddit-ticker ${sent}">
-            <div class="reddit-ticker-header">
-              <div><span class="reddit-ticker-name">${escapeHtml(ticker)}</span> <span class="reddit-ticker-mentions">• ${t.mentions || 0} mentions</span></div>
-              <span class="reddit-sent-pill ${sent}">${sent.toUpperCase()} ${score.toFixed(2)}</span>
-            </div>
-            ${topPost.title ? `<div class="reddit-top-post"><div>${escapeHtml(topPost.title)}</div><div class="reddit-top-post-meta">↑${topPost.score || 0} • 💬${topPost.comments || 0}</div></div>` : ''}
-          </div>
-        `
-      })
-      leftHtml += '</div>'
-    }
-
-    let rightHtml = `
-      <div class="glass-card">
-        <h2>📊 Retail Market Mood</h2>
-        <div class="mood-grid">
-          <div class="mood-item"><span>Sentiment</span><strong class="${moodSent === 'bullish'?'green':moodSent==='bearish'?'red':'yellow'}">${moodSent.toUpperCase()}</strong></div>
-          <div class="mood-item"><span>Confidence</span><strong>${moodConf}%</strong></div>
-        </div>
-        ${moodSummary ? `<div class="glass-text" style="margin-top:12px; font-style:italic;">"${escapeHtml(moodSummary)}"</div>` : ''}
-      </div>
-    `;
-
-    const hot = data.hot_discussions || []
-    if (hot.length > 0) {
-      rightHtml += '<div class="glass-card"><h2>💬 Hot Discussions</h2>'
-      hot.slice(0, 6).forEach((d) => {
-        const sent = (d.sentiment || 'neutral').toLowerCase()
-        rightHtml += `
-          <div class="reddit-discussion ${sent}">
-            <div class="reddit-discussion-title">${escapeHtml(d.title || '')}</div>
-            <div class="reddit-discussion-meta">
-              <span class="reddit-sub">r/${escapeHtml(d.subreddit || '')}</span>
-              <span class="reddit-stats">↑${d.score || 0} • 💬${d.comments || 0}</span>
-            </div>
-          </div>
-        `
-      })
-      rightHtml += '</div>'
-    }
-
-    let html = `
-      ${tabTimestampHtml('reddit', data, `${data.total_posts_analyzed || 0} posts analyzed`)}
-      <div class="brain-grid">
-        <div class="main-column">${leftHtml}</div>
-        <div class="action-column">${rightHtml}</div>
-      </div>
-    `;
-    container.innerHTML = html;
+    container.innerHTML = banner + aihubTabToolbarHtml('myfeed', true) + '<div class="loading">⏳ Loading My Feed…</div>'
+    wireAihubTabRefreshButtons()
+    loadAihubTabData('myfeed', false).then(() => {
+      if ((ASTRA_GUI.aihubActiveTab || getActiveTabPanelId()) !== 'myfeed') return
+      loadMyFeed()
+    }).catch(() => {
+      if ((ASTRA_GUI.aihubActiveTab || getActiveTabPanelId()) === 'myfeed') {
+        container.innerHTML = banner + renderMyFeedAihubHtml([])
+        injectAihubTabToolbar(container, 'myfeed')
+      }
+    })
   }
+
+  async function loadMyFeedMain() {
+    const container = document.getElementById('myFeedMainContent')
+    if (!container) return
+    container.innerHTML = '<div class="loading">⏳ Loading My Feed…</div>'
+    try {
+      const res = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/myfeed?limit=40', { headers: apiHeaders() })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok || payload.ok === false) {
+        throw new Error(String(payload.error || payload.detail || 'My Feed API unavailable'))
+      }
+      const items = Array.isArray(payload.items) ? payload.items : []
+      let html = '<div class="glass-card myfeed-panel"><h2>📥 My Feed</h2>'
+      html += '<p class="myfeed-note">Text-only market feed — screenshots are processed and discarded immediately.</p>'
+      html += '<div class="myfeed-ingest-row">'
+      html += '<textarea id="myFeedTextInput" class="myfeed-text-input" placeholder="Paste market news text…"></textarea>'
+      html += '<button type="button" class="ask-btn" id="myFeedTextSubmit">Save Text</button>'
+      html += '<label class="myfeed-upload-label"><input type="file" id="myFeedScreenshotInput" accept="image/*" hidden />Screenshot (temp OCR)</label>'
+      html += '</div>'
+      if (!items.length) {
+        html += '<div class="empty-state-panel compact"><p>No My Feed items yet. Add news from Telegram or GUI.</p></div>'
+      } else {
+        html += `<div class="myfeed-list">${items.map((item) => {
+          const tickers = (item.tickers || []).join(', ') || '—'
+          const themes = (item.themes || []).join(', ') || '—'
+          return `<div class="myfeed-card">
+            <div class="myfeed-card-head">
+              <strong>${escapeHtml(item.suggested_action || 'NEWS ONLY')}</strong>
+              <span class="myfeed-impact">impact ${escapeHtml(String(item.impact_score || 0))}</span>
+              <span class="myfeed-urgency">${escapeHtml(item.urgency || 'normal')}</span>
+            </div>
+            <div class="myfeed-summary">${escapeHtml(item.cleaned_summary || item.raw_market_text || '')}</div>
+            <div class="myfeed-meta">
+              <span>${escapeHtml(item.detected_source_app || item.source || '—')}</span>
+              <span>tickers: ${escapeHtml(tickers)}</span>
+              <span>themes: ${escapeHtml(themes)}</span>
+              <span>${escapeHtml(item.created_at || '')}</span>
+            </div>
+          </div>`
+        }).join('')}</div>`
+      }
+      html += '</div>'
+      container.innerHTML = html
+      const submitBtn = document.getElementById('myFeedTextSubmit')
+      const textInput = document.getElementById('myFeedTextInput')
+      if (submitBtn && textInput) {
+        submitBtn.addEventListener('click', async () => {
+          const text = String(textInput.value || '').trim()
+          if (!text) return
+          submitBtn.disabled = true
+          try {
+            const saveRes = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/myfeed', {
+              method: 'POST',
+              headers: Object.assign({}, apiHeaders(), { 'Content-Type': 'application/json' }),
+              body: JSON.stringify({ text, source: 'gui_text' }),
+            })
+            const saveBody = await saveRes.json().catch(() => ({}))
+            if (!saveRes.ok || saveBody.ok === false) throw new Error(String(saveBody.error || 'save failed'))
+            await loadMyFeedMain()
+          } catch (err) {
+            alert('My Feed save failed: ' + err.message)
+          } finally {
+            submitBtn.disabled = false
+          }
+        })
+      }
+      const shotInput = document.getElementById('myFeedScreenshotInput')
+      if (shotInput) {
+        shotInput.addEventListener('change', async () => {
+          const file = shotInput.files && shotInput.files[0]
+          if (!file) return
+          const form = new FormData()
+          form.append('file', file)
+          try {
+            const upRes = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/myfeed/screenshot', {
+              method: 'POST',
+              headers: apiHeaders(),
+              body: form,
+            })
+            const body = await upRes.json()
+            if (!upRes.ok || !body.ok) {
+              alert(String(body.reply || 'Could not read screenshot clearly. Paste text instead.'))
+            }
+            shotInput.value = ''
+            await loadMyFeedMain()
+          } catch (err) {
+            alert('Screenshot ingest failed: ' + err.message)
+          }
+        })
+      }
+    } catch (err) {
+      container.innerHTML = `<div class="panel-error-card">My Feed unavailable: ${escapeHtml(err.message)}</div>`
+    }
+  }
+  window.loadMyFeedMain = loadMyFeedMain
 
   function pctClass(pct, invert) {
     if (pct == null || pct === '—') return 'muted'

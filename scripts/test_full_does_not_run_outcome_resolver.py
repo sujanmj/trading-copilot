@@ -27,11 +27,11 @@ def main() -> int:
     from backend.telegram import telegram_analysis_bot as tab
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 49D':
-        return _fail(f'expected AstraEdge 49D got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50A':
+        return _fail(f'expected AstraEdge 50A got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
-    if len(FULL_SNAPSHOT_SEQUENCE) != 33:
-        return _fail(f'/full must remain 33 steps got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    if len(FULL_SNAPSHOT_SEQUENCE) != 32:
+        return _fail(f'/full must remain 32 steps got {len(FULL_SNAPSHOT_SEQUENCE)}')
 
     resolver_calls: list[int] = []
 

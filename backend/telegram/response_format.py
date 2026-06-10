@@ -38,7 +38,7 @@ _STAGE_MARKER_RE = re.compile(
 )
 
 AIHUB_FULL_TABS = (
-    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'reddit', 'calib', 'journal',
+    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'calib', 'journal',
 )
 
 STALE_CACHE_HOURS = 24
@@ -730,7 +730,7 @@ def format_blocked_trade_with_symbol(cmd: str, args: str) -> str:
 def format_aihub_menu() -> str:
     return (
         '<b>🧭 AI Hub menu</b>\n'
-        'Tabs: brain · govt · scan · market · global · news · tv · reddit · calib · journal\n'
+        'Tabs: brain · govt · scan · market · global · news · tv · calib · journal\n'
         'Use /aihub &lt;tab&gt; — e.g. /aihub scan\n'
         'Use /aihub full for the compact all-tabs summary'
     )
@@ -950,7 +950,7 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
                     except (TypeError, ValueError):
                         pass
                 lines.append(f"• {ticker} · {row.get('strength') or 'SIGNAL'}")
-    elif key in ('news', 'tv', 'reddit'):
+    elif key in ('news', 'tv'):
         for row in items[:8]:
             if isinstance(row, dict):
                 title = _news_item_display_label(row) if key == 'news' else str(
@@ -1119,15 +1119,17 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     else:
         lines.append('- empty')
 
-    reddit = payloads.get('reddit') or {}
-    reddit_items = reddit.get('items') or []
-    lines.append('<b>🤖 Reddit</b>')
-    if reddit_items:
-        for row in reddit_items[:3]:
+    myfeed = payloads.get('myfeed') or {}
+    myfeed_items = myfeed.get('items') or []
+    lines.append('<b>🗞 My Feed</b>')
+    if myfeed_items:
+        for row in myfeed_items[:3]:
             if isinstance(row, dict):
-                lines.append(f"- {str(row.get('title') or row.get('headline') or '—')[:100]}")
+                summary = str(row.get('cleaned_summary') or row.get('raw_market_text') or '—')[:100]
+                tickers = ', '.join(row.get('tickers') or []) or '—'
+                lines.append(f'- {tickers}: {summary}')
     else:
-        lines.append('- cache empty')
+        lines.append('- no active items — use /feed news or GUI My Feed')
 
     calib = payloads.get('calib') or {}
     cal_summary = calib.get('summary') or {}

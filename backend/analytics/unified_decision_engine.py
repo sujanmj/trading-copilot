@@ -399,6 +399,99 @@ def apply_live_guard_to_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+MY_FEED_SCORE_BUMP_CAP = 8
+MY_FEED_MAX_SCORE = 60
+
+
+def apply_my_feed_evidence(
+    ranked: list[dict[str, Any]],
+    registry: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    My Feed evidence only — catalyst/risk notes and small watch-priority bump.
+
+    Never creates BUY/SELL alone; never overrides live rejection or stale safety.
+    """
+    try:
+        from backend.my_feed.my_feed_db import active_items_for_tickers
+    except Exception:
+        return ranked
+
+    reg = registry if registry is not None else build_live_rejection_set()
+    tickers = [_normalize_ticker(row.get('ticker')) for row in ranked if row.get('ticker')]
+    feed_items = active_items_for_tickers(tickers)
+    if not feed_items:
+        return ranked
+
+    by_ticker: dict[str, list[dict[str, Any]]] = {}
+    for feed in feed_items:
+        for sym in feed.get('tickers') or []:
+            key = _normalize_ticker(sym)
+            if key:
+                by_ticker.setdefault(key, []).append(feed)
+
+    updated: list[dict[str, Any]] = []
+    for row in ranked:
+        item = dict(row)
+        ticker = _normalize_ticker(item.get('ticker'))
+        matches = by_ticker.get(ticker) or []
+        if not matches:
+            updated.append(item)
+            continue
+
+        rejected, reject_reason = is_live_rejected(ticker, reg)
+        for feed in matches[:2]:
+            summary = str(feed.get('cleaned_summary') or '')[:120]
+            action = str(feed.get('suggested_action') or 'NEWS ONLY')
+            if action == 'WATCH FOR CONFIRMATION':
+                why = [str(w) for w in (item.get('why') or [])]
+                note = f'My Feed catalyst: {summary}' if summary else 'My Feed catalyst noted'
+                if note not in why:
+                    why.insert(0, note)
+                item['why'] = why[:6]
+            elif action in ('RISK ALERT', 'AVOID'):
+                risk = [str(r) for r in (item.get('risk') or [])]
+                note = f'My Feed risk: {summary}' if summary else f'My Feed {action.lower()}'
+                if note not in risk:
+                    risk.insert(0, note)
+                item['risk'] = risk[:6]
+            elif action == 'WAIT':
+                confirm = [str(c) for c in (item.get('confirmation_needed') or [])]
+                confirm.append('My Feed suggests waiting for confirmation')
+                item['confirmation_needed'] = confirm[:5]
+
+        if rejected:
+            item['why'] = list(dict.fromkeys(
+                [*(item.get('why') or []), f'My Feed noted but live scanner rejected: {reject_reason[:80]}']
+            ))[:6]
+            updated.append(item)
+            continue
+
+        if item.get('action') == 'AVOID':
+            updated.append(item)
+            continue
+
+        bump = min(
+            MY_FEED_SCORE_BUMP_CAP,
+            max(1, int(float(matches[0].get('impact_score') or 0) // 12)),
+        )
+        current_score = int(item.get('score') or 0)
+        item['score'] = min(MY_FEED_MAX_SCORE, current_score + bump)
+
+        supports = set(item.get('supports') or [])
+        if item.get('action') == 'BUY_CANDIDATE' and 'my_feed' not in supports:
+            pass
+        elif item.get('action') not in ('BUY_CANDIDATE', 'AVOID'):
+            item['action'] = 'WATCH_FOR_ENTRY'
+
+        evidence = [str(e) for e in (item.get('evidence_notes') or [])]
+        if 'my_feed' not in evidence:
+            evidence.append('my_feed')
+        item['evidence_notes'] = evidence[:4]
+        updated.append(item)
+    return updated
+
+
 def guard_action_plan_top(top: dict[str, Any] | None, decision: str) -> tuple[dict[str, Any] | None, str, list[str]]:
     if not top:
         return None, 'NO_CLEAN_CANDIDATE', []

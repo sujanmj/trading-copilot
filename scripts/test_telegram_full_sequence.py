@@ -30,15 +30,15 @@ def main() -> int:
         '/status', '/health', '/schedule', '/memory', '/broker', '/broker evidence',
         '/qa', '/action plan', '/today', '/tomorrow', '/premarket', '/premarket full',
         '/aihub full', '/aihub brain', '/aihub govt', '/aihub scan', '/aihub market',
-        '/aihub global', '/aihub news', '/aihub tv', '/aihub reddit', '/aihub calib',
+        '/aihub global', '/aihub news', '/aihub tv', '/aihub calib',
         '/aihub journal', '/news', '/morning', '/close', '/theme', '/theme list',
         '/theme budget', '/theme news infra', '/theme scan infra', '/budget',
         '/budget theme infra',
     ]
     if list(FULL_SNAPSHOT_SEQUENCE) != expected:
         return _fail('FULL_SNAPSHOT_SEQUENCE mismatch')
-    if len(FULL_SNAPSHOT_SEQUENCE) != 33:
-        return _fail(f'expected 33 steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    if len(FULL_SNAPSHOT_SEQUENCE) != 32:
+        return _fail(f'expected 32 steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
 
     calls: list[str] = []
 
@@ -57,14 +57,14 @@ def main() -> int:
         return _fail(f'sequence calls mismatch at index {len(calls)}')
 
     texts = [str(r.get('text') or '') for r in results]
-    if not any('Step 01/33 — /status' in t for t in texts):
-        return _fail('missing Step 01/33 prefix')
-    if not any('Step 33/33 — /budget theme infra' in t for t in texts):
-        return _fail('missing Step 33/33 prefix')
+    if not any('Step 01/32 — /status' in t for t in texts):
+        return _fail('missing Step 01/32 prefix')
+    if not any('Step 32/32 — /budget theme infra' in t for t in texts):
+        return _fail('missing Step 32/32 prefix')
     if not any('Section unavailable:' in t and '/schedule' in t for t in texts):
         return _fail('schedule failure must continue with Section unavailable')
-    if len(calls) != 33:
-        return _fail('must invoke all 33 commands even after one failure')
+    if len(calls) != 32:
+        return _fail('must invoke all 32 commands even after one failure')
 
     print('TELEGRAM_FULL_SEQUENCE_TEST_OK')
     return 0

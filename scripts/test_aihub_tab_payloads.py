@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 MAX_TAB_SECONDS = 12.0
 API_TABS = (
-    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'reddit', 'calib', 'journal',
+    'brain', 'govt', 'scan', 'market', 'global', 'news', 'tv', 'calib', 'journal',
 )
 
 
@@ -49,16 +49,6 @@ def main() -> int:
             return _fail('memory fallback row must have change_pct=null')
         if sample.get('source') != 'market-memory':
             return _fail('memory fallback row must have source=market-memory')
-
-    reddit = build_aihub_tab_payload('reddit')
-    if reddit.get('ok') is not True:
-        return _fail('reddit payload must have ok=true even when empty')
-    if not reddit.get('items'):
-        summary = reddit.get('summary') or {}
-        if summary.get('empty_message') != 'No Reddit cache yet':
-            return _fail('reddit empty summary message missing')
-        if not summary.get('source_url'):
-            return _fail('reddit empty summary source_url missing')
 
     total = time.perf_counter() - started
     if total > MAX_TAB_SECONDS * len(API_TABS):
