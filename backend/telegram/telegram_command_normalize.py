@@ -44,6 +44,22 @@ _ARGS_SUGGESTIONS: dict[tuple[str, str], str] = {
 }
 
 
+def normalize_slash_command(text: str) -> str:
+    """Strip leading slash, bot @suffix, and collapse whitespace (Stage 50C)."""
+    raw = str(text or '').strip()
+    if raw.startswith('/'):
+        raw = raw[1:].strip()
+    raw = re.sub(r'\s+', ' ', raw).strip()
+    if '@' in raw:
+        raw = raw.split('@', 1)[0].strip()
+    return raw
+
+
+def normalize_slash_command_text(text: str) -> str:
+    """Backward-compatible alias for normalize_slash_command."""
+    return normalize_slash_command(text)
+
+
 def normalize_parsed_command(cmd: str, args: str) -> tuple[str, str]:
     """Normalize cmd/args after parse_command — safe slashless + action alias."""
     cmd_norm = str(cmd or '').strip().lower()

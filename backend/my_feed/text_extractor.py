@@ -1,11 +1,16 @@
 """
-Privacy-aware market text extraction for My Feed (Stage 50A).
+Privacy-aware market text extraction for My Feed (Stage 50A / 50C).
 """
 
 from __future__ import annotations
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+from backend.storage.data_paths import get_data_path
 
 PRIVATE_PATTERNS = (
     r'\binstagram\b',
@@ -59,6 +64,37 @@ APP_HINTS = {
 
 TICKER_RE = re.compile(r'\b([A-Z]{2,15})\b')
 
+REJECT_TICKER_WORDS = frozenset({
+    'FALLS', 'BELOW', 'ABOVE', 'RS', 'LAKH', 'CRORE', 'AMID', 'GLOBAL', 'SELL', 'BUY',
+    'CHECK', 'CITY', 'TODAY', 'PRICE', 'PRICES', 'MARKET', 'NEWS', 'UPDATE', 'ALERT',
+    'THE', 'AND', 'FOR', 'WITH', 'FROM', 'ONLY', 'WAIT', 'RISK', 'OFF', 'THIS', 'THAT',
+    'WILL', 'HAVE', 'BEEN', 'WERE', 'WAS', 'ARE', 'NOT', 'OUT', 'INTO', 'OVER', 'UNDER',
+    'HIGH', 'LOW', 'OPEN', 'CLOSE', 'YEAR', 'WEEK', 'MONTH', 'INDIA', 'INDIAN', 'STOCK',
+    'SHARE', 'SHARES', 'INDEX', 'POINTS', 'PER', 'CENT', 'PERCENT',
+})
+
+ALLOWED_ENTITY_WORDS = frozenset({
+    'GOLD', 'SILVER', 'CRUDE', 'OIL', 'NIFTY', 'BANKNIFTY', 'SENSEX', 'USDINR', 'INR', 'VIX',
+    'SILVERM', 'MOIL', 'BANK', 'NIFTY50',
+})
+
+ENTITY_HINTS: tuple[tuple[str, str], ...] = (
+    ('bank nifty', 'BANKNIFTY'),
+    ('nifty 50', 'NIFTY'),
+    ('nifty50', 'NIFTY'),
+    ('nifty', 'NIFTY'),
+    ('sensex', 'SENSEX'),
+    ('gold', 'GOLD'),
+    ('silver', 'SILVER'),
+    ('silverm', 'SILVERM'),
+    ('crude', 'CRUDE'),
+    ('oil', 'OIL'),
+    ('usd/inr', 'USDINR'),
+    ('usdinr', 'USDINR'),
+    ('vix', 'VIX'),
+    ('moil', 'MOIL'),
+)
+
 
 def _is_private_line(line: str) -> bool:
     lower = line.lower().strip()
@@ -87,13 +123,70 @@ def detect_source_app(text: str) -> str:
     return ''
 
 
-def extract_tickers(text: str) -> list[str]:
-    found: list[str] = []
-    for match in TICKER_RE.findall(str(text or '').upper()):
-        if match in {'THE', 'AND', 'FOR', 'WITH', 'FROM', 'NEWS', 'ONLY', 'WAIT', 'RISK'}:
+@lru_cache(maxsize=1)
+def _known_stock_tickers() -> frozenset[str]:
+    symbols: set[str] = set()
+    paths = (
+        get_data_path('scanner_data.json'),
+        get_data_path('tomorrow_watchlist_report.json'),
+        get_data_path('intelligence.json'),
+    )
+    for path in paths:
+        if not Path(path).is_file():
             continue
-        if match not in found:
-            found.append(match)
+        try:
+            payload = json.loads(Path(path).read_text(encoding='utf-8'))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        for key in ('top_signals', 'watchlist_candidates', 'top_watchlist', 'raw_candidates'):
+            for row in payload.get(key) or []:
+                if isinstance(row, dict):
+                    sym = str(row.get('symbol') or row.get('ticker') or '').strip().upper()
+                    if sym and 2 <= len(sym) <= 15:
+                        symbols.add(sym)
+                elif isinstance(row, str):
+                    sym = row.strip().upper()
+                    if sym and 2 <= len(sym) <= 15:
+                        symbols.add(sym)
+        for row in (payload.get('risks_and_avoids') or []):
+            if isinstance(row, dict):
+                sym = str(row.get('symbol') or row.get('ticker') or '').strip().upper()
+                if sym:
+                    symbols.add(sym)
+    return frozenset(symbols)
+
+
+def _extract_entity_hints(text: str) -> list[str]:
+    lower = str(text or '').lower()
+    found: list[str] = []
+    for hint, symbol in ENTITY_HINTS:
+        if hint in lower and symbol not in found:
+            found.append(symbol)
+    return found
+
+
+def extract_tickers(text: str) -> list[str]:
+    blob = str(text or '')
+    upper_text = blob.upper()
+    found: list[str] = []
+    known = _known_stock_tickers()
+
+    for symbol in _extract_entity_hints(blob):
+        if symbol not in found:
+            found.append(symbol)
+
+    for match in TICKER_RE.findall(upper_text):
+        if match in REJECT_TICKER_WORDS:
+            continue
+        if match in ALLOWED_ENTITY_WORDS:
+            if match not in found:
+                found.append(match)
+            continue
+        if match in known:
+            if match not in found:
+                found.append(match)
     return found[:8]
 
 

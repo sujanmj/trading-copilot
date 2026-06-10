@@ -19,21 +19,31 @@ FEED_PENDING_REPLY = 'Send market news text or screenshot now.'
 
 
 def is_feed_caption(text: str) -> bool:
-    raw = str(text or '').strip().lower()
-    if raw in ('/feed news', '/myfeed add', '/myfeed news'):
+    from backend.telegram.telegram_command_normalize import normalize_slash_command
+
+    raw = str(text or '').strip()
+    if not raw.startswith('/'):
         return False
-    if raw.startswith('/feed news ') or raw.startswith('/myfeed add ') or raw.startswith('/myfeed news '):
+    inner = normalize_slash_command(raw).lower()
+    if inner in ('feed news', 'myfeed add', 'myfeed news'):
         return False
-    return raw == '/feed' or raw.startswith('/feed ')
+    if inner.startswith('feed news ') or inner.startswith('myfeed add ') or inner.startswith('myfeed news '):
+        return False
+    return inner == 'feed' or inner.startswith('feed ')
 
 
 def extract_feed_caption_text(text: str) -> str:
+    from backend.telegram.telegram_command_normalize import normalize_slash_command
+
     raw = str(text or '').strip()
-    lower = raw.lower()
-    if lower == '/feed':
+    if not raw.startswith('/'):
+        return raw
+    inner = normalize_slash_command(raw)
+    lower = inner.lower()
+    if lower == 'feed':
         return ''
-    if lower.startswith('/feed '):
-        return raw[6:].strip()
+    if lower.startswith('feed '):
+        return inner[5:].strip()
     return ''
 
 

@@ -108,6 +108,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 
 <b>My Feed:</b>
 /feed — add market news text or screenshot
+/myfeed — latest saved feed (same as /myfeed list)
 /myfeed list — latest saved feed
 /myfeed today — today's feed
 /myfeed scan — tickers/themes impact
@@ -196,11 +197,16 @@ def send_analysis_message(
 
 
 def parse_command(text: str) -> tuple[str, str]:
-    raw = str(text or '').strip()
+    from backend.telegram.telegram_command_normalize import normalize_slash_command
+
+    raw_input = str(text or '').strip()
+    if not raw_input:
+        return '', ''
+    if not raw_input.startswith('/'):
+        return '', ''
+    raw = normalize_slash_command(raw_input)
     if not raw:
         return '', ''
-    if raw.startswith('/'):
-        raw = raw[1:]
     lower = raw.lower()
     if lower == 'resolve outcomes':
         return 'resolve', 'outcomes'
@@ -214,6 +220,8 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'removed_feed_alias', raw
     if lower.startswith('feed '):
         return 'feed', raw[5:].strip()
+    if lower == 'myfeed':
+        return 'myfeed', 'list'
     if lower == 'myfeed list':
         return 'myfeed', 'list'
     if lower == 'myfeed today':
@@ -472,7 +480,7 @@ def _handle_health() -> str:
 
         lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
     except Exception:
-        lines.append('Telegram build: <code>AstraEdge 50B</code>')
+        lines.append('Telegram build: <code>AstraEdge 50C</code>')
     return '\n'.join(lines)
 
 

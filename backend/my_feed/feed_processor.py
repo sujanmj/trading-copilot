@@ -48,7 +48,9 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
         event_type = 'corporate_action'
     elif any(w in lower for w in ('crude', 'gold', 'silver', 'commodity', 'oil')):
         event_type = 'commodity'
-        themes.append('commodity')
+        if any(w in lower for w in ('gold', 'silver')):
+            themes.append('Precious Metals')
+        themes.append('Commodity Risk')
 
     impact_score = min(
         100.0,
@@ -63,9 +65,17 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     suggested_action = 'NEWS ONLY'
     if event_type == 'geopolitical':
         suggested_action = 'MARKET RISK ALERT'
-    elif event_type == 'commodity' and impact_score >= 55:
-        suggested_action = 'RISK ALERT'
-        themes.append('watch related stocks')
+    elif event_type == 'commodity':
+        if 'gold' in lower:
+            suggested_action = 'GOLD WATCH'
+            if 'Precious Metals' not in themes:
+                themes.append('Precious Metals')
+            if 'Commodity Risk' not in themes:
+                themes.append('Commodity Risk')
+        else:
+            suggested_action = 'COMMODITY RISK ALERT'
+            if 'Commodity Risk' not in themes:
+                themes.append('Commodity Risk')
     elif sentiment == 'bearish' or any(w in lower for w in ('avoid', 'fraud', 'default', 'downgrade', 'breakdown')):
         suggested_action = 'AVOID'
     elif any(w in lower for w in ('fall', 'drop', 'weak')):
@@ -87,6 +97,7 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
         'suggested_action': suggested_action,
         'confirmation_required': suggested_action in {
             'WATCH FOR CONFIRMATION', 'RISK ALERT', 'MARKET RISK ALERT', 'RISK WATCH',
+            'COMMODITY RISK ALERT', 'GOLD WATCH',
         },
         'themes': themes,
         'sectors': [],

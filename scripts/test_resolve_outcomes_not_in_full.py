@@ -27,8 +27,8 @@ def main() -> int:
     from backend.telegram import telegram_analysis_bot as tab
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50B':
-        return _fail(f'expected AstraEdge 50B got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50C':
+        return _fail(f'expected AstraEdge 50C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     for blocked in ('/resolve outcomes', '/outcomes'):
         if blocked in FULL_SNAPSHOT_SEQUENCE:
