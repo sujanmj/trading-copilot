@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests — My Feed never blind BUY/SELL (Stage 50B)."""
+"""Unit tests — My Feed never blind BUY/SELL (Stage 50F hotfix)."""
 
 from __future__ import annotations
 
@@ -21,17 +21,43 @@ def _fail(msg: str) -> int:
     return 1
 
 
+def _contains_trade_word(text: str) -> bool:
+    upper = str(text or '').upper()
+    return any(token in upper for token in BLIND_ACTIONS) or ' BUY' in f' {upper} ' or ' SELL' in f' {upper} '
+
+
 def main() -> int:
     from backend.my_feed.feed_processor import _classify_item, ingest_text
+    from backend.my_feed.groq_vision_fallback import _sanitize_suggested_action
+    from backend.my_feed.suggested_actions import (
+        MYFEED_ALLOWED_SUGGESTED_ACTIONS,
+        contains_trade_action_literal,
+        normalize_myfeed_suggested_action,
+    )
+
+    for action in MYFEED_ALLOWED_SUGGESTED_ACTIONS:
+        if _contains_trade_word(action):
+            return _fail(f'allowed action enum must not contain trade literal: {action!r}')
 
     aggressive = _classify_item({
         'cleaned_summary': 'INFY strong buy breakout confirmed now today sell HDFC immediately',
         'items_found': 2,
         'tickers': ['INFY', 'HDFC'],
     })
-    action = str(aggressive.get('suggested_action') or '').upper()
-    if action in BLIND_ACTIONS or 'BUY' in action or 'SELL' in action:
+    action = str(aggressive.get('suggested_action') or '')
+    if _contains_trade_word(action):
         return _fail(f'_classify_item must not emit BUY/SELL, got {action!r}')
+
+    if normalize_myfeed_suggested_action('CONFIRMED BUY') != 'WATCH FOR CONFIRMATION':
+        return _fail('trade literal must normalize to WATCH FOR CONFIRMATION')
+    if normalize_myfeed_suggested_action('SELL NOW on downgrade') != 'AVOID / RISK WATCH':
+        return _fail('bearish trade literal must normalize to AVOID / RISK WATCH')
+    if _sanitize_suggested_action('STRONG BUY breakout') != 'WATCH FOR CONFIRMATION':
+        return _fail('vision sanitize must strip trade literals')
+
+    groq_src = (PROJECT_ROOT / 'backend/my_feed/groq_vision_fallback.py').read_text(encoding='utf-8')
+    if 'BUY|' in groq_src or 'SELL|' in groq_src or '|BUY' in groq_src or '|SELL' in groq_src:
+        return _fail('Groq prompt must not list BUY/SELL suggested_action options')
 
     tmp = tempfile.mkdtemp()
     try:
@@ -47,8 +73,8 @@ def main() -> int:
                 result = ingest_text(text, source='telegram_text')
                 if not result.get('ok'):
                     continue
-                stored_action = str((result.get('record') or {}).get('suggested_action') or '').upper()
-                if stored_action in BLIND_ACTIONS or 'BUY' in stored_action or 'SELL' in stored_action:
+                stored_action = str((result.get('record') or {}).get('suggested_action') or '')
+                if _contains_trade_word(stored_action):
                     return _fail(f'ingest suggested_action must not be BUY/SELL, got {stored_action!r}')
 
             insert_feed_item({
@@ -92,6 +118,12 @@ def main() -> int:
     processor_src = (PROJECT_ROOT / 'backend/my_feed/feed_processor.py').read_text(encoding='utf-8')
     if "'BUY'" in processor_src or "'SELL'" in processor_src:
         return _fail('feed_processor must not define BUY/SELL suggested_action literals')
+
+    actions_src = (PROJECT_ROOT / 'backend/my_feed/suggested_actions.py').read_text(encoding='utf-8')
+    if 'MYFEED_ALLOWED_SUGGESTED_ACTIONS' not in actions_src:
+        return _fail('suggested_actions module must define allowed action enum')
+    if not contains_trade_action_literal('BUY NOW'):
+        return _fail('trade literal detector must catch direct trade instructions')
 
     print('MYFEED_NO_BLIND_BUY_SELL_TEST_OK')
     return 0

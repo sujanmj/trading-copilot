@@ -18,13 +18,22 @@ _UPSCALE_TARGET_WIDTH = 1200
 
 
 def _optional_vision_ocr_fallback(image: Any) -> str:
-    """Optional vision OCR when local tesseract is weak; never exposes provider names."""
+    """Groq vision plain-text hook when local tesseract is weak."""
     try:
-        from backend.my_feed import vision_ocr_fallback  # type: ignore
+        from backend.my_feed import groq_vision_fallback
 
-        return str(vision_ocr_fallback.extract_text(image) or '').strip()
+        return str(groq_vision_fallback.extract_text(image) or '').strip()
     except (ImportError, AttributeError, Exception):
         return ''
+
+
+def _optional_vision_structured(image: Any) -> dict[str, Any]:
+    try:
+        from backend.my_feed import groq_vision_fallback
+
+        return groq_vision_fallback.extract_market_items(image)
+    except (ImportError, AttributeError, Exception):
+        return {'ok': False, 'items': [], 'needs_text': True, 'confidence': 0.0}
 
 
 def _preprocess_image(image: Any) -> Any:
@@ -69,9 +78,9 @@ def is_local_tesseract_available() -> bool:
 
 def is_vision_ocr_fallback_available() -> bool:
     try:
-        from backend.my_feed import vision_ocr_fallback
+        from backend.my_feed import groq_vision_fallback
 
-        return bool(vision_ocr_fallback.is_vision_ocr_fallback_available())
+        return bool(groq_vision_fallback.is_groq_vision_available())
     except (ImportError, AttributeError, Exception):
         return False
 
@@ -89,7 +98,25 @@ def _ocr_image(image: Any, *, tesseract_available: bool = True) -> tuple[str, fl
     return raw_text, confidence
 
 
-def _build_result(raw_text: str, *, confidence: float, error: str = '') -> dict[str, Any]:
+def _build_result(raw_text: str, *, confidence: float, error: str = '', vision_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    if vision_payload and vision_payload.get('ok'):
+        items = list(vision_payload.get('items') or [])
+        notifications = [str(item.get('cleaned_summary') or '').strip() for item in items]
+        notifications = [n for n in notifications if n]
+        combined = '\n'.join(notifications).strip()
+        return {
+            'ok': True,
+            'text': combined,
+            'notifications': notifications,
+            'vision_items': items,
+            'ignored_private_count': int(vision_payload.get('ignored_private_items') or 0),
+            'needs_text': False,
+            'cleaned_summary': combined,
+            'confidence': float(vision_payload.get('confidence') or confidence),
+            'extracted': {},
+            'error': '',
+        }
+
     split = split_market_notifications(raw_text)
     notifications = list(split.get('notifications') or [])
     ignored_private_count = int(split.get('ignored_private_count') or 0)
@@ -176,6 +203,10 @@ def extract_market_text_from_image_temp(image_path: str | Path) -> dict[str, Any
         }
 
     if len(raw_text) < _MIN_OCR_CHARS:
+        processed = _preprocess_image(image)
+        vision_payload = _optional_vision_structured(processed)
+        if vision_payload.get('ok'):
+            return _build_result('', confidence=float(vision_payload.get('confidence') or 0.75), vision_payload=vision_payload)
         return {
             'ok': False,
             'text': raw_text,

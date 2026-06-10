@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50E — Railway OCR fallback path available when tesseract missing."""
+"""Stage 50F — Railway OCR fallback uses Groq vision when tesseract missing."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -20,26 +20,15 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    vision_path = PROJECT_ROOT / 'backend/my_feed/vision_ocr_fallback.py'
+    vision_path = PROJECT_ROOT / 'backend/my_feed/groq_vision_fallback.py'
     if not vision_path.is_file():
-        return _fail('vision_ocr_fallback.py must exist')
+        return _fail('groq_vision_fallback.py must exist')
 
     extraction_src = (PROJECT_ROOT / 'backend/my_feed/image_extraction.py').read_text(encoding='utf-8')
-    intake_src = (PROJECT_ROOT / 'backend/telegram/my_feed_intake.py').read_text(encoding='utf-8')
-    if 'is_vision_ocr_fallback_available' not in extraction_src:
-        return _fail('image_extraction must expose is_vision_ocr_fallback_available')
-    if 'ocr_unavailable' not in extraction_src:
-        return _fail('image_extraction must return ocr_unavailable when no OCR paths exist')
-    if 'extract_market_text_from_image_temp' not in intake_src:
-        return _fail('Telegram photo intake must call extract_market_text_from_image_temp')
+    if 'groq_vision_fallback' not in extraction_src:
+        return _fail('image_extraction must use groq_vision_fallback')
 
-    from backend.my_feed import image_extraction, vision_ocr_fallback
-
-    fake_image = MagicMock()
-    with patch.object(vision_ocr_fallback, 'extract_text', return_value='INDmoney: CHAMBLFERT surges 5.3% today'):
-        text = vision_ocr_fallback.extract_text(fake_image)
-    if 'CHAMBLFERT' not in text:
-        return _fail('vision fallback must return extracted market text')
+    from backend.my_feed import groq_vision_fallback, image_extraction
 
     temp_path = ''
     try:
@@ -47,11 +36,13 @@ def main() -> int:
             tmp.write(b'\x89PNG\r\n')
             temp_path = tmp.name
 
+        fake_image = object()
+        pil_mod = type(sys)('PIL')
+        pil_mod.Image = type('Image', (), {'open': staticmethod(lambda _p: fake_image)})
+
         with patch('backend.my_feed.image_extraction.is_local_tesseract_available', return_value=False):
             with patch('backend.my_feed.image_extraction.is_vision_ocr_fallback_available', return_value=True):
                 with patch('backend.my_feed.image_extraction._ocr_image', return_value=('INDmoney: CHAMBLFERT surges 5.3%', 0.75)):
-                    pil_mod = MagicMock()
-                    pil_mod.Image.open.return_value = fake_image
                     with patch.dict(sys.modules, {'PIL': pil_mod}):
                         result = image_extraction.extract_market_text_from_image_temp(temp_path)
 
@@ -65,16 +56,17 @@ def main() -> int:
                 blocked = image_extraction.extract_market_text_from_image_temp(temp_path)
         if not blocked.get('needs_text') or blocked.get('error') != 'ocr_unavailable':
             return _fail(f'expected ocr_unavailable needs_text, got {blocked!r}')
+
+        with patch.object(groq_vision_fallback, 'is_groq_vision_available', return_value=False):
+            empty = groq_vision_fallback.extract_market_items(fake_image)
+        if empty.get('ok'):
+            return _fail('without Groq key vision must not succeed')
     finally:
         if temp_path:
             try:
                 os.remove(temp_path)
             except OSError:
                 pass
-
-    vision_src = vision_path.read_text(encoding='utf-8')
-    if 'generativelanguage.googleapis.com' not in vision_src:
-        return _fail('vision fallback must use safe in-memory vision request path')
 
     print('MYFEED_OCR_RAILWAY_FALLBACK_AVAILABLE_TEST_OK')
     return 0

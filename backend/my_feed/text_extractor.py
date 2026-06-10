@@ -254,6 +254,65 @@ def split_market_notifications(raw_text: str) -> dict[str, Any]:
     }
 
 
+def _levenshtein(a: str, b: str) -> int:
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        curr = [i]
+        for j, cb in enumerate(b, 1):
+            cost = 0 if ca == cb else 1
+            curr.append(min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost))
+        prev = curr
+    return prev[-1]
+
+
+def correct_fuzzy_tickers(candidates: list[str] | tuple[str, ...], text: str = '') -> list[str]:
+    """Map near-miss OCR tokens to known NSE symbols (e.g. CHAMBLERT → CHAMBLFERT)."""
+    known = set(_known_stock_tickers()) | set(EXTRA_KNOWN_TICKERS)
+    found: list[str] = []
+    pool = [str(c or '').strip().upper() for c in candidates if str(c or '').strip()]
+    for token in TICKER_RE.findall(str(text or '').upper()):
+        pool.append(token)
+    for raw in pool:
+        if not raw or raw in REJECT_TICKER_WORDS:
+            continue
+        if raw in known:
+            if raw not in found:
+                found.append(raw)
+            continue
+        if raw in ALLOWED_ENTITY_WORDS:
+            continue
+        best_sym = ''
+        best_dist = 999
+        for sym in known:
+            if abs(len(sym) - len(raw)) > 2:
+                continue
+            dist = _levenshtein(raw, sym)
+            if dist <= 2 and dist < best_dist:
+                best_sym = sym
+                best_dist = dist
+        if best_sym and best_dist <= 2 and best_sym not in found:
+            found.append(best_sym)
+    return found[:8]
+
+
+def split_entity_tokens(candidates: list[str] | tuple[str, ...], text: str = '') -> list[str]:
+    entities: list[str] = []
+    for token in candidates or []:
+        up = str(token or '').strip().upper()
+        if up and up not in entities:
+            entities.append(up)
+    for sym in _extract_entity_hints(text):
+        if sym not in entities:
+            entities.append(sym)
+    return entities[:12]
+
+
 def extract_tickers(text: str) -> list[str]:
     blob = str(text or '')
     upper_text = blob.upper()
@@ -274,7 +333,7 @@ def extract_tickers(text: str) -> list[str]:
         if match in known or match in EXTRA_KNOWN_TICKERS:
             if match not in found:
                 found.append(match)
-    return found[:8]
+    return correct_fuzzy_tickers(found, blob)[:8]
 
 
 def filter_market_text(raw_text: str) -> dict[str, Any]:

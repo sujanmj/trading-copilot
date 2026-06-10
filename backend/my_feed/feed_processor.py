@@ -14,6 +14,10 @@ from backend.my_feed.my_feed_db import (
     list_items,
 )
 from backend.my_feed.text_extractor import extract_tickers, filter_market_text
+from backend.my_feed.suggested_actions import (
+    MYFEED_ACTIONS_REQUIRING_CONFIRMATION,
+    normalize_myfeed_suggested_action,
+)
 
 PUBLIC_ITEM_KEYS = frozenset({
     'feed_id', 'created_at', 'source', 'cleaned_summary', 'detected_source_app',
@@ -80,22 +84,24 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     if event_type == 'geopolitical':
         suggested_action = 'MARKET RISK ALERT'
     elif event_type == 'commodity':
-        if 'gold' in lower:
+        if 'silver' in lower:
+            suggested_action = 'SILVER WATCH'
+            if 'Precious Metals' not in themes:
+                themes.append('Precious Metals')
+        elif 'gold' in lower:
             suggested_action = 'GOLD WATCH'
             if 'Precious Metals' not in themes:
                 themes.append('Precious Metals')
-            if 'Commodity Risk' not in themes:
-                themes.append('Commodity Risk')
+        elif any(w in lower for w in ('crude', 'oil')):
+            suggested_action = 'OIL RISK WATCH'
         else:
             suggested_action = 'COMMODITY RISK ALERT'
-            if 'Commodity Risk' not in themes:
-                themes.append('Commodity Risk')
+        if 'Commodity Risk' not in themes:
+            themes.append('Commodity Risk')
     elif sentiment == 'bearish' or any(w in lower for w in ('avoid', 'fraud', 'default', 'downgrade', 'breakdown')):
-        suggested_action = 'AVOID'
-    elif any(w in lower for w in ('fall', 'drop', 'weak')):
-        suggested_action = 'RISK WATCH'
-    elif any(w in lower for w in ('risk', 'volatility', 'uncertain')):
-        suggested_action = 'RISK ALERT'
+        suggested_action = 'AVOID / RISK WATCH'
+    elif any(w in lower for w in ('fall', 'drop', 'weak', 'risk', 'volatility', 'uncertain')):
+        suggested_action = 'AVOID / RISK WATCH'
     elif tickers and re.search(r'\bsurges?\s+\d', lower):
         suggested_action = 'WATCH FOR CONFIRMATION'
     elif sentiment == 'bullish' and impact_score >= 45:
@@ -105,16 +111,15 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     else:
         suggested_action = 'WATCH FOR CONFIRMATION'
 
+    suggested_action = normalize_myfeed_suggested_action(suggested_action)
+
     return {
         'sentiment': sentiment,
         'event_type': event_type,
         'impact_score': round(impact_score, 1),
         'urgency': urgency,
         'suggested_action': suggested_action,
-        'confirmation_required': suggested_action in {
-            'WATCH FOR CONFIRMATION', 'RISK ALERT', 'MARKET RISK ALERT', 'RISK WATCH',
-            'COMMODITY RISK ALERT', 'GOLD WATCH',
-        },
+        'confirmation_required': suggested_action in MYFEED_ACTIONS_REQUIRING_CONFIRMATION,
         'themes': themes,
         'sectors': [],
     }
@@ -145,16 +150,31 @@ def recompute_item_metadata_from_text(
     }
 
 
-def format_saved_reply(record: dict[str, Any], *, ignored_private_items: int = 0, items_found: int = 0) -> str:
-    entities = ', '.join(record.get('tickers') or []) or '—'
+def format_saved_reply(
+    record: dict[str, Any],
+    *,
+    ignored_private_items: int = 0,
+    items_found: int = 0,
+    all_entities: list[str] | None = None,
+    ticker_list: list[str] | None = None,
+    suggested_actions: list[str] | None = None,
+) -> str:
+    tickers = [str(t).strip() for t in (ticker_list or record.get('tickers') or []) if str(t).strip()]
+    entities = [str(e).strip() for e in (all_entities or tickers) if str(e).strip()]
+    entities_disp = ', '.join(dict.fromkeys(entities)) or '—'
+    tickers_disp = ', '.join(dict.fromkeys(tickers)) or '—'
+    actions = [str(a).strip() for a in (suggested_actions or []) if str(a).strip()]
+    if not actions:
+        actions = [str(record.get('suggested_action') or 'WAIT')]
+    action_disp = ' / '.join(dict.fromkeys(actions))
     return '\n'.join([
         'MY_FEED_SAVED',
         f'items_found={items_found or 1}',
         f'ignored_private_items={ignored_private_items}',
-        f'entities={entities}',
-        f'tickers={entities}',
+        f'entities={entities_disp}',
+        f'tickers={tickers_disp}',
         f"impact_score={record.get('impact_score') or 0}",
-        f"suggested_action={record.get('suggested_action') or 'WAIT'}",
+        f'suggested_action={action_disp}',
     ])
 
 
@@ -308,10 +328,138 @@ def ingest_notifications(
     }
 
 
-def ingest_screenshot_bytes(image_bytes: bytes, *, source: str = 'gui_screenshot') -> dict[str, Any]:
-    from backend.my_feed.image_extraction import extract_market_text_from_image_bytes
+def _merge_classification(vision_item: dict[str, Any], extracted: dict[str, Any]) -> dict[str, Any]:
+    classified = _classify_item(extracted)
+    themes = list(vision_item.get('themes') or []) or classified['themes']
+    for theme in classified['themes']:
+        if theme not in themes:
+            themes.append(theme)
+    suggested = normalize_myfeed_suggested_action(
+        str(vision_item.get('suggested_action') or classified['suggested_action']),
+        fallback=str(classified['suggested_action'] or 'NEWS ONLY'),
+    )
+    impact = float(vision_item.get('impact_score') or 0) or classified['impact_score']
+    urgency = str(vision_item.get('urgency') or classified['urgency'])
+    return {
+        'themes': themes,
+        'sectors': classified['sectors'],
+        'event_type': str(vision_item.get('event_type') or classified['event_type']),
+        'sentiment': str(vision_item.get('sentiment') or classified['sentiment']),
+        'impact_score': round(max(float(classified['impact_score']), impact), 1),
+        'urgency': urgency,
+        'suggested_action': suggested,
+        'confirmation_required': bool(vision_item.get('confirmation_required')) or classified['confirmation_required'],
+    }
 
-    ocr = extract_market_text_from_image_bytes(image_bytes)
+
+def ingest_vision_items(
+    items: list[dict[str, Any]],
+    *,
+    source: str = 'gui_screenshot',
+    ignored_private_items: int = 0,
+) -> dict[str, Any]:
+    from backend.my_feed.text_extractor import correct_fuzzy_tickers, extract_tickers, split_entity_tokens
+
+    saved_records: list[dict[str, Any]] = []
+    duplicate_count = 0
+    total_ignored = ignored_private_items
+    all_entities: list[str] = []
+    all_tickers: list[str] = []
+    all_actions: list[str] = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        cleaned = str(item.get('cleaned_summary') or item.get('raw_market_text') or '').strip()
+        if not cleaned:
+            continue
+        extracted = {
+            'raw_market_text': str(item.get('raw_market_text') or cleaned),
+            'cleaned_summary': cleaned,
+            'items_found': 1,
+            'ignored_private_items': 0,
+            'detected_source_app': str(item.get('detected_source_app') or ''),
+            'tickers': correct_fuzzy_tickers(item.get('tickers') or extract_tickers(cleaned), cleaned),
+        }
+        entities = split_entity_tokens(item.get('entities') or [], cleaned)
+        for ticker in extracted['tickers']:
+            if ticker not in entities and ticker not in all_entities:
+                pass
+            if ticker not in entities:
+                entities.append(ticker)
+
+        duplicate = find_recent_duplicate(cleaned)
+        if duplicate:
+            duplicate_count += 1
+            continue
+
+        classified = _merge_classification(item, extracted)
+        record = insert_feed_item({
+            'source': source,
+            'raw_market_text': extracted['raw_market_text'],
+            'cleaned_summary': cleaned,
+            'detected_source_app': extracted.get('detected_source_app') or '',
+            'tickers': extracted['tickers'],
+            'sectors': classified['sectors'],
+            'themes': classified['themes'],
+            'event_type': classified['event_type'],
+            'sentiment': classified['sentiment'],
+            'impact_score': classified['impact_score'],
+            'urgency': classified['urgency'],
+            'suggested_action': classified['suggested_action'],
+            'confirmation_required': classified['confirmation_required'],
+            'status': 'active',
+        })
+        saved_records.append(record)
+        action = str(classified['suggested_action'] or '')
+        if action and action not in all_actions:
+            all_actions.append(action)
+        for entity in entities:
+            if entity not in all_entities:
+                all_entities.append(entity)
+        for ticker in extracted['tickers']:
+            if ticker not in all_tickers:
+                all_tickers.append(ticker)
+
+    if saved_records:
+        try:
+            from backend.my_feed.cache_invalidation import invalidate_myfeed_caches
+
+            invalidate_myfeed_caches()
+        except Exception:
+            pass
+
+    saved_count = len(saved_records)
+    if saved_count == 0:
+        return {
+            'ok': False,
+            'reply': format_needs_text_reply(),
+            'record': None,
+            'saved_count': 0,
+            'duplicate': duplicate_count > 0,
+            'message': 'Could not read market news clearly. Paste text instead.',
+        }
+
+    primary = saved_records[-1]
+    return {
+        'ok': True,
+        'reply': format_saved_reply(
+            primary,
+            ignored_private_items=total_ignored,
+            items_found=saved_count,
+            all_entities=all_entities,
+            ticker_list=all_tickers,
+            suggested_actions=all_actions,
+        ),
+        'record': primary,
+        'records': saved_records,
+        'duplicate': duplicate_count > 0 and saved_count == 0,
+        'saved_count': saved_count,
+        'message': f'Saved {saved_count} item{"s" if saved_count != 1 else ""}',
+    }
+
+
+def _ingest_ocr_payload(ocr: dict[str, Any], *, source: str) -> dict[str, Any]:
     if ocr.get('needs_text') or not ocr.get('ok'):
         return {
             'ok': False,
@@ -321,8 +469,12 @@ def ingest_screenshot_bytes(image_bytes: bytes, *, source: str = 'gui_screenshot
             'message': 'Could not read market news clearly. Paste text instead.',
         }
 
-    notifications = list(ocr.get('notifications') or [])
+    vision_items = list(ocr.get('vision_items') or [])
     ignored_private = int(ocr.get('ignored_private_count') or 0)
+    if vision_items:
+        return ingest_vision_items(vision_items, source=source, ignored_private_items=ignored_private)
+
+    notifications = list(ocr.get('notifications') or [])
     if len(notifications) > 1:
         return ingest_notifications(
             notifications,
@@ -341,6 +493,13 @@ def ingest_screenshot_bytes(image_bytes: bytes, *, source: str = 'gui_screenshot
         'saved_count': 0,
         'message': 'Could not read market news clearly. Paste text instead.',
     }
+
+
+def ingest_screenshot_bytes(image_bytes: bytes, *, source: str = 'gui_screenshot') -> dict[str, Any]:
+    from backend.my_feed.image_extraction import extract_market_text_from_image_bytes
+
+    ocr = extract_market_text_from_image_bytes(image_bytes)
+    return _ingest_ocr_payload(ocr, source=source)
 
 
 def ingest_feed_content(
@@ -363,28 +522,13 @@ def ingest_feed_content(
                 'message': 'Could not read market news clearly. Paste text instead.',
             }
         resolved_source = 'telegram_screenshot' if source.startswith('telegram') else 'gui_screenshot'
-        notifications = list(ocr.get('notifications') or [])
-        ignored_private = int(ocr.get('ignored_private_count') or 0)
-        if caption:
-            notifications = notifications + [caption] if notifications else [caption]
-        if len(notifications) > 1:
-            return ingest_notifications(
-                notifications,
-                source=resolved_source,
-                ignored_private_items=ignored_private,
-            )
-        if notifications:
-            return ingest_text(notifications[0], source=resolved_source)
-        combined = str(ocr.get('text') or '').strip()
-        if combined:
-            return ingest_text(combined, source=resolved_source)
-        return {
-            'ok': False,
-            'reply': format_needs_text_reply(),
-            'record': None,
-            'saved_count': 0,
-            'message': 'Could not read market news clearly. Paste text instead.',
-        }
+        if caption and not list(ocr.get('vision_items') or []):
+            notifications = list(ocr.get('notifications') or [])
+            if caption:
+                notifications = notifications + [caption] if notifications else [caption]
+            ocr = dict(ocr)
+            ocr['notifications'] = notifications
+        return _ingest_ocr_payload(ocr, source=resolved_source)
     if not caption:
         return {
             'ok': False,
@@ -409,7 +553,10 @@ def scan_feed_summary(*, today_only: bool = False) -> dict[str, Any]:
     return {
         'total': len(items),
         'high_impact': sum(1 for i in items if float(i.get('impact_score') or 0) >= 70),
-        'risk_alerts': sum(1 for i in items if i.get('suggested_action') == 'RISK ALERT'),
+        'risk_alerts': sum(
+            1 for i in items
+            if str(i.get('suggested_action') or '') in {'MARKET RISK ALERT', 'AVOID / RISK WATCH', 'COMMODITY RISK ALERT'}
+        ),
         'watch_items': sum(1 for i in items if i.get('suggested_action') == 'WATCH FOR CONFIRMATION'),
         'items': items,
     }
