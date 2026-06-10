@@ -9349,7 +9349,7 @@
     if (!rows.length) {
       return `<div class="empty-state-panel compact myfeed-empty-state">
         <p>No My Feed items yet. Add news from Telegram or GUI.</p>
-        <small>Send market text via Telegram: /feed news &lt;text&gt;</small>
+        <small>Send market text via Telegram: /feed &lt;text&gt;</small>
       </div>`
     }
     let html = `<div class="glass-card"><h2>📥 My Feed (${rows.length})</h2>`
@@ -9435,7 +9435,8 @@
             </div>
             <div class="myfeed-summary">${escapeHtml(item.cleaned_summary || item.raw_market_text || '')}</div>
             <div class="myfeed-meta">
-              <span>${escapeHtml(item.detected_source_app || item.source || '—')}</span>
+              <span>source: ${escapeHtml(item.source || '—')}</span>
+              <span>app: ${escapeHtml(item.detected_source_app || '—')}</span>
               <span>tickers: ${escapeHtml(tickers)}</span>
               <span>themes: ${escapeHtml(themes)}</span>
               <span>${escapeHtml(item.created_at || '')}</span>
@@ -9447,7 +9448,39 @@
       container.innerHTML = html
       const submitBtn = document.getElementById('myFeedTextSubmit')
       const textInput = document.getElementById('myFeedTextInput')
+      const uploadScreenshotFile = async (file) => {
+        if (!file) return
+        container.innerHTML = '<div class="loading">⏳ Extracting screenshot…</div>'
+        const form = new FormData()
+        form.append('file', file)
+        try {
+          const upRes = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/myfeed/screenshot', {
+            method: 'POST',
+            headers: apiHeaders(),
+            body: form,
+          })
+          const body = await upRes.json().catch(() => ({}))
+          if (!upRes.ok || body.ok === false) {
+            alert(String(body.reply || 'Could not read screenshot clearly. Paste text instead.'))
+          }
+          await loadMyFeedMain()
+        } catch (err) {
+          alert('Screenshot ingest failed: ' + err.message)
+          await loadMyFeedMain()
+        }
+      }
       if (submitBtn && textInput) {
+        textInput.addEventListener('paste', async (e) => {
+          const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : []
+          for (const item of items) {
+            if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
+              e.preventDefault()
+              const file = item.getAsFile()
+              await uploadScreenshotFile(file)
+              return
+            }
+          }
+        })
         submitBtn.addEventListener('click', async () => {
           const text = String(textInput.value || '').trim()
           if (!text) return
@@ -9472,24 +9505,8 @@
       if (shotInput) {
         shotInput.addEventListener('change', async () => {
           const file = shotInput.files && shotInput.files[0]
-          if (!file) return
-          const form = new FormData()
-          form.append('file', file)
-          try {
-            const upRes = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/myfeed/screenshot', {
-              method: 'POST',
-              headers: apiHeaders(),
-              body: form,
-            })
-            const body = await upRes.json()
-            if (!upRes.ok || !body.ok) {
-              alert(String(body.reply || 'Could not read screenshot clearly. Paste text instead.'))
-            }
-            shotInput.value = ''
-            await loadMyFeedMain()
-          } catch (err) {
-            alert('Screenshot ingest failed: ' + err.message)
-          }
+          shotInput.value = ''
+          await uploadScreenshotFile(file)
         })
       }
     } catch (err) {

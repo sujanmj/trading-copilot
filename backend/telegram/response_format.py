@@ -1129,7 +1129,7 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
                 tickers = ', '.join(row.get('tickers') or []) or '—'
                 lines.append(f'- {tickers}: {summary}')
     else:
-        lines.append('- no active items — use /feed news or GUI My Feed')
+        lines.append('- no active items — use /feed or GUI My Feed')
 
     calib = payloads.get('calib') or {}
     cal_summary = calib.get('summary') or {}

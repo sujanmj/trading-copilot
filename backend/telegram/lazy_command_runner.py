@@ -620,14 +620,12 @@ def run_budget_only(args: str = '') -> dict[str, Any]:
     return _runner_result('budget', text=text)
 
 
-def run_feed_news_only(args: str = '') -> dict[str, Any]:
+def run_feed_text_only(args: str = '') -> dict[str, Any]:
     from backend.my_feed.feed_processor import ingest_text
 
     text_blob = str(args or '').strip()
-    if text_blob.lower().startswith('news'):
-        text_blob = text_blob[4:].strip()
     result = ingest_text(text_blob, source='telegram_text')
-    return _runner_result('feed_news', text=result.get('reply') or 'MY_FEED_NEEDS_TEXT', payload=result)
+    return _runner_result('feed_text', text=result.get('reply') or 'MY_FEED_NEEDS_TEXT', payload=result)
 
 
 def run_myfeed_only(args: str = '') -> dict[str, Any]:
@@ -635,7 +633,10 @@ def run_myfeed_only(args: str = '') -> dict[str, Any]:
     from backend.my_feed.telegram_handlers import format_myfeed_list, format_myfeed_scan
 
     sub = str(args or '').strip().lower()
-    if sub == 'today':
+    if sub in ('', 'list'):
+        items = list_feed_items(limit=12, today_only=False)
+        text = format_myfeed_list(items, title='My Feed (latest)')
+    elif sub == 'today':
         items = list_feed_items(limit=12, today_only=True)
         text = format_myfeed_list(items, title='My Feed (today)')
     elif sub == 'scan':
@@ -650,6 +651,5 @@ def run_myfeed_only(args: str = '') -> dict[str, Any]:
         else:
             text = f'My Feed item not found: <code>{feed_id}</code>'
     else:
-        items = list_feed_items(limit=12, today_only=False)
-        text = format_myfeed_list(items)
+        text = 'Usage: /myfeed list · /myfeed today · /myfeed scan'
     return _runner_result('myfeed', text=text)

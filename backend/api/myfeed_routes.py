@@ -120,5 +120,6 @@ def register_myfeed_routes(
             'feed_id': item.get('feed_id') if item else None,
             'item': item if item else None,
             'reply': result.get('reply'),
+            'duplicate': bool(result.get('duplicate')),
             **_base_payload(),
         })

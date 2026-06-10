@@ -445,13 +445,13 @@ def apply_my_feed_evidence(
             action = str(feed.get('suggested_action') or 'NEWS ONLY')
             if action == 'WATCH FOR CONFIRMATION':
                 why = [str(w) for w in (item.get('why') or [])]
-                note = f'My Feed catalyst: {summary}' if summary else 'My Feed catalyst noted'
+                note = f'user_feed catalyst: {summary}' if summary else 'user_feed catalyst noted'
                 if note not in why:
                     why.insert(0, note)
                 item['why'] = why[:6]
-            elif action in ('RISK ALERT', 'AVOID'):
+            elif action in ('RISK ALERT', 'AVOID', 'MARKET RISK ALERT', 'RISK WATCH'):
                 risk = [str(r) for r in (item.get('risk') or [])]
-                note = f'My Feed risk: {summary}' if summary else f'My Feed {action.lower()}'
+                note = f'user_feed risk: {summary}' if summary else f'user_feed {action.lower()}'
                 if note not in risk:
                     risk.insert(0, note)
                 item['risk'] = risk[:6]
@@ -485,8 +485,8 @@ def apply_my_feed_evidence(
             item['action'] = 'WATCH_FOR_ENTRY'
 
         evidence = [str(e) for e in (item.get('evidence_notes') or [])]
-        if 'my_feed' not in evidence:
-            evidence.append('my_feed')
+        if 'user_feed' not in evidence:
+            evidence.append('user_feed')
         item['evidence_notes'] = evidence[:4]
         updated.append(item)
     return updated

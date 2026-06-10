@@ -11,6 +11,7 @@ PRIVATE_PATTERNS = (
     r'\binstagram\b',
     r'\bsnapchat\b',
     r'\bfacebook\b',
+    r'\bfriend suggestion\b',
     r'\breddit\b',
     r'\bwhatsapp\b',
     r'\btelegram\b(?!\s+news)',
@@ -31,14 +32,18 @@ PRIVATE_PATTERNS = (
     r'\botp\b',
     r'\bunrelated ad\b',
     r'\bsponsored ad\b',
+    r'\bbattery\b',
+    r'\b\d{1,2}:\d{2}\s*(am|pm)?\b',
+    r'\bhome screen\b',
 )
 
 MARKET_HINTS = (
     'nifty', 'sensex', 'bank nifty', 'stock', 'share', 'market', 'trading',
     'rbi', 'sebi', 'ipo', 'fii', 'dii', 'results', 'earnings', 'profit',
     'loss', 'target', 'upgrade', 'downgrade', 'sector', 'crude', 'gold',
+    'silver', 'silverm', 'moil', 'commodity', 'geopolitical', 'wipro',
     'inflation', 'gdp', 'budget', 'fed', 'rate cut', 'rate hike', 'index',
-    'bse', 'nse', 'mutual fund', 'bond', 'yield', 'rupee', 'dollar',
+    'bse', 'nse', 'mutual fund', 'bond', 'yield', 'rupee', 'dollar', 'jv',
 )
 
 APP_HINTS = {

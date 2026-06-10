@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests — My Feed no image persistence (Stage 50A hotfix)."""
+"""Unit tests — My Feed no image persistence (Stage 50B final)."""
 
 from __future__ import annotations
 
@@ -21,14 +21,16 @@ def main() -> int:
     if 'image_path' in db_src.lower() and 'pop(\'image_path\'' not in db_src:
         return _fail('schema must not persist image_path')
 
-    routes = (PROJECT_ROOT / 'backend/api/myfeed_routes.py').read_text(encoding='utf-8')
     processor = (PROJECT_ROOT / 'backend/my_feed/feed_processor.py').read_text(encoding='utf-8')
+    extraction = (PROJECT_ROOT / 'backend/my_feed/image_extraction.py').read_text(encoding='utf-8')
     ocr = (PROJECT_ROOT / 'backend/my_feed/screenshot_ocr.py').read_text(encoding='utf-8')
 
     if 'sanitize_item_for_api' not in processor:
         return _fail('feed_processor must sanitize API items')
-    if 'os.remove' not in ocr:
-        return _fail('screenshot OCR must delete temp file')
+    if 'os.remove' not in extraction or 'finally' not in extraction:
+        return _fail('image_extraction must delete temp file in finally block')
+    if 'extract_market_text_from_image_bytes' not in ocr:
+        return _fail('screenshot_ocr must delegate to shared image_extraction helper')
     if 'image_path' not in processor:
         return _fail('processor must strip image_path from API payload')
 

@@ -36,12 +36,19 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
         sentiment = 'bearish'
 
     event_type = 'news'
+    themes: list[str] = []
     if any(w in lower for w in ('results', 'earnings', 'q1', 'q2', 'q3', 'q4')):
         event_type = 'results'
+    elif any(w in lower for w in ('geopolitical', 'war', 'conflict', 'sanction', 'ceasefire')):
+        event_type = 'geopolitical'
+        themes.append('geopolitical')
     elif any(w in lower for w in ('rbi', 'sebi', 'policy', 'budget', 'rate')):
         event_type = 'macro'
-    elif any(w in lower for w in ('block deal', 'insider', 'stake')):
+    elif any(w in lower for w in ('block deal', 'insider', 'stake', 'jv')):
         event_type = 'corporate_action'
+    elif any(w in lower for w in ('crude', 'gold', 'silver', 'commodity', 'oil')):
+        event_type = 'commodity'
+        themes.append('commodity')
 
     impact_score = min(
         100.0,
@@ -53,14 +60,22 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     elif impact_score < 45:
         urgency = 'low'
 
-    if sentiment == 'bearish' or any(w in lower for w in ('avoid', 'fraud', 'default', 'downgrade')):
+    suggested_action = 'NEWS ONLY'
+    if event_type == 'geopolitical':
+        suggested_action = 'MARKET RISK ALERT'
+    elif event_type == 'commodity' and impact_score >= 55:
+        suggested_action = 'RISK ALERT'
+        themes.append('watch related stocks')
+    elif sentiment == 'bearish' or any(w in lower for w in ('avoid', 'fraud', 'default', 'downgrade', 'breakdown')):
         suggested_action = 'AVOID'
+    elif any(w in lower for w in ('fall', 'drop', 'weak')):
+        suggested_action = 'RISK WATCH'
     elif any(w in lower for w in ('risk', 'volatility', 'uncertain')):
         suggested_action = 'RISK ALERT'
-    elif event_type == 'macro':
-        suggested_action = 'NEWS ONLY'
+    elif sentiment == 'bullish' and impact_score >= 45:
+        suggested_action = 'WATCH FOR CONFIRMATION'
     elif impact_score < 45:
-        suggested_action = 'WAIT'
+        suggested_action = 'NEWS ONLY'
     else:
         suggested_action = 'WATCH FOR CONFIRMATION'
 
@@ -70,8 +85,10 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
         'impact_score': round(impact_score, 1),
         'urgency': urgency,
         'suggested_action': suggested_action,
-        'confirmation_required': suggested_action in {'WATCH FOR CONFIRMATION', 'RISK ALERT'},
-        'themes': [],
+        'confirmation_required': suggested_action in {
+            'WATCH FOR CONFIRMATION', 'RISK ALERT', 'MARKET RISK ALERT', 'RISK WATCH',
+        },
+        'themes': themes,
         'sectors': [],
     }
 
@@ -92,7 +109,7 @@ def format_needs_text_reply() -> str:
     return '\n'.join([
         'MY_FEED_NEEDS_TEXT',
         'Could not read screenshot clearly. Please send:',
-        '/feed news <news text>',
+        '/feed <market news text>',
     ])
 
 
@@ -144,12 +161,39 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
 
 
 def ingest_screenshot_bytes(image_bytes: bytes, *, source: str = 'gui_screenshot') -> dict[str, Any]:
-    from backend.my_feed.screenshot_ocr import extract_text_from_image_bytes
+    from backend.my_feed.image_extraction import extract_market_text_from_image_bytes
 
-    ocr = extract_text_from_image_bytes(image_bytes)
+    ocr = extract_market_text_from_image_bytes(image_bytes)
     if not ocr.get('ok') or not str(ocr.get('text') or '').strip():
         return {'ok': False, 'reply': format_needs_text_reply(), 'record': None}
-    return ingest_text(str(ocr['text']), source=source)
+    return ingest_text(str(ocr.get('text') or ''), source=source)
+
+
+def ingest_feed_content(
+    *,
+    text: str = '',
+    image_bytes: bytes | None = None,
+    source: str = 'telegram_text',
+) -> dict[str, Any]:
+    parts: list[str] = []
+    if image_bytes:
+        from backend.my_feed.image_extraction import extract_market_text_from_image_bytes
+
+        ocr = extract_market_text_from_image_bytes(image_bytes)
+        if not ocr.get('ok'):
+            return {'ok': False, 'reply': format_needs_text_reply(), 'record': None}
+        if str(ocr.get('text') or '').strip():
+            parts.append(str(ocr['text']))
+    caption = str(text or '').strip()
+    if caption:
+        parts.append(caption)
+    combined = '\n'.join(p for p in parts if p).strip()
+    if not combined:
+        return {'ok': False, 'reply': format_needs_text_reply(), 'record': None}
+    resolved_source = source
+    if image_bytes:
+        resolved_source = 'telegram_screenshot' if source.startswith('telegram') else 'gui_screenshot'
+    return ingest_text(combined, source=resolved_source)
 
 
 def list_feed_items(*, limit: int = 20, today_only: bool = False, status: str = 'active') -> list[dict[str, Any]]:

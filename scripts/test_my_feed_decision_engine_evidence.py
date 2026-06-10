@@ -48,12 +48,12 @@ def main() -> int:
             updated = apply_my_feed_evidence(ranked, registry={})
             row = updated[0]
             why_blob = ' '.join(row.get('why') or [])
-            if 'My Feed catalyst' not in why_blob:
-                return _fail('expected My Feed catalyst note in why')
+            if 'user_feed catalyst' not in why_blob:
+                return _fail('expected user_feed catalyst note in why')
             if int(row.get('score') or 0) <= 48:
                 return _fail('expected small score bump from My Feed evidence')
-            if 'my_feed' not in (row.get('evidence_notes') or []):
-                return _fail('expected evidence_notes to include my_feed')
+            if 'user_feed' not in (row.get('evidence_notes') or []):
+                return _fail('expected evidence_notes to include user_feed')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

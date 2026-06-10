@@ -44,7 +44,7 @@ from backend.telegram.lazy_command_runner import (
     run_scan_only,
     run_theme_only,
     run_budget_only,
-    run_feed_news_only,
+    run_feed_text_only,
     run_myfeed_only,
 )
 from backend.telegram.response_format import (
@@ -107,11 +107,10 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /aihub brain full — full brain details
 
 <b>My Feed:</b>
-/feed news &lt;text&gt; — store market text
-/myfeed — list recent
-/myfeed today — today only
-/myfeed scan — scan/triage summary
-/myfeed archive &lt;feed_id&gt;
+/feed — add market news text or screenshot
+/myfeed list — latest saved feed
+/myfeed today — today's feed
+/myfeed scan — tickers/themes impact
 
 <b>Briefs:</b>
 /news — news only
@@ -207,21 +206,22 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'resolve', 'outcomes'
     if lower == 'outcomes':
         return 'outcomes', ''
-    if lower.startswith('feed news'):
-        parts = raw.split(maxsplit=2)
-        return 'feed', parts[2] if len(parts) >= 3 else 'news'
+    if lower == 'feed':
+        return 'feed', ''
+    if lower in ('feed news', 'myfeed add', 'myfeed news'):
+        return 'removed_feed_alias', raw
+    if lower.startswith('feed news ') or lower.startswith('myfeed add ') or lower.startswith('myfeed news '):
+        return 'removed_feed_alias', raw
     if lower.startswith('feed '):
         return 'feed', raw[5:].strip()
+    if lower == 'myfeed list':
+        return 'myfeed', 'list'
     if lower == 'myfeed today':
         return 'myfeed', 'today'
     if lower == 'myfeed scan':
         return 'myfeed', 'scan'
     if lower.startswith('myfeed archive'):
         return 'myfeed', raw[len('myfeed archive'):].strip()
-    if lower.startswith('myfeed '):
-        return 'myfeed', raw.split(maxsplit=1)[1].strip()
-    if lower == 'myfeed':
-        return 'myfeed', ''
     parts = raw.split(maxsplit=1)
     cmd = parts[0].lower() if parts else ''
     args = parts[1] if len(parts) > 1 else ''
@@ -250,16 +250,63 @@ def _split_multiline_commands(text: str) -> list[str] | None:
     return lines
 
 
+def handle_telegram_update(
+    message: dict[str, Any],
+    from_user: str = 'unknown',
+    *,
+    dry_run: bool = False,
+    chat_id: str | None = None,
+) -> list[dict[str, Any]]:
+    return handle_incoming_telegram_message(
+        message,
+        from_user,
+        dry_run=dry_run,
+        chat_id=chat_id,
+    )
+
+
+def handle_incoming_telegram_message(
+    message: dict[str, Any],
+    from_user: str = 'unknown',
+    *,
+    dry_run: bool = False,
+    chat_id: str | None = None,
+) -> list[dict[str, Any]]:
+    from backend.telegram.feed_pending_state import is_feed_pending
+    from backend.telegram.my_feed_intake import is_feed_caption, message_has_image, process_feed_message
+
+    resolved_chat_id = chat_id or str((message.get('chat') or {}).get('id') or 'default')
+    feed_reply = process_feed_message(message, dry_run=dry_run)
+    if feed_reply is not None:
+        return [send_analysis_message(feed_reply, command='feed', dry_run=dry_run)]
+
+    caption = str(message.get('caption') or '').strip()
+    if message_has_image(message) and not is_feed_caption(caption) and not is_feed_pending(resolved_chat_id):
+        return []
+
+    msg_text = str(message.get('text') or '').strip()
+    if not msg_text:
+        return []
+
+    return handle_message(
+        msg_text,
+        from_user,
+        dry_run=dry_run,
+        chat_id=resolved_chat_id,
+    )
+
+
 def handle_message(
     text: str,
     from_user: str = 'unknown',
     *,
     dry_run: bool = False,
+    chat_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Process one Telegram message — supports up to 3 slash commands per message."""
     commands = _split_multiline_commands(text)
     if commands is None:
-        return handle_analysis_command(text, from_user, dry_run=dry_run)
+        return handle_analysis_command(text, from_user, dry_run=dry_run, chat_id=chat_id)
     if len(commands) > 3:
         return [
             send_analysis_message(
@@ -270,7 +317,7 @@ def handle_message(
         ]
     results: list[dict[str, Any]] = []
     for command in commands:
-        results.extend(handle_analysis_command(command, from_user, dry_run=dry_run))
+        results.extend(handle_analysis_command(command, from_user, dry_run=dry_run, chat_id=chat_id))
     return results
 
 
@@ -425,7 +472,7 @@ def _handle_health() -> str:
 
         lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
     except Exception:
-        lines.append('Telegram build: <code>AstraEdge 50A</code>')
+        lines.append('Telegram build: <code>AstraEdge 50B</code>')
     return '\n'.join(lines)
 
 
@@ -548,6 +595,7 @@ def handle_analysis_command(
     *,
     dry_run: bool = False,
     in_full_snapshot: bool = False,
+    chat_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Process one command; returns list of send results (supports dry_run)."""
     from backend.telegram.telegram_command_normalize import (
@@ -569,6 +617,10 @@ def handle_analysis_command(
     if cmd in BLOCKED_TRADE_COMMANDS:
         trade_text = BLOCKED_TRADE_RESPONSE
         return [send_analysis_message(trade_text, command=cmd, dry_run=dry_run)]
+
+    if cmd == 'removed_feed_alias':
+        response_text = 'Use /feed <market news text> or send /feed then a screenshot.'
+        return [send_analysis_message(response_text, command='feed', dry_run=dry_run)]
 
     if cmd == 'full' and not in_full_snapshot:
         return _handle_full_snapshot(dry_run=dry_run)
@@ -656,11 +708,15 @@ def handle_analysis_command(
     elif cmd == 'theme':
         response_text = run_without_ai(lambda: run_theme_only(args), command='theme').get('text') or run_theme_only(args).get('text') or 'Theme baskets unavailable.'
     elif cmd == 'feed':
-        sub = (args or '').strip().lower()
-        if not sub.startswith('news') and not sub:
-            response_text = 'Usage: /feed news &lt;market text&gt;'
+        from backend.telegram.feed_pending_state import set_feed_pending
+        from backend.telegram.my_feed_intake import FEED_PENDING_REPLY
+
+        text_blob = str(args or '').strip()
+        if not text_blob:
+            set_feed_pending(str(chat_id or 'default'))
+            response_text = FEED_PENDING_REPLY
         else:
-            result = run_without_ai(lambda: run_feed_news_only(args), command='feed_news')
+            result = run_without_ai(lambda: run_feed_text_only(args), command='feed_text')
             response_text = result.get('text') or 'MY_FEED_NEEDS_TEXT'
     elif cmd == 'myfeed':
         result = run_without_ai(lambda: run_myfeed_only(args), command='myfeed')
@@ -751,14 +807,13 @@ def listen_forever(*, on_command: Callable[[str, str], None] | None = None) -> N
                 if msg_chat_id != str(CHAT_ID):
                     safe_print(f'[TG_ANALYSIS] ignored chat {msg_chat_id}')
                     continue
-                msg_text = str(message.get('text') or '').strip()
                 from_user = str((message.get('from') or {}).get('username') or 'unknown')
-                if not msg_text:
-                    continue
                 if on_command:
-                    on_command(msg_text, from_user)
+                    msg_text = str(message.get('text') or '').strip()
+                    if msg_text:
+                        on_command(msg_text, from_user)
                 else:
-                    handle_message(msg_text, from_user)
+                    handle_incoming_telegram_message(message, from_user, chat_id=msg_chat_id)
             if not updates:
                 time.sleep(1)
         except KeyboardInterrupt:
