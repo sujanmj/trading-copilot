@@ -57,6 +57,26 @@ _MARKET_STALE_WARNING_TOKENS = frozenset({
 _EMPTY_BULLET_VALUES = frozenset({'', '—', '-', '–', 'null', 'none', 'undefined', 'n/a'})
 
 
+def normalize_bullet_items(value: Any) -> list[str]:
+    """Normalize why/wait fields — never iterate strings char-by-char."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if ';' in text:
+            return [part.strip() for part in text.split(';') if part.strip()]
+        return [text]
+    if isinstance(value, (list, tuple)):
+        out: list[str] = []
+        for item in value:
+            out.extend(normalize_bullet_items(item))
+        return out
+    text = str(value).strip()
+    return [text] if text else []
+
+
 def format_cache_age_label(
     age_minutes: int,
     *,
@@ -874,19 +894,19 @@ def format_why_ticker(ticker: str, *, mode: str = 'today') -> str:
         '',
         '<b>Why:</b>',
     ]
-    for item in row.get('why') or []:
+    for item in normalize_bullet_items(row.get('why')):
         lines.append(f'• {item}')
     if row.get('risk'):
         lines.extend(['', '<b>Risk:</b>'])
-        for item in row.get('risk') or []:
+        for item in normalize_bullet_items(row.get('risk')):
             lines.append(f'• {item}')
     if row.get('confirmation_needed'):
         lines.extend(['', '<b>Wait for:</b>'])
-        for item in row.get('confirmation_needed') or []:
+        for item in normalize_bullet_items(row.get('confirmation_needed')):
             lines.append(f'• {item}')
     if row.get('invalid_if'):
         lines.extend(['', '<b>Invalid if:</b>'])
-        for item in row.get('invalid_if') or []:
+        for item in normalize_bullet_items(row.get('invalid_if')):
             lines.append(f'• {item}')
     supports = row.get('supports') or []
     if supports:
@@ -903,13 +923,16 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
     summary = payload.get('summary') or {}
     items = payload.get('items') or []
     stale_cache = _aihub_payload_is_stale(payload)
+    tab_label = key.capitalize() if key != 'scan' else 'Scan'
+    age_mins = int(payload.get('cache_age_seconds') or 0) // 60
+    age_line = format_cache_age_label(age_mins)
     lines = [
         f'<b>AI Hub · {key}</b>',
-        f"Source: {payload.get('source', '—')} · cache age: "
-        f"{format_cache_age_label(int(payload.get('cache_age_seconds') or 0) // 60)}",
+        f"Source: {payload.get('source', '—')} · {tab_label} cache: {age_line}",
     ]
     if stale_cache and key in ('news', 'global', 'brain', 'govt', 'market'):
-        lines.extend(_stale_aihub_prefix_lines())
+        lines.append(f'{tab_label} cache stale — research only')
+        lines.extend(_stale_aihub_prefix_lines()[1:])
     if key == 'brain':
         warn_tokens = {str(w) for w in (payload.get('warnings') or [])}
         if 'Runtime snapshot missing; using report cache.' in warn_tokens:
@@ -1119,18 +1142,6 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     else:
         lines.append('- empty')
 
-    myfeed = payloads.get('myfeed') or {}
-    myfeed_items = myfeed.get('items') or []
-    lines.append('<b>🗞 My Feed</b>')
-    if myfeed_items:
-        for row in myfeed_items[:3]:
-            if isinstance(row, dict):
-                summary = str(row.get('cleaned_summary') or row.get('raw_market_text') or '—')[:100]
-                tickers = ', '.join(row.get('tickers') or []) or '—'
-                lines.append(f'- {tickers}: {summary}')
-    else:
-        lines.append('- no active items — use /feed or GUI My Feed')
-
     calib = payloads.get('calib') or {}
     cal_summary = calib.get('summary') or {}
     cal = cal_summary.get('confidence_calibration') or {}
@@ -1333,7 +1344,7 @@ def format_action_plan_telegram() -> str:
             lines.append('• No clean live candidate')
 
     lines.extend(['', '<b>Why:</b>'])
-    why_items = (top.get('why') or [])[:4] if top else []
+    why_items = normalize_bullet_items(top.get('why') if top else None)[:4]
     if why_items:
         for item in why_items:
             lines.append(f'• {item}')
@@ -1341,11 +1352,13 @@ def format_action_plan_telegram() -> str:
         lines.append('• Review confluence sources before acting')
 
     lines.extend(['', '<b>Wait for:</b>'])
-    wait_items = (top.get('confirmation_needed') or [])[:4] if top else [
-        'price confirmation',
-        'volume confirmation',
-        'market not stale',
-    ]
+    wait_items = normalize_bullet_items(top.get('confirmation_needed') if top else None)[:4]
+    if not wait_items:
+        wait_items = normalize_bullet_items([
+            'price confirmation',
+            'volume confirmation',
+            'market not stale',
+        ])[:4]
     for item in wait_items:
         lines.append(f'• {item}')
 
@@ -1462,7 +1475,7 @@ def format_aihub_brain_full() -> str:
 
     lines.extend(['', '<b>5. Reasons/supports</b>'])
     if top:
-        for w in (top.get('why') or [])[:4]:
+        for w in normalize_bullet_items(top.get('why'))[:4]:
             lines.append(f'• {w}')
         supports = top.get('supports') or []
         if supports:
@@ -1473,7 +1486,7 @@ def format_aihub_brain_full() -> str:
     lines.extend(['', '<b>6. Risks/blocks</b>'])
     risk_lines = 0
     if top:
-        for r in (top.get('risk') or [])[:4]:
+        for r in normalize_bullet_items(top.get('risk'))[:4]:
             lines.append(f'• {r}')
             risk_lines += 1
     for fw in (brain_summary.get('failed_strong_warnings') or [])[:3]:
@@ -1529,7 +1542,7 @@ def format_aihub_brain_full() -> str:
 
     lines.extend(['', '<b>10. Confirmation checklist</b>'])
     if top:
-        for c in (top.get('confirmation_needed') or [])[:5]:
+        for c in normalize_bullet_items(top.get('confirmation_needed'))[:5]:
             lines.append(f'• {c}')
     else:
         lines.append('• Price/volume confirmation before entry')

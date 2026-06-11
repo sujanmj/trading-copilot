@@ -20,6 +20,10 @@ MYFEED_SUBCOMMAND_USAGE = (
     'Use /myfeed list · /myfeed today · /myfeed scan'
 )
 
+MYFEED_CLEAN_OLD_USAGE = (
+    'Usage: /myfeed clean-old — archive pre-50G image/OCR dirty rows (admin only)'
+)
+
 
 def message_has_image(message: dict[str, Any]) -> bool:
     if message.get('photo'):

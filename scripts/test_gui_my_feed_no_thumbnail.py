@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests — AI Hub My Feed tab has no image thumbnails (Stage 50A)."""
+"""Unit tests — standalone My Feed workspace has no image thumbnails (Stage 50H)."""
 
 from __future__ import annotations
 
@@ -21,30 +21,34 @@ def main() -> int:
     src = (PROJECT_ROOT / 'frontend/index.html').read_text(encoding='utf-8')
 
     for needle in (
-        'data-tab="myfeed"',
-        'My Feed',
-        'id="tab-myfeed"',
-        'function loadMyFeed',
+        'myFeedNavBtn',
+        'myFeedMainContent',
+        'async function loadMyFeedMain',
         '/api/myfeed',
-        'renderMyFeedAihubHtml',
+        'Text-only market feed',
     ):
         if needle not in src:
-            return _fail(f'index.html missing {needle!r}')
+            return _fail(f'index.html missing standalone My Feed marker {needle!r}')
+
+    if re.search(r'data-tab=["\']myfeed["\']', src):
+        return _fail('My Feed must not be an AI Hub tab (standalone workspace only)')
+    if 'renderMyFeedAihubHtml' in src or 'function loadMyFeed(' in src:
+        return _fail('AI Hub My Feed render/load helpers must be removed')
 
     if re.search(r'data-tab=["\']reddit["\']', src):
         return _fail('AI Hub must not expose reddit tab')
     if 'reddit: loadReddit' in src.replace(' ', ''):
         return _fail('TAB_PANEL_LOADERS must not wire loadReddit')
 
-    start = src.find('function renderMyFeedAihubHtml')
-    end = src.find('async function loadMyFeedMain', start)
+    start = src.find('async function loadMyFeedMain')
+    end = src.find('window.loadMyFeedMain = loadMyFeedMain', start)
     if start < 0 or end < 0:
-        return _fail('could not locate My Feed render block')
+        return _fail('could not locate standalone My Feed render block')
     block = src[start:end]
     if re.search(r'<img\b', block, re.I):
-        return _fail('My Feed AI Hub render must not use img tags')
+        return _fail('standalone My Feed render must not use img tags')
     if 'thumbnail' in block.lower():
-        return _fail('My Feed AI Hub render must not mention thumbnails')
+        return _fail('standalone My Feed render must not mention thumbnails')
 
     print('GUI_MY_FEED_NO_THUMBNAIL_TEST_OK')
     return 0

@@ -111,6 +111,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /myfeed list — latest saved feed
 /myfeed today — today's feed
 /myfeed scan — tickers/themes impact
+/myfeed clean-old — archive dirty image/OCR rows (admin)
 
 <b>Briefs:</b>
 /news — news only
@@ -227,6 +228,8 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'myfeed', 'today'
     if lower == 'myfeed scan':
         return 'myfeed', 'scan'
+    if lower == 'myfeed clean-old' or lower == 'myfeed clean old':
+        return 'myfeed', 'clean-old'
     if lower == 'myfeed reprocess':
         return 'myfeed', 'reprocess'
     if lower.startswith('myfeed archive'):
@@ -739,6 +742,17 @@ def handle_analysis_command(
                     command='myfeed_reprocess',
                 )
                 response_text = result.get('text') or 'MYFEED_REPROCESS_OK'
+        elif sub in ('clean-old', 'clean old'):
+            if not _is_telegram_admin(from_user):
+                response_text = 'Unauthorized — My Feed clean-old is admin-only.'
+            else:
+                from backend.my_feed.clean_old import clean_old_my_feed_items, format_clean_old_reply
+
+                result = run_without_ai(
+                    lambda: {'text': format_clean_old_reply(clean_old_my_feed_items(apply=True))},
+                    command='myfeed_clean_old',
+                )
+                response_text = result.get('text') or 'MYFEED_CLEAN_OLD_OK'
         elif sub in ('list', 'today', 'scan'):
             result = run_without_ai(lambda: run_myfeed_only(sub), command='myfeed')
             response_text = result.get('text') or 'My Feed unavailable.'

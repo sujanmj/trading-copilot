@@ -25,7 +25,7 @@
   const STALE_PLANNING_MSG = 'Refresh intelligence before next-session planning.';
 
   const FETCH_MS = 15000;
-  const NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.';
+  const NON_JSON_ERROR = 'API JSON unavailable — endpoint returned HTML. Check API base/path.';
 
 
 

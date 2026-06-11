@@ -7,7 +7,7 @@
 
   const ROUTER_SOURCE = '/api/debug/market-router';
   const FETCH_MS = 15000;
-  const NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.';
+  const NON_JSON_ERROR = 'API JSON unavailable — endpoint returned HTML. Check API base/path.';
 
   let config = {
     getApiBase: () => '',

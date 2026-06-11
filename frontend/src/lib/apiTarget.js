@@ -114,7 +114,7 @@ export function logApiTarget(base) {
   console.log('[API_TARGET] resolved=' + resolved + ' mode=' + mode)
 }
 
-const NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.'
+const NON_JSON_ERROR = 'API JSON unavailable — endpoint returned HTML. Check API base/path.'
 
 export function isJsonContentType(contentType) {
   return String(contentType || '').toLowerCase().includes('application/json')

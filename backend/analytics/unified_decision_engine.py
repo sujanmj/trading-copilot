@@ -311,6 +311,7 @@ def apply_live_guard_to_ranked(
     reg = registry if registry is not None else build_live_rejection_set()
     meta = freshness_meta if freshness_meta is not None else get_feed_freshness_meta()
     warnings: list[str] = []
+    from backend.telegram.response_format import normalize_bullet_items
 
     updated: list[dict[str, Any]] = []
     for row in ranked:
@@ -323,7 +324,7 @@ def apply_live_guard_to_ranked(
             if HARD_REJECTION_MSG not in risks:
                 risks.insert(0, HARD_REJECTION_MSG)
             item['risk'] = risks[:6]
-            why = [str(w) for w in (item.get('why') or [])]
+            why = normalize_bullet_items(item.get('why'))
             why.append(f'Live rejection: {reason[:80]}')
             item['why'] = why[:6]
         updated.append(item)
@@ -445,6 +446,7 @@ def apply_my_feed_evidence(
             if key:
                 by_ticker.setdefault(key, []).append(feed)
 
+    from backend.telegram.response_format import normalize_bullet_items
     updated: list[dict[str, Any]] = []
     for row in ranked:
         item = dict(row)
@@ -459,7 +461,7 @@ def apply_my_feed_evidence(
             summary = str(feed.get('cleaned_summary') or '')[:120]
             action = str(feed.get('suggested_action') or 'NEWS ONLY')
             if action in ('WATCH FOR CONFIRMATION', 'WAIT FOR CONFIRMATION'):
-                why = [str(w) for w in (item.get('why') or [])]
+                why = [str(w) for w in normalize_bullet_items(item.get('why'))]
                 note = f'user_feed catalyst: {summary}' if summary else 'user_feed catalyst noted'
                 if note not in why:
                     why.insert(0, note)
@@ -468,19 +470,20 @@ def apply_my_feed_evidence(
                 'RISK ALERT', 'AVOID', 'MARKET RISK ALERT', 'RISK WATCH',
                 'AVOID / RISK WATCH', 'COMMODITY RISK ALERT', 'OIL RISK WATCH',
             ):
-                risk = [str(r) for r in (item.get('risk') or [])]
+                risk = [str(r) for r in normalize_bullet_items(item.get('risk'))]
                 note = f'user_feed risk: {summary}' if summary else f'user_feed {action.lower()}'
                 if note not in risk:
                     risk.insert(0, note)
                 item['risk'] = risk[:6]
             elif action == 'WAIT FOR CONFIRMATION':
-                confirm = [str(c) for c in (item.get('confirmation_needed') or [])]
+                confirm = [str(c) for c in normalize_bullet_items(item.get('confirmation_needed'))]
                 confirm.append('My Feed suggests waiting for confirmation')
                 item['confirmation_needed'] = confirm[:5]
 
         if rejected:
             item['why'] = list(dict.fromkeys(
-                [*(item.get('why') or []), f'My Feed noted but live scanner rejected: {reject_reason[:80]}']
+                [*normalize_bullet_items(item.get('why')),
+                 f'My Feed noted but live scanner rejected: {reject_reason[:80]}']
             ))[:6]
             updated.append(item)
             continue

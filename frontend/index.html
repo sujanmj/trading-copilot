@@ -1546,7 +1546,6 @@
         <div class="tab" data-tab="global"><span class="tab-label">🌐 Global</span></div>
         <div class="tab" data-tab="news"><span class="tab-label">📰 News</span></div>
         <div class="tab" data-tab="tv"><span class="tab-label">📺 TV</span></div>
-        <div class="tab" data-tab="myfeed"><span class="tab-label">My Feed</span></div>
         <div class="tab" data-tab="stats"><span class="tab-label">📊 Calib</span></div>
         <div class="tab" data-tab="history"><span class="tab-label">📜 Journal</span></div>
       </div>
@@ -1564,7 +1563,6 @@
         <div class="tab-content" id="tab-global"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-news"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-tv"><div class="loading">⏳ Loading...</div></div>
-        <div class="tab-content" id="tab-myfeed"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-stats"><div class="loading">⏳ Loading...</div></div>
         <div class="tab-content" id="tab-history"><div class="loading">⏳ Loading...</div></div>
       </div>
@@ -2097,7 +2095,7 @@
 
   const TAB_REFRESH_SCOPES = {
     brain: 'runtime', govt: 'govt', scanner: 'scanner', markets: 'prices',
-    global: 'global', news: 'news', tv: 'tv', myfeed: 'myfeed',
+    global: 'global', news: 'news', tv: 'tv',
     stats: 'calibration', history: 'journal',
   }
 
@@ -2114,14 +2112,13 @@
       { path: '/api/inshorts', cacheKey: 'inshorts' },
     ],
     tv: [{ path: '/api/youtube', cacheKey: 'youtube' }],
-    myfeed: [{ path: '/api/myfeed', cacheKey: 'myfeed' }],
     stats: [{ path: '/api/stats', cacheKey: 'stats' }],
     history: [{ path: '/api/history', cacheKey: 'history' }],
   }
 
   const TAB_PANEL_LOADERS = {
     brain: loadBrain, govt: loadGovt, scanner: loadScanner, markets: loadMarkets,
-    global: loadGlobal, news: loadNews, tv: loadTV, myfeed: loadMyFeed,
+    global: loadGlobal, news: loadNews, tv: loadTV,
     stats: loadStats, history: loadHistory,
   }
 
@@ -2510,7 +2507,7 @@
   const panelHydrationState = {}
   const PANEL_TAB_MAP = {
     brain: 'tab-brain', govt: 'tab-govt', scanner: 'tab-scanner', markets: 'tab-markets',
-    global: 'tab-global', news: 'tab-news', tv: 'tab-tv', myfeed: 'tab-myfeed',
+    global: 'tab-global', news: 'tab-news', tv: 'tab-tv',
     stats: 'tab-stats', history: 'tab-history',
   }
 
@@ -2540,8 +2537,13 @@
       parts.push(key)
     }
     addPart(banner.message)
-    if (banner.stale) addPart('snapshot stale')
-    else if (banner.collectorsActive) {
+    if (banner.stale) {
+      const tabNames = {
+        brain: 'Brain', govt: 'Govt', scanner: 'Scanner', markets: 'Market',
+        global: 'Global', news: 'News', tv: 'TV', stats: 'Calib', history: 'Journal',
+      }
+      addPart(`${tabNames[panelId] || 'Tab'} cache stale`)
+    } else if (banner.collectorsActive) {
       const msgLower = String(banner.message || '').toLowerCase()
       if (!msgLower.includes('live collector') && !msgLower.includes('collectors active')) {
         addPart('live collectors active')
@@ -2716,7 +2718,6 @@
     maybeLoad('global', loadGlobal)
     maybeLoad('news', loadNews)
     maybeLoad('tv', loadTV)
-    maybeLoad('myfeed', loadMyFeed)
     maybeLoad('stats', loadStats)
     maybeLoad('history', loadHistory)
 
@@ -2890,7 +2891,7 @@
     return headers
   }
 
-  const API_NON_JSON_ERROR = 'API returned HTML/non-JSON. Check API base/path.'
+  const API_NON_JSON_ERROR = 'API JSON unavailable — endpoint returned HTML. Check API base/path.'
 
   async function astraParseJsonResponse(res, url) {
     const ct = (res.headers && res.headers.get('content-type')) || ''
@@ -2906,15 +2907,18 @@
     }
   }
 
-  async function astraFetchJson(url, options, timeoutMs) {
+  async function astraFetchJson(urlOrPath, options, timeoutMs) {
+    const target = (String(urlOrPath).startsWith('http://') || String(urlOrPath).startsWith('https://'))
+      ? String(urlOrPath)
+      : astraApiUrl(urlOrPath)
     const opts = Object.assign({ headers: astraApiHeaders(), cache: 'no-store' }, options || {})
     const ms = timeoutMs || FETCH_TIMEOUT_MS
     try {
       const res = typeof fetchWithTimeout === 'function'
-        ? await fetchWithTimeout(url, opts, ms)
-        : await fetch(url, opts)
-      if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url)
-      return await astraParseJsonResponse(res, url)
+        ? await fetchWithTimeout(target, opts, ms)
+        : await fetch(target, opts)
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + target)
+      return await astraParseJsonResponse(res, target)
     } catch (err) {
       if (err && err.name === 'AbortError') {
         throw new Error('Request timed out or was cancelled.')
@@ -2935,44 +2939,60 @@
   function updateAiHubMarketChip() {
     const el = document.getElementById('aiHubMarketChip')
     if (!el) return
-    let market = 'unknown'
-    let mode = 'Research Mode'
-    let dataLabel = ''
-    let ageLabel = ''
-    const hydrationDone = window.RuntimeManager && RuntimeManager.isHydrationFinished
-      && RuntimeManager.isHydrationFinished()
-    if (window.RuntimeManager && RuntimeManager.getState) {
-      const st = RuntimeManager.getState() || {}
-      const snap = st.snapshot || st
-      if (snap.market_status === 'open') market = 'open'
-      else if (snap.market_status === 'closed') market = 'closed'
-      mode = st.active_mode_label || st.active_mode || snap.active_mode_label || snap.active_mode || mode
+    const activeTab = ASTRA_GUI.aihubActiveTab || getActiveTabPanelId() || 'brain'
+    const tabEntry = ASTRA_GUI.aihubTabCache[activeTab]
+    const tabData = tabEntry && tabEntry.data ? tabEntry.data : null
+    const tabSummary = tabData && tabData.summary ? tabData.summary : {}
+    const tabAgeSec = tabData && tabData.cache_age_seconds != null
+      ? Number(tabData.cache_age_seconds)
+      : (tabEntry && tabEntry.loadedAt ? Math.floor((Date.now() - tabEntry.loadedAt) / 1000) : null)
+    const tabStale = !!(tabSummary.stale || tabSummary.is_stale || tabSummary.market_stale
+      || (tabAgeSec != null && tabAgeSec > 86400))
+    const tabLabels = {
+      brain: 'Brain', govt: 'Govt', scanner: 'Scan', markets: 'Market',
+      global: 'Global', news: 'News', tv: 'TV', stats: 'Calib', history: 'Journal',
     }
-    if (window.RuntimeManager && RuntimeManager.packageFreshnessLabels) {
-      const labels = RuntimeManager.packageFreshnessLabels() || {}
-      if (labels.marketStatus && labels.marketStatus !== 'unknown') market = labels.marketStatus
-      if (labels.dataLabel && labels.dataLabel !== '—') dataLabel = labels.dataLabel
-      if (labels.ageLabel && labels.ageLabel !== '—') ageLabel = labels.ageLabel
-    }
-    if (market === 'unknown') {
-      const fbMode = aihubMarketModeFromFallback(getAihubFallback())
-      if (fbMode) {
-        if (fbMode.market) market = fbMode.market
-        if (fbMode.mode) mode = fbMode.mode
+    const tabLabel = tabLabels[activeTab] || activeTab
+
+    let mode = ''
+    if (window.MarketRouterCard && MarketRouterCard.getLastReport) {
+      const router = MarketRouterCard.getLastReport() || {}
+      if (router.ok === true) {
+        mode = String(router.active_mode || router.active_mode_label || '').toUpperCase().replace(/\s+/g, '_')
       }
     }
-    if (market === 'unknown' && !hydrationDone) {
+    if (!mode) {
+      const fbMode = aihubMarketModeFromFallback(getAihubFallback(activeTab))
+      if (fbMode && fbMode.mode) {
+        mode = String(fbMode.mode).toUpperCase().replace(/\s+/g, '_')
+      }
+    }
+    if (!mode && tabData && tabData.market_mode) {
+      mode = String(tabData.market_mode).toUpperCase().replace(/\s+/g, '_')
+    }
+    if (!mode && tabSummary.market_mode) {
+      mode = String(tabSummary.market_mode).toUpperCase().replace(/\s+/g, '_')
+    }
+    if (!mode) mode = 'RESEARCH_MODE'
+
+    const hydrationDone = window.RuntimeManager && RuntimeManager.isHydrationFinished
+      && RuntimeManager.isHydrationFinished()
+    if (!hydrationDone && !tabEntry && !mode) {
       el.textContent = 'Loading market mode...'
       return
     }
-    const parts = [`Market: ${market}`]
-    if (market === 'closed' && dataLabel) {
-      parts.push(`data as-of ${dataLabel}`)
-    }
-    if (ageLabel) {
-      parts.push(`Age ${ageLabel}`)
-    } else if (mode) {
-      parts.push(mode)
+
+    const parts = []
+    if (mode && mode !== 'UNKNOWN') parts.push(mode.replace(/_/g, ' '))
+    if (tabStale) {
+      parts.push(`${tabLabel} cache stale`)
+    } else if (tabAgeSec != null) {
+      const mins = Math.floor(tabAgeSec / 60)
+      parts.push(`${tabLabel} cache ${mins < 60 ? mins + 'm' : Math.floor(mins / 60) + 'h'}`)
+    } else if (tabEntry && tabEntry.loadedAt) {
+      parts.push(`${tabLabel} ${aihubTabCacheAgeLabel(activeTab)}`)
+    } else {
+      parts.push(`${tabLabel} cache not loaded`)
     }
     el.textContent = parts.join(' · ')
   }
@@ -2988,7 +3008,6 @@
     global: 'global',
     news: 'news',
     tv: 'tv',
-    myfeed: 'myfeed',
     stats: 'calib',
     history: 'journal',
   }
@@ -3003,23 +3022,8 @@
     global: ['/api/debug/external-source-coverage', '/api/debug/daily-report-pack', '/api/runtime/snapshot'],
     news: ['/api/debug/source-feed?source=ET', '/api/debug/source-feed?source=MC', '/api/debug/source-feed?source=NDTV', '/api/debug/external-source-coverage'],
     tv: ['/api/debug/source-feed?source=ET%20Now', '/api/debug/source-feed?source=CNBC', '/api/debug/source-feed?source=NDTV', '/api/debug/external-source-coverage'],
-    myfeed: ['/api/myfeed'],
     stats: ['/api/debug/confidence-calibration', '/api/debug/final-confidence/report', '/api/debug/market-memory/dashboard', '/api/debug/daily-report-pack'],
     history: ['/api/debug/daily-report-pack', '/api/debug/final-confidence/report', '/api/debug/market-memory/dashboard'],
-  }
-
-  async function astraFetchJson(path) {
-    const base = astraApiBase()
-    const fullPath = path.startsWith('http') ? path : `${base}${path.startsWith('/') ? path : '/' + path}`
-    const sep = fullPath.indexOf('?') >= 0 ? '&' : '?'
-    const url = `${fullPath}${sep}_ts=${Date.now()}`
-    try {
-      const res = await astraFetchFeed(url)
-      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
-      return await res.json()
-    } catch (e) {
-      return { ok: false, error: (e && e.message) || String(e) }
-    }
   }
 
   function buildFallbackFromAihubPayload(tabData, base) {
@@ -3160,42 +3164,6 @@
   async function loadAihubTabData(tabId, force = false) {
     const cfg = AIHUB_TAB_CONFIG[tabId]
     if (!cfg) return {}
-    if (tabId === 'myfeed') {
-      const now = Date.now()
-      const cached = ASTRA_GUI.aihubTabCache[tabId]
-      if (!force && cached && now - cached.loadedAt < cfg.ttlMs) {
-        return cached.data
-      }
-      if (!force && ASTRA_GUI.aihubTabPromises[tabId]) {
-        return ASTRA_GUI.aihubTabPromises[tabId]
-      }
-      ASTRA_GUI.aihubTabPromises[tabId] = (async () => {
-        let data = { ok: false, tabId, items: [], count: 0, errors: [] }
-        try {
-          const payload = await astraFetchJson(`/api/myfeed?limit=50&_ts=${Date.now()}`)
-          if (payload && payload.ok !== false) {
-            data = Object.assign({ tabId }, payload)
-            apiCache.myfeed = payload
-          } else {
-            throw new Error((payload && payload.error) || 'myfeed_unavailable')
-          }
-        } catch (e) {
-          data = {
-            ok: true,
-            tabId,
-            items: [],
-            count: 0,
-            message: 'No My Feed items yet. Add news from Telegram or GUI.',
-            errors: [],
-          }
-        }
-        ASTRA_GUI.aihubTabCache[tabId] = { loadedAt: Date.now(), data }
-        return data
-      })().finally(() => {
-        delete ASTRA_GUI.aihubTabPromises[tabId]
-      })
-      return ASTRA_GUI.aihubTabPromises[tabId]
-    }
     const apiTab = cfg.apiTab || AIHUB_TAB_API_MAP[tabId]
     if (!apiTab) return {}
     const now = Date.now()
@@ -3404,11 +3372,6 @@
         const data = buildBrainDataFromSnapshot()
         return !!(data && brainHasRenderableContent(data))
       }
-      case 'myfeed': {
-        const cached = ASTRA_GUI.aihubTabCache.myfeed
-        if (cached && cached.data && Array.isArray(cached.data.items) && cached.data.items.length) return true
-        return !!(apiCache.myfeed && Array.isArray(apiCache.myfeed.items) && apiCache.myfeed.items.length)
-      }
       case 'news': {
         const newsData = loadJson(files.news)
         const inshorts = loadJson(files.inshorts)
@@ -3447,8 +3410,6 @@
     switch (pid) {
       case 'brain':
         return !!(fb.dailyReportPack || fb.finalConfidence)
-      case 'myfeed':
-        return !!(apiCache.myfeed && Array.isArray(apiCache.myfeed.items) && apiCache.myfeed.items.length)
       case 'news':
         return aihubCollectNewsFallbackItems(fb).length > 0
       case 'tv':
@@ -9342,74 +9303,15 @@
   }
 
   // ============================================================
-  // MY FEED (text-only — no image thumbnails)
+  // MY FEED (standalone workspace — text-only)
   // ============================================================
-  function renderMyFeedAihubHtml(items) {
-    const rows = Array.isArray(items) ? items : []
-    if (!rows.length) {
-      return `<div class="empty-state-panel compact myfeed-empty-state">
-        <p>No My Feed items yet. Add news from Telegram or GUI.</p>
-        <small>Send market text via Telegram: /feed &lt;text&gt;</small>
-      </div>`
-    }
-    let html = `<div class="glass-card"><h2>📥 My Feed (${rows.length})</h2>`
-    rows.forEach((item) => {
-      const tickers = (item.tickers || []).join(', ') || '—'
-      const themes = (item.themes || []).join(', ') || '—'
-      html += `<div class="news-item myfeed-item">
-        <div class="news-source">${escapeHtml(item.detected_source_app || '—')} · ${escapeHtml(item.suggested_action || '—')} · impact ${escapeHtml(String(item.impact_score != null ? item.impact_score : '—'))}</div>
-        <div class="glass-text">${escapeHtml(item.cleaned_summary || '')}</div>
-        <div class="myfeed-meta" style="display:flex;flex-wrap:wrap;gap:8px;font-size:10px;color:#8B949E;margin-top:8px;">
-          <span>Tickers: ${escapeHtml(tickers)}</span>
-          <span>Themes: ${escapeHtml(themes)}</span>
-          <span>Urgency: ${escapeHtml(item.urgency || '—')}</span>
-          <span>${escapeHtml(item.created_at || '—')}</span>
-        </div>
-      </div>`
-    })
-    html += '</div>'
-    return html
-  }
-
-  function myFeedItemsFromCache() {
-    const cached = ASTRA_GUI.aihubTabCache.myfeed
-    if (cached && cached.data && Array.isArray(cached.data.items)) return cached.data.items
-    if (apiCache.myfeed && Array.isArray(apiCache.myfeed.items)) return apiCache.myfeed.items
-    return null
-  }
-
-  function loadMyFeed() {
-    const container = document.getElementById('tab-myfeed')
-    if (!container) return
-    const banner = panelStatusBannerHtml('myfeed', 'myfeed')
-    const cachedItems = myFeedItemsFromCache()
-    if (cachedItems) {
-      container.innerHTML = banner + renderMyFeedAihubHtml(cachedItems)
-      injectAihubTabToolbar(container, 'myfeed')
-      dedupePanelBanners(container)
-      dedupeAihubTabCacheBadges(container)
-      return
-    }
-    container.innerHTML = banner + aihubTabToolbarHtml('myfeed', true) + '<div class="loading">⏳ Loading My Feed…</div>'
-    wireAihubTabRefreshButtons()
-    loadAihubTabData('myfeed', false).then(() => {
-      if ((ASTRA_GUI.aihubActiveTab || getActiveTabPanelId()) !== 'myfeed') return
-      loadMyFeed()
-    }).catch(() => {
-      if ((ASTRA_GUI.aihubActiveTab || getActiveTabPanelId()) === 'myfeed') {
-        container.innerHTML = banner + renderMyFeedAihubHtml([])
-        injectAihubTabToolbar(container, 'myfeed')
-      }
-    })
-  }
-
   async function loadMyFeedMain() {
     const container = document.getElementById('myFeedMainContent')
     if (!container) return
     container.innerHTML = '<div class="loading">⏳ Loading My Feed…</div>'
     try {
       const res = await fetchWithTimeout(API_BASE.replace(/\/$/, '') + '/api/myfeed?limit=40', { headers: apiHeaders() })
-      const payload = await res.json().catch(() => ({}))
+      const payload = await astraParseJsonResponse(res, '/api/myfeed')
       if (!res.ok || payload.ok === false) {
         throw new Error(String(payload.error || payload.detail || 'My Feed API unavailable'))
       }

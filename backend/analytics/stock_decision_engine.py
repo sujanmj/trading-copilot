@@ -180,6 +180,29 @@ def _load_sources() -> dict[str, Any]:
     }
 
 
+def _broker_cache_stale(sources: dict[str, Any]) -> bool:
+    broker = sources.get('broker') or {}
+    if broker.get('stale') is True or broker.get('stale_reason'):
+        return True
+    try:
+        from backend.analytics.broker_intelligence import get_broker_intel_overview
+
+        overview = get_broker_intel_overview(cache_only=True, lite=True) or {}
+        return bool(overview.get('stale') or overview.get('stale_reason'))
+    except Exception:
+        return False
+
+
+def _budget_cache_stale(sources: dict[str, Any]) -> bool:
+    try:
+        from backend.analytics.budget_impact import compute_freshness_panel
+
+        panel = compute_freshness_panel() or {}
+        return str(panel.get('status') or '').lower() == 'stale'
+    except Exception:
+        return False
+
+
 def _calibration_bucket_ok(calib: dict[str, Any], score: float) -> tuple[bool, bool]:
     """Return (acceptable, weak_sample)."""
     if not calib:
@@ -395,6 +418,16 @@ def _score_candidate(
     supports: set[str] = set()
 
     fc_decision = _decision_token(fc_row) if fc_row else ''
+    broker_stale = _broker_cache_stale(sources)
+    budget_stale = _budget_cache_stale(sources)
+    if broker_stale:
+        risk.append('Broker cache stale — research only')
+        confirmation.append('refresh broker cache before acting on broker evidence')
+    if budget_stale:
+        penalty += 6.0
+        risk.append('Budget/theme cache stale — research only')
+        confirmation.append('refresh budget cache before theme-driven entries')
+
     if fc_row and fc_decision in ('BUY_CANDIDATE', 'BUY', 'WATCH'):
         supports.add('final_confidence')
         why.append('Final confidence report includes this name')
@@ -418,11 +451,11 @@ def _score_candidate(
         if 'ULTRA' in strength.upper() or 'STRONG' in strength.upper():
             boost += 4.0
 
-    if _broker_agrees(entry.get('broker_rows') or []):
+    if not broker_stale and _broker_agrees(entry.get('broker_rows') or []):
         supports.add('broker')
         boost += 10.0
         why.append('Broker/external evidence supports same ticker')
-    if _broker_conflict(entry.get('broker_rows') or []):
+    if not broker_stale and _broker_conflict(entry.get('broker_rows') or []):
         penalty += 12.0
         risk.append('Broker stance conflicts with our signal')
 
@@ -584,6 +617,7 @@ def _build_telegram_message(
 ) -> str:
     label = mode.capitalize()
     lines = [f'<b>AstraEdge — {label}</b>', '']
+    from backend.telegram.response_format import normalize_bullet_items
 
     if top_pick and decision != 'NO_CLEAN_CANDIDATE':
         action = str(top_pick.get('action') or 'WATCH_FOR_ENTRY').replace('_', ' ')
@@ -594,7 +628,7 @@ def _build_telegram_message(
             '',
             '<b>Why:</b>',
         ])
-        for item in top_pick.get('why') or []:
+        for item in normalize_bullet_items(top_pick.get('why')):
             lines.append(f'• {item}')
         try:
             from backend.analytics.broker_intelligence import broker_decision_bullets
@@ -604,11 +638,11 @@ def _build_telegram_message(
         except Exception:
             pass
         lines.extend(['', '<b>Wait for:</b>'])
-        for item in top_pick.get('confirmation_needed') or CONFIRMATION_DEFAULTS:
+        for item in normalize_bullet_items(top_pick.get('confirmation_needed') or CONFIRMATION_DEFAULTS):
             lines.append(f'• {item}')
         if top_pick.get('risk'):
             lines.extend(['', '<b>Risk:</b>'])
-            for item in top_pick.get('risk') or []:
+            for item in normalize_bullet_items(top_pick.get('risk')):
                 lines.append(f'• {item}')
     else:
         lines.extend([

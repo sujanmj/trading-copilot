@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate GUI My Feed has no thumbnails (Stage 50A)."""
+"""Validate standalone My Feed workspace has no thumbnails (Stage 50H)."""
 
 from __future__ import annotations
 

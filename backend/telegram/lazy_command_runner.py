@@ -571,15 +571,6 @@ def run_aihub_full_only() -> dict[str, Any]:
                 'summary': {},
                 'warnings': [str(exc)[:120]],
             }
-    try:
-        from backend.my_feed.cache_invalidation import load_myfeed_items_for_telegram
-
-        payloads['myfeed'] = {
-            'ok': True,
-            'items': load_myfeed_items_for_telegram(limit=5),
-        }
-    except Exception as exc:
-        payloads['myfeed'] = {'ok': True, 'items': [], 'warnings': [str(exc)[:120]]}
     text = format_aihub_full(payloads)
     return _runner_result('aihub_full', text=text, payload=payloads)
 
@@ -645,6 +636,10 @@ def run_myfeed_only(args: str = '') -> dict[str, Any]:
     elif sub == 'scan':
         summary = scan_feed_summary(today_only=True)
         text = format_myfeed_scan(summary)
+    elif sub in ('clean-old', 'clean old'):
+        from backend.my_feed.clean_old import clean_old_my_feed_items, format_clean_old_reply
+
+        text = format_clean_old_reply(clean_old_my_feed_items(apply=True))
     elif sub.startswith('archive'):
         feed_id = sub.replace('archive', '', 1).strip()
         if not feed_id:

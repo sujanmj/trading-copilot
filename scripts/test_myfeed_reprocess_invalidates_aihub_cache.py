@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50C hotfix 2 — reprocess busts My Feed cache for AIHub full."""
+"""Stage 50H — reprocess busts My Feed telegram cache; AI Hub no longer embeds My Feed."""
 
 from __future__ import annotations
 
@@ -51,15 +51,13 @@ def main() -> int:
                 'status': 'active',
             })
 
-            stale = load_myfeed_items_for_telegram(limit=5)
+            load_myfeed_items_for_telegram(limit=5)
             if get_cached_myfeed_items_for_telegram() is None:
                 return _fail('first load must populate telegram myfeed cache')
 
-            dirty_full = format_aihub_full(run_aihub_full_only().get('payload') or {})
-            if 'FALLS' in dirty_full or 'AVOID' in dirty_full:
-                pass
-            elif 'GOLD' not in dirty_full:
-                return _fail('aihub full must include myfeed section before reprocess')
+            aihub_full = format_aihub_full(run_aihub_full_only().get('payload') or {})
+            if '🗞 My Feed' in aihub_full or 'My Feed</b>' in aihub_full:
+                return _fail('aihub full must not embed My Feed section after Stage 50H')
 
             result = reprocess_my_feed_items(apply=True, limit=10)
             if result.get('updated', 0) < 1:
@@ -75,12 +73,8 @@ def main() -> int:
                 return _fail('clean cache must keep GOLD entity')
 
             clean_full = format_aihub_full(run_aihub_full_only().get('payload') or {})
-            if any(word in clean_full for word in ('FALLS', 'BELOW', 'RS', 'LAKH', 'AMID', 'GLOBAL', 'SELL')):
-                return _fail('aihub full must not show dirty ticker words after reprocess')
-            if 'GOLD' not in clean_full:
-                return _fail('aihub full must show GOLD after reprocess')
-            if 'AVOID' in clean_full:
-                return _fail('aihub full must not show AVOID for gold commodity after reprocess')
+            if '🗞 My Feed' in clean_full or 'My Feed</b>' in clean_full:
+                return _fail('aihub full must not embed My Feed after reprocess')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

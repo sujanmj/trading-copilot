@@ -25,16 +25,16 @@ def main() -> int:
     api_server = (PROJECT_ROOT / 'backend/api/api_server.py').read_text(encoding='utf-8')
 
     checks = [
-        (api_target, ('parseApiJsonResponse', 'fetchApiJson', 'API returned HTML/non-JSON')),
+        (api_target, ('parseApiJsonResponse', 'fetchApiJson', 'API JSON unavailable')),
         (api_auth, ('parseApiJsonResponse',)),
-        (index_html, ('astraParseJsonResponse', 'astraFetchJson', 'API returned HTML/non-JSON')),
+        (index_html, ('astraParseJsonResponse', 'astraFetchJson', 'API JSON unavailable — endpoint returned HTML. Check API base/path.')),
         (PROJECT_ROOT / 'frontend/components/BrokerIntelligencePanel.js', (
             'API returned HTML/non-JSON',
             'Broker cache request timed out',
             'cache_only=1&lite=1',
         )),
-        (PROJECT_ROOT / 'frontend/components/MarketRouterCard.js', ('API returned HTML/non-JSON',)),
-        (PROJECT_ROOT / 'frontend/components/SourceFreshnessCard.js', ('API returned HTML/non-JSON',)),
+        (PROJECT_ROOT / 'frontend/components/MarketRouterCard.js', ('API JSON unavailable — endpoint returned HTML. Check API base/path.',)),
+        (PROJECT_ROOT / 'frontend/components/SourceFreshnessCard.js', ('API JSON unavailable — endpoint returned HTML. Check API base/path.',)),
     ]
     for path, needles in checks:
         text = path if isinstance(path, str) else path.read_text(encoding='utf-8')
