@@ -189,6 +189,50 @@ def is_live_rejected(ticker: str, registry: dict[str, str] | None = None) -> tup
     return False, ''
 
 
+def is_avoid_or_rejected(ticker: str, registry: dict[str, str] | None = None) -> bool:
+    """True when ticker is in live avoid/rejection registry."""
+    rejected, _ = is_live_rejected(ticker, registry)
+    return rejected
+
+
+def filter_ticker_list_exclude_avoid(
+    tickers: list[Any] | None,
+    registry: dict[str, str] | None = None,
+) -> list[str]:
+    """Remove avoid/rejected tickers from watch display lists."""
+    reg = registry if registry is not None else build_live_rejection_set()
+    out: list[str] = []
+    for item in tickers or []:
+        if isinstance(item, dict):
+            sym = _normalize_ticker(item.get('ticker') or item.get('symbol'))
+        else:
+            sym = _normalize_ticker(item)
+        if not sym or sym == '?' or sym in reg:
+            continue
+        if sym not in out:
+            out.append(sym)
+    return out
+
+
+def filter_rows_exclude_avoid(
+    rows: list[dict[str, Any]] | None,
+    registry: dict[str, str] | None = None,
+    *,
+    ticker_key: str = 'ticker',
+) -> list[dict[str, Any]]:
+    """Drop setup/watch rows whose ticker is on avoid/rejection list."""
+    reg = registry if registry is not None else build_live_rejection_set()
+    kept: list[dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        sym = _normalize_ticker(row.get(ticker_key) or row.get('symbol'))
+        if sym and sym in reg:
+            continue
+        kept.append(row)
+    return kept
+
+
 def begin_unified_snapshot() -> None:
     global _snapshot_active
     _snapshot_active = True

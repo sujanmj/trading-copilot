@@ -71,6 +71,19 @@ SINGLE_STOCK_MACRO_PATTERNS = (
     r'\b(warning|probe|fine)\b.*\b(shares?|stock)\b',
 )
 
+LOCAL_COOP_BANK_PATTERNS = (
+    r'co-?operative bank',
+    r'urban co-?operative',
+    r'district co-?operative',
+    r'primary co-?operative',
+    r'mogaveera',
+)
+
+SYSTEMIC_MACRO_KEYWORDS = (
+    'systemic', 'nifty', 'sensex', 'bank nifty', 'liquidity', 'repo rate',
+    'policy rate', 'mpc', 'sector-wide', 'broader market', 'fii outflow',
+)
+
 SCHEDULED_QUOTE_NOISE = (
     'quote of the day',
     'motivational quote',
@@ -264,15 +277,36 @@ def format_open_setup_alert(
     base_confidence: float,
     regime: str,
 ) -> Tuple[str, float, bool]:
-    """Build open setup Telegram text with participation-aware confidence."""
+    """Build open setup Telegram text with participation-aware confidence and trade status."""
     conf, label, watch_only, reason = adjust_open_setup_confidence(signal, base_confidence, intel, state)
-    ticker = signal.get('ticker', '?')
+    ticker = str(signal.get('ticker', '?')).upper()
     sector = signal.get('sector', '?')
     direction = str(signal.get('direction', '?')).upper()
     chg = float(signal.get('change_percent') or 0)
     participation = float(signal.get('participation') or signal.get('volume_ratio') or 0)
     price = float(signal.get('price') or 0)
     confirmations = count_open_confirmations(signal, intel, state)
+
+    trade_status = 'WAIT FOR VOLUME' if watch_only else 'VALID ENTRY'
+    plan_note = 'Watch for entry — confirm after 9:15'
+    no_chase = ''
+    try:
+        from backend.trading.trade_card_engine import build_trade_card
+
+        card = build_trade_card(ticker, persist=False, force_refresh=True)
+        trade_status = str(card.get('status') or trade_status).replace('_', ' ')
+        if card.get('status') == 'ENTRY_MISSED':
+            no_chase = 'Do not chase — entry missed; wait for next session setup.'
+            plan_note = 'No chase — extended move without pullback.'
+        elif card.get('status') == 'WAIT_FOR_PULLBACK':
+            plan_note = f"Pullback watch — entry zone {card.get('entry_zone') or '—'}"
+        elif card.get('status') == 'VALID_ENTRY':
+            plan_note = (
+                f"Plan: entry {card.get('entry_zone') or '—'} · "
+                f"SL {card.get('stop_loss') or '—'} · T1 {card.get('target_1') or '—'}"
+            )
+    except Exception:
+        pass
 
     sector_support = 'yes' if sector.lower() in [
         str(s).lower() for s in ((intel or {}).get('sector_rotation') or {}).get('bullish') or []
@@ -284,13 +318,17 @@ def format_open_setup_alert(
 
     text = f"""<b>🎯 {label}</b> <code>{regime.replace('_', ' ').upper()}</code>
 <b>{ticker}</b> · {direction} MOVE
+<b>Trade status:</b> {trade_status}
 <b>Price move:</b> {chg:+.2f}% · Rs.{price:,.0f}
 <b>Volume/participation:</b> {participation:.1f}x
 <b>Sector support:</b> {sector_support} ({sector})
 <b>Confirmation:</b> {conf_status}
 <b>Confidence:</b> {conf:.0%}
 <b>Reason:</b> {reason}
-<b>Action:</b> {'wait for volume confirmation' if watch_only else 'watch for entry — confirm after 9:15'}"""
+<b>Plan:</b> {plan_note}"""
+    if no_chase:
+        text += f"\n<b>Note:</b> {no_chase}"
+    text += f"\n<b>Action:</b> {'wait for volume confirmation' if watch_only else 'watch for entry — confirm after 9:15'}"
     return text, conf, watch_only
 
 
@@ -304,6 +342,30 @@ def is_broad_macro_emergency(headline: str, item: Optional[dict] = None) -> bool
         if len(sectors) >= 2:
             return True
     return False
+
+
+def is_local_bank_low_impact(headline: str, item: Optional[dict] = None) -> bool:
+    """Small/local cooperative bank news — INFO MACRO, not Emergency."""
+    lower = str(headline or '').lower()
+    if not any(re.search(pat, lower) for pat in LOCAL_COOP_BANK_PATTERNS):
+        return False
+    if any(k in lower for k in SYSTEMIC_MACRO_KEYWORDS):
+        return False
+    if is_broad_macro_emergency(headline, item):
+        return False
+    return True
+
+
+def macro_display_class(headline: str, item: Optional[dict] = None) -> str:
+    """Telegram/display class for macro headlines."""
+    severity = classify_macro_severity(headline, item)
+    if severity == 'info_macro_low_impact':
+        return 'INFO MACRO / LOW MARKET IMPACT'
+    if severity == 'emergency_macro':
+        return 'EMERGENCY MACRO'
+    if severity == 'stock_specific':
+        return 'STOCK SPECIFIC / LOW MARKET IMPACT'
+    return 'INFO MACRO / LOW MARKET IMPACT'
 
 
 def is_stock_specific_risk(headline: str, item: Optional[dict] = None) -> bool:
@@ -398,15 +460,19 @@ def evaluate_scheduled_emergency_macro_gate(
 
 def classify_macro_severity(headline: str, item: Optional[dict] = None) -> str:
     """
-    Returns severity class: emergency_macro | stock_specific | generic_skip.
+    Returns severity class: emergency_macro | stock_specific | info_macro_low_impact | generic_skip.
     """
+    if is_local_bank_low_impact(headline, item):
+        return 'info_macro_low_impact'
     if is_stock_specific_risk(headline, item):
         return 'stock_specific'
     if is_broad_macro_emergency(headline, item):
         return 'emergency_macro'
     lower = str(headline or '').lower()
-    if 'rbi' in lower or 'mpc' in lower or 'repo rate' in lower:
+    if 'rbi' in lower and any(k in lower for k in ('repo rate', 'policy rate', 'liquidity', 'mpc')):
         return 'emergency_macro'
+    if 'rbi' in lower or 'mpc' in lower:
+        return 'info_macro_low_impact'
     return 'generic_skip'
 
 
@@ -447,6 +513,10 @@ def evaluate_emergency_macro(
     if severity == 'stock_specific':
         _log('EMERGENCY_MACRO_SKIPPED', f'reason=stock_specific_risk theme={theme}')
         return False, 'stock_specific', theme
+
+    if severity == 'info_macro_low_impact':
+        _log('EMERGENCY_MACRO_SKIPPED', f'reason=local_bank_low_impact theme={theme}')
+        return False, 'info_macro_low_impact', theme
 
     if severity == 'generic_skip' and not is_broad_macro_emergency(headline, item):
         _log('EMERGENCY_MACRO_SKIPPED', f'reason=generic_headline_downgrade theme={theme}')

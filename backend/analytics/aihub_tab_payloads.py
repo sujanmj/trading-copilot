@@ -660,6 +660,21 @@ def _build_actionable_candidates(pack: dict[str, Any], fc: Any) -> dict[str, Any
     watch_sorted = sorted(watch_pool, key=_watch_score, reverse=True)
     avoid_sorted = sorted(avoid_pool, key=_watch_score, reverse=True)
 
+    try:
+        from backend.analytics.unified_decision_engine import build_live_rejection_set
+
+        reg = build_live_rejection_set()
+        watch_sorted = [
+            r for r in watch_sorted
+            if str(r.get('ticker') or r.get('symbol') or '').strip().upper() not in reg
+        ]
+        buy_rows = [
+            r for r in buy_rows
+            if str(r.get('ticker') or r.get('symbol') or '').strip().upper() not in reg
+        ]
+    except Exception:
+        pass
+
     def _fmt_watch(row: dict[str, Any]) -> dict[str, Any]:
         return {
             'ticker': row.get('ticker') or row.get('symbol'),

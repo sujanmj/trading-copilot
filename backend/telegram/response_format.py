@@ -382,6 +382,46 @@ def _market_useful_bullets(summary: dict[str, Any], items: list[Any]) -> list[st
 
 REJECTED_TODAY_DETAIL = 'live scanner rejection'
 
+_BROKEN_REASON_SUFFIX_RE = re.compile(
+    r'(?:\s|[_-])+(?:INFRA|SECTOR|BANK|TECH|AUTO|PHARMA|METAL|FMCG|IT|NBFC)[_\s-]*$',
+    re.IGNORECASE,
+)
+_BROKEN_REASON_TAIL_RE = re.compile(r'(?:\s+\d{1,2}$|\s+[A-Z]{2,8}_$)')
+
+
+def clean_avoid_reason_text(text: str, max_len: int = 180) -> str:
+    """Trim avoid reasons to clean sentence boundaries — no partial words or junk suffixes."""
+    raw = str(text or '').strip()
+    if not raw:
+        return 'Risk flagged'
+    cleaned = re.sub(r'\s+', ' ', raw)
+    cleaned = _BROKEN_REASON_SUFFIX_RE.sub('', cleaned).strip()
+    cleaned = _BROKEN_REASON_TAIL_RE.sub('', cleaned).strip()
+    if cleaned.endswith('_') or cleaned.endswith('-'):
+        cleaned = cleaned.rstrip('_-').strip()
+    if len(cleaned) <= max_len:
+        return cleaned
+    chunk = cleaned[:max_len]
+    if ' ' in chunk:
+        chunk = chunk.rsplit(' ', 1)[0]
+    elif '.' in chunk:
+        chunk = chunk.rsplit('.', 1)[0]
+    chunk = chunk.strip(' ,;:-')
+    if not chunk:
+        chunk = cleaned[: max_len - 1].rsplit(' ', 1)[0].strip()
+    return f'{chunk}…' if chunk else '…'
+
+
+INTRADAY_ACTION_LABELS = frozenset({
+    'WATCH FOR CONFIRMATION',
+    'WAIT FOR VOLUME',
+    'ENTRY MISSED',
+    'PULLBACK WATCH',
+    'RISK WATCH',
+    'IGNORE LOW VOLUME',
+    'AVOID',
+})
+
 
 def format_watchlist_with_rejections(
     watchlist: list[Any] | None,
@@ -1374,7 +1414,7 @@ def format_action_plan_telegram() -> str:
             reason = (row.get('risk') or row.get('why') or ['weak signal'])
             if isinstance(reason, list):
                 reason = reason[0] if reason else 'weak signal'
-            lines.append(f"• {row.get('ticker', '?')} — {reason}")
+            lines.append(f"• {row.get('ticker', '?')} — {clean_avoid_reason_text(str(reason))}")
     else:
         lines.append('• No avoid candidates flagged')
 
@@ -1707,4 +1747,98 @@ def format_status_text() -> str:
     except Exception:
         lines.append('Last QA: unavailable')
 
+    return strip_stage_markers('\n'.join(lines))
+
+
+def classify_intraday_action_label(
+    signal: dict[str, Any],
+    *,
+    registry: dict[str, str] | None = None,
+) -> str:
+    """Map scanner/intraday signal to allowed action label — never naked BUY/SELL."""
+    from backend.analytics.unified_decision_engine import is_live_rejected
+
+    ticker = str(signal.get('ticker') or signal.get('symbol') or '').upper()
+    if ticker:
+        rejected, _ = is_live_rejected(ticker, registry)
+        if rejected:
+            return 'AVOID'
+
+    vol = float(signal.get('volume_ratio') or signal.get('participation') or 0)
+    chg = abs(float(signal.get('change_percent') or 0))
+    direction = str(signal.get('direction') or '').upper()
+
+    if direction == 'BEARISH':
+        return 'RISK WATCH'
+    if vol < 0.5 and chg >= 3.0:
+        return 'IGNORE LOW VOLUME'
+    if vol < 0.8:
+        return 'WAIT FOR VOLUME'
+    if chg >= 6.5:
+        return 'ENTRY MISSED'
+    if chg >= 4.0:
+        return 'PULLBACK WATCH'
+    return 'WATCH FOR CONFIRMATION'
+
+
+def format_intraday_anomaly_alert(
+    signal: dict[str, Any],
+    *,
+    confidence: float = 0.0,
+    registry: dict[str, str] | None = None,
+    entry_status: str = '',
+) -> str:
+    """Structured intraday anomaly alert — ticker, move, volume, label, reason."""
+    ticker = str(signal.get('ticker') or signal.get('symbol') or '?').upper()
+    chg = float(signal.get('change_percent') or 0)
+    vol = float(signal.get('volume_ratio') or signal.get('participation') or 0)
+    label = classify_intraday_action_label(signal, registry=registry)
+    conf_pct = f'{max(0.0, min(1.0, confidence)):.0%}' if confidence else '—'
+    status = entry_status or label
+    reason = clean_avoid_reason_text(
+        str(signal.get('reason') or signal.get('detail') or signal.get('setup') or 'Scanner anomaly detected'),
+        max_len=160,
+    )
+    return (
+        f'<b>⚡ INTRADAY ALERT</b> <code>{ticker}</code>\n'
+        f'<b>Move:</b> {chg:+.2f}%\n'
+        f'<b>Volume/participation:</b> {vol:.1f}x\n'
+        f'<b>Confidence:</b> {conf_pct}\n'
+        f'<b>Action:</b> {label}\n'
+        f'<b>Reason:</b> {reason}\n'
+        f'<b>Entry status:</b> {status}'
+    )
+
+
+def format_tradecard_telegram(*, explain: bool = False) -> str:
+    """Format paper-only trade card for /tradecard commands."""
+    from backend.trading.trade_card_engine import get_trade_card
+
+    card = get_trade_card(rebuild=explain)
+    if card.get('ok') is False and not card.get('ticker'):
+        return 'Trade card unavailable — no scanner candidate yet. Paper only.'
+
+    status = str(card.get('status') or 'NO_TRADE')
+    lines = [
+        '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
+        f"<b>{card.get('ticker', '—')}</b> · <code>{status}</code>",
+        f"Price: {card.get('current_price') or '—'}",
+        f"Entry zone: {card.get('entry_zone') or '—'}",
+        f"Stop: {card.get('stop_loss') or '—'} · T1: {card.get('target_1') or '—'} · T2: {card.get('target_2') or '—'}",
+        f"R:R {card.get('risk_reward') or '—'} · Confidence: {card.get('confidence') or '—'}",
+        f"Capital plan: {card.get('capital_plan') or 'Paper only.'}",
+        f"Reason: {clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)}",
+        f"Invalid if: {clean_avoid_reason_text(str(card.get('invalid_if') or ''), max_len=120)}",
+    ]
+    if explain:
+        lines.extend([
+            '',
+            '<b>Explain</b>',
+            f"Exit rule: {card.get('exit_rule') or '—'}",
+            f"Session: {card.get('session_date') or '—'} · Updated: {card.get('generated_at') or '—'}",
+            'No certainty on outcome — confirm manually before any paper journal entry.',
+        ])
+    else:
+        lines.append('Use /tradecard explain for full plan notes.')
+    lines.append('Paper only — you decide and place trades manually.')
     return strip_stage_markers('\n'.join(lines))

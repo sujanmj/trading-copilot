@@ -619,6 +619,15 @@ def run_feed_text_only(args: str = '') -> dict[str, Any]:
     return _runner_result('feed_text', text=result.get('reply') or 'MY_FEED_NEEDS_TEXT', payload=result)
 
 
+def run_tradecard_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import format_tradecard_telegram
+
+    sub = str(args or '').strip().lower()
+    explain = sub in ('explain',) or sub.endswith(' explain')
+    text = format_tradecard_telegram(explain=explain)
+    return _runner_result('tradecard', text=text)
+
+
 def run_myfeed_only(args: str = '') -> dict[str, Any]:
     from backend.my_feed.cache_invalidation import load_myfeed_items_for_telegram
     from backend.my_feed.feed_processor import archive_feed_item, scan_feed_summary

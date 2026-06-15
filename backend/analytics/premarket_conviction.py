@@ -534,31 +534,20 @@ def _apply_volume_caps(setups: list[dict], scanner: dict, intel: dict) -> tuple[
 
 
 def _apply_conflict_guard(setups: list[dict], avoids: list[dict]) -> list[dict]:
+    """Avoid/rejection overrides watch — excluded from live/previous-session watch lists."""
     avoid_tickers = {str(a.get('ticker', '')).upper() for a in avoids if a.get('ticker')}
-    top_tickers = {str(s.get('ticker', '')).upper() for s in setups[:3]}
-    conflicted = top_tickers & avoid_tickers
-    if not conflicted:
+    try:
+        from backend.analytics.unified_decision_engine import build_live_rejection_set
+
+        avoid_tickers |= set(build_live_rejection_set().keys())
+    except Exception:
+        pass
+    if not avoid_tickers:
         return setups
-    out: list[dict] = []
-    for setup in setups:
-        ticker = str(setup.get('ticker', '')).upper()
-        if ticker in conflicted:
-            row = dict(setup)
-            row['setup'] = 'Conflict/Wait'
-            row['score'] = min(int(row.get('score', 50)), 55)
-            row['conflict'] = True
-            avoid_reason = next(
-                (a.get('reason', 'mixed signal') for a in avoids if str(a.get('ticker', '')).upper() == ticker),
-                'mixed signal',
-            )
-            row['reasons'] = [
-                str((setup.get('reasons') or ['Setup candidate'])[0]),
-                f'Conflict with avoid list — {avoid_reason}',
-            ]
-            out.append(row)
-        else:
-            out.append(setup)
-    return out
+    return [
+        setup for setup in setups
+        if str(setup.get('ticker', '')).upper() not in avoid_tickers
+    ]
 
 
 def _rank_top_setups(setups: list[dict], limit: int = 5) -> list[dict]:
@@ -961,15 +950,23 @@ def format_premarket_telegram(
 
     if hard_stale_lock:
         lines.append('<b>Previous-session movers (research only):</b>')
-        display_setups = (previous_session_movers or setups)[:3 if not full else 5]
+        from backend.analytics.unified_decision_engine import filter_rows_exclude_avoid
+
+        prev_rows = filter_rows_exclude_avoid(previous_session_movers or setups)
+        display_setups = prev_rows[:3 if not full else 5]
     elif not fresh_ok and fresh_header:
         lines.append('<b>Previous-session / stale research only:</b>')
-        display_setups = (setups)[:3 if not full else 5]
+        from backend.analytics.unified_decision_engine import filter_rows_exclude_avoid
+
+        display_setups = filter_rows_exclude_avoid(setups)[:3 if not full else 5]
     else:
         watch_header = '<b>Live watch:</b>' if live_market and fresh_ok else '<b>Top watch:</b>'
         lines.append(watch_header)
-        top3 = [s for s in setups if s.get('tier_cap') != 'not_top3'][:3 if not full else 5]
-        display_setups = top3 if top3 else setups[:3 if not full else 5]
+        from backend.analytics.unified_decision_engine import filter_rows_exclude_avoid
+
+        filtered = filter_rows_exclude_avoid(setups)
+        top3 = [s for s in filtered if s.get('tier_cap') != 'not_top3'][:3 if not full else 5]
+        display_setups = top3 if top3 else filtered[:3 if not full else 5]
 
     if display_setups:
         for idx, setup in enumerate(display_setups, 1):
@@ -1030,8 +1027,12 @@ def format_premarket_telegram(
 
     lines.extend(['', '<b>Avoid:</b>'])
     if avoids:
+        from backend.telegram.response_format import clean_avoid_reason_text
+
         for row in avoids[:3]:
-            lines.append(f"• {row.get('ticker')} — {row.get('reason')}")
+            lines.append(
+                f"• {row.get('ticker')} — {clean_avoid_reason_text(str(row.get('reason') or ''))}"
+            )
     else:
         lines.append('• No explicit avoid flags')
 

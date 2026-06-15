@@ -3002,6 +3002,14 @@ def api_daily_review(
     return sanitize_json_value(review)
 
 
+@app.get("/api/trade-card", dependencies=[Depends(verify_api_key)])
+def api_trade_card(rebuild: bool = Query(False)):
+    from backend.trading.trade_card_engine import build_trade_card, get_trade_card
+
+    card = build_trade_card(force_refresh=rebuild) if rebuild else get_trade_card(rebuild=False)
+    return sanitize_json_value(card)
+
+
 @app.get("/api/calibration", dependencies=[Depends(verify_api_key)])
 def api_calibration():
     from backend.analytics.regime_analytics import build_calibration_dashboard

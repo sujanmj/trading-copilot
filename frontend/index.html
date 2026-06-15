@@ -1620,6 +1620,10 @@
         <summary>System Status</summary>
         <div class="ai-ops-section-body"><div class="ai-ops-stat-grid" id="aiOpsStatusGrid"></div></div>
       </details>
+      <details class="ai-ops-section" data-ui-section="aiops-trade-card" open>
+        <summary>Trade Card (paper only)</summary>
+        <div class="ai-ops-section-body" id="aiOpsTradeCard"></div>
+      </details>
       <details class="ai-ops-section" data-ui-section="aiops-live-timeline" open>
         <summary>Live AI Timeline</summary>
         <div class="ai-ops-section-body" id="aiOpsTimeline"></div>
@@ -1692,6 +1696,10 @@
     <div class="ai-review-body">
       <section class="ai-review-section" id="reviewHero"></section>
       <section class="ai-review-section">
+        <div class="ai-review-section-title">Trade Card (paper only)</div>
+        <div id="reviewTradeCard"></div>
+      </section>
+      <section class="ai-review-section">
         <div class="ai-review-section-title">AI Performance</div>
         <div id="reviewPerformance"></div>
       </section>
@@ -1733,6 +1741,7 @@
   <script src="components/BudgetImpactPanel.js"></script>
   <script src="components/FinalConfidencePanel.js"></script>
   <script src="components/DailyReportPackPanel.js"></script>
+  <script src="components/TradeCardCard.js"></script>
   <script src="components/SourceFreshnessCard.js"></script>
   <script src="components/MarketRouterCard.js"></script>
   <script src="components/SourceFeedViewer.js"></script>
@@ -10327,6 +10336,12 @@
       }
       if (window.MarketMemoryPanel) {
         MarketMemoryPanel.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+        })
+      }
+      if (window.TradeCardCard) {
+        TradeCardCard.init({
           getApiBase: () => API_BASE,
           getHeaders: apiHeaders,
         })

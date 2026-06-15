@@ -760,6 +760,11 @@ def handle_analysis_command(
             response_text = MYFEED_SUBCOMMAND_USAGE
     elif cmd == 'budget':
         response_text = run_without_ai(lambda: run_budget_only(args), command='budget').get('text') or run_budget_only(args).get('text') or 'Budget impact unavailable.'
+    elif cmd == 'tradecard':
+        from backend.telegram.lazy_command_runner import run_tradecard_only
+
+        result = run_without_ai(lambda: run_tradecard_only(args), command='tradecard')
+        response_text = result.get('text') or 'Trade card unavailable.'
     else:
         response_text = format_unknown_command_response(cmd, args)
 

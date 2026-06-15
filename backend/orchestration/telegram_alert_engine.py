@@ -480,7 +480,14 @@ def try_intraday_events() -> int:
     sent = 0
     if len(to_send) == 1 and not (partition.get('new') and partition.get('changed')):
         ev = to_send[0]
-        text = f"<b>⚡ INTRADAY EVENT</b> <code>{ev['type'].upper()}</code>\n{ev['detail']}\n<b>Conf:</b> {ev['confidence']:.0%}"
+        if ev.get('type') == 'scanner_anomaly' and ev.get('signal'):
+            from backend.telegram.response_format import format_intraday_anomaly_alert
+            text = format_intraday_anomaly_alert(
+                ev['signal'],
+                confidence=float(ev.get('confidence') or 0),
+            )
+        else:
+            text = f"<b>⚡ INTRADAY EVENT</b> <code>{ev['type'].upper()}</code>\n{ev['detail']}\n<b>Conf:</b> {ev['confidence']:.0%}"
         if _dispatch(INTRADAY_EVENT, text, ev['confidence'], ev['detail'],
                      ticker=ev.get('ticker', ''), dedupe_key=ev.get('dedupe', ''),
                      regime=regime, volatility=vol):

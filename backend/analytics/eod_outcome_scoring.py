@@ -224,12 +224,15 @@ def compute_eod_outcome_summary(review_date: Optional[str] = None) -> dict:
 
     alerts_meta = _alerts_sent_meta(date)
 
+    alert_tracking = summarize_alert_review_tracking(date)
+
     return {
         'date': date,
         'alerts_sent': alerts_meta.get('alerts_sent', 0),
         'alerts_tracked': alerts_meta.get('alerts_tracked', 0),
         'alerts_scorable': alerts_meta.get('alerts_scorable', 0),
         'alerts_pending_score': alerts_meta.get('alerts_pending_score', 0),
+        'alert_tracking': alert_tracking,
         'resolved': resolved,
         'wins': wins,
         'losses': losses,
@@ -248,6 +251,85 @@ def compute_eod_outcome_summary(review_date: Optional[str] = None) -> dict:
     }
 
 
+def summarize_alert_review_tracking(review_date: str) -> dict[str, int]:
+    """Track alert volumes and pending review buckets for daily review display."""
+    rows = []
+    try:
+        from backend.orchestration.alert_event_log import read_alert_events_for_date
+
+        rows = read_alert_events_for_date(review_date)
+    except Exception:
+        rows = []
+
+    counts = {
+        'premarket_watch_count': 0,
+        'live_watch_count': 0,
+        'open_setup_count': 0,
+        'intraday_alert_count': 0,
+        'pending_review_count': 0,
+        'confirmed_count': 0,
+        'rejected_count': 0,
+        'wait_volume_count': 0,
+        'entry_missed_count': 0,
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        alert_type = str(row.get('alert_type') or '').lower()
+        reason = str(row.get('reason_preview') or row.get('reason') or '').upper()
+        if alert_type == 'premarket':
+            counts['premarket_watch_count'] += 1
+        elif alert_type == 'open':
+            counts['open_setup_count'] += 1
+        elif alert_type == 'intraday':
+            counts['intraday_alert_count'] += 1
+        elif alert_type in ('today', 'tomorrow'):
+            counts['live_watch_count'] += 1
+        if 'WAIT FOR VOLUME' in reason or 'WEAK PARTICIPATION' in reason:
+            counts['wait_volume_count'] += 1
+        if 'ENTRY MISSED' in reason or 'EXTENDED' in reason:
+            counts['entry_missed_count'] += 1
+
+    tg = _query_telegram_alert_outcomes(review_date)
+    for type_counts in (tg.get('by_type') or {}).values():
+        counts['confirmed_count'] += int(type_counts.get('WIN', 0))
+        counts['rejected_count'] += int(type_counts.get('LOSS', 0)) + int(type_counts.get('NEUTRAL', 0))
+        counts['pending_review_count'] += int(type_counts.get('PENDING', 0))
+
+    if counts['pending_review_count'] == 0 and rows:
+        resolved = counts['confirmed_count'] + counts['rejected_count']
+        counts['pending_review_count'] = max(0, len(rows) - resolved)
+
+    return counts
+
+
+def format_daily_review_alert_lines(summary: dict, tracking: dict[str, int]) -> list[str]:
+    """Human-readable alert tracking lines for daily review."""
+    lines = [
+        f"Premarket watch: {tracking.get('premarket_watch_count', 0)} · "
+        f"Live watch: {tracking.get('live_watch_count', 0)} · "
+        f"Open setups: {tracking.get('open_setup_count', 0)} · "
+        f"Intraday alerts: {tracking.get('intraday_alert_count', 0)}",
+    ]
+    resolved = int(summary.get('resolved') or 0)
+    alerts_sent = int(summary.get('alerts_sent') or summary.get('alerts_tracked') or 0)
+    pending = int(tracking.get('pending_review_count') or 0)
+    if alerts_sent > 0 and resolved == 0:
+        lines.append(
+            f"Pending review: {pending or alerts_sent} · Resolved today: 0 · "
+            f"Wait volume: {tracking.get('wait_volume_count', 0)} · "
+            f"Entry missed: {tracking.get('entry_missed_count', 0)}"
+        )
+    else:
+        lines.append(
+            f"Pending review: {pending} · Confirmed: {tracking.get('confirmed_count', 0)} · "
+            f"Rejected: {tracking.get('rejected_count', 0)} · "
+            f"Wait volume: {tracking.get('wait_volume_count', 0)} · "
+            f"Entry missed: {tracking.get('entry_missed_count', 0)}"
+        )
+    return lines
+
+
 def format_outcome_line(row: dict) -> str:
     ticker = row.get('ticker') or '?'
     pct = row.get('pct')
@@ -261,17 +343,18 @@ def format_outcome_line(row: dict) -> str:
 
 
 def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] = None) -> str:
-    """Format DAILY REVIEW Telegram message per Stage 46H spec."""
+    """Format DAILY REVIEW Telegram message per Stage 46H/50L spec."""
     pending = pending_meta or {}
     alerts_sent = int(summary.get('alerts_sent') or summary.get('alerts_tracked') or 0)
     resolved = int(summary.get('resolved') or 0)
+    review_date = str(summary.get('date') or _today())
+    tracking = summary.get('alert_tracking') or summarize_alert_review_tracking(review_date)
 
     if alerts_sent > 0 and resolved == 0:
         pending_price = summary.get('alerts_pending_score', summary.get('pending', alerts_sent))
+        pending_count = int(tracking.get('pending_review_count') or pending_price or alerts_sent)
         outcome_line = (
-            f"Alerts sent: {alerts_sent} · "
-            f"Scorable: {summary.get('alerts_scorable', 0)} · "
-            f"Pending price data: {pending_price}"
+            f"Alerts sent: {alerts_sent} · Pending review: {pending_count} · Resolved today: 0"
         )
     elif not summary.get('data_available') and resolved == 0:
         outcome_line = 'Outcome pending — price data unavailable.'
@@ -281,6 +364,8 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
             f"W{summary.get('wins', 0)}/L{summary.get('losses', 0)}/"
             f"N{summary.get('neutrals', 0)}/P{summary.get('partials', 0)}"
         )
+
+    alert_lines = format_daily_review_alert_lines(summary, tracking)
 
     best_lines = [format_outcome_line(r) for r in (summary.get('best') or [])]
     worst_lines = [format_outcome_line(r) for r in (summary.get('worst') or [])]
@@ -297,6 +382,8 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
         f"<b>📘 DAILY REVIEW</b>\n\n"
         f"<b>EOD Resolution</b>\n"
         f"{outcome_line}\n"
+        f"{alert_lines[0]}\n"
+        f"{alert_lines[1] if len(alert_lines) > 1 else ''}\n"
         f"Pending Active: {pending.get('pending_active', 0)} · "
         f"Expired: {pending.get('expired', summary.get('expired', 0))}\n\n"
         f"<b>Best:</b>\n{chr(10).join(best_lines) if best_lines else '—'}\n\n"

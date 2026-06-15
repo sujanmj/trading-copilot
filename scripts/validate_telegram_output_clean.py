@@ -52,8 +52,12 @@ def main() -> int:
         return _fail('missing clean blocked order response')
     if 'def format_aihub_full(' not in fmt_src:
         return _fail('missing format_aihub_full()')
+    if '🗞 My Feed' in fmt_src.split('def format_aihub_full', 1)[1].split('\ndef ', 1)[0]:
+        return _fail('format_aihub_full must not embed My Feed section (Stage 50H)')
     if 'def run_aihub_full_only(' not in lazy_src:
         return _fail('missing run_aihub_full_only()')
+    if "payloads['myfeed']" in lazy_src.split('def run_aihub_full_only', 1)[1].split('\ndef ', 1)[0]:
+        return _fail('run_aihub_full_only must not load My Feed payload (Stage 50H)')
 
     if "tab in ('full', 'all')" not in bot_src:
         return _fail('/aihub full and /aihub all alias missing')

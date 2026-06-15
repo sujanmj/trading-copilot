@@ -59,7 +59,7 @@ FORBIDDEN_USER_PHRASES = (
     'Blocked forever',
     'not trade execution',
     'Shadow mode only',
-    'Research only',
+    'Research only. You decide and place trades manually.',
     'TELEGRAM_STAGE',
 )
 
@@ -104,7 +104,7 @@ def main() -> int:
                 if cmd not in ('/buy TATA', '/sell RELIANCE'):
                     for phrase in FORBIDDEN_USER_PHRASES:
                         if phrase.lower() in text.lower():
-                            if cmd == '/broker' and phrase == 'Research only':
+                            if cmd == '/broker' and 'Research only. You decide' in phrase:
                                 continue
                             return _fail(f'forbidden phrase in {cmd}: {phrase!r}')
 

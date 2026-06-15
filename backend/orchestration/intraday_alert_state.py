@@ -161,20 +161,35 @@ def filter_intraday_events(events: list[dict], regime: str) -> dict[str, Any]:
 
 
 def format_intraday_batch(partition: dict, regime: str) -> str:
+    from backend.telegram.response_format import format_intraday_anomaly_alert
+
     lines = [f"<b>⚡ INTRADAY BATCH</b> <code>{regime.replace('_', ' ').upper()}</code>", '']
 
     if partition.get('new'):
         lines.append('<b>New:</b>')
         for ev in partition['new'][:3]:
-            lines.append(f"• {ev.get('ticker') or ev.get('type', '?')} {ev.get('detail', '')[:70]}")
+            signal = ev.get('signal') or ev
+            if ev.get('type') == 'scanner_anomaly' and signal:
+                lines.append(format_intraday_anomaly_alert(signal, confidence=float(ev.get('confidence') or 0)))
+            else:
+                lines.append(f"• {ev.get('ticker') or ev.get('type', '?')} {ev.get('detail', '')[:70]}")
         lines.append('')
 
     if partition.get('changed'):
         lines.append('<b>Changed:</b>')
         for ev in partition['changed'][:3]:
-            detail = ev.get('change_detail') or ev.get('detail', '')[:70]
-            ticker = ev.get('ticker') or ev.get('type', '?')
-            lines.append(f"• {ticker} {detail}")
+            signal = ev.get('signal') or ev
+            if ev.get('type') == 'scanner_anomaly' and signal:
+                detail = ev.get('change_detail') or ''
+                lines.append(format_intraday_anomaly_alert(
+                    signal,
+                    confidence=float(ev.get('confidence') or 0),
+                    entry_status=detail or 'CHANGED',
+                ))
+            else:
+                detail = ev.get('change_detail') or ev.get('detail', '')[:70]
+                ticker = ev.get('ticker') or ev.get('type', '?')
+                lines.append(f"• {ticker} {detail}")
         lines.append('')
 
     suppressed = int(partition.get('suppressed_count') or 0)
