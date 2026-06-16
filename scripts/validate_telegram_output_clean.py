@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Validate clean Telegram output wiring (Stage 45TG5).
+Validate clean Telegram output wiring (Stage 50O).
 
 Prints TELEGRAM_OUTPUT_CLEAN_OK on success.
 Marker: TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL

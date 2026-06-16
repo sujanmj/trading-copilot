@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Stage 50N hotfix — help includes catalyst/tradecard commands."""
+"""Validate Stage 50O — help includes catalyst/tradecard commands."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50C hotfix — build-info stage matches /status Telegram build."""
+"""Stage 50O — build-info stage matches /status Telegram build."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ def main() -> int:
     from backend.telegram.response_format import format_status_text
 
     stage = get_astraedge_build_stage()
-    if stage != '50N' or ASTRAEDGE_BUILD_STAGE != '50N':
-        return _fail(f'expected build stage 50N got {stage!r}')
+    if stage != '50O' or ASTRAEDGE_BUILD_STAGE != '50O':
+        return _fail(f'expected build stage 50O got {stage!r}')
 
     status = format_status_text()
     if ASTRAEDGE_TELEGRAM_BUILD not in status:

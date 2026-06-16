@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests — /full read-only after Stage 50A."""
+"""Stage 50O — /full read-only snapshot must not mutate data."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_EXCLUDED, FULL_SNAPSHOT_SEQUENCE
 
     stage = get_astraedge_build_stage()
-    if stage != '50N' or ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50N':
-        return _fail(f'expected AstraEdge 50N got stage={stage!r} build={ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if stage != '50O' or ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50O':
+        return _fail(f'expected AstraEdge 50O got stage={stage!r} build={ASTRAEDGE_TELEGRAM_BUILD!r}')
     if len(FULL_SNAPSHOT_SEQUENCE) != 32:
         return _fail(f'/full must be 32 steps got {len(FULL_SNAPSHOT_SEQUENCE)}')
     if '/aihub reddit' in FULL_SNAPSHOT_SEQUENCE:

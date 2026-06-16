@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate /full read-only after Stage 50A."""
+"""Validate Stage 50O — /full read-only snapshot must not mutate data."""
 
 from __future__ import annotations
 

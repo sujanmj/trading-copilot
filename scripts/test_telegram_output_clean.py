@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dry-run simulation for clean Telegram output (Stage 50L hotfix).
+Dry-run simulation for clean Telegram output (Stage 50O).
 
 Prints TELEGRAM_OUTPUT_CLEAN_TEST_OK on success.
 """
@@ -84,8 +84,8 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.telegram_analysis_bot import handle_analysis_command
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50N':
-        return _fail(f'expected AstraEdge 50N got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50O':
+        return _fail(f'expected AstraEdge 50O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     if len(FULL_SNAPSHOT_SEQUENCE) != 32:
         return _fail(f'/full must remain 32 read-only steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
     if '/aihub reddit' in FULL_SNAPSHOT_SEQUENCE:

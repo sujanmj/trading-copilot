@@ -1812,33 +1812,62 @@ def format_intraday_anomaly_alert(
 
 def format_tradecard_telegram(*, explain: bool = False) -> str:
     """Format paper-only trade card for /tradecard commands."""
-    from backend.trading.trade_card_engine import get_trade_card
+    from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale
 
-    card = get_trade_card(rebuild=explain)
+    card = get_trade_card(rebuild=False)
     if card.get('ok') is False and not card.get('ticker'):
         return 'Trade card unavailable — no scanner candidate yet. Paper only.'
 
+    if is_trade_card_stale(card):
+        return (
+            '<b>📋 TRADE CARD — RESEARCH ONLY / STALE</b>\n'
+            'Card cache is stale for this session.\n'
+            'Run /refresh full or wait for fresh scanner.\n'
+            '<i>Paper only — no order execution.</i>'
+        )
+
     status = str(card.get('status') or 'NO_TRADE')
+    ticker = str(card.get('ticker') or '—')
     lines = [
         '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
-        f"<b>{card.get('ticker', '—')}</b> · <code>{status}</code>",
+        f"<b>{ticker}</b> · <code>{status}</code>",
         f"Price: {card.get('current_price') or '—'}",
-        f"Entry zone: {card.get('entry_zone') or '—'}",
-        f"Stop: {card.get('stop_loss') or '—'} · T1: {card.get('target_1') or '—'} · T2: {card.get('target_2') or '—'}",
-        f"R:R {card.get('risk_reward') or '—'} · Confidence: {card.get('confidence') or '—'}",
-        f"Capital plan: {card.get('capital_plan') or 'Paper only.'}",
-        f"Reason: {clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)}",
-        f"Invalid if: {clean_avoid_reason_text(str(card.get('invalid_if') or ''), max_len=120)}",
     ]
-    if explain:
+
+    if status == 'ENTRY_MISSED':
         lines.extend([
-            '',
-            '<b>Explain</b>',
-            f"Exit rule: {card.get('exit_rule') or '—'}",
-            f"Session: {card.get('session_date') or '—'} · Updated: {card.get('generated_at') or '—'}",
-            'No certainty on outcome — confirm manually before any paper journal entry.',
+            'Entry: NO ACTIVE ENTRY',
+            f"Reason: {clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)}",
+            'Plan: wait for pullback/retest — no chase.',
+            'Capital plan: no trade until valid entry forms.',
         ])
+        if explain:
+            ref = card.get('research_reference') or {}
+            lines.extend([
+                '',
+                '<b>Research reference only (not actionable)</b>',
+                f"Ref entry: {ref.get('entry_zone') or '—'}",
+                f"Ref SL: {ref.get('stop_loss') or '—'} · Ref T1: {ref.get('target_1') or '—'} · Ref T2: {ref.get('target_2') or '—'}",
+            ])
     else:
-        lines.append('Use /tradecard explain for full plan notes.')
+        lines.extend([
+            f"Entry zone: {card.get('entry_zone') or '—'}",
+            f"Stop: {card.get('stop_loss') or '—'} · T1: {card.get('target_1') or '—'} · T2: {card.get('target_2') or '—'}",
+            f"R:R {card.get('risk_reward') or '—'} · Confidence: {card.get('confidence') or '—'}",
+            f"Capital plan: {card.get('capital_plan') or 'Paper only.'}",
+            f"Reason: {clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)}",
+            f"Invalid if: {clean_avoid_reason_text(str(card.get('invalid_if') or ''), max_len=120)}",
+        ])
+        if explain:
+            lines.extend([
+                '',
+                '<b>Explain</b>',
+                f"Exit rule: {card.get('exit_rule') or '—'}",
+                f"Session: {card.get('session_date') or '—'} · Updated: {card.get('generated_at') or '—'}",
+                'No certainty on outcome — confirm manually before any paper journal entry.',
+            ])
+        else:
+            lines.append('Use /tradecard explain for full plan notes.')
+
     lines.append('Paper only — you decide and place trades manually.')
     return strip_stage_markers('\n'.join(lines))

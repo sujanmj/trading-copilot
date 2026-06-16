@@ -32,9 +32,13 @@ VALID_STATUSES = frozenset({
 
 MIN_RR = 1.5
 MIN_VOLUME_RATIO = 0.8
-MAX_SL_PCT = 4.5
-EXTENDED_MOVE_PCT = 8.0
-ENTRY_MISSED_MOVE_PCT = 6.5
+SCALP_MAX_SL_PCT = 1.2
+SCALP_IDEAL_SL_PCT = 0.6
+SCALP_T1_PCT = 1.0
+SCALP_T2_PCT = 1.65
+MAX_SL_PCT = SCALP_MAX_SL_PCT
+EXTENDED_MOVE_PCT = 5.0
+ENTRY_MISSED_MOVE_PCT = 5.0
 PAPER_ONLY = True
 
 
@@ -170,7 +174,7 @@ def detect_entry_missed(
     if risk_reward > 0 and risk_reward < MIN_RR and abs(change_pct) >= 4.0:
         reasons.append(f'risk/reward {risk_reward:.2f} below {MIN_RR}')
 
-    if sl_pct > MAX_SL_PCT:
+    if sl_pct > SCALP_MAX_SL_PCT:
         reasons.append(f'stop too wide ({sl_pct:.1f}%)')
 
     if volume_ratio < MIN_VOLUME_RATIO and abs(change_pct) >= 4.0:
@@ -195,14 +199,17 @@ def _compute_plan(row: dict[str, Any]) -> dict[str, Any]:
             'target_2': None,
             'risk_reward': 0.0,
             'sl_pct': 0.0,
+            'price': 0.0,
+            'change_pct': change_pct,
+            'volume_ratio': volume_ratio,
         }
 
-    atr = _estimate_atr(price, change_pct, volume_ratio)
-    entry_low = round(price - atr * 0.2, 2)
-    entry_high = round(price + atr * 0.08, 2)
-    stop = round(price - atr * 1.15, 2)
-    target_1 = round(price + atr * 2.0, 2)
-    target_2 = round(price + atr * 3.0, 2)
+    sl_pct_val = SCALP_IDEAL_SL_PCT
+    stop = round(price * (1 - sl_pct_val / 100), 2)
+    entry_low = round(price * (1 - 0.002), 2)
+    entry_high = round(price * (1 + 0.003), 2)
+    target_1 = round(price * (1 + SCALP_T1_PCT / 100), 2)
+    target_2 = round(price * (1 + SCALP_T2_PCT / 100), 2)
 
     risk = max(0.01, price - stop)
     reward = max(0.0, target_1 - price)
@@ -338,6 +345,9 @@ def build_trade_card(
     if missed:
         status = 'ENTRY_MISSED'
         reason_parts.extend(missed_reasons)
+    elif plan['sl_pct'] > SCALP_MAX_SL_PCT:
+        status = 'NO_TRADE'
+        reason_parts.append(f"Stop {plan['sl_pct']:.1f}% exceeds scalp max {SCALP_MAX_SL_PCT}%")
     elif rr < MIN_RR:
         status = 'NO_TRADE'
         reason_parts.append(f'Risk/reward {rr:.2f} below minimum {MIN_RR}')
@@ -380,12 +390,47 @@ def build_trade_card(
         'paper_only': True,
         'change_percent': round(change_pct, 2),
         'volume_ratio': round(volume_ratio, 2),
+        'research_reference': {
+            'stop_loss': plan['stop_loss'],
+            'target_1': plan['target_1'],
+            'target_2': plan['target_2'],
+            'entry_zone': plan['entry_zone'],
+        },
     }
+
+    if status == 'ENTRY_MISSED':
+        card.update({
+            'entry_zone': 'NO ACTIVE ENTRY',
+            'stop_loss': None,
+            'target_1': None,
+            'target_2': None,
+            'risk_reward': 0.0,
+            'capital_plan': 'No trade until valid entry forms after pullback.',
+            'invalid_if': 'No active entry — extended move.',
+            'exit_rule': 'Wait for pullback/retest — no chase. If no pullback: NO TRADE.',
+            'reason': '; '.join(reason_parts)[:240] or 'Strong move, but do not chase.',
+        })
 
     if persist:
         TRADE_CARD_CACHE.parent.mkdir(parents=True, exist_ok=True)
         TRADE_CARD_CACHE.write_text(json.dumps(card, indent=2), encoding='utf-8')
     return card
+
+
+def is_trade_card_stale(card: dict[str, Any]) -> bool:
+    if not card or card.get('session_date') != _today():
+        return True
+    generated = str(card.get('generated_at') or '')
+    if not generated:
+        return False
+    try:
+        dt = datetime.fromisoformat(generated.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=IST)
+        age_h = (datetime.now(IST) - dt.astimezone(IST)).total_seconds() / 3600.0
+        return age_h > 6.0
+    except ValueError:
+        return False
 
 
 def get_trade_card(*, rebuild: bool = False) -> dict[str, Any]:

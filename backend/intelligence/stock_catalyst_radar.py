@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50N'
+STAGE = '50O'
 CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 
 CATALYST_TYPES = frozenset({
@@ -41,6 +41,7 @@ CATALYST_TYPES = frozenset({
     'MANAGEMENT_CHANGE',
     'SECTOR_NEWS',
     'GENERAL_NEWS',
+    'AI_INVESTMENT',
 })
 
 CATALYST_SIDES = frozenset({
@@ -90,18 +91,42 @@ REJECT_TICKER_WORDS = frozenset({
 
 TICKER_RE = re.compile(r'\b([A-Z]{2,15})\b')
 
+CATALYST_TYPE_RANK: dict[str, int] = {
+    'AI_INVESTMENT': 100,
+    'ACQUISITION': 95,
+    'ORDER_WIN': 92,
+    'PROJECT_ANNOUNCEMENT': 90,
+    'STAKE_BUY': 88,
+    'BROKER_UPGRADE': 85,
+    'TARGET_UPGRADE': 85,
+    'REGULATORY_APPROVAL': 84,
+    'DIVIDEND_BONUS_SPLIT': 80,
+    'RESULT_ALERT': 75,
+    'BLOCK_DEAL': 70,
+    'BULK_DEAL': 68,
+    'BOARD_MEETING': 50,
+    'MANAGEMENT_CHANGE': 48,
+    'OFS': 86,
+    'STAKE_SALE': 86,
+    'BROKER_DOWNGRADE': 82,
+    'TARGET_DOWNGRADE': 82,
+    'REGULATORY_RISK': 80,
+    'SECTOR_NEWS': 20,
+    'GENERAL_NEWS': 10,
+}
+
 CATALYST_RULES: tuple[tuple[re.Pattern[str], str, str], ...] = (
+    (re.compile(r'\b(ai investment|investment in ai|artificial intelligence stake|sarvam ai)\b', re.I), 'AI_INVESTMENT', 'BULLISH'),
     (re.compile(r'\b(project|smart city|township|housing project|real estate project)\b', re.I), 'PROJECT_ANNOUNCEMENT', 'BULLISH'),
     (re.compile(r'\b(order win|wins order|bagged order|contract win|wins contract)\b', re.I), 'ORDER_WIN', 'BULLISH'),
     (re.compile(r'\b(acquisition|acquires|to acquire|merger|takeover)\b', re.I), 'ACQUISITION', 'BULLISH'),
-    (re.compile(r'\b(stake buy|buys stake|picks up stake|invests in|investment in)\b', re.I), 'STAKE_BUY', 'BULLISH'),
-    (re.compile(r'\b(ofs|offer for sale|stake dilution)\b', re.I), 'OFS', 'BEARISH'),
-    (re.compile(r'\b(stake sale|sells stake|offloads stake|divest)\b', re.I), 'STAKE_SALE', 'BEARISH'),
+    (re.compile(r'\b(stake buy|buys stake|buying stake|bought stake|picks up stake|invests in|investment in)\b', re.I), 'STAKE_BUY', 'BULLISH'),
+    (re.compile(r'\b(promoter sells|ofs|offer for sale|stake dilution|stake sale|sells stake|offloads stake|divest)\b', re.I), 'OFS', 'BEARISH'),
     (re.compile(r'\b(block deal|block trade)\b', re.I), 'BLOCK_DEAL', 'MIXED'),
     (re.compile(r'\b(bulk deal)\b', re.I), 'BULK_DEAL', 'MIXED'),
-    (re.compile(r'\b(upgrade|upgraded|overweight|outperform|buy rating|accumulate)\b', re.I), 'BROKER_UPGRADE', 'BULLISH'),
+    (re.compile(r'\b(upgrade|upgraded|overweight|outperform|buy rating|accumulate|rating upgrade)\b', re.I), 'BROKER_UPGRADE', 'BULLISH'),
     (re.compile(r'\b(downgrade|downgraded|underweight|underperform|sell rating|reduce rating)\b', re.I), 'BROKER_DOWNGRADE', 'BEARISH'),
-    (re.compile(r'\b(target raised|target upgrade|raises target|hikes target|price target raised)\b', re.I), 'TARGET_UPGRADE', 'BULLISH'),
+    (re.compile(r'\b(target raised|target upgrade|raises target|hikes target|price target raised|traffic)\b', re.I), 'TARGET_UPGRADE', 'BULLISH'),
     (re.compile(r'\b(target cut|target downgrade|cuts target|lowers target|price target cut)\b', re.I), 'TARGET_DOWNGRADE', 'BEARISH'),
     (re.compile(r'\b(results|earnings|quarterly|q[1-4]|profit|revenue beat|revenue miss)\b', re.I), 'RESULT_ALERT', 'MIXED'),
     (re.compile(r'\b(board meeting|board meet|agm|egm)\b', re.I), 'BOARD_MEETING', 'NEUTRAL'),
@@ -109,6 +134,7 @@ CATALYST_RULES: tuple[tuple[re.Pattern[str], str, str], ...] = (
     (re.compile(r'\b(regulatory approval|sebi approval|rbi approval|clearance granted)\b', re.I), 'REGULATORY_APPROVAL', 'BULLISH'),
     (re.compile(r'\b(regulatory risk|sebi probe|rbi action|investigation|penalty|fine imposed)\b', re.I), 'REGULATORY_RISK', 'BEARISH'),
     (re.compile(r'\b(ceo|md|cfo|management change|resigns|appoints new)\b', re.I), 'MANAGEMENT_CHANGE', 'MIXED'),
+    (re.compile(r'\b(falls|crashes|plunges|tumbles|slumps)\b', re.I), 'GENERAL_NEWS', 'RISK'),
     (re.compile(r'\b(sector|industry|theme|policy boost|sector tailwind)\b', re.I), 'SECTOR_NEWS', 'NEUTRAL'),
 )
 
@@ -212,31 +238,186 @@ def resolve_tickers_from_text(text: str, *, known: Optional[frozenset[str]] = No
 
 
 def classify_catalyst(text: str) -> tuple[str, str]:
-    """Return (catalyst_type, side) from headline/body."""
+    """Return strongest (catalyst_type, side) from headline/body."""
     blob = str(text or '')
     lower = blob.lower()
-
-    matched_type = 'GENERAL_NEWS'
-    matched_side = 'NEUTRAL'
+    matches: list[tuple[str, str, int]] = []
 
     for pattern, ctype, side in CATALYST_RULES:
         if pattern.search(blob):
-            matched_type = ctype
-            matched_side = side
-            break
+            matches.append((ctype, side, CATALYST_TYPE_RANK.get(ctype, 50)))
 
-    if matched_type == 'GENERAL_NEWS' and SHARP_FALL_RE.search(blob):
-        if not any(p.search(blob) for p, _, s in CATALYST_RULES if s in ('BULLISH', 'MIXED')):
+    if re.search(r'\b(shares jump|shares surge|shares rally|jump \d+%)\b', lower) and re.search(
+        r'\b(buying stake|buys stake|bought stake|acquisition|investment in)\b', lower
+    ):
+        if re.search(r'\b(ai|artificial intelligence)\b', lower):
+            matches.append(('AI_INVESTMENT', 'BULLISH', CATALYST_TYPE_RANK['AI_INVESTMENT']))
+        else:
+            matches.append(('STAKE_BUY', 'BULLISH', CATALYST_TYPE_RANK['STAKE_BUY']))
+
+    if not matches:
+        if SHARP_FALL_RE.search(blob):
             return 'GENERAL_NEWS', 'RISK'
+        return 'GENERAL_NEWS', 'NEUTRAL'
 
-    if 'traffic' in lower and matched_type in ('BROKER_UPGRADE', 'GENERAL_NEWS', 'SECTOR_NEWS'):
-        matched_side = 'BULLISH'
+    matches.sort(key=lambda item: item[2], reverse=True)
+    ctype, side, _ = matches[0]
 
-    if matched_type in ('BLOCK_DEAL', 'BULK_DEAL') and matched_side == 'MIXED':
-        if re.search(r'\b(jump|surge|rally|gain)\b', lower):
-            matched_side = 'BULLISH'
+    if ctype in ('BLOCK_DEAL', 'BULK_DEAL') and re.search(r'\b(jump|surge|rally|gain)\b', lower):
+        side = 'BULLISH'
+    elif ctype in ('BLOCK_DEAL', 'BULK_DEAL'):
+        side = 'MIXED'
 
-    return matched_type, matched_side
+    if ctype in ('OFS', 'STAKE_SALE') and re.search(r'\b(absorb|strong demand|above floor)\b', lower):
+        side = 'MIXED'
+
+    return ctype, side
+
+
+def _combine_sides(sides: list[str]) -> str:
+    normalized = {str(s or '').upper() for s in sides if s}
+    if not normalized:
+        return 'NEUTRAL'
+    if 'BEARISH' in normalized or 'RISK' in normalized:
+        if 'BULLISH' in normalized:
+            return 'MIXED'
+        return 'BEARISH' if 'BEARISH' in normalized else 'RISK'
+    if 'MIXED' in normalized:
+        return 'MIXED'
+    if 'BULLISH' in normalized:
+        return 'BULLISH'
+    return 'NEUTRAL'
+
+
+def _merge_raw_by_ticker(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        sym = _normalize_ticker(row.get('ticker'))
+        if not sym:
+            continue
+        buckets.setdefault(sym, []).append(row)
+
+    merged: list[dict[str, Any]] = []
+    for sym, group in buckets.items():
+        types = [str(g.get('catalyst_type') or 'GENERAL_NEWS') for g in group]
+        best_type = max(types, key=lambda t: CATALYST_TYPE_RANK.get(t, 0))
+        combined_side = _combine_sides([str(g.get('side') or 'NEUTRAL') for g in group])
+        headlines = [str(g.get('headline') or '').strip() for g in group if g.get('headline')]
+        newest = max(group, key=lambda g: _freshness_score(_parse_ts(g.get('published_at'))))
+        merged.append({
+            'ticker': sym,
+            'tickers': [sym],
+            'headline': headlines[0] if headlines else '',
+            'catalyst_notes': headlines,
+            'catalyst_type': best_type,
+            'side': combined_side,
+            'published_at': newest.get('published_at'),
+            'source': newest.get('source'),
+            'source_key': newest.get('source_key'),
+            'url': newest.get('url'),
+        })
+    return merged
+
+
+def _safe_optional_float(value: Any) -> Optional[float]:
+    if value is None or value == '':
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _quote_metrics(ticker: str, row: dict[str, Any]) -> dict[str, Any]:
+    quote = _scanner_quote(ticker)
+    quote_available = bool(
+        quote
+        and (
+            _safe_optional_float(quote.get('price') or quote.get('last_price'))
+            or _safe_optional_float(quote.get('change_percent')) is not None
+        )
+    )
+    change_pct = _safe_optional_float(row.get('change_pct'))
+    volume_ratio = _safe_optional_float(row.get('volume_ratio'))
+    if change_pct is None and quote_available:
+        change_pct = _safe_optional_float(quote.get('change_percent'))
+    if volume_ratio is None and quote_available:
+        volume_ratio = _safe_optional_float(quote.get('volume_ratio'))
+    return {
+        'quote_available': quote_available,
+        'change_pct': change_pct,
+        'volume_ratio': volume_ratio,
+        'quote': quote,
+    }
+
+
+def format_price_reaction_display(change_pct: Optional[float], *, quote_available: bool) -> str:
+    if not quote_available or change_pct is None:
+        return 'unavailable'
+    return f'{change_pct:+.1f}%'
+
+
+def format_volume_display(volume_ratio: Optional[float], *, quote_available: bool) -> str:
+    if not quote_available or volume_ratio is None:
+        return 'unavailable'
+    return f'{volume_ratio:.1f}x'
+
+
+def _reconcile_trade_status(
+    *,
+    priority: str,
+    side: str,
+    quote_available: bool,
+    volume_ratio: Optional[float],
+    change_pct: Optional[float],
+    ticker: str,
+) -> str:
+    side_u = side.upper()
+    if not quote_available:
+        return 'WAIT FOR LIVE DATA'
+    if priority == 'AVOID' or side_u in ('BEARISH', 'RISK'):
+        return 'AVOID/RISK'
+    from backend.trading.trade_card_engine import MIN_RR, MIN_VOLUME_RATIO, detect_entry_missed, _compute_plan
+
+    row = _scanner_quote(ticker)
+    if not row:
+        return 'WAIT FOR LIVE DATA'
+    plan = _compute_plan(row)
+    missed, _ = detect_entry_missed(
+        price=plan['price'],
+        change_pct=plan['change_pct'],
+        volume_ratio=plan['volume_ratio'],
+        day_high=plan.get('day_high'),
+        vwap=plan.get('vwap'),
+        open_price=plan.get('open_price'),
+        risk_reward=plan['risk_reward'],
+        sl_pct=plan['sl_pct'],
+    )
+    if missed:
+        return 'ENTRY MISSED'
+    if plan['risk_reward'] < MIN_RR:
+        return 'NO TRADE'
+    vol = volume_ratio if volume_ratio is not None else plan['volume_ratio']
+    if vol is None or vol < MIN_VOLUME_RATIO:
+        return 'WAIT FOR VOLUME'
+    return 'VALID ENTRY WATCH'
+
+
+def _eligible_for_priority_list(row: dict[str, Any]) -> bool:
+    ctype = str(row.get('catalyst_type') or 'GENERAL_NEWS').upper()
+    side = str(row.get('side') or 'NEUTRAL').upper()
+    score = float(row.get('score') or 0)
+    if not row.get('ticker'):
+        return False
+    if ctype == 'GENERAL_NEWS' and side == 'NEUTRAL':
+        return False
+    if ctype == 'SECTOR_NEWS' and side == 'NEUTRAL' and score < PRIORITY_MEDIUM:
+        return False
+    if row.get('freshness_label') == 'stale':
+        return False
+    if score < PRIORITY_LOW and side not in ('BEARISH', 'RISK'):
+        return False
+    return True
 
 
 def _freshness_score(ts: Optional[datetime]) -> float:
@@ -286,7 +467,9 @@ def _scanner_quote(ticker: str) -> dict[str, Any]:
     return {}
 
 
-def _price_reaction_score(change_pct: float, side: str) -> float:
+def _price_reaction_score(change_pct: Optional[float], side: str) -> float:
+    if change_pct is None:
+        return 4.0
     mag = abs(change_pct)
     if side == 'BEARISH':
         if change_pct <= -5:
@@ -311,7 +494,9 @@ def _price_reaction_score(change_pct: float, side: str) -> float:
     return 2.0
 
 
-def _volume_score(volume_ratio: float, side: str) -> float:
+def _volume_score(volume_ratio: Optional[float], side: str) -> float:
+    if volume_ratio is None:
+        return 3.0
     if volume_ratio >= 1.5:
         return 15.0
     if volume_ratio >= 1.0:
@@ -335,14 +520,15 @@ def _sector_support_score(ticker: str) -> float:
     return 5.0
 
 
-def _risk_penalty(side: str, catalyst_type: str, change_pct: float) -> float:
+def _risk_penalty(side: str, catalyst_type: str, change_pct: Optional[float]) -> float:
+    chg = abs(change_pct) if change_pct is not None else 0.0
     if side == 'BEARISH':
         return -25.0
     if side == 'RISK':
         return -20.0
     if catalyst_type in ('OFS', 'STAKE_SALE', 'REGULATORY_RISK', 'BROKER_DOWNGRADE'):
         return -15.0
-    if side == 'MIXED' and abs(change_pct) >= 6:
+    if side == 'MIXED' and chg >= 6:
         return -8.0
     return 0.0
 
@@ -359,49 +545,14 @@ def _priority_label(total: float, side: str) -> str:
     return 'AVOID'
 
 
-def _trade_status(ticker: str, side: str, volume_ratio: float, change_pct: float) -> str:
-    if side in ('BEARISH', 'RISK'):
-        return 'AVOID/RISK'
-    from backend.trading.trade_card_engine import (
-        MIN_RR,
-        MIN_VOLUME_RATIO,
-        detect_entry_missed,
-        _compute_plan,
-    )
-
-    row = _scanner_quote(ticker)
-    if not row:
-        if volume_ratio < MIN_VOLUME_RATIO:
-            return 'WAIT FOR VOLUME'
-        return 'NO_TRADE'
-
-    plan = _compute_plan(row)
-    missed, _ = detect_entry_missed(
-        price=plan['price'],
-        change_pct=plan['change_pct'],
-        volume_ratio=plan['volume_ratio'],
-        day_high=plan.get('day_high'),
-        vwap=plan.get('vwap'),
-        open_price=plan.get('open_price'),
-        risk_reward=plan['risk_reward'],
-        sl_pct=plan['sl_pct'],
-    )
-    if missed:
-        return 'ENTRY MISSED'
-    if plan['risk_reward'] < MIN_RR:
-        return 'NO_TRADE'
-    if plan['volume_ratio'] < MIN_VOLUME_RATIO:
-        return 'WAIT FOR VOLUME'
-    return 'VALID ENTRY WATCH'
-
-
 def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
     ticker = _normalize_ticker(row.get('ticker'))
     side = str(row.get('side') or 'NEUTRAL').upper()
     ctype = str(row.get('catalyst_type') or 'GENERAL_NEWS').upper()
-    quote = _scanner_quote(ticker)
-    change_pct = float(row.get('change_pct') if row.get('change_pct') is not None else quote.get('change_percent') or 0)
-    volume_ratio = float(row.get('volume_ratio') if row.get('volume_ratio') is not None else quote.get('volume_ratio') or 0)
+    metrics = _quote_metrics(ticker, row)
+    change_pct = metrics['change_pct']
+    volume_ratio = metrics['volume_ratio']
+    quote_available = metrics['quote_available']
 
     ts = _parse_ts(row.get('published_at') or row.get('timestamp'))
     fresh = _freshness_score(ts)
@@ -413,13 +564,22 @@ def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
     total = round(fresh + quality + price + volume + sector + penalty, 1)
 
     priority = _priority_label(total, side)
-    trade_status = _trade_status(ticker, side, volume_ratio, change_pct)
+    trade_status = _reconcile_trade_status(
+        priority=priority,
+        side=side,
+        quote_available=quote_available,
+        volume_ratio=volume_ratio,
+        change_pct=change_pct,
+        ticker=ticker,
+    )
 
     reason_parts = [
         f"{ctype.replace('_', ' ').lower()}",
         f"freshness {fresh:.0f}/25",
     ]
-    if volume_ratio < 0.8 and side not in ('BEARISH', 'RISK'):
+    if not quote_available:
+        reason_parts.append('live quote unavailable')
+    elif volume_ratio is not None and volume_ratio < 0.8 and side not in ('BEARISH', 'RISK'):
         reason_parts.append('volume confirm required')
     if side == 'RISK':
         reason_parts.append('sharp move without positive catalyst')
@@ -429,8 +589,11 @@ def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
         'ticker': ticker,
         'side': side,
         'catalyst_type': ctype,
-        'change_pct': round(change_pct, 2),
-        'volume_ratio': round(volume_ratio, 2),
+        'change_pct': change_pct,
+        'volume_ratio': volume_ratio,
+        'quote_available': quote_available,
+        'price_display': format_price_reaction_display(change_pct, quote_available=quote_available),
+        'volume_display': format_volume_display(volume_ratio, quote_available=quote_available),
         'score': total,
         'score_breakdown': {
             'freshness': fresh,
@@ -579,10 +742,12 @@ def build_catalyst_radar(*, persist: bool = True, force_refresh: bool = False) -
             return cached
 
     raw = _collect_raw_catalysts()
-    scored = [score_catalyst_row(row) for row in raw]
+    merged_raw = _merge_raw_by_ticker(raw)
+    scored = [score_catalyst_row(row) for row in merged_raw]
     scored.sort(key=lambda r: (r.get('score') or 0), reverse=True)
 
-    bullish = [r for r in scored if r.get('side') == 'BULLISH' and r.get('priority') != 'AVOID']
+    priority_list = [r for r in scored if _eligible_for_priority_list(r)][:10]
+    bullish = [r for r in priority_list if r.get('side') == 'BULLISH' and r.get('priority') != 'AVOID']
     avoid = [r for r in scored if r.get('side') in ('BEARISH', 'RISK') or r.get('priority') == 'AVOID']
 
     payload: dict[str, Any] = {
@@ -591,7 +756,7 @@ def build_catalyst_radar(*, persist: bool = True, force_refresh: bool = False) -
         'session_date': session_date,
         'generated_at': _now_iso(),
         'items': scored[:40],
-        'priority_list': scored[:15],
+        'priority_list': priority_list,
         'bullish_watch': bullish[:8],
         'avoid_list': avoid[:6],
         'source_status': _stub_source_status(),
@@ -648,7 +813,14 @@ def explain_catalyst(ticker: str) -> Optional[dict[str, Any]]:
     if not matches:
         return None
     matches.sort(key=lambda r: r.get('score') or 0, reverse=True)
-    return matches[0]
+    primary = dict(matches[0])
+    notes = primary.get('catalyst_notes') or []
+    for row in matches[1:]:
+        for note in row.get('catalyst_notes') or [row.get('headline')]:
+            if note and note not in notes:
+                notes.append(note)
+    primary['catalyst_notes'] = notes
+    return primary
 
 
 def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: Optional[str] = None) -> str:
@@ -661,13 +833,18 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
             f"<b>📡 CATALYST EXPLAIN — {row.get('ticker')}</b>",
             f"Side: {row.get('side')} · Type: {str(row.get('catalyst_type', '')).replace('_', ' ')}",
             f"Headline: {str(row.get('headline') or '')[:180]}",
+        ]
+        for note in (row.get('catalyst_notes') or [])[1:4]:
+            lines.append(f"Also: {str(note)[:120]}")
+        lines.extend([
             f"Freshness: {row.get('freshness_label')} · Score: {row.get('score')}",
-            f"Price reaction: {row.get('change_pct'):+.1f}% · Volume: {row.get('volume_ratio')}x",
+            f"Price reaction: {row.get('price_display') or format_price_reaction_display(row.get('change_pct'), quote_available=bool(row.get('quote_available')))} · "
+            f"Volume: {row.get('volume_display') or format_volume_display(row.get('volume_ratio'), quote_available=bool(row.get('quote_available')))}",
             f"Priority: {row.get('priority')} · Status: {row.get('trade_status')}",
             f"Breakdown: fresh {bd.get('freshness', 0):.0f} · quality {bd.get('quality', 0):.0f} · "
             f"price {bd.get('price_reaction', 0):.0f} · vol {bd.get('volume_confirmation', 0):.0f}",
             'Paper watch only — no order execution.',
-        ]
+        ])
         return '\n'.join(lines)
 
     radar = build_catalyst_radar(force_refresh=today_only)
@@ -683,8 +860,8 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
         lines.append(
             f"{idx}. <b>{row.get('ticker')}</b> — {row.get('side')}\n"
             f"   Catalyst: {str(row.get('catalyst_type', '')).replace('_', ' ').lower()}\n"
-            f"   Freshness: {row.get('freshness_label')} · Price: {row.get('change_pct'):+.1f}%\n"
-            f"   Volume: {row.get('volume_ratio')}x · Priority: {row.get('priority')}\n"
+            f"   Freshness: {row.get('freshness_label')} · Price: {row.get('price_display') or 'unavailable'}\n"
+            f"   Volume: {row.get('volume_display') or 'unavailable'} · Priority: {row.get('priority')}\n"
             f"   Trade status: {row.get('trade_status')}"
         )
     lines.append('')
