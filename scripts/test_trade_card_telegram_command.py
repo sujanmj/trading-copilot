@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50Q — /tradecard Telegram command wiring and ticker contract."""
+"""Stage 50R hotfix — /tradecard Telegram command wiring, ticker + explain contract."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 FORBIDDEN = re.compile(r'\b(guaranteed|99%)\b', re.IGNORECASE)
 NAKED_BUY_SELL = re.compile(r'\bAction:\s*(BUY|SELL)\b', re.IGNORECASE)
+EXPLAIN_FIELDS = ('Reason:', 'Entry logic:', 'Risk logic:', 'Next action:')
 
 
 def _has_ticker_contract(text: str) -> bool:
@@ -24,6 +25,12 @@ def _has_ticker_contract(text: str) -> bool:
     if re.search(r'<b>[A-Z][A-Z0-9]{1,14}</b>\s*·', text):
         return True
     return False
+
+
+def _has_explain_section(text: str) -> bool:
+    if 'Explain' not in text:
+        return False
+    return all(field in text for field in EXPLAIN_FIELDS)
 
 
 def _fail(msg: str) -> int:
@@ -55,8 +62,17 @@ def main() -> int:
         'session_date': '2026-06-16',
         'generated_at': '2026-06-16T10:00:00+05:30',
     }
+    missed_card = {
+        'ok': True,
+        'ticker': 'DEVYANI',
+        'status': 'ENTRY_MISSED',
+        'entry_zone': 'NO ACTIVE ENTRY',
+        'reason': 'Strong move, but do not chase.',
+        'paper_only': True,
+    }
     with patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake_card), \
          patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('', '')), \
          patch('scripts.refresh_local_intelligence.run_refresh_scoped', return_value={'ok': True}):
         text = format_tradecard_telegram(explain=False)
         explain = format_tradecard_telegram(explain=True)
@@ -71,13 +87,29 @@ def main() -> int:
                 return _fail(f'forbidden wording in {cmd}')
             if not _has_ticker_contract(body):
                 return _fail(f'missing ticker or Ticker: NONE in {cmd}')
+            if cmd == '/tradecard explain' and not _has_explain_section(body):
+                return _fail(f'explain mode missing Explain section in {cmd}')
 
     if 'TRADE CARD' not in text or 'paper only' not in text.lower():
         return _fail('format_tradecard_telegram missing header/paper note')
     if not _has_ticker_contract(text):
         return _fail('missing ticker in tradecard text')
-    if 'Explain' not in explain:
+    if not _has_explain_section(explain):
         return _fail('explain mode missing Explain section')
+    if 'Explain' in text:
+        return _fail('plain tradecard must not include Explain section')
+
+    with patch('backend.trading.trade_card_engine.get_trade_card', return_value=missed_card), \
+         patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('DEVYANI', 'ENTRY_MISSED')):
+        missed_explain = format_tradecard_telegram(explain=True)
+    if not _has_explain_section(missed_explain):
+        return _fail('ENTRY_MISSED explain missing Explain section')
+    if 'Ref entry:' in missed_explain or 'Ref SL:' in missed_explain:
+        return _fail('ENTRY_MISSED explain must not show ref entry/SL/targets')
+    if 'no active entry because entry is missed' not in missed_explain.lower():
+        return _fail('ENTRY_MISSED explain missing entry logic wording')
+
     if today_result.get('scope') != 'tradecard':
         return _fail(f'run_tradecard_only today wrong scope {today_result.get("scope")!r}')
     if explain_result.get('scope') != 'tradecard':

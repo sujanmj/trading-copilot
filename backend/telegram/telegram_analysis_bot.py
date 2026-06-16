@@ -514,10 +514,8 @@ def _handle_close() -> str:
 
 
 def _handle_stock_decision_command(mode: str, *, cache_only: bool = False) -> str:
-    from backend.analytics.railway_decision_bootstrap import (
-        decision_rebuilding_reply,
-        start_background_bootstrap_reports,
-    )
+    """Shared /today and /tomorrow handler — same path for direct and /full steps."""
+    from backend.analytics.railway_decision_bootstrap import decision_rebuilding_reply
     from backend.analytics.stock_decision_engine import build_stock_decision
     from backend.telegram.response_format import (
         format_stock_decision_payload,
@@ -530,6 +528,9 @@ def _handle_stock_decision_command(mode: str, *, cache_only: bool = False) -> st
         return format_stock_decision_payload(payload, normalized)
     if cache_only:
         return decision_rebuilding_reply(normalized)
+
+    from backend.analytics.railway_decision_bootstrap import start_background_bootstrap_reports
+
     start_background_bootstrap_reports(force=True, railway_only=False)
     return decision_rebuilding_reply(normalized)
 

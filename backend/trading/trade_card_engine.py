@@ -313,6 +313,39 @@ def build_trade_card(
     }
 
     if not row:
+        if ticker and pick_reason.startswith('unified'):
+            sym = _normalize_ticker(ticker)
+            entry_status = 'NO_ACTIVE_ENTRY'
+            try:
+                from backend.trading.unified_live_priority_engine import build_unified_priority
+
+                unified = build_unified_priority(mode='today')
+                for urow in [unified.get('top_pick'), *(unified.get('ranked_candidates') or [])]:
+                    if not isinstance(urow, dict):
+                        continue
+                    if _normalize_ticker(urow.get('ticker')) != sym:
+                        continue
+                    entry_status = str(urow.get('entry_status') or 'NO_ACTIVE_ENTRY')
+                    break
+            except Exception:
+                pass
+            status = {
+                'ENTRY_MISSED': 'ENTRY_MISSED',
+                'WAIT_FOR_VOLUME': 'WAIT_FOR_VOLUME',
+                'WAIT_FOR_PULLBACK': 'WAIT_FOR_PULLBACK',
+                'VALID_ENTRY': 'VALID_ENTRY',
+            }.get(entry_status, 'NO_TRADE')
+            base.update({
+                'ticker': sym,
+                'status': status,
+                'entry_zone': 'NO ACTIVE ENTRY',
+                'reason': 'Unified /today top — no valid entry on live scanner row.',
+                'pick_reason': pick_reason,
+            })
+            if persist:
+                TRADE_CARD_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                TRADE_CARD_CACHE.write_text(json.dumps(base, indent=2), encoding='utf-8')
+            return base
         base['ok'] = False
         base['reason'] = 'No scanner candidate available for trade card.'
         if persist:

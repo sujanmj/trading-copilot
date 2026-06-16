@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Stage 50Q /tradecard command wiring."""
+"""Validate Stage 50R hotfix /tradecard command wiring and explain contract."""
 
 from __future__ import annotations
 

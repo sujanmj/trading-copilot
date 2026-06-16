@@ -56,7 +56,7 @@ def main() -> int:
         return _fail(f'today top {today_top!r} != tradecard pick {tradecard_sym!r}')
     if today_top == 'AVANTIFEED':
         return _fail('stale AVANTIFEED must not be unified top when scanner fresh')
-    if reason not in ('unified_catalyst_scanner', 'unified_scanner', 'unified_fallback_scanner'):
+    if reason not in ('unified_catalyst_scanner', 'unified_scanner', 'unified_fallback_scanner', 'unified_today_top'):
         return _fail(f'unexpected pick reason {reason!r}')
 
     print('TODAY_TRADECARD_SAME_PRIORITY_ENGINE_TEST_OK')

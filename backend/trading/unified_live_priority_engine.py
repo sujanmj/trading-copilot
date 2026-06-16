@@ -1,5 +1,5 @@
 """
-Unified live priority engine — Stage 50Q.
+Unified live priority engine — Stage 50R.
 
 Single ranking path for /today, /tomorrow, /premarket, /catalysts, /tradecard.
 
@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50Q'
+STAGE = '50R'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 FINAL_CONF_FILE = DATA_DIR / 'final_confidence_report.json'
 
@@ -596,7 +596,7 @@ def pick_tradecard_candidate(
     """
     Pick best trade-card ticker using unified priority.
 
-    Order: catalyst+scanner confirmed → scanner-only → stale report last (skipped when live fresh).
+    Always evaluate /today unified top first; fall back to scanner-confirmed names.
     """
     reg = registry if registry is not None else _live_registry()
     scan = scanner if scanner is not None else _load_json(SCANNER_FILE)
@@ -610,11 +610,13 @@ def pick_tradecard_candidate(
     top = unified.get('top_pick')
     if isinstance(top, dict):
         sym = _normalize_ticker(top.get('ticker'))
-        if sym and sym not in reg and top.get('action') != 'AVOID' and sym in scan_index:
+        if sym and sym not in reg and top.get('action') != 'AVOID':
             supports = top.get('supports') or []
-            if 'catalyst' in supports:
-                return sym, 'unified_catalyst_scanner'
-            return sym, 'unified_scanner'
+            if sym in scan_index:
+                if 'catalyst' in supports:
+                    return sym, 'unified_catalyst_scanner'
+                return sym, 'unified_scanner'
+            return sym, 'unified_today_top'
 
     for row in unified.get('ranked_candidates') or []:
         sym = _normalize_ticker(row.get('ticker'))

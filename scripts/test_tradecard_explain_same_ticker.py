@@ -40,7 +40,8 @@ def main() -> int:
         'generated_at': '2026-05-27T10:00:00+05:30',
     }
     with patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake), \
-         patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False):
+         patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('IXIGO', 'VALID_ENTRY')):
         normal = format_tradecard_telegram(explain=False)
         explain = format_tradecard_telegram(explain=True)
 

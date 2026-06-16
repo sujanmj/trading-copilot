@@ -693,7 +693,9 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         if is_unified_snapshot_active():
             cached = get_snapshot_cached_decision(normalized_mode)
             if cached:
-                return cached
+                meta = sources.get('_freshness_meta') or get_feed_freshness_meta()
+                if cached.get('unified_priority') or not meta.get('scanner_fresh'):
+                    return cached
         sources['_freshness_meta'] = get_feed_freshness_meta()
         sources['_live_avoid'] = build_live_rejection_set()
     except Exception:
@@ -791,6 +793,14 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         payload = apply_live_guard_to_payload(payload)
     except Exception:
         pass
+
+    if normalized_mode in ('today', 'tomorrow'):
+        try:
+            from backend.analytics.unified_decision_engine import cache_snapshot_decision
+
+            cache_snapshot_decision(normalized_mode, payload)
+        except Exception:
+            pass
 
     return payload
 

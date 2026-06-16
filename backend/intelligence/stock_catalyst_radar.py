@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50Q'
+STAGE = '50R'
 CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 
 CATALYST_TYPES = frozenset({
@@ -145,9 +145,26 @@ SHARP_FALL_RE = re.compile(
 )
 
 HCLTECH_AI_STAKE_FORCE_RE = re.compile(
-    r'(hcl\s+tech\s+shares\s+jump.*?buying\s+stake\s+in\s+sarvam\s+ai|buying\s+stake\s+in\s+sarvam\s+ai|sarvam\s+ai\s+stake)',
+    r'(hcl\s+tech\s+shares\s+jump.*?buying\s+stake\s+in\s+sarvam\s+ai|'
+    r'buying\s+stake\s+in\s+sarvam\s+ai|buys\s+stake\s+in\s+sarvam\s+ai|'
+    r'stake\s+in\s+sarvam\s+ai|sarvam\s+ai\s+for\s+rs[\s,.]*1[\s,.]*427\s+crore|'
+    r'sarvam\s+ai\s+stake|ai\s+investment)',
     re.IGNORECASE,
 )
+
+
+def _hcltech_sarvam_ai_stake(text: str, *, ticker: str = '') -> bool:
+    """Hard rule — HCLTECH Sarvam AI stake headlines stay BULLISH / AI_INVESTMENT."""
+    blob = str(text or '')
+    sym = _normalize_ticker(ticker)
+    if sym and sym != 'HCLTECH':
+        return False
+    if HCLTECH_AI_STAKE_FORCE_RE.search(blob):
+        return True
+    lower = blob.lower()
+    if 'sarvam ai' in lower and re.search(r'\b(stake|investment)\b', lower):
+        return True
+    return False
 
 SOURCE_QUALITY: dict[str, float] = {
     'nse_filings': 1.0,
@@ -246,7 +263,7 @@ def classify_catalyst(text: str) -> tuple[str, str]:
     """Return strongest (catalyst_type, side) from headline/body."""
     blob = str(text or '')
     lower = blob.lower()
-    if HCLTECH_AI_STAKE_FORCE_RE.search(blob):
+    if _hcltech_sarvam_ai_stake(blob):
         return 'AI_INVESTMENT', 'BULLISH'
     matches: list[tuple[str, str, int]] = []
 
@@ -362,7 +379,7 @@ def _merge_raw_by_ticker(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         best_side = str(best.get('side') or 'NEUTRAL').upper()
 
         forced_ai = next(
-            (g for g in classified if HCLTECH_AI_STAKE_FORCE_RE.search(str(g.get('headline') or ''))),
+            (g for g in classified if _hcltech_sarvam_ai_stake(str(g.get('headline') or ''), ticker=sym)),
             None,
         )
         if forced_ai:
@@ -371,15 +388,23 @@ def _merge_raw_by_ticker(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             best = forced_ai
 
         # Generic index headlines must not dilute a stronger specific catalyst.
-        if best_tier >= 40 or forced_ai:
+        if forced_ai or best_type == 'AI_INVESTMENT':
+            side = 'BULLISH'
+        elif best_tier >= 40:
             side = best_side
         else:
             strong_sides = [
                 str(g.get('side') or 'NEUTRAL').upper()
                 for g in classified
                 if int(g.get('_evidence_tier') or 0) >= 40
+                and not _GENERIC_INDEX_HEADLINE_RE.search(str(g.get('headline') or ''))
             ]
             side = _combine_sides(strong_sides) if strong_sides else best_side
+            if side == 'MIXED' and any(
+                str(g.get('catalyst_type') or '').upper() == 'AI_INVESTMENT'
+                for g in classified
+            ):
+                side = 'BULLISH'
 
         headlines = [str(g.get('headline') or '').strip() for g in classified if g.get('headline')]
         merged.append({
@@ -625,8 +650,13 @@ def _priority_label(total: float, side: str) -> str:
 
 def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
     ticker = _normalize_ticker(row.get('ticker'))
+    headline = str(row.get('headline') or '')
     side = str(row.get('side') or 'NEUTRAL').upper()
     ctype = str(row.get('catalyst_type') or 'GENERAL_NEWS').upper()
+    if _hcltech_sarvam_ai_stake(headline, ticker=ticker):
+        side = 'BULLISH'
+        ctype = 'AI_INVESTMENT'
+        row = {**row, 'side': side, 'catalyst_type': ctype, 'headline': headline or row.get('headline')}
     metrics = _quote_metrics(ticker, row)
     change_pct = metrics['change_pct']
     volume_ratio = metrics['volume_ratio']

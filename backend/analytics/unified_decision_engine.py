@@ -255,6 +255,14 @@ def get_snapshot_cached_decision(mode: str) -> dict[str, Any] | None:
     return _snapshot_cache.get(key)
 
 
+def cache_snapshot_decision(mode: str, payload: dict[str, Any]) -> None:
+    """Store today/tomorrow payload once fully unified — never mid-pipeline."""
+    if not is_unified_snapshot_active() or not isinstance(payload, dict):
+        return
+    key = 'today' if mode == 'today' else 'tomorrow' if mode == 'tomorrow' else str(mode)
+    _snapshot_cache[key] = payload
+
+
 def get_feed_freshness_meta() -> dict[str, Any]:
     from backend.storage.data_paths import get_data_path
     from backend.telegram.freshness_consistency import (
@@ -428,19 +436,33 @@ def apply_live_guard_to_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if warnings:
         msg_parts.extend(out['snapshot_warnings'])
         msg_parts.append('')
-    msg_parts.append(
-        _build_telegram_message(
-            mode=mode,
-            decision=decision,
-            top_pick=top_pick,
-            avoid=out['avoid'],
-        )
-    )
-    out['telegram_message'] = '\n'.join(msg_parts)
+    if payload.get('unified_priority') and mode in ('today', 'tomorrow'):
+        try:
+            from backend.trading.unified_live_priority_engine import build_unified_priority, format_decision_unified
 
-    if is_unified_snapshot_active():
-        key = 'today' if mode == 'today' else 'tomorrow' if mode == 'tomorrow' else mode
-        _snapshot_cache[key] = out
+            unified = build_unified_priority(mode=mode)
+            body = format_decision_unified(unified, mode=mode)
+            out['telegram_message'] = '\n'.join(msg_parts + [body]) if msg_parts else body
+        except Exception:
+            msg_parts.append(
+                _build_telegram_message(
+                    mode=mode,
+                    decision=decision,
+                    top_pick=top_pick,
+                    avoid=out['avoid'],
+                )
+            )
+            out['telegram_message'] = '\n'.join(msg_parts)
+    else:
+        msg_parts.append(
+            _build_telegram_message(
+                mode=mode,
+                decision=decision,
+                top_pick=top_pick,
+                avoid=out['avoid'],
+            )
+        )
+        out['telegram_message'] = '\n'.join(msg_parts)
     return out
 
 
