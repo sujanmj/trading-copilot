@@ -749,16 +749,6 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         top_pick=top_pick,
         avoid=avoid_rows,
     )
-    if normalized_mode == 'today':
-        try:
-            from backend.trading.unified_live_priority_engine import build_unified_priority, format_today_unified
-
-            unified = build_unified_priority(mode='today')
-            meta = sources.get('_freshness_meta') or {}
-            if meta.get('scanner_fresh'):
-                telegram_message = format_today_unified(unified)
-        except Exception:
-            pass
 
     payload = {
         'ok': True,
@@ -782,6 +772,18 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
             'buy_cap_active': fc.get('buy_cap_active'),
         },
     }
+
+    if normalized_mode in ('today', 'tomorrow'):
+        try:
+            from backend.trading.unified_live_priority_engine import apply_unified_delegation_if_scanner_fresh
+
+            payload = apply_unified_delegation_if_scanner_fresh(
+                payload,
+                mode=normalized_mode,
+                freshness_meta=sources.get('_freshness_meta'),
+            )
+        except Exception:
+            pass
 
     try:
         from backend.analytics.unified_decision_engine import apply_live_guard_to_payload

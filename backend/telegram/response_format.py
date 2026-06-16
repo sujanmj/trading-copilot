@@ -900,6 +900,12 @@ def format_stock_decision_telegram(mode: str) -> str:
         payload = apply_live_guard_to_payload(payload)
     except Exception:
         pass
+    try:
+        from backend.trading.unified_live_priority_engine import apply_unified_delegation_if_scanner_fresh
+
+        payload = apply_unified_delegation_if_scanner_fresh(payload, mode=normalized)
+    except Exception:
+        pass
     if payload.get('ok') is not True:
         retry_cached = load_cached_stock_decision(normalized)
         if retry_cached:
@@ -1282,13 +1288,29 @@ def format_action_plan_telegram() -> str:
             get_feed_freshness_meta,
             note_snapshot_pick,
         )
+        from backend.trading.unified_live_priority_engine import apply_unified_delegation_if_scanner_fresh
 
-        today = apply_live_guard_to_payload(today)
-        tomorrow = apply_live_guard_to_payload(tomorrow)
-        note_snapshot_pick('action_plan', (top or {}).get('ticker') if isinstance(top, dict) else None)
-        freshness_lines = get_feed_freshness_meta().get('lines') or {}
+        freshness_meta = get_feed_freshness_meta()
+        today = apply_unified_delegation_if_scanner_fresh(
+            apply_live_guard_to_payload(today),
+            mode='today',
+            freshness_meta=freshness_meta,
+        )
+        tomorrow = apply_unified_delegation_if_scanner_fresh(
+            apply_live_guard_to_payload(tomorrow),
+            mode='tomorrow',
+            freshness_meta=freshness_meta,
+        )
+        freshness_lines = freshness_meta.get('lines') or {}
     except Exception:
         freshness_lines = {}
+        try:
+            from backend.analytics.unified_decision_engine import apply_live_guard_to_payload
+
+            today = apply_live_guard_to_payload(today)
+            tomorrow = apply_live_guard_to_payload(tomorrow)
+        except Exception:
+            pass
 
     brain = build_brain_payload()
     market = build_market_payload(force=False)
@@ -1341,6 +1363,13 @@ def format_action_plan_telegram() -> str:
     top = today.get('top_pick') if today.get('ok') else None
     decision = today.get('decision') if today.get('ok') else 'NO_CLEAN_CANDIDATE'
     action_warnings: list[str] = list(today.get('snapshot_warnings') or [])
+
+    try:
+        from backend.analytics.unified_decision_engine import note_snapshot_pick
+
+        note_snapshot_pick('action_plan', (top or {}).get('ticker') if isinstance(top, dict) else None)
+    except Exception:
+        pass
 
     if (not top or decision == 'NO_CLEAN_CANDIDATE') and pack:
         actionable = (brain.get('summary') or {}).get('actionable_candidates') or {}
@@ -1831,37 +1860,132 @@ def format_intraday_anomaly_alert(
     )
 
 
+def _normalize_tradecard_ticker(value: object) -> str:
+    sym = str(value or '').strip().upper()
+    if sym in _EMPTY_BULLET_VALUES or sym == 'NONE':
+        return ''
+    return sym
+
+
+def _tradecard_reviewed_fallback() -> tuple[str, str]:
+    """Best reviewed ticker from unified priority when trade card has none."""
+    try:
+        from backend.trading.unified_live_priority_engine import build_unified_priority
+
+        unified = build_unified_priority(mode='today')
+        for row in (unified.get('missed_candidates') or []) + (unified.get('ranked_candidates') or []):
+            if not isinstance(row, dict) or row.get('action') == 'AVOID':
+                continue
+            sym = _normalize_tradecard_ticker(row.get('ticker'))
+            if not sym:
+                continue
+            if row.get('entry_missed') or row.get('entry_status') == 'ENTRY_MISSED':
+                return sym, 'ENTRY_MISSED'
+            entry_status = str(row.get('entry_status') or '').strip().upper()
+            if entry_status in ('WAIT_FOR_PULLBACK', 'WAIT_FOR_VOLUME', 'NO_ACTIVE_ENTRY'):
+                return sym, entry_status
+            action = str(row.get('action') or '').strip().upper()
+            if action == 'WATCH_FOR_ENTRY':
+                return sym, 'WAIT'
+            if action == 'BUY_CANDIDATE':
+                return sym, 'VALID_ENTRY'
+            return sym, 'NO_ACTIVE_ENTRY'
+    except Exception:
+        pass
+    return '', ''
+
+
+def _tradecard_postmarket_line() -> str:
+    try:
+        from backend.trading.unified_live_priority_engine import _is_postmarket_mode
+
+        if _is_postmarket_mode():
+            return 'No live entry now. Next-session watch only.'
+    except Exception:
+        pass
+    return ''
+
+
+def _tradecard_status_label(status: str) -> str:
+    normalized = str(status or 'NO_TRADE').strip().upper()
+    if normalized == 'ENTRY_MISSED':
+        return 'ENTRY_MISSED'
+    if normalized in ('WAIT_FOR_PULLBACK', 'WAIT_FOR_VOLUME'):
+        return 'WAIT'
+    if normalized in ('NO_TRADE', 'AVOID'):
+        return 'NO_ACTIVE_ENTRY'
+    return normalized or 'NO_ACTIVE_ENTRY'
+
+
 def format_tradecard_telegram(*, explain: bool = False) -> str:
     """Format paper-only trade card for /tradecard commands."""
     from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale
 
     card = get_trade_card(rebuild=False)
-    if card.get('ok') is False and not card.get('ticker'):
-        return 'Trade card unavailable — no scanner candidate yet. Paper only.'
+    stale = is_trade_card_stale(card)
+    postmarket_line = _tradecard_postmarket_line()
 
-    if is_trade_card_stale(card):
-        return (
-            '<b>📋 TRADE CARD — RESEARCH ONLY / STALE</b>\n'
-            'Card cache is stale for this session.\n'
-            'Run /refresh full or wait for fresh scanner.\n'
-            '<i>Paper only — no order execution.</i>'
-        )
+    ticker = _normalize_tradecard_ticker(card.get('ticker'))
+    fallback_ticker, fallback_status = ('', '')
+    if not ticker:
+        fallback_ticker, fallback_status = _tradecard_reviewed_fallback()
 
-    status = str(card.get('status') or 'NO_TRADE')
-    ticker = str(card.get('ticker') or '—')
-    lines = [
-        '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
-        f"<b>{ticker}</b> · <code>{status}</code>",
-        f"Price: {card.get('current_price') or '—'}",
-    ]
+    effective_ticker = ticker or fallback_ticker
+    status = str(card.get('status') or 'NO_TRADE').strip().upper()
+    if not ticker and fallback_ticker and status in ('NO_TRADE', '—', ''):
+        status = fallback_status or 'NO_ACTIVE_ENTRY'
 
-    if status == 'ENTRY_MISSED':
-        lines.extend([
+    reason = clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)
+    if not reason and not effective_ticker:
+        reason = 'no fresh candidate with valid entry'
+
+    if not effective_ticker:
+        lines = [
+            '<b>📋 TRADE CARD — NO TRADE</b>',
+            'Ticker: NONE',
+            f'Reason: {reason or "no fresh candidate with valid entry"}',
+            'Plan: wait for next fresh scanner/catalyst',
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
+        lines.append('Paper only.')
+        return strip_stage_markers('\n'.join(lines))
+
+    if stale:
+        lines = [
+            '<b>📋 TRADE CARD — RESEARCH ONLY / STALE</b>',
+            f'<b>{effective_ticker}</b> · <code>{_tradecard_status_label(status)}</code>',
+            'Card cache is stale for this session.',
+            'Run /refresh full or wait for fresh scanner.',
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
+        lines.append('Paper only — no order execution.')
+        return strip_stage_markers('\n'.join(lines))
+
+    if card.get('ok') is False and not ticker and fallback_ticker:
+        lines = [
+            '<b>📋 TRADE CARD — NO TRADE</b>',
+            f'Top reviewed: <b>{fallback_ticker}</b>',
+            f'Status: {_tradecard_status_label(fallback_status)}',
+            f'Reason: {reason or "no valid entry on current card"}',
+            'Plan: wait for next fresh scanner/catalyst',
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
+        lines.append('Paper only.')
+        return strip_stage_markers('\n'.join(lines))
+
+    if status == 'ENTRY_MISSED' or str(card.get('entry_zone') or '').strip().upper() == 'NO ACTIVE ENTRY':
+        lines = [
+            '<b>📋 TRADE CARD — NO ACTIVE ENTRY</b>',
+            f'<b>{effective_ticker}</b> · <code>ENTRY_MISSED</code>',
             'Entry: NO ACTIVE ENTRY',
-            f"Reason: {clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)}",
+            f"Reason: {reason or 'Strong move, but do not chase.'}",
             'Plan: wait for pullback/retest — no chase.',
-            'Capital plan: no trade until valid entry forms.',
-        ])
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
         if explain:
             ref = card.get('research_reference') or {}
             lines.extend([
@@ -1870,25 +1994,44 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
                 f"Ref entry: {ref.get('entry_zone') or '—'}",
                 f"Ref SL: {ref.get('stop_loss') or '—'} · Ref T1: {ref.get('target_1') or '—'} · Ref T2: {ref.get('target_2') or '—'}",
             ])
-    else:
-        lines.extend([
-            f"Entry zone: {card.get('entry_zone') or '—'}",
-            f"Stop: {card.get('stop_loss') or '—'} · T1: {card.get('target_1') or '—'} · T2: {card.get('target_2') or '—'}",
-            f"R:R {card.get('risk_reward') or '—'} · Confidence: {card.get('confidence') or '—'}",
-            f"Capital plan: {card.get('capital_plan') or 'Paper only.'}",
-            f"Reason: {clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)}",
-            f"Invalid if: {clean_avoid_reason_text(str(card.get('invalid_if') or ''), max_len=120)}",
-        ])
-        if explain:
-            lines.extend([
-                '',
-                '<b>Explain</b>',
-                f"Exit rule: {card.get('exit_rule') or '—'}",
-                f"Session: {card.get('session_date') or '—'} · Updated: {card.get('generated_at') or '—'}",
-                'No certainty on outcome — confirm manually before any paper journal entry.',
-            ])
-        else:
-            lines.append('Use /tradecard explain for full plan notes.')
+        lines.append('Paper only.')
+        return strip_stage_markers('\n'.join(lines))
 
+    if status in ('NO_TRADE', 'AVOID') or card.get('ok') is False:
+        lines = [
+            '<b>📋 TRADE CARD — NO TRADE</b>',
+            f'Top reviewed: <b>{effective_ticker}</b>',
+            f'Status: {_tradecard_status_label(status)}',
+            f'Reason: {reason or "no valid entry on current card"}',
+            'Plan: wait for next fresh scanner/catalyst',
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
+        lines.append('Paper only.')
+        return strip_stage_markers('\n'.join(lines))
+
+    lines = [
+        '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
+        f'<b>{effective_ticker}</b> · <code>{status}</code>',
+        f"Price: {card.get('current_price') or '—'}",
+        f"Entry zone: {card.get('entry_zone') or '—'}",
+        f"Stop: {card.get('stop_loss') or '—'} · T1: {card.get('target_1') or '—'} · T2: {card.get('target_2') or '—'}",
+        f"R:R {card.get('risk_reward') or '—'} · Confidence: {card.get('confidence') or '—'}",
+        f"Capital plan: {card.get('capital_plan') or 'Paper only.'}",
+        f'Reason: {reason or "—"}',
+        f"Invalid if: {clean_avoid_reason_text(str(card.get('invalid_if') or ''), max_len=120)}",
+    ]
+    if explain:
+        lines.extend([
+            '',
+            '<b>Explain</b>',
+            f"Exit rule: {card.get('exit_rule') or '—'}",
+            f"Session: {card.get('session_date') or '—'} · Updated: {card.get('generated_at') or '—'}",
+            'No certainty on outcome — confirm manually before any paper journal entry.',
+        ])
+    else:
+        lines.append('Use /tradecard explain for full plan notes.')
+    if postmarket_line:
+        lines.append(postmarket_line)
     lines.append('Paper only — you decide and place trades manually.')
     return strip_stage_markers('\n'.join(lines))

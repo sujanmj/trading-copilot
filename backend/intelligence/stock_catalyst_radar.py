@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50P'
+STAGE = '50Q'
 CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 
 CATALYST_TYPES = frozenset({
@@ -144,6 +144,11 @@ SHARP_FALL_RE = re.compile(
     re.IGNORECASE,
 )
 
+HCLTECH_AI_STAKE_FORCE_RE = re.compile(
+    r'(hcl\s+tech\s+shares\s+jump.*?buying\s+stake\s+in\s+sarvam\s+ai|buying\s+stake\s+in\s+sarvam\s+ai|sarvam\s+ai\s+stake)',
+    re.IGNORECASE,
+)
+
 SOURCE_QUALITY: dict[str, float] = {
     'nse_filings': 1.0,
     'external_evidence': 0.9,
@@ -241,6 +246,8 @@ def classify_catalyst(text: str) -> tuple[str, str]:
     """Return strongest (catalyst_type, side) from headline/body."""
     blob = str(text or '')
     lower = blob.lower()
+    if HCLTECH_AI_STAKE_FORCE_RE.search(blob):
+        return 'AI_INVESTMENT', 'BULLISH'
     matches: list[tuple[str, str, int]] = []
 
     for pattern, ctype, side in CATALYST_RULES:
@@ -354,8 +361,17 @@ def _merge_raw_by_ticker(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         best_type = str(best.get('catalyst_type') or 'GENERAL_NEWS')
         best_side = str(best.get('side') or 'NEUTRAL').upper()
 
+        forced_ai = next(
+            (g for g in classified if HCLTECH_AI_STAKE_FORCE_RE.search(str(g.get('headline') or ''))),
+            None,
+        )
+        if forced_ai:
+            best_type = 'AI_INVESTMENT'
+            best_side = 'BULLISH'
+            best = forced_ai
+
         # Generic index headlines must not dilute a stronger specific catalyst.
-        if best_tier >= 40:
+        if best_tier >= 40 or forced_ai:
             side = best_side
         else:
             strong_sides = [

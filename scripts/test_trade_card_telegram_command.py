@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50L/50N — /tradecard Telegram command wiring."""
+"""Stage 50Q — /tradecard Telegram command wiring and ticker contract."""
 
 from __future__ import annotations
 
@@ -14,6 +14,16 @@ if str(PROJECT_ROOT) not in sys.path:
 
 FORBIDDEN = re.compile(r'\b(guaranteed|99%)\b', re.IGNORECASE)
 NAKED_BUY_SELL = re.compile(r'\bAction:\s*(BUY|SELL)\b', re.IGNORECASE)
+
+
+def _has_ticker_contract(text: str) -> bool:
+    if 'Ticker: NONE' in text:
+        return True
+    if re.search(r'\bTop reviewed:\s*<b>[A-Z][A-Z0-9]{1,14}</b>', text):
+        return True
+    if re.search(r'<b>[A-Z][A-Z0-9]{1,14}</b>\s*·', text):
+        return True
+    return False
 
 
 def _fail(msg: str) -> int:
@@ -46,6 +56,7 @@ def main() -> int:
         'generated_at': '2026-06-16T10:00:00+05:30',
     }
     with patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake_card), \
+         patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
          patch('scripts.refresh_local_intelligence.run_refresh_scoped', return_value={'ok': True}):
         text = format_tradecard_telegram(explain=False)
         explain = format_tradecard_telegram(explain=True)
@@ -58,10 +69,12 @@ def main() -> int:
             body = str(bot[0].get('text') or '')
             if FORBIDDEN.search(body) or NAKED_BUY_SELL.search(body):
                 return _fail(f'forbidden wording in {cmd}')
+            if not _has_ticker_contract(body):
+                return _fail(f'missing ticker or Ticker: NONE in {cmd}')
 
     if 'TRADE CARD' not in text or 'paper only' not in text.lower():
         return _fail('format_tradecard_telegram missing header/paper note')
-    if 'IXIGO' not in text:
+    if not _has_ticker_contract(text):
         return _fail('missing ticker in tradecard text')
     if 'Explain' not in explain:
         return _fail('explain mode missing Explain section')

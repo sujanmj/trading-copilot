@@ -1,5 +1,5 @@
 """
-Unified live priority engine — Stage 50P.
+Unified live priority engine — Stage 50Q.
 
 Single ranking path for /today, /tomorrow, /premarket, /catalysts, /tradecard.
 
@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50P'
+STAGE = '50Q'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 FINAL_CONF_FILE = DATA_DIR / 'final_confidence_report.json'
 
@@ -317,9 +317,181 @@ def build_unified_priority(mode: str = 'today') -> dict[str, Any]:
     }
 
 
+def _confidence_label(score: int) -> str:
+    if score >= 75:
+        return 'HIGH'
+    if score >= 55:
+        return 'MEDIUM'
+    return 'LOW'
+
+
+def _is_postmarket_mode() -> bool:
+    try:
+        from backend.telegram.india_mode_lock import resolve_telegram_market_phase
+
+        return resolve_telegram_market_phase() == 'INDIA_POSTMARKET_MODE'
+    except Exception:
+        return False
+
+
+def _unified_row_to_decision(row: dict[str, Any]) -> dict[str, Any]:
+    score = int(row.get('unified_score') or row.get('score') or 0)
+    return {
+        'ticker': row.get('ticker'),
+        'action': row.get('action'),
+        'score': score,
+        'confidence': _confidence_label(score),
+        'why': list(row.get('why') or []),
+        'risk': list(row.get('risk') or []),
+        'supports': list(row.get('supports') or []),
+        'confirmation_needed': [
+            'price strength above recent support',
+            'volume support on entry window',
+            'market data not stale',
+        ],
+        'invalid_if': [
+            'opens weak below support',
+            'sector or global context turns negative',
+        ],
+        'entry_status': row.get('entry_status'),
+        'entry_missed': row.get('entry_missed'),
+        'unified': True,
+    }
+
+
+def format_postmarket_today(payload: dict[str, Any]) -> str:
+    """Post-market /today — next-session watch, not actionable live entry."""
+    lines = [
+        '<b>AstraEdge — Today</b>',
+        '',
+        '📋 POST-MARKET REVIEW / NEXT-SESSION WATCH',
+        'Top fresh scanner names:',
+    ]
+    missed = payload.get('missed_candidates') or []
+    ranked = payload.get('ranked_candidates') or []
+    names: list[str] = []
+    for row in missed + ranked:
+        if not isinstance(row, dict) or row.get('action') == 'AVOID':
+            continue
+        sym = _normalize_ticker(row.get('ticker'))
+        if sym and sym not in names:
+            names.append(sym)
+        if len(names) >= 5:
+            break
+    if names:
+        for idx, sym in enumerate(names[:5], 1):
+            lines.append(f'{idx}. {sym} — entry missed / next-session watch')
+    else:
+        lines.append('1. — no fresh scanner names')
+    lines.extend(['', 'No live entry now. Wait for next session confirmation.'])
+    return '\n'.join(lines)
+
+
+def format_tomorrow_unified(payload: Optional[dict[str, Any]] = None) -> str:
+    """Telegram body for /tomorrow using unified live priority."""
+    data = payload or build_unified_priority(mode='tomorrow')
+    lines = ['<b>AstraEdge — Tomorrow</b>', '']
+
+    top = data.get('top_pick')
+    decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
+
+    if top and decision != 'NO_CLEAN_CANDIDATE':
+        action = str(top.get('action') or 'WATCH_FOR_ENTRY').replace('_', ' ')
+        lines.extend([
+            '<b>Top watch:</b>',
+            f"{top.get('ticker')} — {action}",
+            f"Score: {top.get('unified_score', '—')}",
+            '',
+            '<b>Why:</b>',
+        ])
+        for item in top.get('why') or []:
+            lines.append(f'• {item}')
+        if top.get('risk'):
+            lines.extend(['', '<b>Risk:</b>'])
+            for item in top.get('risk') or []:
+                lines.append(f'• {item}')
+    else:
+        lines.extend([
+            '<b>No clean candidate</b>',
+            'Nothing meets live catalyst/scanner confluence for tomorrow yet.',
+            'Review watch names or refresh when scanner updates.',
+        ])
+
+    avoid = [r for r in (data.get('ranked_candidates') or []) if r.get('action') == 'AVOID']
+    if avoid:
+        lines.extend(['', '<b>Avoid:</b>'])
+        for row in avoid[:5]:
+            reason = (row.get('risk') or row.get('why') or ['weak signal'])[0]
+            lines.append(f"• {row.get('ticker')} — {reason}")
+
+    return '\n'.join(lines)
+
+
+def format_decision_unified(payload: Optional[dict[str, Any]] = None, *, mode: str = 'today') -> str:
+    """Route unified formatter by mode and market phase."""
+    normalized = str(mode or 'today').strip().lower()
+    data = payload or build_unified_priority(mode=normalized if normalized in VALID_MODES else 'today')
+    if normalized == 'today' and _is_postmarket_mode():
+        return format_postmarket_today(data)
+    if normalized == 'tomorrow':
+        return format_tomorrow_unified(data)
+    return format_today_unified(data)
+
+
+def apply_unified_delegation_if_scanner_fresh(
+    payload: dict[str, Any],
+    *,
+    mode: str,
+    freshness_meta: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Replace decision fields with unified engine output when scanner is fresh."""
+    if payload.get('ok') is not True:
+        return payload
+    meta = freshness_meta or payload.get('freshness_meta') or _freshness_meta()
+    if not meta.get('scanner_fresh'):
+        return payload
+
+    normalized = str(mode or 'today').strip().lower()
+    if normalized not in VALID_MODES:
+        normalized = 'today'
+
+    unified = build_unified_priority(mode=normalized)
+    ranked = [
+        _unified_row_to_decision(row)
+        for row in (unified.get('ranked_candidates') or [])
+        if isinstance(row, dict)
+    ]
+    top_raw = unified.get('top_pick')
+    top_pick = _unified_row_to_decision(top_raw) if isinstance(top_raw, dict) else None
+    decision = str(unified.get('decision') or 'NO_CLEAN_CANDIDATE')
+    watch_rows = [r for r in ranked if r.get('action') == 'WATCH_FOR_ENTRY']
+    avoid_rows = [r for r in ranked if r.get('action') == 'AVOID']
+    buy_rows = [r for r in ranked if r.get('action') == 'BUY_CANDIDATE']
+
+    out = dict(payload)
+    out['top_pick'] = top_pick
+    out['decision'] = decision
+    out['ranked_candidates'] = ranked[:25]
+    out['watch_for_entry'] = watch_rows[:10]
+    out['avoid'] = avoid_rows[:10]
+    out['telegram_message'] = format_decision_unified(unified, mode=normalized)
+    out['unified_priority'] = True
+    out['unified_stage'] = STAGE
+    out['freshness_meta'] = meta
+    if buy_rows:
+        out.setdefault('summary', {})
+        if isinstance(out['summary'], dict):
+            out['summary']['buy_candidate'] = len(buy_rows)
+            out['summary']['watch_for_entry'] = len(watch_rows)
+            out['summary']['avoid'] = len(avoid_rows)
+    return out
+
+
 def format_today_unified(payload: Optional[dict[str, Any]] = None) -> str:
     """Telegram body for /today using unified live priority."""
     data = payload or build_unified_priority(mode='today')
+    if _is_postmarket_mode():
+        return format_postmarket_today(data)
     lines = ['<b>AstraEdge — Today</b>', '']
 
     top = data.get('top_pick')
@@ -435,17 +607,13 @@ def pick_tradecard_candidate(
     }
 
     unified = build_unified_priority(mode='today')
-    for row in unified.get('ranked_candidates') or []:
-        sym = _normalize_ticker(row.get('ticker'))
-        if not sym or sym in reg:
-            continue
-        if row.get('action') == 'AVOID':
-            continue
-        if row.get('entry_status') == 'AVOID':
-            continue
-        if row.get('supports') and 'catalyst' in (row.get('supports') or []) and sym in scan_index:
-            return sym, 'unified_catalyst_scanner'
-        if sym in scan_index:
+    top = unified.get('top_pick')
+    if isinstance(top, dict):
+        sym = _normalize_ticker(top.get('ticker'))
+        if sym and sym not in reg and top.get('action') != 'AVOID' and sym in scan_index:
+            supports = top.get('supports') or []
+            if 'catalyst' in supports:
+                return sym, 'unified_catalyst_scanner'
             return sym, 'unified_scanner'
 
     for row in unified.get('ranked_candidates') or []:
