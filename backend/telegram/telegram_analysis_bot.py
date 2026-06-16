@@ -765,6 +765,11 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_tradecard_only(args), command='tradecard')
         response_text = result.get('text') or 'Trade card unavailable.'
+    elif cmd == 'catalysts':
+        from backend.telegram.lazy_command_runner import run_catalysts_only
+
+        result = run_without_ai(lambda: run_catalysts_only(args), command='catalysts')
+        response_text = result.get('text') or 'Catalyst radar unavailable.'
     else:
         response_text = format_unknown_command_response(cmd, args)
 

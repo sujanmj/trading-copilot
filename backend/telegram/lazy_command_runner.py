@@ -628,6 +628,21 @@ def run_tradecard_only(args: str = '') -> dict[str, Any]:
     return _runner_result('tradecard', text=text)
 
 
+def run_catalysts_only(args: str = '') -> dict[str, Any]:
+    from backend.intelligence.stock_catalyst_radar import format_catalyst_radar_telegram
+
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower.startswith('explain '):
+        ticker = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_catalyst_radar_telegram(explain_ticker=ticker or None)
+    elif lower in ('today',):
+        text = format_catalyst_radar_telegram(today_only=True)
+    else:
+        text = format_catalyst_radar_telegram(today_only=False)
+    return _runner_result('catalysts', text=text)
+
+
 def run_myfeed_only(args: str = '') -> dict[str, Any]:
     from backend.my_feed.cache_invalidation import load_myfeed_items_for_telegram
     from backend.my_feed.feed_processor import archive_feed_item, scan_feed_summary

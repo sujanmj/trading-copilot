@@ -3010,6 +3010,14 @@ def api_trade_card(rebuild: bool = Query(False)):
     return sanitize_json_value(card)
 
 
+@app.get("/api/catalyst-radar", dependencies=[Depends(verify_api_key)])
+def api_catalyst_radar(rebuild: bool = Query(False)):
+    from backend.intelligence.stock_catalyst_radar import build_catalyst_radar, get_catalyst_radar
+
+    radar = build_catalyst_radar(force_refresh=True) if rebuild else get_catalyst_radar(rebuild=rebuild)
+    return sanitize_json_value(radar)
+
+
 @app.get("/api/calibration", dependencies=[Depends(verify_api_key)])
 def api_calibration():
     from backend.analytics.regime_analytics import build_calibration_dashboard

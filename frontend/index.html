@@ -1700,6 +1700,10 @@
         <div id="reviewTradeCard"></div>
       </section>
       <section class="ai-review-section">
+        <div class="ai-review-section-title">Stock Catalyst Radar</div>
+        <div id="reviewCatalystRadar"></div>
+      </section>
+      <section class="ai-review-section">
         <div class="ai-review-section-title">AI Performance</div>
         <div id="reviewPerformance"></div>
       </section>
@@ -1742,6 +1746,7 @@
   <script src="components/FinalConfidencePanel.js"></script>
   <script src="components/DailyReportPackPanel.js"></script>
   <script src="components/TradeCardCard.js"></script>
+  <script src="components/CatalystRadarCard.js"></script>
   <script src="components/SourceFreshnessCard.js"></script>
   <script src="components/MarketRouterCard.js"></script>
   <script src="components/SourceFeedViewer.js"></script>
@@ -10342,6 +10347,12 @@
       }
       if (window.TradeCardCard) {
         TradeCardCard.init({
+          getApiBase: () => API_BASE,
+          getHeaders: apiHeaders,
+        })
+      }
+      if (window.CatalystRadarCard) {
+        CatalystRadarCard.init({
           getApiBase: () => API_BASE,
           getHeaders: apiHeaders,
         })

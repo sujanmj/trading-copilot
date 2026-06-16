@@ -1,8 +1,8 @@
 """
-Personal intraday trade card engine — Stage 50L.
+Personal intraday trade card engine — Stage 50N.
 
-Paper-only observation card from scanner/anomaly + confluence inputs.
-Never places orders or emits blind BUY/SELL.
+News-first catalyst radar, then scanner/anomaly + confluence inputs.
+Paper-only observation card. Never places orders or emits blind BUY/SELL.
 """
 
 from __future__ import annotations
@@ -255,7 +255,23 @@ def build_trade_card(
     scanner = _load_json(SCANNER_FILE)
     intel = _load_json(INTEL_FILE)
     registry = _avoid_registry()
-    row, pick_reason = _pick_candidate(ticker, scanner, registry)
+
+    catalyst_ticker: Optional[str] = None
+    pick_reason = 'top_scanner'
+    if not ticker:
+        try:
+            from backend.intelligence.stock_catalyst_radar import pick_catalyst_tradecard_candidate
+
+            catalyst_ticker, catalyst_reason = pick_catalyst_tradecard_candidate(registry=registry)
+            if catalyst_ticker:
+                ticker = catalyst_ticker
+                pick_reason = catalyst_reason
+        except Exception:
+            pass
+
+    row, scanner_pick_reason = _pick_candidate(ticker, scanner, registry)
+    if pick_reason == 'top_scanner':
+        pick_reason = scanner_pick_reason
     sym = _normalize_ticker(row.get('ticker') if row else ticker)
 
     base: dict[str, Any] = {

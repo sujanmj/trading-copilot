@@ -298,6 +298,24 @@ def format_pre_market(intel: dict, state: dict, scanner: dict, govt: dict, globa
 <i>Regime {regime} · vol {vol:.2f}</i>"""
 
 
+def try_catalyst_preopen() -> int:
+    """Send catalyst watchlist before market open (Stage 50N)."""
+    try:
+        from backend.intelligence.stock_catalyst_radar import format_preopen_catalyst_watchlist, get_catalyst_radar
+
+        radar = get_catalyst_radar()
+        if not (radar.get('bullish_watch') or radar.get('avoid_list')):
+            get_observability().record_suppressed(PRE_MARKET, 'no_catalysts', 'skip catalyst preopen')
+            return 0
+        text = format_preopen_catalyst_watchlist()
+        dedupe = f"catalyst_preopen_{datetime.now().strftime('%Y-%m-%d')}"
+        if _dispatch(PRE_MARKET, text, 0.55, 'catalyst preopen watchlist', dedupe_key=dedupe):
+            return 1
+    except Exception:
+        pass
+    return 0
+
+
 def try_pre_market() -> int:
     state = _load_analysis_state()
     if not _meaningful_overnight_change(state):
@@ -367,6 +385,15 @@ def try_open_opportunity() -> int:
         if watch_only and confidence > 0.65:
             confidence = 0.65
         ticker = str(signal.get('ticker', ''))
+        try:
+            from backend.intelligence.stock_catalyst_radar import catalyst_scanner_confirmed
+
+            if not catalyst_scanner_confirmed(ticker):
+                get_observability().record_suppressed(
+                    INTRADAY_OPPORTUNITY, 'catalyst_not_confirmed', ticker)
+                continue
+        except Exception:
+            pass
         dedupe = f"open_{ticker}_{signal.get('direction')}_{datetime.now().strftime('%Y-%m-%d')}"
         text = format_opportunity(signal, intel, state)
         if _dispatch(

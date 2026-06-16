@@ -95,6 +95,11 @@ def tick() -> dict:
             n = engine.try_pre_market()
             result['sent'] += n
             result['actions'].append(f'pre_market:{n}')
+        if _once_per_slot('catalyst_preopen', now, 5) and now.minute in (18, 22):
+            n = engine.try_catalyst_preopen()
+            result['sent'] += n
+            if n:
+                result['actions'].append(f'catalyst_preopen:{n}')
 
     # ── Outcome 8:00 ──
     if now.hour == 8 and now.minute == 5 and _once_per_slot('outcome', now, 60):

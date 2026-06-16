@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50L — trade card engine VALID_ENTRY path."""
+"""Stage 50L — trade card engine VALID_ENTRY path (explicit ticker; catalyst tested separately in 50N)."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def main() -> int:
     with patch('backend.trading.trade_card_engine._load_json', side_effect=lambda p: scanner if 'scanner' in str(p) else {}), \
          patch('backend.trading.trade_card_engine._avoid_registry', return_value={}), \
          patch('backend.trading.trade_card_engine.TRADE_CARD_CACHE', PROJECT_ROOT / 'data' / '_test_trade_card_valid.json'):
-        card = build_trade_card(persist=True, force_refresh=True)
+        card = build_trade_card('IXIGO', persist=True, force_refresh=True)
 
     for field in required:
         if field not in card:
