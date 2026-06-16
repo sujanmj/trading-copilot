@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50N — /catalysts telegram command formatting."""
+"""Stage 50N — /catalysts telegram command formatting and routing."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ def _fail(msg: str) -> int:
 def main() -> int:
     from backend.intelligence.stock_catalyst_radar import format_catalyst_radar_telegram, format_preopen_catalyst_watchlist
     from backend.telegram.lazy_command_runner import run_catalysts_only
+    from backend.telegram.telegram_analysis_bot import handle_analysis_command
 
     fake_radar = {
         'priority_list': [{
@@ -38,13 +39,31 @@ def main() -> int:
         }],
         'bullish_watch': [{'ticker': 'HCLTECH', 'catalyst_type': 'ACQUISITION'}],
         'avoid_list': [{'ticker': 'GICRE', 'catalyst_type': 'OFS'}],
-        'items': [],
+        'items': [{
+            'ticker': 'HCLTECH',
+            'side': 'BULLISH',
+            'catalyst_type': 'ACQUISITION',
+            'headline': 'AI stake',
+            'freshness_label': 'today',
+            'change_pct': 3.1,
+            'volume_ratio': 1.2,
+            'score': 78,
+            'priority': 'HIGH',
+            'trade_status': 'WAIT FOR VOLUME',
+            'score_breakdown': {'freshness': 20, 'quality': 22, 'price_reaction': 12, 'volume_confirmation': 8},
+        }],
     }
     with patch('backend.intelligence.stock_catalyst_radar.build_catalyst_radar', return_value=fake_radar), \
-         patch('backend.intelligence.stock_catalyst_radar.get_catalyst_radar', return_value=fake_radar):
+         patch('backend.intelligence.stock_catalyst_radar.get_catalyst_radar', return_value=fake_radar), \
+         patch('scripts.refresh_local_intelligence.run_refresh_scoped', return_value={'ok': True}):
         text = format_catalyst_radar_telegram()
         preopen = format_preopen_catalyst_watchlist()
-        result = run_catalysts_only('today')
+        today_result = run_catalysts_only('today')
+        explain_result = run_catalysts_only('explain HCLTECH')
+        for cmd in ('/catalysts', '/catalysts today', '/catalysts explain HCLTECH'):
+            bot = handle_analysis_command(cmd, 'catalyst_test', dry_run=True)
+            if not bot:
+                return _fail(f'no bot response for {cmd}')
 
     if 'STOCK CATALYST RADAR' not in text:
         return _fail('missing radar header')
@@ -56,8 +75,16 @@ def main() -> int:
         return _fail('naked BUY/SELL in catalyst output')
     if 'CATALYST WATCHLIST' not in preopen:
         return _fail('preopen watchlist header missing')
-    if result.get('scope') != 'catalysts':
-        return _fail('run_catalysts_only scope must be catalysts')
+    if today_result.get('scope') != 'catalysts':
+        return _fail('run_catalysts_only today scope must be catalysts')
+    if 'HCLTECH' not in (explain_result.get('text') or ''):
+        return _fail('explain runner missing ticker')
+    if 'CATALYST EXPLAIN' not in (explain_result.get('text') or ''):
+        return _fail('explain runner missing explain header')
+
+    bot_src = (PROJECT_ROOT / 'backend/telegram/telegram_analysis_bot.py').read_text(encoding='utf-8')
+    if "cmd == 'catalysts'" not in bot_src:
+        return _fail('telegram_analysis_bot missing catalysts handler')
 
     print('CATALYST_RADAR_TELEGRAM_COMMAND_TEST_OK')
     return 0

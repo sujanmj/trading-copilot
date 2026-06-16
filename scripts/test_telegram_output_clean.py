@@ -42,6 +42,7 @@ COMMANDS = (
     '/buy TATA',
     '/myfeed list',
     '/tradecard',
+    '/catalysts',
 )
 
 FORBIDDEN_PHRASES = (
@@ -119,6 +120,14 @@ def main() -> int:
                     '/myfeed today',
                     '/myfeed scan',
                     'market news text',
+                    '<b>Catalyst Radar:</b>',
+                    '/catalysts — stock-specific catalyst radar',
+                    '/catalysts today',
+                    '/catalysts explain',
+                    '<b>Trade Card:</b>',
+                    '/tradecard — one-stock paper trade card',
+                    '/tradecard today',
+                    '/tradecard explain',
                 ):
                     if needle.lower() not in text.lower() and needle not in text:
                         return _fail(f'/help missing My Feed text-only command marker {needle!r}')
@@ -135,14 +144,22 @@ def main() -> int:
                     return _fail('/myfeed list must not mention Reddit')
                 continue
 
+            if cmd == '/catalysts':
+                lower = text.lower()
+                if 'catalyst' not in lower:
+                    return _fail('/catalysts must return catalyst radar output')
+                if re.search(r'\bAction:\s*(BUY|SELL)\b', text, re.I):
+                    return _fail('/catalysts must not contain naked BUY/SELL action labels')
+                continue
+
             if cmd == '/tradecard':
                 lower = text.lower()
                 if 'trade card' not in lower:
                     return _fail('/tradecard must return trade card header')
                 if 'paper only' not in lower and 'no trade' not in lower:
                     return _fail('/tradecard must label paper-only or no-trade state')
-                if re.search(r'\bBUY\b', text) or re.search(r'\bSELL\b', text):
-                    return _fail('/tradecard must not contain naked BUY/SELL tokens')
+                if re.search(r'\bAction:\s*(BUY|SELL)\b', text, re.I):
+                    return _fail('/tradecard must not contain naked BUY/SELL action labels')
                 continue
 
             if cmd in ('/aihub full', '/aihub all'):

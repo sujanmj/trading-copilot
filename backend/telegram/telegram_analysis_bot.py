@@ -113,6 +113,16 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /myfeed scan — tickers/themes impact
 /myfeed clean-old — archive dirty image/OCR rows (admin)
 
+<b>Catalyst Radar:</b>
+/catalysts — stock-specific catalyst radar
+/catalysts today — today's catalyst priority list
+/catalysts explain &lt;ticker&gt; — catalyst reason for ticker
+
+<b>Trade Card:</b>
+/tradecard — one-stock paper trade card
+/tradecard today — today's trade card
+/tradecard explain — full trade card plan notes
+
 <b>Briefs:</b>
 /news — news only
 /morning — pre-market brief
