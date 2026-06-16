@@ -717,8 +717,10 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
     ranked = _rank_candidates(scored)
     try:
         from backend.analytics.unified_decision_engine import apply_my_feed_evidence, build_live_rejection_set
+        from backend.trading.unified_live_priority_engine import apply_unified_priority_to_ranked
 
         ranked = apply_my_feed_evidence(ranked, build_live_rejection_set())
+        ranked = apply_unified_priority_to_ranked(ranked, mode=normalized_mode, sources=sources)
     except Exception:
         pass
     watch_rows = [r for r in ranked if r.get('action') == 'WATCH_FOR_ENTRY']
@@ -747,6 +749,16 @@ def build_stock_decision(mode: str = 'today') -> dict[str, Any]:
         top_pick=top_pick,
         avoid=avoid_rows,
     )
+    if normalized_mode == 'today':
+        try:
+            from backend.trading.unified_live_priority_engine import build_unified_priority, format_today_unified
+
+            unified = build_unified_priority(mode='today')
+            meta = sources.get('_freshness_meta') or {}
+            if meta.get('scanner_fresh'):
+                telegram_message = format_today_unified(unified)
+        except Exception:
+            pass
 
     payload = {
         'ok': True,

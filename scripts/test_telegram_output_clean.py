@@ -84,10 +84,10 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.telegram_analysis_bot import handle_analysis_command
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50O':
-        return _fail(f'expected AstraEdge 50O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
-    if len(FULL_SNAPSHOT_SEQUENCE) != 32:
-        return _fail(f'/full must remain 32 read-only steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50P':
+        return _fail(f'expected AstraEdge 50P got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if len(FULL_SNAPSHOT_SEQUENCE) != 34:
+        return _fail(f'/full must remain 34 read-only steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
     if '/aihub reddit' in FULL_SNAPSHOT_SEQUENCE:
         return _fail('/full must not include removed Reddit step')
 

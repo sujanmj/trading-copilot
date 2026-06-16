@@ -267,14 +267,24 @@ def build_trade_card(
     pick_reason = 'top_scanner'
     if not ticker:
         try:
-            from backend.intelligence.stock_catalyst_radar import pick_catalyst_tradecard_candidate
+            from backend.trading.unified_live_priority_engine import pick_tradecard_candidate
 
-            catalyst_ticker, catalyst_reason = pick_catalyst_tradecard_candidate(registry=registry)
-            if catalyst_ticker:
-                ticker = catalyst_ticker
-                pick_reason = catalyst_reason
+            unified_ticker, unified_reason = pick_tradecard_candidate(registry=registry, scanner=scanner)
+            if unified_ticker:
+                ticker = unified_ticker
+                pick_reason = unified_reason
         except Exception:
             pass
+        if not ticker:
+            try:
+                from backend.intelligence.stock_catalyst_radar import pick_catalyst_tradecard_candidate
+
+                catalyst_ticker, catalyst_reason = pick_catalyst_tradecard_candidate(registry=registry)
+                if catalyst_ticker:
+                    ticker = catalyst_ticker
+                    pick_reason = catalyst_reason
+            except Exception:
+                pass
 
     row, scanner_pick_reason = _pick_candidate(ticker, scanner, registry)
     if pick_reason == 'top_scanner':

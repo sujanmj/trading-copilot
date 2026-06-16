@@ -50,6 +50,8 @@ FULL_SNAPSHOT_SEQUENCE: tuple[str, ...] = (
     '/theme scan infra',
     '/budget',
     '/budget theme infra',
+    '/catalysts today',
+    '/tradecard',
 )
 
 FULL_SNAPSHOT_EXCLUDED: frozenset[str] = frozenset({

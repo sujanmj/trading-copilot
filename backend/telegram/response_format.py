@@ -186,16 +186,23 @@ def _market_has_stale_warnings(warnings: list[Any]) -> bool:
     return bool(tokens & _MARKET_STALE_WARNING_TOKENS)
 
 
-def _aihub_payload_is_stale(payload: dict[str, Any]) -> bool:
+def _aihub_payload_is_stale(payload: dict[str, Any], *, tab: str = '') -> bool:
     """True when AIHub tab cache should be labeled stale for Telegram."""
     summary = payload.get('summary') or {}
     if summary.get('stale') or summary.get('is_stale') or summary.get('market_stale'):
         return True
-    age_min = int(payload.get('cache_age_seconds') or 0) // 60
-    if age_min >= 60:
+    age_sec = int(payload.get('cache_age_seconds') or 0)
+    age_min = age_sec // 60
+    stale_threshold_min = 1440 if tab in ('brain', 'govt', 'market') else 60
+    if age_min >= stale_threshold_min:
         return True
     age_label = format_cache_age_label(age_min)
     return 'stale' in age_label or 'old cache' in age_label
+
+
+def _aihub_tab_stale_message(tab: str) -> str:
+    label = tab.capitalize() if tab != 'govt' else 'Govt'
+    return f'{label} cache stale — run /refresh full'
 
 
 def _stale_aihub_prefix_lines() -> list[str]:
@@ -962,7 +969,7 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
     key = str(tab or '').strip().lower()
     summary = payload.get('summary') or {}
     items = payload.get('items') or []
-    stale_cache = _aihub_payload_is_stale(payload)
+    stale_cache = _aihub_payload_is_stale(payload, tab=key)
     tab_label = key.capitalize() if key != 'scan' else 'Scan'
     age_mins = int(payload.get('cache_age_seconds') or 0) // 60
     age_line = format_cache_age_label(age_mins)
@@ -971,7 +978,10 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
         f"Source: {payload.get('source', '—')} · {tab_label} cache: {age_line}",
     ]
     if stale_cache and key in ('news', 'global', 'brain', 'govt', 'market'):
-        lines.append(f'{tab_label} cache stale — research only')
+        lines.append(_aihub_tab_stale_message(key))
+        if key in ('brain', 'govt', 'market') and age_mins >= 1440:
+            lines.append('<i>Stale cached summary suppressed — refresh for current research.</i>')
+            return strip_stage_markers('\n'.join(lines))
         lines.extend(_stale_aihub_prefix_lines()[1:])
     if key == 'brain':
         warn_tokens = {str(w) for w in (payload.get('warnings') or [])}
@@ -1086,6 +1096,10 @@ def format_aihub_payload(tab: str, payload: dict[str, Any]) -> str:
     return strip_stage_markers('\n'.join(lines))
 
 
+def _aihub_full_section_stale(payload: dict[str, Any], tab: str) -> bool:
+    return _aihub_payload_is_stale(payload, tab=tab)
+
+
 def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     lines = ['<b>🧭 AI Hub Full Summary</b>']
 
@@ -1094,7 +1108,9 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     brain_items = brain.get('items') or []
     actionable = brain_summary.get('actionable_candidates') or {}
     lines.append('<b>🧠 Brain</b>')
-    if brain_items:
+    if _aihub_full_section_stale(brain, 'brain'):
+        lines.append(f"- {_aihub_tab_stale_message('brain')}")
+    elif brain_items:
         row = brain_items[0]
         if isinstance(row, dict):
             sig = str(row.get('title') or row.get('summary') or row.get('text') or '—')[:120]
@@ -1107,7 +1123,9 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     govt_items = govt.get('items') or []
     govt_summary = govt.get('summary') or {}
     lines.append('<b>🏛 Govt</b>')
-    if govt_items:
+    if _aihub_full_section_stale(govt, 'govt'):
+        lines.append(f"- {_aihub_tab_stale_message('govt')}")
+    elif govt_items:
         row = govt_items[0]
         if isinstance(row, dict):
             lines.append(f"- {str(row.get('title') or row.get('headline') or row.get('summary') or '—')[:120]}")
@@ -1139,14 +1157,17 @@ def format_aihub_full(payloads: dict[str, dict[str, Any]]) -> str:
     )
     unified = get_unified_market_freshness()
     lines.append('<b>📊 Market</b>')
-    lines.append(f"- {unified.get('line', 'Market: unavailable')}")
-    lines.append(f"- mode: {mode} · {'fresh' if unified.get('is_fresh') else 'stale'}")
-    india = market_summary.get('india_context') or market_summary.get('context') or {}
-    us_ctx = market_summary.get('us_context') or market_summary.get('global_context') or {}
-    if isinstance(india, dict) and india:
-        lines.append(f"- India: {str(india.get('headline') or india.get('status') or '—')[:80]}")
-    if isinstance(us_ctx, dict) and us_ctx:
-        lines.append(f"- US: {str(us_ctx.get('headline') or us_ctx.get('status') or '—')[:80]}")
+    if _aihub_full_section_stale(market, 'market'):
+        lines.append(f"- {_aihub_tab_stale_message('market')}")
+    else:
+        lines.append(f"- {unified.get('line', 'Market: unavailable')}")
+        lines.append(f"- mode: {mode} · {'fresh' if unified.get('is_fresh') else 'stale'}")
+        india = market_summary.get('india_context') or market_summary.get('context') or {}
+        us_ctx = market_summary.get('us_context') or market_summary.get('global_context') or {}
+        if isinstance(india, dict) and india:
+            lines.append(f"- India: {str(india.get('headline') or india.get('status') or '—')[:80]}")
+        if isinstance(us_ctx, dict) and us_ctx:
+            lines.append(f"- US: {str(us_ctx.get('headline') or us_ctx.get('status') or '—')[:80]}")
 
     global_p = payloads.get('global') or {}
     global_summary = global_p.get('summary') or {}

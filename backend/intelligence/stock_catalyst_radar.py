@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50O'
+STAGE = '50P'
 CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 
 CATALYST_TYPES = frozenset({
@@ -274,6 +274,36 @@ def classify_catalyst(text: str) -> tuple[str, str]:
     return ctype, side
 
 
+_GENERIC_INDEX_HEADLINE_RE = re.compile(
+    r'\b(sensex|nifty\s*50|nifty|top\s+gainers?|among\s+top|index\s+(?:rises|falls|gains))\b',
+    re.IGNORECASE,
+)
+
+
+def _headline_evidence_tier(headline: str, catalyst_type: str) -> int:
+    """Rank headline evidence — specific corporate beats generic index noise."""
+    ctype = str(catalyst_type or 'GENERAL_NEWS').upper()
+    blob = str(headline or '')
+    if ctype in (
+        'AI_INVESTMENT', 'ACQUISITION', 'STAKE_BUY', 'STAKE_SALE', 'OFS',
+        'PROJECT_ANNOUNCEMENT', 'ORDER_WIN', 'BLOCK_DEAL', 'BULK_DEAL',
+        'REGULATORY_APPROVAL', 'DIVIDEND_BONUS_SPLIT', 'RESULT_ALERT',
+    ):
+        return 100
+    if ctype in (
+        'BROKER_UPGRADE', 'BROKER_DOWNGRADE', 'TARGET_UPGRADE', 'TARGET_DOWNGRADE',
+        'MANAGEMENT_CHANGE', 'BOARD_MEETING',
+    ):
+        return 85
+    if ctype == 'SECTOR_NEWS':
+        return 40
+    if _GENERIC_INDEX_HEADLINE_RE.search(blob):
+        return 10
+    if ctype == 'GENERAL_NEWS':
+        return 25
+    return 60
+
+
 def _combine_sides(sides: list[str]) -> str:
     normalized = {str(s or '').upper() for s in sides if s}
     if not normalized:
@@ -299,22 +329,54 @@ def _merge_raw_by_ticker(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     merged: list[dict[str, Any]] = []
     for sym, group in buckets.items():
-        types = [str(g.get('catalyst_type') or 'GENERAL_NEWS') for g in group]
-        best_type = max(types, key=lambda t: CATALYST_TYPE_RANK.get(t, 0))
-        combined_side = _combine_sides([str(g.get('side') or 'NEUTRAL') for g in group])
-        headlines = [str(g.get('headline') or '').strip() for g in group if g.get('headline')]
-        newest = max(group, key=lambda g: _freshness_score(_parse_ts(g.get('published_at'))))
+        classified: list[dict[str, Any]] = []
+        for g in group:
+            headline = str(g.get('headline') or '').strip()
+            ctype, side = classify_catalyst(headline or str(g.get('catalyst_type') or ''))
+            tier = _headline_evidence_tier(headline, ctype)
+            classified.append({
+                **g,
+                'headline': headline,
+                'catalyst_type': ctype,
+                'side': side,
+                '_evidence_tier': tier,
+            })
+
+        best = max(
+            classified,
+            key=lambda g: (
+                int(g.get('_evidence_tier') or 0),
+                _freshness_score(_parse_ts(g.get('published_at'))),
+                CATALYST_TYPE_RANK.get(str(g.get('catalyst_type') or ''), 0),
+            ),
+        )
+        best_tier = int(best.get('_evidence_tier') or 0)
+        best_type = str(best.get('catalyst_type') or 'GENERAL_NEWS')
+        best_side = str(best.get('side') or 'NEUTRAL').upper()
+
+        # Generic index headlines must not dilute a stronger specific catalyst.
+        if best_tier >= 40:
+            side = best_side
+        else:
+            strong_sides = [
+                str(g.get('side') or 'NEUTRAL').upper()
+                for g in classified
+                if int(g.get('_evidence_tier') or 0) >= 40
+            ]
+            side = _combine_sides(strong_sides) if strong_sides else best_side
+
+        headlines = [str(g.get('headline') or '').strip() for g in classified if g.get('headline')]
         merged.append({
             'ticker': sym,
             'tickers': [sym],
-            'headline': headlines[0] if headlines else '',
+            'headline': str(best.get('headline') or headlines[0] if headlines else ''),
             'catalyst_notes': headlines,
             'catalyst_type': best_type,
-            'side': combined_side,
-            'published_at': newest.get('published_at'),
-            'source': newest.get('source'),
-            'source_key': newest.get('source_key'),
-            'url': newest.get('url'),
+            'side': side,
+            'published_at': best.get('published_at'),
+            'source': best.get('source'),
+            'source_key': best.get('source_key'),
+            'url': best.get('url'),
         })
     return merged
 
@@ -778,6 +840,27 @@ def get_catalyst_radar(*, rebuild: bool = False) -> dict[str, Any]:
     return build_catalyst_radar(force_refresh=True)
 
 
+def get_clean_catalyst_radar(*, today_only: bool = False) -> dict[str, Any]:
+    """
+    Single cleaned catalyst build path for /catalysts and /catalysts today.
+
+    Uses session cache when available; today_only only affects display filtering downstream.
+    """
+    radar = get_catalyst_radar()
+    if not today_only:
+        return radar
+    filtered_items = [r for r in (radar.get('items') or []) if r.get('freshness_label') == 'today']
+    filtered_priority = [r for r in (radar.get('priority_list') or []) if r.get('freshness_label') == 'today']
+    filtered_watch = [r for r in (radar.get('bullish_watch') or []) if r.get('freshness_label') == 'today']
+    return {
+        **radar,
+        'items': filtered_items,
+        'priority_list': filtered_priority,
+        'bullish_watch': filtered_watch,
+        'display_filter': 'today',
+    }
+
+
 def pick_catalyst_tradecard_candidate(*, registry: Optional[dict[str, str]] = None) -> tuple[Optional[str], str]:
     """Return best catalyst-confirmed ticker for trade card, if any."""
     radar = get_catalyst_radar()
@@ -847,10 +930,8 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
         ])
         return '\n'.join(lines)
 
-    radar = build_catalyst_radar(force_refresh=today_only)
+    radar = get_clean_catalyst_radar(today_only=today_only)
     items = radar.get('priority_list') or []
-    if today_only:
-        items = [r for r in items if r.get('freshness_label') == 'today']
 
     lines = ['<b>📡 STOCK CATALYST RADAR</b> <i>(news-first · paper only)</i>']
     if not items:
