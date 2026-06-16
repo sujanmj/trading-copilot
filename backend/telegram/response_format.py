@@ -1997,17 +1997,21 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         fallback_status = today_entry_status
 
     effective_ticker = ticker or fallback_ticker
+    reason = clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)
     status = str(card.get('status') or 'NO_TRADE').strip().upper()
     if today_top and effective_ticker == today_top and today_entry_status:
-        mapped = _tradecard_status_label(today_entry_status)
-        if mapped in ('ENTRY_MISSED', 'WAIT', 'NO_ACTIVE_ENTRY') or ticker != _normalize_tradecard_ticker(card.get('ticker')):
-            status = today_entry_status if today_entry_status in (
-                'ENTRY_MISSED', 'WAIT_FOR_VOLUME', 'WAIT_FOR_PULLBACK', 'NO_ACTIVE_ENTRY', 'NO_TRADE', 'VALID_ENTRY',
-            ) else mapped
+        if today_entry_status != 'VALID_ENTRY' and today_entry_status in (
+            'ENTRY_MISSED', 'WAIT_FOR_VOLUME', 'WAIT_FOR_PULLBACK', 'NO_ACTIVE_ENTRY', 'NO_TRADE',
+        ):
+            status = today_entry_status
+        elif status in ('NO_TRADE', '—', ''):
+            if today_entry_status != 'VALID_ENTRY':
+                status = today_entry_status
     if not ticker and fallback_ticker and status in ('NO_TRADE', '—', ''):
         status = fallback_status or 'NO_ACTIVE_ENTRY'
+    if 'stop too wide' in reason.lower() and status == 'VALID_ENTRY':
+        status = 'NO_ACTIVE_ENTRY'
 
-    reason = clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)
     if not reason and not effective_ticker:
         reason = 'no fresh candidate with valid entry'
 
@@ -2054,7 +2058,36 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
         return strip_stage_markers('\n'.join(lines))
 
-    if status == 'ENTRY_MISSED' or str(card.get('entry_zone') or '').strip().upper() == 'NO ACTIVE ENTRY':
+    if status == 'NEXT_SESSION_WATCH' or (card.get('after_hours') and status != 'VALID_ENTRY'):
+        lines = [
+            '<b>📋 TRADE CARD — NEXT-SESSION WATCH</b>',
+            f'<b>{effective_ticker}</b> · <code>NO ACTIVE ENTRY</code>',
+            f"Reason: {reason or 'market closed/after-hours'}",
+            'Plan: confirm next session after 09:20 with fresh price + volume',
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
+        lines.append('Paper only.')
+        if explain:
+            lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason or 'market closed/after-hours'))
+        return strip_stage_markers('\n'.join(lines))
+
+    if status == 'NO_ACTIVE_ENTRY' and 'stop too wide' in reason.lower():
+        lines = [
+            '<b>📋 TRADE CARD — NO ACTIVE ENTRY</b>',
+            f'<b>{effective_ticker}</b> · <code>NO ACTIVE ENTRY</code>',
+            'Entry: NO ACTIVE ENTRY',
+            f'Reason: {reason}',
+            'Plan: wait for tighter setup or no trade.',
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
+        lines.append('Paper only.')
+        if explain:
+            lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason))
+        return strip_stage_markers('\n'.join(lines))
+
+    if status == 'ENTRY_MISSED' or status == 'NO_ACTIVE_ENTRY' or str(card.get('entry_zone') or '').strip().upper() == 'NO ACTIVE ENTRY':
         lines = [
             '<b>📋 TRADE CARD — NO ACTIVE ENTRY</b>',
             f'<b>{effective_ticker}</b> · <code>ENTRY_MISSED</code>',

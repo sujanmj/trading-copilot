@@ -648,11 +648,43 @@ def _priority_label(total: float, side: str) -> str:
     return 'AVOID'
 
 
+def _apply_live_ticker_classification(row: dict[str, Any]) -> dict[str, Any]:
+    """Hard rules on merged/live catalyst rows — HCLTECH Sarvam AI stays BULLISH."""
+    sym = _normalize_ticker(row.get('ticker'))
+    headlines = [str(row.get('headline') or '')]
+    headlines.extend(str(note) for note in (row.get('catalyst_notes') or []) if note)
+    forced_headline = ''
+    for text in headlines:
+        if _hcltech_sarvam_ai_stake(text, ticker=sym or 'HCLTECH'):
+            forced_headline = text
+            break
+    if not forced_headline:
+        return row
+    notes = [str(n) for n in (row.get('catalyst_notes') or []) if n]
+    if forced_headline not in notes:
+        notes.insert(0, forced_headline)
+    return {
+        **row,
+        'ticker': 'HCLTECH' if sym in ('', 'HCLTECH') else sym,
+        'side': 'BULLISH',
+        'catalyst_type': 'AI_INVESTMENT',
+        'headline': forced_headline,
+        'catalyst_notes': notes,
+    }
+
+
 def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
     ticker = _normalize_ticker(row.get('ticker'))
     headline = str(row.get('headline') or '')
     side = str(row.get('side') or 'NEUTRAL').upper()
     ctype = str(row.get('catalyst_type') or 'GENERAL_NEWS').upper()
+    for candidate in [headline, *(row.get('catalyst_notes') or [])]:
+        if _hcltech_sarvam_ai_stake(str(candidate), ticker=ticker):
+            side = 'BULLISH'
+            ctype = 'AI_INVESTMENT'
+            headline = str(candidate)
+            row = {**row, 'side': side, 'catalyst_type': ctype, 'headline': headline}
+            break
     if _hcltech_sarvam_ai_stake(headline, ticker=ticker):
         side = 'BULLISH'
         ctype = 'AI_INVESTMENT'
@@ -692,7 +724,7 @@ def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
     if side == 'RISK':
         reason_parts.append('sharp move without positive catalyst')
 
-    return {
+    return _apply_live_ticker_classification({
         **row,
         'ticker': ticker,
         'side': side,
@@ -715,7 +747,7 @@ def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
         'trade_status': trade_status,
         'reason': '; '.join(reason_parts),
         'freshness_label': 'today' if fresh >= 15 else ('recent' if fresh >= 8 else 'stale'),
-    }
+    })
 
 
 def _iter_news_feed_items() -> list[dict[str, Any]]:
@@ -882,7 +914,14 @@ def get_catalyst_radar(*, rebuild: bool = False) -> dict[str, Any]:
         return build_catalyst_radar(force_refresh=True)
     cached = _load_json(CACHE_FILE)
     if cached.get('session_date') == _today() and cached.get('items') is not None:
-        return cached
+        items = [_apply_live_ticker_classification(dict(r)) for r in (cached.get('items') or []) if isinstance(r, dict)]
+        priority = [_apply_live_ticker_classification(dict(r)) for r in (cached.get('priority_list') or []) if isinstance(r, dict)]
+        return {
+            **cached,
+            'items': items,
+            'priority_list': priority,
+            'bullish_watch': [_apply_live_ticker_classification(dict(r)) for r in (cached.get('bullish_watch') or []) if isinstance(r, dict)],
+        }
     return build_catalyst_radar(force_refresh=True)
 
 
@@ -949,7 +988,7 @@ def explain_catalyst(ticker: str) -> Optional[dict[str, Any]]:
             if note and note not in notes:
                 notes.append(note)
     primary['catalyst_notes'] = notes
-    return primary
+    return _apply_live_ticker_classification(primary)
 
 
 def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: Optional[str] = None) -> str:
@@ -957,14 +996,23 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
         row = explain_catalyst(explain_ticker)
         if not row:
             return f'No catalyst radar entry for {_normalize_ticker(explain_ticker)} today.'
+        row = _apply_live_ticker_classification(row)
         bd = row.get('score_breakdown') or {}
         lines = [
             f"<b>📡 CATALYST EXPLAIN — {row.get('ticker')}</b>",
             f"Side: {row.get('side')} · Type: {str(row.get('catalyst_type', '')).replace('_', ' ')}",
             f"Headline: {str(row.get('headline') or '')[:180]}",
         ]
-        for note in (row.get('catalyst_notes') or [])[1:4]:
-            lines.append(f"Also: {str(note)[:120]}")
+        primary_headline = str(row.get('headline') or '')
+        also_count = 0
+        for note in (row.get('catalyst_notes') or []):
+            note_text = str(note or '').strip()
+            if not note_text or note_text == primary_headline:
+                continue
+            lines.append(f"Also: {note_text[:120]}")
+            also_count += 1
+            if also_count >= 3:
+                break
         lines.extend([
             f"Freshness: {row.get('freshness_label')} · Score: {row.get('score')}",
             f"Price reaction: {row.get('price_display') or format_price_reaction_display(row.get('change_pct'), quote_available=bool(row.get('quote_available')))} · "
