@@ -36,12 +36,16 @@ def main() -> int:
             reply = str(result.get('reply') or '')
             if VERIFICATION_UNVERIFIED not in reply:
                 return _fail(f'reply must show UNVERIFIED, got {reply!r}')
-            if 'not used for catalyst until verified' not in reply:
+            if 'Used as catalyst evidence: no' not in reply:
+                return _fail('reply must state Used as catalyst evidence: no')
+            if 'Not used for catalyst/tradecard boost until verified.' not in reply:
                 return _fail('reply must warn unverified catalyst exclusion')
 
             record = result.get('record') or {}
             if str(record.get('verification_status') or '').upper() != VERIFICATION_UNVERIFIED:
                 return _fail('stored verification_status must be UNVERIFIED')
+            if str(record.get('catalyst_eligible')).lower() in ('true', '1'):
+                return _fail('unverified feed must not be catalyst_eligible=true')
 
             myfeed_rows = _iter_my_feed_text()
             if myfeed_rows:

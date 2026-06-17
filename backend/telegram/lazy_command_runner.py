@@ -653,15 +653,33 @@ def run_myfeed_only(args: str = '') -> dict[str, Any]:
 
     sub = str(args or '').strip().lower()
     if sub in ('', 'list'):
-        items = load_myfeed_items_for_telegram(limit=12)
+        items = load_myfeed_items_for_telegram(limit=12, force_refresh=True)
         text = format_myfeed_list(items, title='My Feed (latest)')
+    elif sub == 'list all':
+        items = load_myfeed_items_for_telegram(
+            limit=12, force_refresh=True, include_archived=True,
+        )
+        text = format_myfeed_list(items, title='My Feed (all incl. archived)')
+    elif sub == 'list verified':
+        items = load_myfeed_items_for_telegram(
+            limit=12, force_refresh=True, verification_filter='verified',
+        )
+        text = format_myfeed_list(items, title='My Feed (verified)')
+    elif sub == 'list unverified':
+        items = load_myfeed_items_for_telegram(
+            limit=12, force_refresh=True, verification_filter='unverified',
+        )
+        text = format_myfeed_list(items, title='My Feed (unverified)')
     elif sub == 'today':
         from backend.my_feed.feed_processor import list_feed_items, sanitize_item_for_api
 
-        items = [sanitize_item_for_api(row) for row in list_feed_items(limit=12, today_only=True)]
+        items = [
+            sanitize_item_for_api(row)
+            for row in list_feed_items(limit=12, today_only=True)
+        ]
         text = format_myfeed_list(items, title='My Feed (today)')
     elif sub == 'scan':
-        summary = scan_feed_summary(today_only=True)
+        summary = scan_feed_summary(today_only=False)
         text = format_myfeed_scan(summary)
     elif sub in ('clean-old', 'clean old'):
         from backend.my_feed.clean_old import clean_old_my_feed_items, format_clean_old_reply
@@ -676,5 +694,5 @@ def run_myfeed_only(args: str = '') -> dict[str, Any]:
         else:
             text = f'My Feed item not found: <code>{feed_id}</code>'
     else:
-        text = 'Usage: /myfeed list · /myfeed today · /myfeed scan'
+        text = 'Usage: /myfeed list · /myfeed list verified · /myfeed list unverified · /myfeed list all · /myfeed today · /myfeed scan'
     return _runner_result('myfeed', text=text)

@@ -187,14 +187,16 @@ def send_analysis_message(
         message = message[:3950] + '\n… (truncated)'
 
     try:
+        payload = {
+            'chat_id': CHAT_ID,
+            'text': message,
+            'disable_web_page_preview': True,
+        }
+        if parse_mode:
+            payload['parse_mode'] = parse_mode
         response = requests.post(
             f"{API_URL}/sendMessage",
-            json={
-                'chat_id': CHAT_ID,
-                'text': message,
-                'parse_mode': parse_mode,
-                'disable_web_page_preview': True,
-            },
+            json=payload,
             timeout=10,
         )
         ok = response.status_code == 200
@@ -232,6 +234,12 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'feed', raw[5:].strip()
     if lower == 'myfeed':
         return 'myfeed', ''
+    if lower == 'myfeed list all':
+        return 'myfeed', 'list all'
+    if lower == 'myfeed list verified':
+        return 'myfeed', 'list verified'
+    if lower == 'myfeed list unverified':
+        return 'myfeed', 'list unverified'
     if lower == 'myfeed list':
         return 'myfeed', 'list'
     if lower == 'myfeed today':
@@ -736,8 +744,14 @@ def handle_analysis_command(
         if not text_blob:
             response_text = FEED_TEXT_ONLY_USAGE
         else:
-            result = run_without_ai(lambda: run_feed_text_only(args), command='feed_text')
-            response_text = result.get('text') or 'MY_FEED_NEEDS_TEXT'
+            try:
+                result = run_without_ai(lambda: run_feed_text_only(args), command='feed_text')
+                response_text = result.get('text') or '❌ Feed could not be saved'
+            except Exception as exc:
+                from backend.my_feed.feed_verification import format_feed_save_failed_reply
+
+                response_text = format_feed_save_failed_reply(reason=str(exc))
+        return [send_analysis_message(response_text, command='feed', dry_run=dry_run, parse_mode='')]
     elif cmd == 'myfeed':
         from backend.telegram.my_feed_intake import MYFEED_SUBCOMMAND_USAGE
 
@@ -764,7 +778,7 @@ def handle_analysis_command(
                     command='myfeed_clean_old',
                 )
                 response_text = result.get('text') or 'MYFEED_CLEAN_OLD_OK'
-        elif sub in ('list', 'today', 'scan'):
+        elif sub in ('list', 'list all', 'list verified', 'list unverified', 'today', 'scan'):
             result = run_without_ai(lambda: run_myfeed_only(sub), command='myfeed')
             response_text = result.get('text') or 'My Feed unavailable.'
         else:

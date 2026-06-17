@@ -17,7 +17,8 @@ FEED_TEXT_ONLY_IMAGE_REPLY = (
 )
 
 MYFEED_SUBCOMMAND_USAGE = (
-    'Use /myfeed list · /myfeed today · /myfeed scan'
+    'Use /myfeed list · /myfeed list verified · /myfeed list unverified · '
+    '/myfeed list all · /myfeed today · /myfeed scan'
 )
 
 MYFEED_CLEAN_OLD_USAGE = (

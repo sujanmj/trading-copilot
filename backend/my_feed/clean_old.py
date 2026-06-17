@@ -12,7 +12,7 @@ from typing import Any
 
 from backend.my_feed.my_feed_db import archive_item, list_items
 
-CLEAN_OLD_STAGE = 'MYFEED_STAGE_50H_CLEAN_OLD'
+CLEAN_OLD_ARCHIVE_REASON = 'dirty_legacy_ocr_or_unverified_noise'
 
 _DIRTY_SOURCE_TOKENS = (
     'screenshot',
@@ -60,6 +60,38 @@ def _tickers_are_dirty(tickers: list[Any]) -> bool:
     return False
 
 
+def _text_has_currency_noise(text: str) -> bool:
+    blob = str(text or '')
+    if not blob:
+        return False
+    if re.search(r'[$€£¥₹][\d,]+', blob):
+        return True
+    if re.search(r'[\u20ac\u00a3\u20b9]', blob):
+        return True
+    return False
+
+
+def _legacy_unverified_noise(item: dict[str, Any]) -> bool:
+    """Pre-50W rows without verification metadata and OCR-ish noise."""
+    if str(item.get('verification_status') or '').strip():
+        return False
+    source = str(item.get('source') or '').lower()
+    if _source_is_dirty(source):
+        return True
+    tickers = item.get('tickers') or []
+    if _tickers_are_dirty(tickers if isinstance(tickers, list) else []):
+        return True
+    text = ' '.join([
+        str(item.get('cleaned_summary') or ''),
+        str(item.get('raw_market_text') or ''),
+    ])
+    if _text_has_ocr_noise(text) or _text_has_currency_noise(text):
+        return True
+    if 'CHAMBLERT' in text.upper():
+        return True
+    return False
+
+
 def _text_has_ocr_noise(text: str) -> bool:
     blob = str(text or '')
     if not blob:
@@ -97,6 +129,12 @@ def is_dirty_feed_item(item: dict[str, Any]) -> tuple[bool, str]:
     if _text_has_ocr_noise(text):
         return True, 'ocr_noise'
 
+    if _text_has_currency_noise(text):
+        return True, 'currency_noise'
+
+    if _legacy_unverified_noise(item):
+        return True, 'legacy_unverified_noise'
+
     return False, ''
 
 
@@ -121,7 +159,7 @@ def clean_old_my_feed_items(*, apply: bool = True, limit: int = 500) -> dict[str
             archived_count += 1
             continue
         try:
-            if archive_item(feed_id):
+            if archive_item(feed_id, reason=CLEAN_OLD_ARCHIVE_REASON):
                 archived_count += 1
             else:
                 errors.append(f'archive failed: {feed_id}')

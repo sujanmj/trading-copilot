@@ -23,6 +23,7 @@ PUBLIC_ITEM_KEYS = frozenset({
     'feed_id', 'created_at', 'source', 'cleaned_summary', 'detected_source_app',
     'tickers', 'themes', 'impact_score', 'urgency', 'suggested_action', 'status',
     'verification_status', 'verified_headline', 'source_name', 'side', 'confidence',
+    'raw_user_text', 'normalized_claim', 'catalyst_eligible', 'archive_reason', 'archived',
 })
 
 
@@ -182,7 +183,7 @@ def format_saved_reply(
 def format_needs_text_reply() -> str:
     return '\n'.join([
         'MY_FEED_NEEDS_TEXT',
-        'Could not read market news from screenshot. Please send:',
+        'Could not read market news text. Please send:',
         '/feed <market news text>',
     ])
 
@@ -214,7 +215,8 @@ def _verify_and_build_text_record(
     if is_catalyst_eligible_status(status) and verification.get('verified_headline'):
         cleaned_summary = str(verification.get('verified_headline') or cleaned_summary)
 
-    payload = verification_payload_fields(verification)
+    payload = verification_payload_fields(verification, normalized_claim=claim)
+    payload['raw_user_text'] = str(raw_text or '').strip()
     record = insert_feed_item({
         'source': source,
         'raw_market_text': extracted['raw_market_text'],
@@ -236,58 +238,102 @@ def _verify_and_build_text_record(
 
 
 def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
-    from backend.my_feed.feed_verification import format_verification_telegram_reply
+    from backend.my_feed.feed_verification import (
+        format_feed_save_failed_reply,
+        format_verification_telegram_reply,
+        item_verification_status,
+    )
 
-    extracted = filter_market_text(text)
-    if not extracted.get('cleaned_summary'):
+    raw = str(text or '').strip()
+    if not raw:
         return {
             'ok': False,
             'reply': format_needs_text_reply(),
             'record': None,
             'saved_count': 0,
-            'message': 'Could not read market news clearly. Paste text instead.',
+            'message': 'Empty feed text.',
         }
 
-    duplicate = find_recent_duplicate(extracted['cleaned_summary'])
-    if duplicate:
+    try:
+        extracted = filter_market_text(raw)
+        if not extracted.get('cleaned_summary') and raw and source in ('telegram_text', 'gui_text'):
+            extracted = {
+                **extracted,
+                'cleaned_summary': raw,
+                'items_found': 1,
+                'tickers': extract_tickers(raw),
+            }
+        if not extracted.get('cleaned_summary'):
+            return {
+                'ok': False,
+                'reply': format_needs_text_reply(),
+                'record': None,
+                'saved_count': 0,
+                'message': 'Could not read market news clearly. Paste text instead.',
+            }
+
+        duplicate = find_recent_duplicate(extracted['cleaned_summary'])
+        if duplicate:
+            dup_status = item_verification_status(duplicate)
+            verification = {
+                'verification_status': dup_status,
+                'raw_user_text': duplicate.get('raw_user_text') or raw,
+                'claim_summary': duplicate.get('cleaned_summary') or extracted['cleaned_summary'],
+                'verified_headline': duplicate.get('verified_headline') or '',
+                'ticker': (duplicate.get('tickers') or [''])[0] if duplicate.get('tickers') else duplicate.get('ticker', ''),
+                'entity': duplicate.get('entity') or '',
+                'event_type': duplicate.get('event_type') or '',
+                'side': duplicate.get('side') or 'NEUTRAL',
+                'source_name': duplicate.get('source_name') or '',
+            }
+            return {
+                'ok': True,
+                'reply': format_verification_telegram_reply(
+                    duplicate,
+                    verification,
+                    ignored_private_items=extracted['ignored_private_items'],
+                    items_found=0,
+                ),
+                'record': duplicate,
+                'duplicate': True,
+                'saved_count': 0,
+                'message': 'Duplicate item — already saved recently.',
+                'verification_status': dup_status,
+            }
+
+        record, verification = _verify_and_build_text_record(
+            extracted,
+            source=source,
+            raw_text=raw,
+        )
+        try:
+            from backend.my_feed.cache_invalidation import invalidate_myfeed_caches
+
+            invalidate_myfeed_caches()
+        except Exception:
+            pass
         return {
             'ok': True,
-            'reply': format_saved_reply(
-                duplicate,
+            'reply': format_verification_telegram_reply(
+                record,
+                verification,
                 ignored_private_items=extracted['ignored_private_items'],
-                items_found=0,
+                items_found=extracted['items_found'],
             ),
-            'record': duplicate,
-            'duplicate': True,
-            'saved_count': 0,
-            'message': 'Duplicate item — already saved recently.',
+            'record': record,
+            'duplicate': False,
+            'saved_count': 1,
+            'message': 'Saved 1 item',
+            'verification_status': verification.get('verification_status'),
         }
-
-    record, verification = _verify_and_build_text_record(
-        extracted,
-        source=source,
-        raw_text=text,
-    )
-    try:
-        from backend.my_feed.cache_invalidation import invalidate_myfeed_caches
-
-        invalidate_myfeed_caches()
-    except Exception:
-        pass
-    return {
-        'ok': True,
-        'reply': format_verification_telegram_reply(
-            record,
-            verification,
-            ignored_private_items=extracted['ignored_private_items'],
-            items_found=extracted['items_found'],
-        ),
-        'record': record,
-        'duplicate': False,
-        'saved_count': 1,
-        'message': 'Saved 1 item',
-        'verification_status': verification.get('verification_status'),
-    }
+    except Exception as exc:
+        return {
+            'ok': False,
+            'reply': format_feed_save_failed_reply(reason=str(exc)),
+            'record': None,
+            'saved_count': 0,
+            'message': str(exc)[:200],
+        }
 
 
 def ingest_notifications(
@@ -581,33 +627,98 @@ def ingest_feed_content(
     return ingest_text(caption, source=source)
 
 
-def list_feed_items(*, limit: int = 20, today_only: bool = False, status: str = 'active') -> list[dict[str, Any]]:
-    return list_items(limit=limit, today_only=today_only, status=status)
+def list_feed_items(
+    *,
+    limit: int = 20,
+    today_only: bool = False,
+    status: str | None = 'active',
+    include_archived: bool = False,
+    verification_filter: str | None = None,
+) -> list[dict[str, Any]]:
+    from backend.my_feed.feed_verification import (
+        CATALYST_ELIGIBLE_STATUSES,
+        VERIFICATION_CONTRADICTED,
+        VERIFICATION_UNVERIFIED,
+        item_verification_status,
+    )
 
+    filt = str(verification_filter or '').strip().lower()
+    if filt == 'archived':
+        rows = list_items(limit=max(limit * 3, 50), today_only=today_only, status='archived')
+    elif include_archived:
+        rows = list_items(
+            limit=max(limit * 3, 50),
+            today_only=today_only,
+            status=None,
+            include_archived=True,
+        )
+    else:
+        rows = list_items(limit=max(limit * 3, 50), today_only=today_only, status='active')
 
-def archive_feed_item(feed_id: str) -> bool:
-    return archive_item(feed_id)
+    filtered: list[dict[str, Any]] = []
+    for row in rows:
+        vstatus = item_verification_status(row)
+        row_status = str(row.get('status') or 'active').lower()
+        if filt == 'verified' and vstatus not in CATALYST_ELIGIBLE_STATUSES:
+            continue
+        if filt == 'unverified' and vstatus != VERIFICATION_UNVERIFIED:
+            continue
+        if filt == 'contradicted' and vstatus != VERIFICATION_CONTRADICTED:
+            continue
+        if filt == 'archived' and row_status != 'archived':
+            continue
+        if not include_archived and filt != 'archived' and row_status == 'archived':
+            continue
+        filtered.append(row)
+        if len(filtered) >= limit:
+            break
+    return filtered
 
 
 def scan_feed_summary(*, today_only: bool = False) -> dict[str, Any]:
-    from backend.my_feed.feed_verification import is_catalyst_eligible_item
+    from backend.my_feed.feed_verification import (
+        CATALYST_ELIGIBLE_STATUSES,
+        VERIFICATION_CONTRADICTED,
+        VERIFICATION_UNVERIFIED,
+        is_catalyst_eligible_item,
+        item_verification_status,
+    )
 
-    items = list_feed_items(limit=50, today_only=today_only, status='active')
+    active_items = list_feed_items(limit=200, today_only=today_only, status='active')
+    archived_items = list_items(limit=200, status='archived', include_archived=True)
+    archived_dirty = sum(
+        1 for i in archived_items
+        if 'dirty' in str(i.get('archive_reason') or '').lower()
+        or str(i.get('archive_reason') or '') == 'dirty_legacy_ocr_or_unverified_noise'
+    )
     return {
-        'total': len(items),
-        'verified': sum(1 for i in items if is_catalyst_eligible_item(i)),
-        'unverified': sum(
-            1 for i in items
-            if str(i.get('verification_status') or 'UNVERIFIED').upper() == 'UNVERIFIED'
+        'total': len(active_items),
+        'verified': sum(1 for i in active_items if is_catalyst_eligible_item(i)),
+        'partial': sum(
+            1 for i in active_items
+            if item_verification_status(i) == 'PARTIALLY_VERIFIED'
         ),
-        'high_impact': sum(1 for i in items if float(i.get('impact_score') or 0) >= 70),
+        'unverified': sum(
+            1 for i in active_items
+            if item_verification_status(i) == VERIFICATION_UNVERIFIED
+        ),
+        'contradicted': sum(
+            1 for i in active_items
+            if item_verification_status(i) == VERIFICATION_CONTRADICTED
+        ),
+        'archived_dirty': archived_dirty,
+        'high_impact': sum(1 for i in active_items if float(i.get('impact_score') or 0) >= 70),
         'risk_alerts': sum(
-            1 for i in items
+            1 for i in active_items
             if str(i.get('suggested_action') or '') in {'MARKET RISK ALERT', 'AVOID / RISK WATCH', 'COMMODITY RISK ALERT'}
         ),
-        'watch_items': sum(1 for i in items if i.get('suggested_action') == 'WATCH FOR CONFIRMATION'),
-        'items': items,
+        'watch_items': sum(1 for i in active_items if i.get('suggested_action') == 'WATCH FOR CONFIRMATION'),
+        'items': active_items,
     }
+
+
+def archive_feed_item(feed_id: str, *, reason: str = '') -> bool:
+    return archive_item(feed_id, reason=reason)
 
 
 def public_feed_items(limit: int = 20) -> list[dict[str, Any]]:

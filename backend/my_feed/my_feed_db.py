@@ -48,7 +48,7 @@ def get_my_feed_db_path():
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _connect() -> sqlite3.Connection:
@@ -183,11 +183,16 @@ def list_items(
     limit: int = 20,
     today_only: bool = False,
     status: str | None = 'active',
+    include_archived: bool = False,
 ) -> list[dict[str, Any]]:
     init_my_feed_db()
     clauses = []
     params: list[Any] = []
-    if status:
+    if include_archived and status is None:
+        clauses.append("status IN ('active', 'archived')")
+    elif include_archived and status == 'archived':
+        clauses.append("status = 'archived'")
+    elif status:
         clauses.append('status = ?')
         params.append(status)
     if today_only:
@@ -195,7 +200,7 @@ def list_items(
         clauses.append('created_at LIKE ?')
         params.append(f'{today_prefix}%')
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ''
-    sql = f'SELECT * FROM feed_items {where} ORDER BY created_at DESC LIMIT ?'
+    sql = f'SELECT * FROM feed_items {where} ORDER BY created_at DESC, rowid DESC LIMIT ?'
     params.append(max(1, int(limit)))
     with _connect() as conn:
         rows = conn.execute(sql, params).fetchall()
@@ -209,12 +214,21 @@ def get_item(feed_id: str) -> dict[str, Any] | None:
     return row_to_dict(row) if row else None
 
 
-def archive_item(feed_id: str) -> bool:
+def archive_item(feed_id: str, *, reason: str = '') -> bool:
     init_my_feed_db()
     with _connect() as conn:
+        row = conn.execute('SELECT payload FROM feed_items WHERE feed_id = ?', (feed_id,)).fetchone()
+        if not row:
+            return False
+        payload = _json_load(row['payload']) if row['payload'] else {}
+        if not isinstance(payload, dict):
+            payload = {}
+        if reason:
+            payload['archive_reason'] = reason
+        payload['archived'] = True
         cur = conn.execute(
-            "UPDATE feed_items SET status = 'archived' WHERE feed_id = ? AND status != 'archived'",
-            (feed_id,),
+            "UPDATE feed_items SET status = 'archived', payload = ? WHERE feed_id = ? AND status != 'archived'",
+            (_json_dump(payload), feed_id),
         )
         conn.commit()
         return cur.rowcount > 0

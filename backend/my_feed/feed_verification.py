@@ -274,6 +274,10 @@ def normalize_claim(raw_text: str) -> dict[str, Any]:
         side = side_map.get(str(classified.get('sentiment') or 'neutral'), 'NEUTRAL')
 
     keywords = sorted(_tokenize(cleaned))[:24]
+    lower = cleaned.lower()
+    if not tickers and 'adani' in lower:
+        tickers = ['ADANIENT']
+        entity = 'Adani Group'
     return {
         'raw_user_text': text,
         'claim_summary': cleaned,
@@ -422,6 +426,28 @@ def verify_claim_against_sources(
     }
 
 
+def item_verification_status(item: dict[str, Any]) -> str:
+    return str(item.get('verification_status') or VERIFICATION_UNVERIFIED).upper()
+
+
+def format_feed_save_failed_reply(*, reason: str = '') -> str:
+    detail = str(reason or 'database or validation error').strip()[:160]
+    return '\n'.join([
+        'MY_FEED_SAVE_FAILED',
+        '❌ Feed could not be saved',
+        f'Reason: {detail}',
+        'Try again with /feed <market news text>',
+    ])
+
+
+def _ticker_entity_line(record: dict[str, Any], verification: dict[str, Any]) -> str:
+    tickers = [str(t).strip().upper() for t in (record.get('tickers') or []) if str(t).strip()]
+    ticker = str(verification.get('ticker') or (tickers[0] if tickers else '')).strip().upper()
+    entity = str(verification.get('entity') or ticker or '').strip()
+    parts = [p for p in dict.fromkeys([ticker, entity]) if p and p != '—']
+    return ' / '.join(parts) if parts else '—'
+
+
 def format_verification_telegram_reply(
     record: dict[str, Any],
     verification: dict[str, Any],
@@ -432,6 +458,16 @@ def format_verification_telegram_reply(
 ) -> str:
     """Telegram-facing /feed save reply with verification status."""
     status = str(verification.get('verification_status') or VERIFICATION_UNVERIFIED).upper()
+    feed_id = str(record.get('feed_id') or '—')
+    claim = str(
+        verification.get('raw_user_text')
+        or verification.get('claim_summary')
+        or record.get('raw_market_text')
+        or record.get('cleaned_summary')
+        or ''
+    ).strip()[:200]
+    ticker_entity = _ticker_entity_line(record, verification)
+    catalyst_yes = 'yes' if is_catalyst_eligible_status(status) else 'no'
     tickers = [str(t).strip() for t in (ticker_list or record.get('tickers') or []) if str(t).strip()]
     tickers_disp = ', '.join(dict.fromkeys(tickers)) or '—'
     action = str(record.get('suggested_action') or 'NEWS ONLY')
@@ -440,38 +476,76 @@ def format_verification_telegram_reply(
     lines = [
         'MY_FEED_SAVED',
         f'verification_status={status}',
+        f'feed_id={feed_id}',
         f'items_found={items_found or 1}',
         f'ignored_private_items={ignored_private_items}',
         f'tickers={tickers_disp}',
         f'impact_score={impact}',
         f'suggested_action={action}',
+        f'catalyst_eligible={catalyst_yes}',
     ]
 
     if status == VERIFICATION_VERIFIED:
-        lines.append('✅ Feed verified — saved for catalyst evidence')
+        lines.extend([
+            '✅ Feed verified',
+            f'Feed ID: {feed_id}',
+            f'Claim: {claim or "—"}',
+            f'Ticker/entity: {ticker_entity}',
+            f'Used as catalyst evidence: {catalyst_yes}',
+        ])
         headline = str(verification.get('verified_headline') or '').strip()
         if headline:
             lines.append(f'Headline: {headline[:180]}')
+        event = str(verification.get('event_type') or record.get('event_type') or '—')
+        side = str(verification.get('side') or 'NEUTRAL').upper()
+        lines.append(f'Event: {event}')
+        lines.append(f'Side: {side}')
         source = str(verification.get('source_name') or 'news_cache')
         if source and source != 'user_feed_unverified':
             lines.append(f'Source: {source}')
     elif status == VERIFICATION_PARTIAL:
-        lines.append('⚠️ Feed partially verified — limited catalyst use')
+        lines.extend([
+            '🟡 Feed partially verified',
+            f'Feed ID: {feed_id}',
+            f'Claim: {claim or "—"}',
+            f'Ticker/entity: {ticker_entity}',
+            'Matched company/event but exact claim unclear.',
+            f'Used as catalyst evidence: {catalyst_yes} (low weight only)',
+        ])
         headline = str(verification.get('verified_headline') or '').strip()
         if headline:
             lines.append(f'Closest match: {headline[:160]}')
     elif status == VERIFICATION_CONTRADICTED:
-        lines.append('❌ Feed claim contradicted — not used for catalyst/tradecard')
+        lines.extend([
+            '❌ Feed claim contradicted by available sources.',
+            f'Feed ID: {feed_id}',
+            f'Claim: {claim or "—"}',
+            f'Ticker/entity: {ticker_entity}',
+            'Not used for catalyst/tradecard.',
+            f'Used as catalyst evidence: {catalyst_yes}',
+        ])
         headline = str(verification.get('verified_headline') or '').strip()
         if headline:
             lines.append(f'Cached headline: {headline[:160]}')
     else:
-        lines.append('⚠️ Feed saved as UNVERIFIED — not used for catalyst until verified')
+        lines.extend([
+            '⚠️ Feed saved as UNVERIFIED',
+            f'Feed ID: {feed_id}',
+            f'Claim: {claim or "—"}',
+            f'Ticker/entity: {ticker_entity}',
+            'Used as catalyst evidence: no',
+            'Reason: could not confirm from trusted sources yet.',
+            'Not used for catalyst/tradecard boost until verified.',
+        ])
 
     return '\n'.join(lines)
 
 
-def verification_payload_fields(verification: dict[str, Any]) -> dict[str, Any]:
+def verification_payload_fields(
+    verification: dict[str, Any],
+    *,
+    normalized_claim: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Fields stored in feed_items.payload for verification metadata."""
     keys = (
         'verification_status', 'raw_user_text', 'verified_headline', 'verified_summary',
@@ -483,6 +557,9 @@ def verification_payload_fields(verification: dict[str, Any]) -> dict[str, Any]:
         val = verification.get(key)
         if val not in (None, ''):
             out[key] = val
-    if 'verification_status' not in out:
-        out['verification_status'] = VERIFICATION_UNVERIFIED
+    if normalized_claim:
+        out['normalized_claim'] = normalized_claim
+    status = str(out.get('verification_status') or VERIFICATION_UNVERIFIED).upper()
+    out['verification_status'] = status
+    out['catalyst_eligible'] = is_catalyst_eligible_status(status)
     return out

@@ -50,13 +50,29 @@ def get_cached_myfeed_items_for_telegram() -> list[dict] | None:
     return _MYFEED_TELEGRAM_CACHE
 
 
-def load_myfeed_items_for_telegram(*, limit: int = 12, force_refresh: bool = False) -> list[dict]:
+def load_myfeed_items_for_telegram(
+    *,
+    limit: int = 12,
+    force_refresh: bool = False,
+    include_archived: bool = False,
+    verification_filter: str | None = None,
+    today_only: bool = False,
+) -> list[dict]:
     if not force_refresh:
         cached = get_cached_myfeed_items_for_telegram()
-        if cached is not None:
+        if cached is not None and not include_archived and not verification_filter and not today_only:
             return cached
     from backend.my_feed.feed_processor import list_feed_items, sanitize_item_for_api
 
-    items = [sanitize_item_for_api(row) for row in list_feed_items(limit=limit)]
-    cache_myfeed_items_for_telegram(items)
+    items = [
+        sanitize_item_for_api(row)
+        for row in list_feed_items(
+            limit=limit,
+            today_only=today_only,
+            include_archived=include_archived,
+            verification_filter=verification_filter,
+        )
+    ]
+    if not include_archived and not verification_filter and not today_only:
+        cache_myfeed_items_for_telegram(items)
     return items
