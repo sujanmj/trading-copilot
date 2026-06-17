@@ -280,7 +280,7 @@ def run_daily_pack_only() -> dict[str, Any]:
     if isinstance(fc, dict):
         lines.append(
             f"Final confidence — watch: {fc.get('watch', '?')} · "
-            f"avoid: {fc.get('avoid', '?')} · buy_candidate: {fc.get('buy_candidate', '?')}"
+            f"avoid: {fc.get('avoid', '?')} · entry_candidates: {fc.get('buy_candidate', '?')}"
         )
     return _runner_result('daily_pack', text='\n'.join(lines), payload=pack)
 

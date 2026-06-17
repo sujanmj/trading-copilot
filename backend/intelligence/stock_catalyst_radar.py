@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50T'
+STAGE = '50U'
 CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 
 CATALYST_TYPES = frozenset({
@@ -476,6 +476,15 @@ def format_volume_display(volume_ratio: Optional[float], *, quote_available: boo
     return f'{volume_ratio:.1f}x'
 
 
+def _finalize_catalyst_display_row(row: dict[str, Any]) -> dict[str, Any]:
+    """User-facing trade status — bearish/risk/avoid never show WAIT FOR LIVE DATA."""
+    side = str(row.get('side') or '').upper()
+    priority = str(row.get('priority') or '').upper()
+    if priority == 'AVOID' or side in ('BEARISH', 'RISK'):
+        return {**row, 'trade_status': 'AVOID/RISK'}
+    return row
+
+
 def _reconcile_trade_status(
     *,
     priority: str,
@@ -734,7 +743,7 @@ def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
     if side == 'RISK':
         reason_parts.append('sharp move without positive catalyst')
 
-    return _apply_live_ticker_classification({
+    return _finalize_catalyst_display_row(_apply_live_ticker_classification({
         **row,
         'ticker': ticker,
         'side': side,
@@ -757,7 +766,7 @@ def score_catalyst_row(row: dict[str, Any]) -> dict[str, Any]:
         'trade_status': trade_status,
         'reason': '; '.join(reason_parts),
         'freshness_label': 'today' if fresh >= 15 else ('recent' if fresh >= 8 else 'stale'),
-    })
+    }))
 
 
 def _iter_news_feed_items() -> list[dict[str, Any]]:
@@ -924,13 +933,13 @@ def get_catalyst_radar(*, rebuild: bool = False) -> dict[str, Any]:
         return build_catalyst_radar(force_refresh=True)
     cached = _load_json(CACHE_FILE)
     if cached.get('session_date') == _today() and cached.get('items') is not None:
-        items = [_apply_live_ticker_classification(dict(r)) for r in (cached.get('items') or []) if isinstance(r, dict)]
-        priority = [_apply_live_ticker_classification(dict(r)) for r in (cached.get('priority_list') or []) if isinstance(r, dict)]
+        items = [_finalize_catalyst_display_row(_apply_live_ticker_classification(dict(r))) for r in (cached.get('items') or []) if isinstance(r, dict)]
+        priority = [_finalize_catalyst_display_row(_apply_live_ticker_classification(dict(r))) for r in (cached.get('priority_list') or []) if isinstance(r, dict)]
         return {
             **cached,
             'items': items,
             'priority_list': priority,
-            'bullish_watch': [_apply_live_ticker_classification(dict(r)) for r in (cached.get('bullish_watch') or []) if isinstance(r, dict)],
+            'bullish_watch': [_finalize_catalyst_display_row(_apply_live_ticker_classification(dict(r))) for r in (cached.get('bullish_watch') or []) if isinstance(r, dict)],
         }
     return build_catalyst_radar(force_refresh=True)
 
@@ -998,7 +1007,7 @@ def explain_catalyst(ticker: str) -> Optional[dict[str, Any]]:
             if note and note not in notes:
                 notes.append(note)
     primary['catalyst_notes'] = notes
-    return _apply_live_ticker_classification(primary)
+    return _finalize_catalyst_display_row(_apply_live_ticker_classification(primary))
 
 
 def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: Optional[str] = None) -> str:
@@ -1006,7 +1015,7 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
         row = explain_catalyst(explain_ticker)
         if not row:
             return f'No catalyst radar entry for {_normalize_ticker(explain_ticker)} today.'
-        row = _apply_live_ticker_classification(row)
+        row = _finalize_catalyst_display_row(_apply_live_ticker_classification(row))
         sym = _normalize_ticker(explain_ticker)
         notes_blob = ' '.join(
             [str(row.get('headline') or '')]
@@ -1052,7 +1061,7 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
     if not items:
         lines.append('No fresh actionable catalysts in cache — check again after news refresh.')
     for idx, row in enumerate(items[:10], start=1):
-        row = _apply_live_ticker_classification(dict(row))
+        row = _finalize_catalyst_display_row(_apply_live_ticker_classification(dict(row)))
         lines.append('')
         lines.append(
             f"{idx}. <b>{row.get('ticker')}</b> — {row.get('side')}\n"
@@ -1062,7 +1071,7 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
             f"   Trade status: {row.get('trade_status')}"
         )
     lines.append('')
-    lines.append('Use /catalysts explain &lt;ticker&gt; for detail. No BUY/SELL — confirm manually.')
+    lines.append('Use /catalysts explain &lt;ticker&gt; for detail. Research only — confirm manually.')
     return '\n'.join(lines)
 
 

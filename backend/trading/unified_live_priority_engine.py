@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50T'
+STAGE = '50U'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 FINAL_CONF_FILE = DATA_DIR / 'final_confidence_report.json'
 

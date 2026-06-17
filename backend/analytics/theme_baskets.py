@@ -53,12 +53,61 @@ SKIP_KEYWORDS: tuple[str, ...] = (
     'block deal',
     'currency defence',
     'rupee defence',
+    'telegram ban',
+    'neet',
+    'spacex',
+    'celebrity',
+    'consumer tech',
+    'global headline',
     'analyst says',
     'flashing bullish signals',
     'market crash',
     'selloff',
     'sell-off',
 )
+
+THEME_NOISE_EXCLUDE: tuple[str, ...] = (
+    'telegram ban',
+    'neet exam',
+    ' neet ',
+    'spacex',
+    'celebrity',
+    'consumer tech',
+    'iphone',
+    'tiktok',
+    'social media ban',
+)
+
+INFRA_LINKAGE_TERMS: tuple[str, ...] = (
+    'infrastructure',
+    'infra',
+    'capex',
+    'construction',
+    'road',
+    'rail',
+    'power',
+    'cement',
+    'steel',
+    'logistics',
+    'airport',
+    'port',
+    'warehouse',
+    'epc',
+    'nhai',
+    'metro',
+    'bridge',
+    'tunnel',
+    'highway',
+    'expressway',
+    'smart city',
+    'urban development',
+    'civil engineering',
+)
+
+
+def _has_infra_linkage(text: str) -> bool:
+    return _contains_any(text, INFRA_LINKAGE_TERMS)
+
 
 THEME_ANCHORS: dict[str, list[str]] = {
     'infrastructure': [
@@ -1306,6 +1355,12 @@ def is_theme_catalyst_relevant(
     has_stock = bool(_find_named_companies(text, basket))
     has_govt_order = _has_strong_govt_order(text, theme_id)
 
+    if theme_id == 'infrastructure':
+        if _contains_any(text, THEME_NOISE_EXCLUDE):
+            return False
+        if not (_has_infra_linkage(text) or has_stock or has_govt_order):
+            return False
+
     if _has_skip_signal(text):
         if has_stock and has_anchor:
             return True
@@ -1681,7 +1736,11 @@ def _filter_relevant_catalysts(
             continue
         if row.get('relevant') is False:
             continue
-        norm = _normalize_title(str(row.get('headline') or ''))
+        headline = str(row.get('headline') or '')
+        theme_id = str(row.get('theme_id') or '')
+        if theme_id == 'infrastructure' and headline and not is_theme_catalyst_relevant(headline, 'infrastructure'):
+            continue
+        norm = _normalize_title(headline)
         if not norm or norm in seen:
             continue
         seen.add(norm)

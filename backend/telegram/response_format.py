@@ -50,7 +50,7 @@ def user_text_has_naked_buy_sell(text: str) -> bool:
         return True
     if 'No confirmed BUY candidate' in cleaned:
         return True
-    if re.search(r'\b(BUY|SELL)\s+candidate\b', cleaned, re.I):
+    if re.search(r'\b(buy_candidate|sell_candidate)\b', cleaned, re.I):
         return True
     return False
 
