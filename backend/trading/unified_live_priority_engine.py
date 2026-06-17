@@ -17,11 +17,50 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50R'
+STAGE = '50T'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 FINAL_CONF_FILE = DATA_DIR / 'final_confidence_report.json'
 
 VALID_MODES = frozenset({'today', 'tomorrow', 'premarket'})
+
+
+def user_action_label(action: object) -> str:
+    token = str(action or '').strip().upper().replace(' ', '_')
+    if token in ('BUY_CANDIDATE', 'BUY'):
+        return 'ENTRY CANDIDATE'
+    if token in ('SELL_CANDIDATE', 'SELL'):
+        return 'AVOID CANDIDATE'
+    return str(action or '').replace('_', ' ')
+
+
+def decision_source_label(ticker: str) -> str:
+    """Catalyst-backed vs scanner-only label for /today and /tradecard."""
+    sym = _normalize_ticker(ticker)
+    if not sym:
+        return 'Source: scanner-confirmed'
+    try:
+        from backend.intelligence.stock_catalyst_radar import PRIORITY_LOW, get_catalyst_radar
+
+        radar = get_catalyst_radar()
+        for row in radar.get('priority_list') or []:
+            if _normalize_ticker(row.get('ticker')) != sym:
+                continue
+            side = str(row.get('side') or '').upper()
+            ctype = str(row.get('catalyst_type') or '').upper()
+            score = float(row.get('score') or 0)
+            if score < PRIORITY_LOW:
+                continue
+            if side in ('BEARISH', 'RISK') or row.get('priority') == 'AVOID':
+                continue
+            if side == 'BULLISH' and ctype not in ('GENERAL_NEWS', 'SECTOR_NEWS'):
+                return 'Source: catalyst-backed + scanner-confirmed'
+            if side == 'BULLISH' and ctype in (
+                'AI_INVESTMENT', 'STAKE_BUY', 'ORDER_WIN', 'PROJECT_ANNOUNCEMENT', 'ACQUISITION',
+            ):
+                return 'Source: catalyst-backed + scanner-confirmed'
+    except Exception:
+        pass
+    return 'Source: scanner-confirmed'
 
 
 def _now_iso() -> str:
@@ -396,11 +435,12 @@ def format_tomorrow_unified(payload: Optional[dict[str, Any]] = None) -> str:
     decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
 
     if top and decision != 'NO_CLEAN_CANDIDATE':
-        action = str(top.get('action') or 'WATCH_FOR_ENTRY').replace('_', ' ')
+        action = user_action_label(top.get('action') or 'WATCH_FOR_ENTRY')
         lines.extend([
             '<b>Top watch:</b>',
             f"{top.get('ticker')} — {action}",
             f"Score: {top.get('unified_score', '—')}",
+            decision_source_label(str(top.get('ticker') or '')),
             '',
             '<b>Why:</b>',
         ])
@@ -508,11 +548,12 @@ def format_today_unified(payload: Optional[dict[str, Any]] = None) -> str:
         return '\n'.join(lines)
 
     if top and decision != 'NO_CLEAN_CANDIDATE':
-        action = str(top.get('action') or 'WATCH_FOR_ENTRY').replace('_', ' ')
+        action = user_action_label(top.get('action') or 'WATCH_FOR_ENTRY')
         lines.extend([
             '<b>Top candidate:</b>',
             f"{top.get('ticker')} — {action}",
             f"Score: {top.get('unified_score', '—')}",
+            decision_source_label(str(top.get('ticker') or '')),
             '',
             '<b>Why:</b>',
         ])

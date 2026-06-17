@@ -81,8 +81,8 @@ def main() -> int:
                 return _fail('/action plan missing Market state')
             if 'Top candidate' not in text:
                 return _fail('/action plan missing Top candidate')
-            if 'No confirmed BUY candidate' not in text and 'Ticker:' not in text:
-                return _fail('/action plan missing candidate or no-buy message')
+            if 'No confirmed entry candidate' not in text and 'Ticker:' not in text:
+                return _fail('/action plan missing candidate or no-entry message')
             if 'Why:' not in text:
                 return _fail('/action plan missing Why')
             if 'Wait for:' not in text:

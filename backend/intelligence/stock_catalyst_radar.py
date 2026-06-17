@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50R'
+STAGE = '50T'
 CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 
 CATALYST_TYPES = frozenset({
@@ -147,8 +147,9 @@ SHARP_FALL_RE = re.compile(
 HCLTECH_AI_STAKE_FORCE_RE = re.compile(
     r'(hcl\s+tech\s+shares\s+jump.*?buying\s+stake\s+in\s+sarvam\s+ai|'
     r'buying\s+stake\s+in\s+sarvam\s+ai|buys\s+stake\s+in\s+sarvam\s+ai|'
-    r'stake\s+in\s+sarvam\s+ai|sarvam\s+ai\s+for\s+rs[\s,.]*1[\s,.]*427\s+crore|'
-    r'sarvam\s+ai\s+stake|ai\s+investment)',
+    r'buying\s+stake|buys\s+stake|stake\s+in\s+sarvam|sarvam\s+ai|'
+    r'sarvam\s+ai\s+for\s+rs[\s,.]*1[\s,.]*427\s+crore|'
+    r'sarvam\s+ai\s+stake|ai\s+investment|rs[\s,.]*1[\s,.]*427\s+crore)',
     re.IGNORECASE,
 )
 
@@ -157,11 +158,21 @@ def _hcltech_sarvam_ai_stake(text: str, *, ticker: str = '') -> bool:
     """Hard rule — HCLTECH Sarvam AI stake headlines stay BULLISH / AI_INVESTMENT."""
     blob = str(text or '')
     sym = _normalize_ticker(ticker)
-    if sym and sym != 'HCLTECH':
+    if sym and sym not in ('', 'HCLTECH'):
         return False
     if HCLTECH_AI_STAKE_FORCE_RE.search(blob):
         return True
     lower = blob.lower()
+    if 'sarvam' in lower and 'ai' in lower:
+        return True
+    if re.search(r'stake\s+in\s+sarvam', lower):
+        return True
+    if re.search(r'(buying|buys)\s+stake', lower) and 'sarvam' in lower:
+        return True
+    if 'ai investment' in lower and (not sym or sym == 'HCLTECH' or 'hcl' in lower):
+        return True
+    if re.search(r'rs[\s,.]*1[\s,.]*427\s+crore', lower) and 'sarvam' in lower:
+        return True
     if 'sarvam ai' in lower and re.search(r'\b(stake|investment)\b', lower):
         return True
     return False
@@ -386,9 +397,8 @@ def _merge_raw_by_ticker(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             best_type = 'AI_INVESTMENT'
             best_side = 'BULLISH'
             best = forced_ai
-
-        # Generic index headlines must not dilute a stronger specific catalyst.
-        if forced_ai or best_type == 'AI_INVESTMENT':
+            side = 'BULLISH'
+        elif best_type in ('AI_INVESTMENT', 'STAKE_BUY') and best_side == 'BULLISH':
             side = 'BULLISH'
         elif best_tier >= 40:
             side = best_side
@@ -476,10 +486,10 @@ def _reconcile_trade_status(
     ticker: str,
 ) -> str:
     side_u = side.upper()
-    if not quote_available:
-        return 'WAIT FOR LIVE DATA'
     if priority == 'AVOID' or side_u in ('BEARISH', 'RISK'):
         return 'AVOID/RISK'
+    if not quote_available:
+        return 'WAIT FOR LIVE DATA'
     from backend.trading.trade_card_engine import MIN_RR, MIN_VOLUME_RATIO, detect_entry_missed, _compute_plan
 
     row = _scanner_quote(ticker)
@@ -997,6 +1007,17 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
         if not row:
             return f'No catalyst radar entry for {_normalize_ticker(explain_ticker)} today.'
         row = _apply_live_ticker_classification(row)
+        sym = _normalize_ticker(explain_ticker)
+        notes_blob = ' '.join(
+            [str(row.get('headline') or '')]
+            + [str(n) for n in (row.get('catalyst_notes') or [])]
+        )
+        if sym == 'HCLTECH' and not _hcltech_sarvam_ai_stake(notes_blob, ticker='HCLTECH'):
+            return (
+                f'<b>📡 CATALYST EXPLAIN — HCLTECH</b>\n'
+                'No stock-specific AI stake evidence currently in live cache.\n'
+                'Paper watch only — no order execution.'
+            )
         bd = row.get('score_breakdown') or {}
         lines = [
             f"<b>📡 CATALYST EXPLAIN — {row.get('ticker')}</b>",
@@ -1031,6 +1052,7 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
     if not items:
         lines.append('No fresh actionable catalysts in cache — check again after news refresh.')
     for idx, row in enumerate(items[:10], start=1):
+        row = _apply_live_ticker_classification(dict(row))
         lines.append('')
         lines.append(
             f"{idx}. <b>{row.get('ticker')}</b> — {row.get('side')}\n"

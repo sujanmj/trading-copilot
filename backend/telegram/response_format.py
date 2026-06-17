@@ -20,6 +20,40 @@ BLOCKED_TRADE_RESPONSE = (
 )
 TRADE_EXECUTION_PERMANENTLY_DISABLED = True
 
+_USER_BUY_SELL_RE = re.compile(r'\b(BUY|SELL)\b', re.IGNORECASE)
+
+
+def sanitize_user_action_label(action: object) -> str:
+    """Map internal decision tokens to user-safe labels — never naked BUY/SELL."""
+    token = str(action or '').strip().upper().replace(' ', '_')
+    if token in ('BUY_CANDIDATE', 'BUY'):
+        return 'ENTRY CANDIDATE'
+    if token in ('SELL_CANDIDATE', 'SELL'):
+        return 'AVOID CANDIDATE'
+    return str(action or '—').replace('_', ' ')
+
+
+def user_text_has_naked_buy_sell(text: str) -> bool:
+    """True when user-facing text contains naked BUY/SELL outside allowed phrases."""
+    cleaned = str(text or '')
+    for allowed in (
+        'No BUY/SELL',
+        'never naked BUY/SELL',
+        'not blind BUY/SELL',
+        'no blind BUY/SELL',
+        'No BUY/SELL — confirm manually',
+    ):
+        cleaned = cleaned.replace(allowed, '')
+    if re.search(r'\bAction:\s*(BUY|SELL)\b', cleaned, re.I):
+        return True
+    if re.search(r'\b(confirmed|naked|blind)\s+(BUY|SELL)\b', cleaned, re.I):
+        return True
+    if 'No confirmed BUY candidate' in cleaned:
+        return True
+    if re.search(r'\b(BUY|SELL)\s+candidate\b', cleaned, re.I):
+        return True
+    return False
+
 BLOCKED_TRADE_COMMANDS = frozenset({
     'buy', 'sell', 'execute', 'place_order', 'trade', 'auto_trade',
 })
@@ -947,7 +981,7 @@ def format_why_ticker(ticker: str, *, mode: str = 'today') -> str:
 
     row = result.get('breakdown') or {}
     sym = row.get('ticker') or ticker.upper()
-    action = str(row.get('action') or '—').replace('_', ' ')
+    action = sanitize_user_action_label(row.get('action'))
     lines = [
         f'<b>Why {sym}</b> ({mode})',
         f'Action: {action} · Score: {row.get("score", "—")} · Confidence: {row.get("confidence", "—")}',
@@ -1258,7 +1292,7 @@ def _decision_short_instruction(payload: dict[str, Any]) -> str:
     decision = payload.get('decision') or 'NO_CLEAN_CANDIDATE'
     if not top or decision == 'NO_CLEAN_CANDIDATE':
         return 'No clean candidate — review watchlist or wait for confluence.'
-    action = str(top.get('action') or '').replace('_', ' ')
+    action = sanitize_user_action_label(top.get('action'))
     ticker = top.get('ticker') or '—'
     if decision == 'BUY_CANDIDATE':
         return f'Monitor {ticker} ({action}) — confirm entry signals before acting.'
@@ -1402,7 +1436,7 @@ def format_action_plan_telegram() -> str:
     ])
 
     if top and decision == 'BUY_CANDIDATE':
-        action = str(top.get('action') or '').replace('_', ' ')
+        action = sanitize_user_action_label(top.get('action'))
         lines.extend([
             f"• Ticker: {top.get('ticker', '—')}",
             f'• Action: {action}',
@@ -1410,8 +1444,8 @@ def format_action_plan_telegram() -> str:
             f"• Confidence: {top.get('confidence', '—')}",
         ])
     elif top:
-        action = str(top.get('action') or 'WATCH FOR ENTRY').replace('_', ' ')
-        lines.append('No confirmed BUY candidate. Best watch-for-entry is...')
+        action = sanitize_user_action_label(top.get('action') or 'WATCH_FOR_ENTRY')
+        lines.append('No confirmed entry candidate. Best watch-for-entry is...')
         lines.extend([
             f"• Ticker: {top.get('ticker', '—')}",
             f'• Action: {action}',
@@ -1420,7 +1454,7 @@ def format_action_plan_telegram() -> str:
         ])
     else:
         lines.extend([
-            'No confirmed BUY candidate. Best watch-for-entry is...',
+            'No confirmed entry candidate. Best watch-for-entry is...',
             '• Ticker: —',
             '• Action: —',
             '• Score: —',
@@ -1528,14 +1562,14 @@ def format_aihub_brain_full() -> str:
     lines.extend([
         '',
         '<b>2. Actionability</b>',
-        f'• Buy candidates: {buy_n} · Watch: {watch_n} · Avoid: {avoid_n}',
+        f'• Entry candidates: {buy_n} · Watch: {watch_n} · Avoid: {avoid_n}',
         f"• Active mode: {fc.get('active_mode') or '—'}",
     ])
 
     top = today.get('top_pick') if today.get('ok') else None
     lines.extend(['', '<b>3. Top candidate</b>'])
     if top:
-        action = str(top.get('action') or '—').replace('_', ' ')
+        action = sanitize_user_action_label(top.get('action'))
         lines.append(
             f"• {top.get('ticker')} — {action} · score {top.get('score')} · {top.get('confidence')}"
         )
@@ -1548,7 +1582,7 @@ def format_aihub_brain_full() -> str:
     if ranked:
         for row in ranked:
             if isinstance(row, dict):
-                action = str(row.get('action') or '').replace('_', ' ').strip()
+                action = sanitize_user_action_label(row.get('action'))
                 ticker = row.get('ticker')
                 score = row.get('score')
                 if ticker and not _is_empty_bullet_text(str(ticker)):
@@ -1636,7 +1670,7 @@ def format_aihub_brain_full() -> str:
 
     tom_top = tomorrow.get('top_pick') if tomorrow.get('ok') else None
     if tom_top and tom_top.get('ticker') != (top or {}).get('ticker'):
-        lines.append(f"• Tomorrow watch: {tom_top.get('ticker')} ({str(tom_top.get('action') or '').replace('_', ' ')})")
+        lines.append(f"• Tomorrow watch: {tom_top.get('ticker')} ({sanitize_user_action_label(tom_top.get('action'))})")
 
     return strip_stage_markers('\n'.join(lines))
 
@@ -1980,6 +2014,7 @@ def _tradecard_explain_lines(
 def format_tradecard_telegram(*, explain: bool = False) -> str:
     """Format paper-only trade card for /tradecard commands."""
     from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale
+    from backend.trading.unified_live_priority_engine import decision_source_label
 
     card = get_trade_card(rebuild=False)
     stale = is_trade_card_stale(card)
@@ -2015,6 +2050,10 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
     if not reason and not effective_ticker:
         reason = 'no fresh candidate with valid entry'
 
+    def _append_source(lines: list[str]) -> None:
+        if effective_ticker:
+            lines.append(decision_source_label(effective_ticker))
+
     if not effective_ticker:
         lines = [
             '<b>📋 TRADE CARD — NO TRADE</b>',
@@ -2038,6 +2077,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         ]
         if postmarket_line:
             lines.append(postmarket_line)
+        _append_source(lines)
         lines.append('Paper only — no order execution.')
         if explain:
             lines.extend(_tradecard_explain_lines(variant='stale'))
@@ -2053,6 +2093,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         ]
         if postmarket_line:
             lines.append(postmarket_line)
+        _append_source(lines)
         lines.append('Paper only.')
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
@@ -2067,6 +2108,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         ]
         if postmarket_line:
             lines.append(postmarket_line)
+        _append_source(lines)
         lines.append('Paper only.')
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason or 'market closed/after-hours'))
@@ -2082,6 +2124,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         ]
         if postmarket_line:
             lines.append(postmarket_line)
+        _append_source(lines)
         lines.append('Paper only.')
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason))
@@ -2097,6 +2140,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         ]
         if postmarket_line:
             lines.append(postmarket_line)
+        _append_source(lines)
         lines.append('Paper only.')
         if explain:
             explain_variant = 'wait' if status in ('WAIT_FOR_PULLBACK', 'WAIT_FOR_VOLUME') else 'entry_missed'
@@ -2113,6 +2157,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         ]
         if postmarket_line:
             lines.append(postmarket_line)
+        _append_source(lines)
         lines.append('Paper only.')
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
@@ -2135,5 +2180,6 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         lines.append('Use /tradecard explain for full plan notes.')
     if postmarket_line:
         lines.append(postmarket_line)
+    _append_source(lines)
     lines.append('Paper only — you decide and place trades manually.')
     return strip_stage_markers('\n'.join(lines))
