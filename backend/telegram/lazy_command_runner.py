@@ -621,13 +621,14 @@ def run_feed_text_only(args: str = '') -> dict[str, Any]:
     return _runner_result('feed_text', text=result.get('reply') or 'MY_FEED_NEEDS_TEXT', payload=result)
 
 
-def run_tradecard_only(args: str = '') -> dict[str, Any]:
+def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[str, Any]:
     from backend.telegram.response_format import format_tradecard_telegram
+    from backend.trading.tradecard_refresh import parse_tradecard_args, refresh_tradecard_market_data
 
-    sub = str(args or '').strip().lower()
-    explain = sub in ('explain',) or sub.endswith(' explain')
-    text = format_tradecard_telegram(explain=explain)
-    return _runner_result('tradecard', text=text)
+    force, explain = parse_tradecard_args(args)
+    freshness = refresh_tradecard_market_data(chat_id, force=force)
+    text = format_tradecard_telegram(explain=explain, freshness_meta=freshness)
+    return _runner_result('tradecard', text=text, payload={'freshness': freshness})
 
 
 def run_catalysts_only(args: str = '') -> dict[str, Any]:

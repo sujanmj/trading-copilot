@@ -2011,14 +2011,24 @@ def _tradecard_explain_lines(
     return lines
 
 
-def format_tradecard_telegram(*, explain: bool = False) -> str:
+def format_tradecard_telegram(
+    *,
+    explain: bool = False,
+    freshness_meta: dict[str, Any] | None = None,
+) -> str:
     """Format paper-only trade card for /tradecard commands."""
-    from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale
-    from backend.trading.unified_live_priority_engine import decision_source_label
+    from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale, resolve_tradecard_source_label
+    from backend.trading.tradecard_refresh import format_freshness_line, is_tradecard_data_stale
 
     card = get_trade_card(rebuild=False)
     stale = is_trade_card_stale(card)
+    data_stale = is_tradecard_data_stale(freshness_meta or {})
     postmarket_line = _tradecard_postmarket_line()
+
+    def _append_freshness(lines: list[str]) -> None:
+        line = format_freshness_line(freshness_meta)
+        if line:
+            lines.append(line)
 
     today_top, today_entry_status = _tradecard_unified_today_top()
     ticker = _normalize_tradecard_ticker(card.get('ticker'))
@@ -2052,7 +2062,24 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
 
     def _append_source(lines: list[str]) -> None:
         if effective_ticker:
-            lines.append(decision_source_label(effective_ticker))
+            lines.append(resolve_tradecard_source_label(card, effective_ticker))
+
+    if data_stale and effective_ticker:
+        stale_reason = reason or 'quote/scanner refresh failed — cache too old for live entry'
+        lines = [
+            '<b>📋 TRADE CARD — DATA STALE / NO ACTIVE ENTRY</b>',
+            f'<b>{effective_ticker}</b> · <code>NO ACTIVE ENTRY</code>',
+            f'Reason: {stale_reason}',
+            'Plan: wait for fresh quote + scanner before any paper entry',
+        ]
+        if postmarket_line:
+            lines.append(postmarket_line)
+        _append_freshness(lines)
+        _append_source(lines)
+        lines.append('Paper only.')
+        if explain:
+            lines.extend(_tradecard_explain_lines(variant='stale'))
+        return strip_stage_markers('\n'.join(lines))
 
     if not effective_ticker:
         lines = [
@@ -2064,6 +2091,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
         if postmarket_line:
             lines.append(postmarket_line)
         lines.append('Paper only.')
+        _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_candidate'))
         return strip_stage_markers('\n'.join(lines))
@@ -2079,6 +2107,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
             lines.append(postmarket_line)
         _append_source(lines)
         lines.append('Paper only — no order execution.')
+        _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='stale'))
         return strip_stage_markers('\n'.join(lines))
@@ -2095,6 +2124,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
             lines.append(postmarket_line)
         _append_source(lines)
         lines.append('Paper only.')
+        _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
         return strip_stage_markers('\n'.join(lines))
@@ -2110,6 +2140,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
             lines.append(postmarket_line)
         _append_source(lines)
         lines.append('Paper only.')
+        _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason or 'market closed/after-hours'))
         return strip_stage_markers('\n'.join(lines))
@@ -2126,6 +2157,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
             lines.append(postmarket_line)
         _append_source(lines)
         lines.append('Paper only.')
+        _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason))
         return strip_stage_markers('\n'.join(lines))
@@ -2142,6 +2174,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
             lines.append(postmarket_line)
         _append_source(lines)
         lines.append('Paper only.')
+        _append_freshness(lines)
         if explain:
             explain_variant = 'wait' if status in ('WAIT_FOR_PULLBACK', 'WAIT_FOR_VOLUME') else 'entry_missed'
             lines.extend(_tradecard_explain_lines(variant=explain_variant, reason=reason))
@@ -2159,6 +2192,7 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
             lines.append(postmarket_line)
         _append_source(lines)
         lines.append('Paper only.')
+        _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
         return strip_stage_markers('\n'.join(lines))
@@ -2181,5 +2215,6 @@ def format_tradecard_telegram(*, explain: bool = False) -> str:
     if postmarket_line:
         lines.append(postmarket_line)
     _append_source(lines)
+    _append_freshness(lines)
     lines.append('Paper only — you decide and place trades manually.')
     return strip_stage_markers('\n'.join(lines))

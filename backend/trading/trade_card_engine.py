@@ -127,6 +127,41 @@ def _unified_today_top_ticker() -> str:
     return ''
 
 
+TRADECARD_SOURCE_LABELS = frozenset({
+    'Source: scanner-confirmed',
+    'Source: catalyst-backed + scanner-confirmed',
+    'Source: catalyst-backed',
+    'Source: research-only',
+})
+
+
+def resolve_tradecard_source_label(card: dict[str, Any], ticker: str) -> str:
+    """Prefer engine-provided source_label; do not downgrade catalyst-backed labels."""
+    label = str(card.get('source_label') or '').strip()
+    if label in TRADECARD_SOURCE_LABELS:
+        return label
+    sym = _normalize_ticker(ticker)
+    if not sym:
+        return 'Source: scanner-confirmed'
+    try:
+        from backend.trading.unified_live_priority_engine import decision_source_label
+
+        return decision_source_label(sym)
+    except Exception:
+        return 'Source: scanner-confirmed'
+
+
+def _ensure_source_label(card: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(card, dict):
+        return card
+    sym = _normalize_ticker(card.get('ticker'))
+    if not sym or sym == '—':
+        return card
+    if str(card.get('source_label') or '').strip() in TRADECARD_SOURCE_LABELS:
+        return card
+    return {**card, 'source_label': resolve_tradecard_source_label(card, sym)}
+
+
 def _strip_actionable_levels(card: dict[str, Any], *, reason: str, status: str = 'NO_ACTIVE_ENTRY') -> dict[str, Any]:
     updated = {
         **card,
@@ -147,6 +182,10 @@ def _strip_actionable_levels(card: dict[str, Any], *, reason: str, status: str =
 
 def apply_tradecard_safety_gates(card: dict[str, Any]) -> dict[str, Any]:
     """Final hard gate — never expose VALID_ENTRY unless all scalp/market checks pass."""
+    return _ensure_source_label(_apply_tradecard_safety_gates(card))
+
+
+def _apply_tradecard_safety_gates(card: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(card, dict) or not card.get('ticker'):
         return card
 
