@@ -1,5 +1,5 @@
 """
-My Feed ingest, classify, and reply formatting (Stage 50A).
+My Feed ingest, classify, and reply formatting (Stage 50A / 50W verified intake).
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from backend.my_feed.suggested_actions import (
 PUBLIC_ITEM_KEYS = frozenset({
     'feed_id', 'created_at', 'source', 'cleaned_summary', 'detected_source_app',
     'tickers', 'themes', 'impact_score', 'urgency', 'suggested_action', 'status',
+    'verification_status', 'verified_headline', 'source_name', 'side', 'confidence',
 })
 
 
@@ -186,7 +187,57 @@ def format_needs_text_reply() -> str:
     ])
 
 
+def _verify_and_build_text_record(
+    extracted: dict[str, Any],
+    *,
+    source: str,
+    raw_text: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    from backend.my_feed.feed_verification import (
+        format_verification_telegram_reply,
+        is_catalyst_eligible_status,
+        normalize_claim,
+        verification_payload_fields,
+        verify_claim_against_sources,
+    )
+
+    claim = normalize_claim(raw_text)
+    verification = verify_claim_against_sources(claim)
+    classified = _classify_item(extracted)
+    tickers = extracted.get('tickers') or extract_tickers(extracted['cleaned_summary'])
+    verify_ticker = str(verification.get('ticker') or '').strip().upper()
+    if verify_ticker:
+        tickers = [verify_ticker, *[t for t in tickers if str(t).upper() != verify_ticker]]
+
+    status = str(verification.get('verification_status') or 'UNVERIFIED').upper()
+    cleaned_summary = extracted['cleaned_summary']
+    if is_catalyst_eligible_status(status) and verification.get('verified_headline'):
+        cleaned_summary = str(verification.get('verified_headline') or cleaned_summary)
+
+    payload = verification_payload_fields(verification)
+    record = insert_feed_item({
+        'source': source,
+        'raw_market_text': extracted['raw_market_text'],
+        'cleaned_summary': cleaned_summary,
+        'detected_source_app': extracted.get('detected_source_app') or '',
+        'tickers': tickers,
+        'sectors': classified['sectors'],
+        'themes': classified['themes'],
+        'event_type': str(verification.get('event_type') or classified['event_type']),
+        'sentiment': classified['sentiment'],
+        'impact_score': classified['impact_score'],
+        'urgency': classified['urgency'],
+        'suggested_action': classified['suggested_action'],
+        'confirmation_required': classified['confirmation_required'],
+        'status': 'active',
+        'payload': payload,
+    })
+    return record, verification
+
+
 def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
+    from backend.my_feed.feed_verification import format_verification_telegram_reply
+
     extracted = filter_market_text(text)
     if not extracted.get('cleaned_summary'):
         return {
@@ -212,23 +263,11 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
             'message': 'Duplicate item — already saved recently.',
         }
 
-    classified = _classify_item(extracted)
-    record = insert_feed_item({
-        'source': source,
-        'raw_market_text': extracted['raw_market_text'],
-        'cleaned_summary': extracted['cleaned_summary'],
-        'detected_source_app': extracted.get('detected_source_app') or '',
-        'tickers': extracted.get('tickers') or extract_tickers(extracted['cleaned_summary']),
-        'sectors': classified['sectors'],
-        'themes': classified['themes'],
-        'event_type': classified['event_type'],
-        'sentiment': classified['sentiment'],
-        'impact_score': classified['impact_score'],
-        'urgency': classified['urgency'],
-        'suggested_action': classified['suggested_action'],
-        'confirmation_required': classified['confirmation_required'],
-        'status': 'active',
-    })
+    record, verification = _verify_and_build_text_record(
+        extracted,
+        source=source,
+        raw_text=text,
+    )
     try:
         from backend.my_feed.cache_invalidation import invalidate_myfeed_caches
 
@@ -237,8 +276,9 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
         pass
     return {
         'ok': True,
-        'reply': format_saved_reply(
+        'reply': format_verification_telegram_reply(
             record,
+            verification,
             ignored_private_items=extracted['ignored_private_items'],
             items_found=extracted['items_found'],
         ),
@@ -246,6 +286,7 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
         'duplicate': False,
         'saved_count': 1,
         'message': 'Saved 1 item',
+        'verification_status': verification.get('verification_status'),
     }
 
 
@@ -549,9 +590,16 @@ def archive_feed_item(feed_id: str) -> bool:
 
 
 def scan_feed_summary(*, today_only: bool = False) -> dict[str, Any]:
+    from backend.my_feed.feed_verification import is_catalyst_eligible_item
+
     items = list_feed_items(limit=50, today_only=today_only, status='active')
     return {
         'total': len(items),
+        'verified': sum(1 for i in items if is_catalyst_eligible_item(i)),
+        'unverified': sum(
+            1 for i in items
+            if str(i.get('verification_status') or 'UNVERIFIED').upper() == 'UNVERIFIED'
+        ),
         'high_impact': sum(1 for i in items if float(i.get('impact_score') or 0) >= 70),
         'risk_alerts': sum(
             1 for i in items

@@ -52,8 +52,8 @@ def main() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, handle_analysis_command
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50V':
-        return _fail(f'expected AstraEdge 50V got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50W':
+        return _fail(f'expected AstraEdge 50W got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     for marker in HELP_CATALYST_MARKERS:
         if marker not in HELP_TEXT:

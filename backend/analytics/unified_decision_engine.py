@@ -505,6 +505,12 @@ def apply_my_feed_evidence(
     if not feed_items:
         return ranked
 
+    from backend.my_feed.feed_verification import is_catalyst_eligible_item
+
+    feed_items = [f for f in feed_items if is_catalyst_eligible_item(f)]
+    if not feed_items:
+        return ranked
+
     by_ticker: dict[str, list[dict[str, Any]]] = {}
     for feed in feed_items:
         for sym in feed.get('tickers') or []:
@@ -524,7 +530,7 @@ def apply_my_feed_evidence(
 
         rejected, reject_reason = is_live_rejected(ticker, reg)
         for feed in matches[:2]:
-            summary = str(feed.get('cleaned_summary') or '')[:120]
+            summary = str(feed.get('verified_headline') or feed.get('cleaned_summary') or '')[:120]
             action = str(feed.get('suggested_action') or 'NEWS ONLY')
             if action in ('WATCH FOR CONFIRMATION', 'WAIT FOR CONFIRMATION'):
                 why = [str(w) for w in normalize_bullet_items(item.get('why'))]

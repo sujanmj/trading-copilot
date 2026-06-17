@@ -152,7 +152,8 @@ def insert_feed_item(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def row_to_dict_from_record(feed_id: str, row: dict[str, Any]) -> dict[str, Any]:
-    return {
+    payload = _json_load(row.get('payload')) if row.get('payload') else {}
+    item = {
         'feed_id': feed_id,
         'created_at': row['created_at'],
         'source': row['source'],
@@ -170,6 +171,11 @@ def row_to_dict_from_record(feed_id: str, row: dict[str, Any]) -> dict[str, Any]
         'confirmation_required': bool(row['confirmation_required']),
         'status': row['status'],
     }
+    if isinstance(payload, dict):
+        for key, val in payload.items():
+            if key not in item and key != 'image_path':
+                item[key] = val
+    return item
 
 
 def list_items(

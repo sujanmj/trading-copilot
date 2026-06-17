@@ -57,6 +57,7 @@ def main() -> int:
                 'suggested_action': 'WATCH FOR CONFIRMATION',
                 'impact_score': 95,
                 'status': 'active',
+                'payload': {'verification_status': 'VERIFIED', 'verified_headline': 'INFY strong catalyst from user feed'},
             })
             ranked = [{
                 'ticker': 'INFY',

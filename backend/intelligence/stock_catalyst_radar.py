@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '50V'
+STAGE = '50W'
 CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 
 CATALYST_TYPES = frozenset({
@@ -808,9 +808,28 @@ def _iter_nse_filings() -> list[dict[str, Any]]:
 def _iter_my_feed_text() -> list[dict[str, Any]]:
     try:
         from backend.my_feed.feed_processor import list_feed_items, sanitize_item_for_api
+        from backend.my_feed.feed_verification import is_catalyst_eligible_item
 
         rows = [sanitize_item_for_api(r) for r in list_feed_items(limit=40, today_only=False)]
-        return [{**row, '_source_key': 'my_feed'} for row in rows if isinstance(row, dict)]
+        eligible: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict) or not is_catalyst_eligible_item(row):
+                continue
+            headline = str(row.get('verified_headline') or row.get('cleaned_summary') or '').strip()
+            if not headline:
+                continue
+            item = {
+                **row,
+                'title': headline,
+                'headline': headline,
+                'summary': str(row.get('verified_summary') or row.get('cleaned_summary') or headline),
+                'published_at': row.get('source_time') or row.get('created_at'),
+                'source': row.get('source_name') or 'my_feed_verified',
+                'url': row.get('source_url') or '',
+                '_source_key': 'my_feed',
+            }
+            eligible.append(item)
+        return eligible
     except Exception:
         return []
 
