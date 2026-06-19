@@ -2290,6 +2290,14 @@ def format_tradecard_telegram(
 
         active = get_active_valid_entry(effective_ticker)
         if active:
+            try:
+                from backend.trading.tradecard_journal import get_active_valid_entry as _reload_active
+                from backend.trading.tradecard_journal import track_active_tradecard_outcome
+
+                track_active_tradecard_outcome(active, refresh=False, source='quote_refresh')
+                active = _reload_active(effective_ticker) or active
+            except Exception:
+                pass
             active_card = {
                 'ticker': effective_ticker,
                 'status': 'VALID_ENTRY',

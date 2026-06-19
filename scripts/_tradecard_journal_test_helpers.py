@@ -25,6 +25,25 @@ def isolated_tradecard_latest():
         yield latest
 
 
+@contextmanager
+def isolated_tradecard_path_samples():
+    tmp = tempfile.mkdtemp()
+    samples = Path(tmp) / 'tradecard_path_samples.jsonl'
+    with patch('backend.trading.tradecard_journal.PATH_SAMPLES_FILE', samples):
+        yield samples
+
+
+@contextmanager
+def isolated_tradecard_store():
+    """Isolate journal + path samples together."""
+    tmp = tempfile.mkdtemp()
+    journal = Path(tmp) / 'tradecard_journal.jsonl'
+    samples = Path(tmp) / 'tradecard_path_samples.jsonl'
+    with patch('backend.trading.tradecard_journal.JOURNAL_FILE', journal), \
+         patch('backend.trading.tradecard_journal.PATH_SAMPLES_FILE', samples):
+        yield journal, samples
+
+
 def sample_valid_card(**overrides):
     card = {
         'generated_at': '2026-06-19T10:00:00+05:30',

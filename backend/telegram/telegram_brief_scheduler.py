@@ -151,9 +151,18 @@ def build_close_brief_text() -> str:
         '',
     ])
     try:
-        from backend.trading.tradecard_journal import format_tradecard_review_section
+        from backend.telegram.india_mode_lock import is_live_market_hours_phase
+        from backend.trading.tradecard_journal import (
+            format_tradecard_review_section,
+            sample_and_resolve_pending_tradecards,
+        )
 
-        lines.append(format_tradecard_review_section())
+        provisional = is_live_market_hours_phase()
+        sample_and_resolve_pending_tradecards(
+            expire_at_close=not provisional,
+            refresh=True,
+        )
+        lines.append(format_tradecard_review_section(provisional=provisional))
         lines.append('')
     except Exception:
         pass

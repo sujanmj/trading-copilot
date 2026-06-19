@@ -17,6 +17,7 @@ from backend.utils.config import DATA_DIR
 IST = __import__('zoneinfo').ZoneInfo('Asia/Kolkata')
 
 JOURNAL_FILE = DATA_DIR / 'tradecard_journal.jsonl'
+PATH_SAMPLES_FILE = DATA_DIR / 'tradecard_path_samples.jsonl'
 
 OUTCOME_PENDING = 'PENDING'
 OUTCOME_NO_FILL = 'NO_FILL'
@@ -103,6 +104,239 @@ def _write_journal(rows: list[dict[str, Any]]) -> None:
     with JOURNAL_FILE.open('w', encoding='utf-8') as fh:
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False) + '\n')
+
+
+def _append_path_sample_line(sample: dict[str, Any]) -> dict[str, Any]:
+    PATH_SAMPLES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with PATH_SAMPLES_FILE.open('a', encoding='utf-8') as fh:
+        fh.write(json.dumps(sample, ensure_ascii=False) + '\n')
+    return sample
+
+
+def append_path_sample(
+    *,
+    tradecard_id: str,
+    ticker: str,
+    price: float,
+    high: float | None = None,
+    low: float | None = None,
+    volume: float | None = None,
+    participation: str | None = None,
+    source: str = 'quote_refresh',
+    sampled_at: str | None = None,
+) -> dict[str, Any]:
+    """Append one post-signal quote/candle sample for outcome path tracking."""
+    sample = {
+        'tradecard_id': str(tradecard_id),
+        'ticker': str(ticker or '').strip().upper(),
+        'sampled_at': sampled_at or _now_iso(),
+        'price': round(float(price), 4),
+        'high': round(float(high if high is not None else price), 4),
+        'low': round(float(low if low is not None else price), 4),
+        'volume': volume,
+        'participation': participation,
+        'source': source,
+    }
+    return _append_path_sample_line(sample)
+
+
+def load_path_samples(tradecard_id: str) -> list[dict[str, Any]]:
+    tid = str(tradecard_id or '').strip()
+    if not tid or not PATH_SAMPLES_FILE.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in PATH_SAMPLES_FILE.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict) or str(row.get('tradecard_id') or '') != tid:
+            continue
+        rows.append(row)
+    rows.sort(key=lambda r: str(r.get('sampled_at') or ''))
+    return rows
+
+
+def _price_entry_for_ticker(market_data: dict[str, Any], ticker: str) -> dict[str, Any] | None:
+    prices = market_data.get('prices') if isinstance(market_data, dict) else None
+    if not isinstance(prices, dict):
+        return None
+    sym = str(ticker or '').strip().upper()
+    if sym in prices and isinstance(prices[sym], dict):
+        return prices[sym]
+    for key, val in prices.items():
+        if str(key).strip().upper() == sym and isinstance(val, dict):
+            return val
+    return None
+
+
+def build_quote_path_sample(
+    record: dict[str, Any],
+    market_data: dict[str, Any] | None,
+    *,
+    source: str = 'quote_refresh',
+) -> dict[str, Any] | None:
+    """Build and append a path sample from latest quote data."""
+    from backend.storage.market_memory_outcomes import lookup_latest_price
+
+    ticker = str(record.get('ticker') or '').strip().upper()
+    record_id = str(record.get('id') or '')
+    if not ticker or not record_id or not market_data:
+        return None
+    price = lookup_latest_price(market_data, ticker)
+    if price is None:
+        return None
+    entry = _price_entry_for_ticker(market_data, ticker) or {}
+    high = _safe_float(entry.get('high')) or price
+    low = _safe_float(entry.get('low')) or price
+    volume = _safe_float(entry.get('volume'))
+    participation = str(entry.get('participation') or entry.get('volume_status') or '').strip() or None
+    return append_path_sample(
+        tradecard_id=record_id,
+        ticker=ticker,
+        price=price,
+        high=high,
+        low=low,
+        volume=volume,
+        participation=participation,
+        source=source,
+    )
+
+
+def samples_to_resolver_path(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    path: list[dict[str, Any]] = []
+    for sample in samples:
+        path.append({
+            'ts': sample.get('sampled_at'),
+            'price': sample.get('price'),
+            'high': sample.get('high', sample.get('price')),
+            'low': sample.get('low', sample.get('price')),
+        })
+    return path
+
+
+def _format_sample_time(sampled_at: object) -> str:
+    dt = _parse_ts(sampled_at)
+    if dt is None:
+        return '—'
+    return dt.strftime('%H:%M')
+
+
+def _format_outcome_result_lines(row: dict[str, Any]) -> list[str]:
+    samples = load_path_samples(str(row.get('id') or ''))
+    outcome = str(row.get('outcome_status') or OUTCOME_PENDING).upper()
+    signal = _safe_float(row.get('price_at_signal'))
+    note = str(row.get('path_note') or '').strip()
+
+    if not samples:
+        if outcome in TERMINAL_OUTCOMES or (note and note not in ('', 'no after-signal path')):
+            if outcome == OUTCOME_AMBIGUOUS:
+                label = f'{OUTCOME_AMBIGUOUS} / {row.get("conservative_result") or OUTCOME_SL_HIT}'
+                detail = note or label
+                return [f'   Result: {label} — {detail}']
+            detail = note or outcome.lower().replace('_', ' ')
+            return [f'   Result: {outcome} — {detail}']
+        return [
+            '   Result: pending — no post-signal quote sample yet',
+            '   Plan: refresh outcome again after next price update',
+        ]
+
+    latest = samples[-1]
+    latest_price = _safe_float(latest.get('price'))
+    latest_time = _format_sample_time(latest.get('sampled_at'))
+    path_line = (
+        f'   Path: signal {signal or "—"} → latest {latest_price or "—"} at {latest_time}'
+    )
+
+    if outcome == OUTCOME_AMBIGUOUS:
+        label = f'{OUTCOME_AMBIGUOUS} / {row.get("conservative_result") or OUTCOME_SL_HIT}'
+        result = f'   Result: {label}'
+        if note:
+            result = f'   Result: {label} — {note}'
+    elif outcome == OUTCOME_PENDING:
+        detail = note or 'awaiting SL/T1/T2 after fill'
+        result = f'   Result: {OUTCOME_PENDING} — {detail}'
+    else:
+        detail = note or outcome.lower().replace('_', ' ')
+        result = f'   Result: {outcome} — {detail}'
+
+    return [result, path_line]
+
+
+def _load_market_data_with_optional_refresh(*, refresh: bool) -> dict[str, Any] | None:
+    if refresh:
+        try:
+            from backend.trading.tradecard_refresh import _run_lightweight_refresh
+
+            _run_lightweight_refresh()
+        except Exception:
+            pass
+    try:
+        from backend.storage.market_memory_outcomes import load_latest_market_data
+
+        return load_latest_market_data()
+    except Exception:
+        return None
+
+
+def track_active_tradecard_outcome(
+    active: dict[str, Any],
+    *,
+    refresh: bool = False,
+    source: str = 'quote_refresh',
+) -> dict[str, Any] | None:
+    """Append latest quote sample for an active card and re-run resolver."""
+    market_data = _load_market_data_with_optional_refresh(refresh=refresh)
+    if market_data:
+        build_quote_path_sample(active, market_data, source=source)
+    samples = load_path_samples(str(active.get('id') or ''))
+    return apply_path_to_journal_record(active, samples_to_resolver_path(samples))
+
+
+def sample_and_resolve_pending_tradecards(
+    *,
+    session_date: str | None = None,
+    expire_at_close: bool = False,
+    refresh: bool = True,
+) -> dict[str, Any]:
+    """Refresh quotes for active tradecards, append path samples, then resolve outcomes."""
+    day = session_date or _today()
+    summary: dict[str, Any] = {'checked': 0, 'sampled': 0, 'updated': 0, 'errors': 0}
+    pending_rows: list[dict[str, Any]] = []
+    for row in _read_journal():
+        if str(row.get('session_date') or '') != day:
+            continue
+        if str(row.get('status') or '').upper() != 'VALID_ENTRY':
+            continue
+        prior = str(row.get('outcome_status') or OUTCOME_PENDING).upper()
+        if prior not in ACTIVE_OUTCOMES:
+            continue
+        pending_rows.append(row)
+
+    market_data = _load_market_data_with_optional_refresh(refresh=refresh and bool(pending_rows))
+
+    for row in pending_rows:
+        summary['checked'] += 1
+        prior = str(row.get('outcome_status') or OUTCOME_PENDING).upper()
+        try:
+            if market_data:
+                sample = build_quote_path_sample(row, market_data, source='quote_refresh')
+                if sample:
+                    summary['sampled'] += 1
+            samples = load_path_samples(str(row.get('id') or ''))
+            updated = apply_path_to_journal_record(
+                row,
+                samples_to_resolver_path(samples),
+                expire_at_close=expire_at_close,
+            )
+            if updated and str(updated.get('outcome_status') or '').upper() != prior:
+                summary['updated'] += 1
+        except Exception:
+            summary['errors'] += 1
+    return summary
 
 
 def journal_record_from_card(
@@ -337,26 +571,16 @@ def _outcome(status: str, pt: dict[str, Any], price: float, filled_at: datetime,
 
 
 def _quote_path_point(market_data: dict[str, Any], ticker: str) -> dict[str, Any] | None:
-    from backend.storage.market_memory_outcomes import get_latest_market_data_timestamp, lookup_latest_price
+    from backend.storage.market_memory_outcomes import lookup_latest_price
 
     price = lookup_latest_price(market_data, ticker)
     if price is None:
         return None
-    high = low = price
-    prices = market_data.get('prices') or {}
-    sym = str(ticker or '').strip().upper()
-    entry = prices.get(sym)
-    if entry is None:
-        for key, val in prices.items():
-            if str(key).strip().upper() == sym:
-                entry = val
-                break
-    if isinstance(entry, dict):
-        high = _safe_float(entry.get('high')) or price
-        low = _safe_float(entry.get('low')) or price
-    ts = get_latest_market_data_timestamp(market_data)
+    entry = _price_entry_for_ticker(market_data, ticker) or {}
+    high = _safe_float(entry.get('high')) or price
+    low = _safe_float(entry.get('low')) or price
     return {
-        'ts': ts.isoformat() if ts else _now_iso(),
+        'ts': _now_iso(),
         'price': price,
         'high': high,
         'low': low,
@@ -367,40 +591,14 @@ def resolve_pending_tradecard_outcomes(
     *,
     session_date: str | None = None,
     expire_at_close: bool = False,
+    refresh: bool = True,
 ) -> dict[str, Any]:
-    """Apply latest quote path to pending VALID_ENTRY journal rows."""
-    day = session_date or _today()
-    summary: dict[str, Any] = {'checked': 0, 'updated': 0, 'errors': 0}
-    market_data: dict[str, Any] | None = None
-    try:
-        from backend.storage.market_memory_outcomes import load_latest_market_data
-
-        market_data = load_latest_market_data()
-    except Exception:
-        market_data = None
-
-    for row in _read_journal():
-        if str(row.get('session_date') or '') != day:
-            continue
-        if str(row.get('status') or '').upper() != 'VALID_ENTRY':
-            continue
-        prior = str(row.get('outcome_status') or OUTCOME_PENDING).upper()
-        if prior not in ACTIVE_OUTCOMES:
-            continue
-        summary['checked'] += 1
-        ticker = str(row.get('ticker') or '').upper()
-        path: list[dict[str, Any]] = []
-        if market_data:
-            pt = _quote_path_point(market_data, ticker)
-            if pt:
-                path = [pt]
-        try:
-            updated = apply_path_to_journal_record(row, path, expire_at_close=expire_at_close)
-            if updated and str(updated.get('outcome_status') or '').upper() != prior:
-                summary['updated'] += 1
-        except Exception:
-            summary['errors'] += 1
-    return summary
+    """Apply accumulated path samples to pending VALID_ENTRY journal rows."""
+    return sample_and_resolve_pending_tradecards(
+        session_date=session_date,
+        expire_at_close=expire_at_close,
+        refresh=refresh,
+    )
 
 
 def apply_path_to_journal_record(record: dict[str, Any], path: list[dict[str, Any]], *, expire_at_close: bool = False) -> dict[str, Any]:
@@ -422,6 +620,11 @@ def apply_path_to_journal_record(record: dict[str, Any], path: list[dict[str, An
         expire_at_close=expire_at_close,
     )
     patch = {**resolved}
+    if path:
+        latest = path[-1]
+        patch['latest_sample_price'] = _safe_float(latest.get('price'))
+        patch['latest_sample_at'] = str(latest.get('ts') or '')
+        patch['path_sample_count'] = len(path)
     if resolved.get('outcome_status') == OUTCOME_AMBIGUOUS:
         patch['outcome_status'] = OUTCOME_AMBIGUOUS
     return update_journal_record(str(record.get('id')), patch) or {**record, **patch}
@@ -507,16 +710,26 @@ def _move_pct(row: dict[str, Any]) -> float | None:
     return None
 
 
-def format_tradecard_review_section(*, session_date: str | None = None) -> str:
+def format_tradecard_review_section(
+    *,
+    session_date: str | None = None,
+    provisional: bool = False,
+) -> str:
     summary = summarize_today_outcomes(session_date=session_date)
     c = summary.get('counts') or {}
-    lines = [
-        '<b>Tradecards:</b>',
+    if provisional:
+        lines = [
+            '<b>Tradecards: provisional intraday review</b>',
+            'Final EOD resolution will run after market close.',
+        ]
+    else:
+        lines = ['<b>Tradecards:</b>']
+    lines.extend([
         f"Generated: {c.get('generated', 0)}",
         f"Filled: {c.get('filled', 0)}",
         f"T1: {c.get('T1', 0)} · T2: {c.get('T2', 0)} · SL: {c.get('SL', 0)}",
         f"No fill: {c.get('no_fill', 0)} · Pending: {c.get('pending', 0)} · Expired: {c.get('expired', 0)}",
-    ]
+    ])
     best = summary.get('best') or []
     worst = summary.get('worst') or []
     if best:
@@ -571,10 +784,10 @@ def format_tradecard_journal_telegram(*, session_date: str | None = None, limit:
             f"   Entry: {entry} · SL: {row.get('stop')} · "
             f"T1: {row.get('t1')} · T2: {row.get('t2')}"
         )
-        note = str(row.get('path_note') or 'awaiting after-signal path')
-        lines.append(f'   Result: {note}')
+        lines.extend(_format_outcome_result_lines(row))
     return '\n'.join(lines)
 
 
 def format_tradecard_outcome_telegram(*, session_date: str | None = None) -> str:
+    sample_and_resolve_pending_tradecards(session_date=session_date, refresh=True)
     return format_tradecard_journal_telegram(session_date=session_date)
