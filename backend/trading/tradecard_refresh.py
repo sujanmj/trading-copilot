@@ -188,18 +188,24 @@ def _rebuild_unified_and_card() -> None:
         pass
 
 
-def parse_tradecard_args(args: str) -> tuple[bool, bool]:
-    """Return (force_refresh, explain) from /tradecard subcommand args."""
+def parse_tradecard_args(args: str) -> tuple[bool, bool, str]:
+    """Return (force_refresh, explain, mode) from /tradecard subcommand args."""
     tokens = [t.strip().lower() for t in str(args or '').split() if t.strip()]
     force = 'fresh' in tokens or force_refresh_enabled()
     explain = 'explain' in tokens
-    return force, explain
+    mode = 'default'
+    if 'outcome' in tokens:
+        mode = 'outcome'
+    elif 'journal' in tokens:
+        mode = 'journal'
+    return force, explain, mode
 
 
 def refresh_tradecard_market_data(
     chat_id: str | None = None,
     *,
     force: bool = False,
+    skip_card_rebuild: bool = False,
 ) -> dict[str, Any]:
     """
     Lightweight on-demand refresh for /tradecard during INDIA_MARKET_HOURS.
@@ -236,7 +242,14 @@ def refresh_tradecard_market_data(
     meta['refresh_failed'] = not (prices_ok and scanner_ok)
 
     if prices_ok or scanner_ok:
-        _rebuild_unified_and_card()
+        if not skip_card_rebuild:
+            _rebuild_unified_and_card()
+        try:
+            from backend.trading.tradecard_journal import resolve_pending_tradecard_outcomes
+
+            meta['journal_outcomes'] = resolve_pending_tradecard_outcomes()
+        except Exception:
+            pass
 
     meta['data_stale'] = is_tradecard_data_stale(meta)
     return meta

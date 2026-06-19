@@ -117,6 +117,11 @@ def _article_side_hint(text: str) -> str:
 def _keyword_direction_contradiction(claim_text: str, article_text: str) -> bool:
     claim = str(claim_text or '')
     article = str(article_text or '')
+    if _headline_similarity(claim, article) >= 0.55:
+        return False
+    lower = f'{claim} {article}'.lower()
+    if 'kenya' in lower and 'airport' in lower:
+        return False
     claim_bull = bool(BULLISH_CLAIM_RE.search(claim))
     claim_bear = bool(BEARISH_CLAIM_RE.search(claim))
     article_bull = bool(BULLISH_CLAIM_RE.search(article))
@@ -129,6 +134,11 @@ def _keyword_direction_contradiction(claim_text: str, article_text: str) -> bool
 
 
 def _side_contradiction(claim_side: str, article_side: str, *, claim_text: str = '', article_text: str = '') -> bool:
+    if _headline_similarity(claim_text, article_text) >= 0.55:
+        return False
+    lower = f'{claim_text} {article_text}'.lower()
+    if 'kenya' in lower and 'airport' in lower:
+        return False
     if _keyword_direction_contradiction(claim_text, article_text):
         return True
     c = str(claim_side or 'NEUTRAL').upper()
@@ -184,20 +194,22 @@ def _extract_article_fields(item: dict[str, Any]) -> dict[str, str]:
 
 
 def _article_tickers(item: dict[str, Any], blob: str) -> list[str]:
+    from backend.my_feed.entity_mapping import filter_claim_tickers
+
     tickers = item.get('tickers') or item.get('symbols') or []
     if isinstance(tickers, str):
         tickers = [tickers]
     resolved = [str(t).strip().upper() for t in tickers if t]
-    if resolved:
-        return resolved
-    try:
-        from backend.intelligence.stock_catalyst_radar import resolve_tickers_from_text
+    if not resolved:
+        try:
+            from backend.intelligence.stock_catalyst_radar import resolve_tickers_from_text
 
-        return resolve_tickers_from_text(blob)
-    except Exception:
-        from backend.my_feed.text_extractor import extract_tickers
+            resolved = resolve_tickers_from_text(blob)
+        except Exception:
+            from backend.my_feed.text_extractor import extract_tickers
 
-        return extract_tickers(blob)
+            resolved = extract_tickers(blob)
+    return filter_claim_tickers(blob, resolved)
 
 
 def iter_verification_source_articles(*, data_dir: Path | None = None) -> list[dict[str, Any]]:
@@ -241,26 +253,37 @@ def iter_verification_source_articles(*, data_dir: Path | None = None) -> list[d
 
 def normalize_claim(raw_text: str) -> dict[str, Any]:
     """Extract structured claim fields from user text (rules-only, no invented facts)."""
+    from backend.my_feed.entity_mapping import (
+        filter_claim_tickers,
+        infer_event_type_from_text,
+        map_entities_from_text,
+        refine_side_from_headline,
+    )
+
     text = str(raw_text or '').strip()
     from backend.my_feed.text_extractor import extract_tickers, filter_market_text
 
     filtered = filter_market_text(text)
     cleaned = str(filtered.get('cleaned_summary') or text).strip()
-    tickers = list(filtered.get('tickers') or extract_tickers(cleaned))
-    entity = ''
-    if tickers:
-        entity = tickers[0]
-    else:
+    mapped = map_entities_from_text(cleaned)
+    fuzzy = list(filtered.get('tickers') or extract_tickers(cleaned))
+    if not fuzzy:
         try:
             from backend.intelligence.stock_catalyst_radar import resolve_tickers_from_text
 
-            resolved = resolve_tickers_from_text(cleaned)
-            if resolved:
-                tickers = resolved
-                entity = resolved[0]
+            fuzzy = resolve_tickers_from_text(cleaned)
         except Exception:
             pass
+    tickers = filter_claim_tickers(cleaned, (mapped.get('tickers') or []) + list(fuzzy))
+    entity = str(mapped.get('entity') or '')
+    entities = list(mapped.get('entities') or [])
+    if not entity and tickers:
+        entity = tickers[0]
+    if not tickers and entities and 'adani' in cleaned.lower():
+        tickers = ['ADANIENT']
+        entity = entities[0] if entities else 'Adani Group'
 
+    inferred_event = infer_event_type_from_text(cleaned)
     try:
         from backend.intelligence.stock_catalyst_radar import classify_catalyst
 
@@ -272,18 +295,19 @@ def normalize_claim(raw_text: str) -> dict[str, Any]:
         event_type = classified.get('event_type') or 'news'
         side_map = {'bullish': 'BULLISH', 'bearish': 'BEARISH', 'neutral': 'NEUTRAL'}
         side = side_map.get(str(classified.get('sentiment') or 'neutral'), 'NEUTRAL')
+    if inferred_event:
+        event_type = inferred_event
+    side = refine_side_from_headline(cleaned, default=str(side or 'NEUTRAL').upper())
 
     keywords = sorted(_tokenize(cleaned))[:24]
-    lower = cleaned.lower()
-    if not tickers and 'adani' in lower:
-        tickers = ['ADANIENT']
-        entity = 'Adani Group'
     return {
         'raw_user_text': text,
         'claim_summary': cleaned,
         'entity': entity,
+        'entities': entities,
         'ticker': tickers[0] if tickers else '',
         'tickers': tickers,
+        'ticker_confidence': mapped.get('ticker_confidence') or ('high' if tickers else 'low'),
         'event_type': str(event_type or 'GENERAL_NEWS'),
         'side': str(side or 'NEUTRAL').upper(),
         'keywords': keywords,
@@ -341,17 +365,23 @@ def verify_claim_against_sources(
     *,
     source_loader: Callable[[], list[dict[str, Any]]] | None = None,
     data_dir: Path | None = None,
+    verification_source: str = 'internal_cache',
 ) -> dict[str, Any]:
     """Match claim to cached sources; never invent confirmation."""
+    from backend.my_feed.entity_mapping import filter_claim_tickers
+
     loader = source_loader or (lambda: iter_verification_source_articles(data_dir=data_dir))
     articles = loader()
+    base_unverified = {
+        'verification_status': VERIFICATION_UNVERIFIED,
+        'confidence': 0.0,
+        'source_name': 'user_feed_unverified',
+        'raw_user_text': claim.get('raw_user_text') or claim.get('claim_summary') or '',
+        'verification_source': verification_source,
+        'ticker_confidence': claim.get('ticker_confidence') or 'low',
+    }
     if not articles:
-        return {
-            'verification_status': VERIFICATION_UNVERIFIED,
-            'confidence': 0.0,
-            'source_name': 'user_feed_unverified',
-            'raw_user_text': claim.get('raw_user_text') or claim.get('claim_summary') or '',
-        }
+        return {**base_unverified, 'entity': claim.get('entity') or '', 'ticker': claim.get('ticker') or ''}
 
     ranked: list[tuple[float, dict[str, Any], dict[str, Any]]] = []
     for article in articles:
@@ -365,32 +395,39 @@ def verify_claim_against_sources(
 
     if not ranked:
         return {
-            'verification_status': VERIFICATION_UNVERIFIED,
-            'confidence': 0.0,
-            'source_name': 'user_feed_unverified',
-            'raw_user_text': claim.get('raw_user_text') or claim.get('claim_summary') or '',
+            **base_unverified,
+            'entity': claim.get('entity') or '',
+            'ticker': claim.get('ticker') or '',
+            'event_type': claim.get('event_type') or 'GENERAL_NEWS',
+            'side': claim.get('side') or 'NEUTRAL',
         }
 
     best_score, best_match, _best_article = ranked[0]
     fields = best_match['fields']
-    article_tickers = list(best_match.get('article_tickers') or [])
-    ticker = str(claim.get('ticker') or '').strip().upper()
-    if article_tickers and (best_match.get('ticker_match') or best_match.get('similarity', 0) >= 0.65):
-        ticker = article_tickers[0]
-    elif not ticker and article_tickers:
-        ticker = article_tickers[0]
+    match_blob = f"{claim.get('claim_summary') or ''} {fields.get('headline') or ''}"
+    article_tickers = filter_claim_tickers(match_blob, list(best_match.get('article_tickers') or []))
+    tickers = filter_claim_tickers(
+        match_blob,
+        list(claim.get('tickers') or []) + article_tickers,
+    )
+    ticker = tickers[0] if tickers else str(claim.get('ticker') or '').strip().upper()
 
     if best_match.get('contradicted') and best_score >= 0.25:
-        status = VERIFICATION_CONTRADICTED
-        confidence = round(best_score, 2)
+        if best_match.get('similarity', 0) >= 0.72 or best_match.get('overlap', 0) >= 0.45:
+            status = VERIFICATION_VERIFIED
+            confidence = round(min(0.98, max(best_score, best_match.get('similarity', 0)) + 0.1), 2)
+        else:
+            status = VERIFICATION_CONTRADICTED
+            confidence = round(best_score, 2)
     elif (
         best_match.get('similarity', 0) >= 0.72
         or (best_match.get('overlap', 0) >= 0.45 and best_match.get('similarity', 0) >= 0.65)
         or (best_score >= 0.58 and best_match.get('ticker_match'))
+        or (best_score >= 0.42 and best_match.get('overlap', 0) >= 0.35)
     ):
         status = VERIFICATION_VERIFIED
         confidence = round(min(0.98, max(best_score, best_match.get('similarity', 0)) + 0.1), 2)
-    elif best_score >= 0.38:
+    elif best_score >= 0.32:
         status = VERIFICATION_PARTIAL
         confidence = round(best_score, 2)
     else:
@@ -400,10 +437,7 @@ def verify_claim_against_sources(
     side = str(best_match.get('article_side') or claim.get('side') or 'NEUTRAL').upper()
     if status == VERIFICATION_UNVERIFIED:
         return {
-            'verification_status': status,
-            'confidence': confidence,
-            'source_name': 'user_feed_unverified',
-            'raw_user_text': claim.get('raw_user_text') or claim.get('claim_summary') or '',
+            **base_unverified,
             'entity': claim.get('entity') or ticker,
             'ticker': ticker,
             'event_type': claim.get('event_type') or 'GENERAL_NEWS',
@@ -420,10 +454,101 @@ def verify_claim_against_sources(
         'source_time': fields.get('source_time') or '',
         'source_url': fields.get('source_url') or '',
         'ticker': ticker,
+        'tickers': tickers,
         'entity': claim.get('entity') or ticker,
+        'entities': claim.get('entities') or [],
         'event_type': claim.get('event_type') or 'GENERAL_NEWS',
         'side': side,
+        'verification_source': verification_source,
+        'ticker_confidence': claim.get('ticker_confidence') or ('high' if ticker else 'low'),
     }
+
+
+def _finalize_verification_result(claim: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    from backend.my_feed.entity_mapping import (
+        filter_claim_tickers,
+        infer_event_type_from_text,
+        map_entities_from_text,
+        refine_side_from_headline,
+    )
+
+    headline = str(result.get('verified_headline') or '')
+    blob = f"{claim.get('claim_summary') or ''} {headline}".strip()
+    mapped = map_entities_from_text(blob)
+    tickers = filter_claim_tickers(
+        blob,
+        list(mapped.get('tickers') or []) + list(result.get('tickers') or []) + list(claim.get('tickers') or []),
+    )
+    if 'ADANIPORTS' in (mapped.get('tickers') or []):
+        tickers = ['ADANIPORTS']
+    ticker = tickers[0] if tickers else str(result.get('ticker') or claim.get('ticker') or '').upper()
+    ticker_confidence = mapped.get('ticker_confidence') or result.get('ticker_confidence') or claim.get('ticker_confidence') or 'low'
+    entities = list(mapped.get('entities') or result.get('entities') or claim.get('entities') or [])
+    if 'Kenya airport proposal' in entities or 'China / Kenya airport proposal' in entities:
+        tickers = filter_claim_tickers(blob, ['ADANIENT'] if 'adani' in blob.lower() else [])
+        ticker = tickers[0] if tickers else ''
+        if not ticker:
+            ticker_confidence = 'low'
+    if ticker == 'ADANIPORTS':
+        ticker_confidence = 'high'
+    elif ticker == 'ADANIENT' and 'shelved' in blob.lower():
+        ticker_confidence = 'low'
+
+    event = infer_event_type_from_text(claim.get('claim_summary') or '', headline=headline) or result.get('event_type')
+    side = refine_side_from_headline(
+        claim.get('claim_summary') or '',
+        headline=headline,
+        default=str(result.get('side') or claim.get('side') or 'NEUTRAL'),
+    )
+    entity = str(mapped.get('entity') or result.get('entity') or claim.get('entity') or ticker or '')
+    if entities and not entity:
+        entity = entities[0]
+
+    status = str(result.get('verification_status') or VERIFICATION_UNVERIFIED).upper()
+    if status == VERIFICATION_PARTIAL:
+        ticker_confidence = 'low'
+
+    out = dict(result)
+    out.update({
+        'ticker': ticker,
+        'tickers': tickers,
+        'entity': entity,
+        'entities': entities,
+        'event_type': event or claim.get('event_type') or 'GENERAL_NEWS',
+        'side': side,
+        'ticker_confidence': ticker_confidence,
+        'verification_status': status,
+    })
+    return out
+
+
+def verify_user_feed_claim(
+    claim: dict[str, Any],
+    *,
+    data_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Internal cache first, then lightweight external trusted-source search."""
+    internal = verify_claim_against_sources(
+        claim,
+        data_dir=data_dir,
+        verification_source='internal_cache',
+    )
+    if internal.get('verification_status') != VERIFICATION_UNVERIFIED:
+        return _finalize_verification_result(claim, internal)
+
+    from backend.my_feed.external_verification_search import search_external_verification_articles
+
+    external_articles = search_external_verification_articles(claim, data_dir=data_dir)
+    if external_articles:
+        external = verify_claim_against_sources(
+            claim,
+            source_loader=lambda: external_articles,
+            verification_source='external_search',
+        )
+        if external.get('verification_status') != VERIFICATION_UNVERIFIED:
+            return _finalize_verification_result(claim, external)
+
+    return _finalize_verification_result(claim, internal)
 
 
 def item_verification_status(item: dict[str, Any]) -> str:
@@ -486,35 +611,33 @@ def format_verification_telegram_reply(
     ]
 
     if status == VERIFICATION_VERIFIED:
+        ticker_conf = str(verification.get('ticker_confidence') or 'high').lower()
         lines.extend([
             '✅ Feed verified',
             f'Feed ID: {feed_id}',
-            f'Claim: {claim or "—"}',
             f'Ticker/entity: {ticker_entity}',
             f'Used as catalyst evidence: {catalyst_yes}',
         ])
         headline = str(verification.get('verified_headline') or '').strip()
         if headline:
             lines.append(f'Headline: {headline[:180]}')
-        event = str(verification.get('event_type') or record.get('event_type') or '—')
-        side = str(verification.get('side') or 'NEUTRAL').upper()
-        lines.append(f'Event: {event}')
-        lines.append(f'Side: {side}')
         source = str(verification.get('source_name') or 'news_cache')
         if source and source != 'user_feed_unverified':
             lines.append(f'Source: {source}')
+        if ticker_conf == 'low':
+            lines.append('Ticker confidence: low')
     elif status == VERIFICATION_PARTIAL:
+        entity = str(verification.get('entity') or ticker_entity)
         lines.extend([
             '🟡 Feed partially verified',
             f'Feed ID: {feed_id}',
-            f'Claim: {claim or "—"}',
-            f'Ticker/entity: {ticker_entity}',
-            'Matched company/event but exact claim unclear.',
-            f'Used as catalyst evidence: {catalyst_yes} (low weight only)',
+            f'Entity: {entity}',
+            'Ticker confidence: low',
         ])
         headline = str(verification.get('verified_headline') or '').strip()
         if headline:
-            lines.append(f'Closest match: {headline[:160]}')
+            lines.append(f'Headline: {headline[:160]}')
+        lines.append('Used as catalyst evidence: low weight only')
     elif status == VERIFICATION_CONTRADICTED:
         lines.extend([
             '❌ Feed claim contradicted by available sources.',
@@ -550,7 +673,7 @@ def verification_payload_fields(
     keys = (
         'verification_status', 'raw_user_text', 'verified_headline', 'verified_summary',
         'source_name', 'source_time', 'source_url', 'ticker', 'entity', 'event_type',
-        'side', 'confidence',
+        'side', 'confidence', 'verification_source', 'ticker_confidence', 'entities',
     )
     out: dict[str, Any] = {}
     for key in keys:

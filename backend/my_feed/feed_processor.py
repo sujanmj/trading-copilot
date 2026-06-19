@@ -199,11 +199,11 @@ def _verify_and_build_text_record(
         is_catalyst_eligible_status,
         normalize_claim,
         verification_payload_fields,
-        verify_claim_against_sources,
+        verify_user_feed_claim,
     )
 
     claim = normalize_claim(raw_text)
-    verification = verify_claim_against_sources(claim)
+    verification = verify_user_feed_claim(claim)
     classified = _classify_item(extracted)
     tickers = extracted.get('tickers') or extract_tickers(extracted['cleaned_summary'])
     verify_ticker = str(verification.get('ticker') or '').strip().upper()

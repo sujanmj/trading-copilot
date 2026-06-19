@@ -28,8 +28,8 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_EXCLUDED, FULL_SNAPSHOT_SEQUENCE
 
     stage = get_astraedge_build_stage()
-    if stage != '50X' or ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50X':
-        return _fail(f'expected AstraEdge 50X got stage={stage!r} build={ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if stage != '50Z' or ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50Z':
+        return _fail(f'expected AstraEdge 50Z got stage={stage!r} build={ASTRAEDGE_TELEGRAM_BUILD!r}')
     if len(FULL_SNAPSHOT_SEQUENCE) != 34:
         return _fail(f'/full must be 34 steps got {len(FULL_SNAPSHOT_SEQUENCE)}')
     if '/aihub reddit' in FULL_SNAPSHOT_SEQUENCE:

@@ -21,8 +21,8 @@ def main() -> int:
     from backend.telegram.response_format import format_status_text
 
     stage = get_astraedge_build_stage()
-    if stage != '50X' or ASTRAEDGE_BUILD_STAGE != '50X':
-        return _fail(f'expected build stage 50X got {stage!r}')
+    if stage != '50Z' or ASTRAEDGE_BUILD_STAGE != '50Z':
+        return _fail(f'expected build stage 50Z got {stage!r}')
 
     status = format_status_text()
     if ASTRAEDGE_TELEGRAM_BUILD not in status:

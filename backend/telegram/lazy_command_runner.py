@@ -623,11 +623,42 @@ def run_feed_text_only(args: str = '') -> dict[str, Any]:
 
 def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[str, Any]:
     from backend.telegram.response_format import format_tradecard_telegram
+    from backend.trading.tradecard_journal import format_tradecard_journal_telegram, format_tradecard_outcome_telegram
+    from backend.trading.tradecard_latest import (
+        NO_LATEST_MESSAGE,
+        is_latest_tradecard_expired,
+        load_latest_tradecard,
+    )
     from backend.trading.tradecard_refresh import parse_tradecard_args, refresh_tradecard_market_data
 
-    force, explain = parse_tradecard_args(args)
+    force, explain, mode = parse_tradecard_args(args)
+    if mode == 'journal':
+        text = format_tradecard_journal_telegram()
+        return _runner_result('tradecard_journal', text=text)
+    if mode == 'outcome':
+        text = format_tradecard_outcome_telegram()
+        return _runner_result('tradecard_outcome', text=text)
+    if explain:
+        latest = load_latest_tradecard(chat_id)
+        if not latest or is_latest_tradecard_expired(latest):
+            return _runner_result('tradecard_explain', text=NO_LATEST_MESSAGE)
+        freshness = refresh_tradecard_market_data(
+            chat_id,
+            force=force,
+            skip_card_rebuild=True,
+        )
+        text = format_tradecard_telegram(
+            explain=True,
+            freshness_meta=freshness,
+            pinned_latest=latest,
+        )
+        return _runner_result('tradecard_explain', text=text, payload={'freshness': freshness})
     freshness = refresh_tradecard_market_data(chat_id, force=force)
-    text = format_tradecard_telegram(explain=explain, freshness_meta=freshness)
+    text = format_tradecard_telegram(
+        explain=False,
+        freshness_meta=freshness,
+        chat_id=chat_id,
+    )
     return _runner_result('tradecard', text=text, payload={'freshness': freshness})
 
 

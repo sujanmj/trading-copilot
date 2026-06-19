@@ -61,16 +61,36 @@ def main() -> int:
             return _fail('explain variant must include Explain block')
 
     from backend.telegram.lazy_command_runner import run_tradecard_only
+    from backend.telegram.response_format import format_tradecard_telegram
+
+    runner_card = {
+        **fake_card,
+        'status': 'VALID_ENTRY',
+        'entry_zone': '100–102',
+        'stop_loss': 98,
+        'target_1': 104,
+        'target_2': 106,
+        'risk_reward': 2.0,
+        'confidence': 'MEDIUM',
+        'invalid_if': 'below 98',
+        'exit_rule': 'trim T1',
+    }
 
     with patch('backend.trading.tradecard_refresh.refresh_tradecard_market_data', return_value=meta), \
-         patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake_card), \
+         patch('backend.trading.trade_card_engine.get_trade_card', return_value=runner_card), \
          patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
-         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('KPIL', 'NO_ACTIVE_ENTRY')), \
-         patch('backend.telegram.response_format._tradecard_postmarket_line', return_value=''):
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('KPIL', 'VALID_ENTRY')), \
+         patch('backend.telegram.response_format._tradecard_postmarket_line', return_value=''), \
+         patch('backend.trading.tradecard_refresh.is_tradecard_data_stale', return_value=False), \
+         patch('backend.trading.tradecard_journal.get_active_valid_entry', return_value=None), \
+         patch('backend.trading.tradecard_journal.persist_tradecard_generation', return_value={'id': 'x'}):
+        runner_plain = run_tradecard_only('', chat_id='freshness-line')
         runner = run_tradecard_only('explain', chat_id='freshness-line')
 
     if 'Freshness:' not in (runner.get('text') or ''):
         return _fail('run_tradecard_only explain must include freshness line')
+    if 'KPIL' not in (runner_plain.get('text') or ''):
+        return _fail('plain runner must establish latest card ticker')
 
     print('TRADECARD_FRESHNESS_LINE_TEST_OK')
     return 0

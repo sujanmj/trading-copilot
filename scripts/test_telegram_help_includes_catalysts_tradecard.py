@@ -31,6 +31,8 @@ HELP_TRADECARD_MARKERS = (
     '/tradecard — one-stock paper trade card',
     '/tradecard today — today\'s trade card',
     '/tradecard explain — full trade card plan notes',
+    '/tradecard journal — today\'s tradecard journal',
+    '/tradecard outcome — tradecard outcome summary',
 )
 
 COMMAND_CASES = (
@@ -52,8 +54,8 @@ def main() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, handle_analysis_command
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50X':
-        return _fail(f'expected AstraEdge 50X got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50Z':
+        return _fail(f'expected AstraEdge 50Z got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     for marker in HELP_CATALYST_MARKERS:
         if marker not in HELP_TEXT:

@@ -226,6 +226,13 @@ def compute_eod_outcome_summary(review_date: Optional[str] = None) -> dict:
 
     alert_tracking = summarize_alert_review_tracking(date)
 
+    try:
+        from backend.trading.tradecard_journal import resolve_pending_tradecard_outcomes
+
+        resolve_pending_tradecard_outcomes(session_date=date, expire_at_close=True)
+    except Exception:
+        pass
+
     return {
         'date': date,
         'alerts_sent': alerts_meta.get('alerts_sent', 0),
@@ -396,9 +403,19 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
         f"<b>Emergency macro:</b>\n"
         f"Useful: {summary.get('emergency_useful', 0)} · "
         f"Duplicate skipped: {summary.get('emergency_duplicate_skipped', 0)}\n\n"
-        f"<b>Tomorrow:</b>\nFresh post-market intelligence generated"
+        f"<b>Tomorrow:</b>\nFresh post-market intelligence generated\n\n"
+        f"{_tradecard_review_block(summary)}"
     )
     return msg
+
+
+def _tradecard_review_block(summary: dict) -> str:
+    try:
+        from backend.trading.tradecard_journal import format_tradecard_review_section
+
+        return format_tradecard_review_section(session_date=str(summary.get('date') or _today()))
+    except Exception:
+        return '<b>Tradecards:</b>\nGenerated: 0'
 
 
 def persist_eod_summary(summary: dict) -> None:

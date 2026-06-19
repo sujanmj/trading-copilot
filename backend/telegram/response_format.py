@@ -2011,14 +2011,101 @@ def _tradecard_explain_lines(
     return lines
 
 
+def _format_pinned_tradecard_from_latest(
+    latest: dict[str, Any],
+    *,
+    explain: bool,
+    freshness_meta: dict[str, Any] | None = None,
+) -> str:
+    """Format /tradecard explain from stored latest card — ticker/levels never change."""
+    from backend.trading.trade_card_engine import resolve_tradecard_source_label
+    from backend.trading.tradecard_latest import refresh_pinned_card_price
+    from backend.trading.tradecard_refresh import format_freshness_line
+
+    card = latest.get('card') if isinstance(latest.get('card'), dict) else latest
+    ticker = str(latest.get('ticker') or card.get('ticker') or '').strip().upper()
+    status = str(latest.get('status') or card.get('status') or 'VALID_ENTRY').strip().upper()
+    display = refresh_pinned_card_price(card, ticker)
+    reason = clean_avoid_reason_text(str(display.get('reason') or ''), max_len=200)
+    postmarket_line = _tradecard_postmarket_line()
+
+    lines = [
+        '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
+        f'<b>{ticker}</b> · <code>{status}</code>',
+        f"Price: {display.get('current_price') or '—'}",
+        f"Entry zone: {display.get('entry_zone') or '—'}",
+        f"Stop: {display.get('stop_loss') or '—'} · T1: {display.get('target_1') or '—'} · T2: {display.get('target_2') or '—'}",
+        f"R:R {display.get('risk_reward') or '—'} · Confidence: {display.get('confidence') or '—'}",
+        f"Capital plan: {display.get('capital_plan') or 'Paper only.'}",
+        f'Reason: {reason or "—"}',
+        f"Invalid if: {clean_avoid_reason_text(str(display.get('invalid_if') or ''), max_len=120)}",
+    ]
+    if explain:
+        lines.extend(_tradecard_explain_lines(variant='valid_entry', reason=reason, card=display))
+    if postmarket_line:
+        lines.append(postmarket_line)
+    lines.append(resolve_tradecard_source_label(display, ticker))
+    freshness = format_freshness_line(freshness_meta)
+    if freshness:
+        lines.append(freshness)
+    lines.append('Paper only — you decide and place trades manually.')
+    return strip_stage_markers('\n'.join(lines))
+
+
 def format_tradecard_telegram(
     *,
     explain: bool = False,
     freshness_meta: dict[str, Any] | None = None,
+    chat_id: str | None = None,
+    pinned_latest: dict[str, Any] | None = None,
 ) -> str:
     """Format paper-only trade card for /tradecard commands."""
+    if pinned_latest:
+        return _format_pinned_tradecard_from_latest(
+            pinned_latest,
+            explain=explain,
+            freshness_meta=freshness_meta,
+        )
+
     from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale, resolve_tradecard_source_label
+    from backend.trading.tradecard_latest import save_latest_tradecard
     from backend.trading.tradecard_refresh import format_freshness_line, is_tradecard_data_stale
+
+    def _safe_float(value: object) -> float | None:
+        try:
+            if value in (None, '', '—'):
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _persist_tradecard_journal(card_payload: dict[str, Any]) -> None:
+        try:
+            from backend.trading.tradecard_journal import persist_tradecard_generation
+
+            if card_payload and card_payload.get('ticker'):
+                persist_tradecard_generation(
+                    card_payload,
+                    freshness_meta=freshness_meta or {},
+                    source_label=resolve_tradecard_source_label(
+                        card_payload,
+                        str(card_payload.get('ticker') or ''),
+                    ),
+                )
+        except Exception:
+            pass
+
+    def _save_latest(card_payload: dict[str, Any], *, ticker: str, status: str) -> None:
+        if chat_id and ticker:
+            try:
+                save_latest_tradecard(
+                    chat_id,
+                    card_payload,
+                    ticker=ticker,
+                    status=status,
+                )
+            except Exception:
+                pass
 
     card = get_trade_card(rebuild=False)
     stale = is_trade_card_stale(card)
@@ -2195,7 +2282,36 @@ def format_tradecard_telegram(
         _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
+        _persist_tradecard_journal(card)
         return strip_stage_markers('\n'.join(lines))
+
+    if status == 'VALID_ENTRY' and effective_ticker:
+        from backend.trading.tradecard_journal import format_active_card_exists, get_active_valid_entry
+
+        active = get_active_valid_entry(effective_ticker)
+        if active:
+            active_card = {
+                'ticker': effective_ticker,
+                'status': 'VALID_ENTRY',
+                'current_price': active.get('price_at_signal') or active.get('outcome_price'),
+                'entry_zone': (
+                    f"{active.get('entry_low')}–{active.get('entry_high')}"
+                    if active.get('entry_low') is not None and active.get('entry_high') is not None
+                    else '—'
+                ),
+                'stop_loss': active.get('stop'),
+                'target_1': active.get('t1'),
+                'target_2': active.get('t2'),
+                'reason': active.get('reason') or 'active card tracking',
+                'confidence': active.get('confidence') or '—',
+            }
+            lines = [format_active_card_exists(
+                active,
+                current_price=_safe_float(card.get('current_price')),
+            )]
+            _append_freshness(lines)
+            _save_latest(active_card, ticker=effective_ticker, status='VALID_ENTRY')
+            return strip_stage_markers('\n'.join(lines))
 
     lines = [
         '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
@@ -2217,4 +2333,9 @@ def format_tradecard_telegram(
     _append_source(lines)
     _append_freshness(lines)
     lines.append('Paper only — you decide and place trades manually.')
+    _persist_tradecard_journal(card)
+    journal_card = dict(card)
+    journal_card['ticker'] = effective_ticker
+    journal_card['status'] = status
+    _save_latest(journal_card, ticker=effective_ticker, status=status)
     return strip_stage_markers('\n'.join(lines))

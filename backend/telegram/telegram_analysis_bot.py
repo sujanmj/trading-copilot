@@ -122,6 +122,8 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /tradecard — one-stock paper trade card
 /tradecard today — today's trade card
 /tradecard explain — full trade card plan notes
+/tradecard journal — today's tradecard journal
+/tradecard outcome — tradecard outcome summary
 
 <b>Briefs:</b>
 /news — news only

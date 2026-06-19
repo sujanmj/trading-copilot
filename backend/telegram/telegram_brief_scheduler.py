@@ -149,6 +149,15 @@ def build_close_brief_text() -> str:
     lines.extend([
         pack_res.get('text', ''),
         '',
+    ])
+    try:
+        from backend.trading.tradecard_journal import format_tradecard_review_section
+
+        lines.append(format_tradecard_review_section())
+        lines.append('')
+    except Exception:
+        pass
+    lines.extend([
         memory_res.get('text', ''),
         '',
         market_res.get('text', ''),
