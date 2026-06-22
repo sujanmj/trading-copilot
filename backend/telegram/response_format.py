@@ -830,6 +830,37 @@ def strip_stage_markers(text: str) -> str:
     return '\n'.join(lines).strip()
 
 
+def _latest_tradecard_audit_for_ticker(ticker: object = '') -> dict[str, Any] | None:
+    try:
+        from backend.trading.tradecard_latest import find_latest_tradecard_audit
+
+        return find_latest_tradecard_audit(ticker=str(ticker or '').strip().upper() or None)
+    except Exception:
+        return None
+
+
+def _format_no_active_audit_watch_text(
+    *,
+    label: str,
+    ticker: str,
+    no_clean: bool = False,
+) -> str:
+    sym = str(ticker or '').strip().upper() or '—'
+    lines = [f'<b>AstraEdge — {label}</b>', '']
+    if no_clean:
+        lines.extend([
+            'No clean active watch yet.',
+            f'Research-only watch: {sym} — confirm next session.',
+        ])
+    else:
+        lines.extend([
+            f'{sym} — NEXT-SESSION WATCH ONLY',
+            'Reason: no active entry in current mode',
+            'Plan: confirm after 09:20 with fresh price + volume',
+        ])
+    return strip_stage_markers('\n'.join(lines))
+
+
 def with_shadow_disclaimer(text: str) -> str:
     """Legacy name — sanitizes only; no footer is appended."""
     return strip_stage_markers(text)
@@ -897,6 +928,22 @@ def format_stock_decision_payload(
 
     decision = payload.get('decision') or 'NO_CLEAN_CANDIDATE'
     top = payload.get('top_pick')
+    if isinstance(top, dict):
+        audit = _latest_tradecard_audit_for_ticker(top.get('ticker'))
+        if audit:
+            return _format_no_active_audit_watch_text(
+                label=label,
+                ticker=str(audit.get('ticker') or top.get('ticker') or ''),
+                no_clean=decision == 'NO_CLEAN_CANDIDATE',
+            )
+    elif decision == 'NO_CLEAN_CANDIDATE':
+        audit = _latest_tradecard_audit_for_ticker()
+        if audit:
+            return _format_no_active_audit_watch_text(
+                label=label,
+                ticker=str(audit.get('ticker') or ''),
+                no_clean=True,
+            )
     if decision == 'NO_CLEAN_CANDIDATE' and not top:
         return strip_stage_markers(format_watchlist_fallback_telegram(normalized, rebuilt=rebuilt))
 
@@ -2086,7 +2133,7 @@ def _format_pinned_tradecard_from_latest(
 ) -> str:
     """Format /tradecard explain from stored latest card — ticker/levels never change."""
     from backend.trading.trade_card_engine import resolve_tradecard_source_label
-    from backend.trading.tradecard_latest import refresh_pinned_card_price
+    from backend.trading.tradecard_latest import is_tradecard_audit_status, refresh_pinned_card_price
     from backend.trading.tradecard_refresh import format_freshness_line
 
     card = latest.get('card') if isinstance(latest.get('card'), dict) else latest
@@ -2095,6 +2142,41 @@ def _format_pinned_tradecard_from_latest(
     display = refresh_pinned_card_price(card, ticker)
     reason = clean_avoid_reason_text(str(display.get('reason') or ''), max_len=200)
     postmarket_line = _tradecard_postmarket_line()
+    audit_only = (
+        bool(latest.get('audit_only'))
+        or is_tradecard_audit_status(status)
+        or str(display.get('entry_zone') or '').strip().upper() == 'NO ACTIVE ENTRY'
+    )
+
+    if audit_only:
+        title = 'NEXT-SESSION WATCH' if status == 'NEXT_SESSION_WATCH' or display.get('after_hours') else 'NO ACTIVE ENTRY'
+        status_label = 'NO ACTIVE ENTRY' if title == 'NEXT-SESSION WATCH' else _tradecard_status_label(status)
+        lines = [
+            f'<b>📋 TRADE CARD — {title}</b>',
+            f'<b>{ticker}</b> · <code>{status_label}</code>',
+        ]
+        if explain:
+            lines.extend([
+                '',
+                '<b>Explain</b>',
+                f'Reason: {reason or "market closed/after-hours or research mode / market not open"}',
+                'Entry logic: no active entry generated',
+                'Risk logic: wait for next session confirmation after 09:20',
+                'Next action: watch only; no paper entry until fresh market-hours confirmation',
+            ])
+        else:
+            lines.extend([
+                f'Reason: {reason or "market closed/after-hours or research mode / market not open"}',
+                'Plan: confirm after 09:20 with fresh price + volume',
+            ])
+        if postmarket_line:
+            lines.append(postmarket_line)
+        lines.append(resolve_tradecard_source_label(display, ticker))
+        freshness = format_freshness_line(freshness_meta)
+        if freshness:
+            lines.append(freshness)
+        lines.append('Paper only.')
+        return strip_stage_markers('\n'.join(lines))
 
     lines = [
         '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
@@ -2135,7 +2217,7 @@ def format_tradecard_telegram(
         )
 
     from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale, resolve_tradecard_source_label
-    from backend.trading.tradecard_latest import save_latest_tradecard
+    from backend.trading.tradecard_latest import is_tradecard_audit_status, save_latest_tradecard
     from backend.trading.tradecard_refresh import format_freshness_line, is_tradecard_data_stale
 
     def _safe_float(value: object) -> float | None:
@@ -2162,14 +2244,24 @@ def format_tradecard_telegram(
         except Exception:
             pass
 
-    def _save_latest(card_payload: dict[str, Any], *, ticker: str, status: str) -> None:
+    def _save_latest(
+        card_payload: dict[str, Any],
+        *,
+        ticker: str,
+        status: str,
+        audit_only: bool = False,
+    ) -> None:
         if chat_id and ticker:
             try:
+                payload = dict(card_payload)
+                payload['ticker'] = ticker
+                payload['status'] = status
                 save_latest_tradecard(
                     chat_id,
-                    card_payload,
+                    payload,
                     ticker=ticker,
                     status=status,
+                    audit_only=audit_only,
                 )
             except Exception:
                 pass
@@ -2233,6 +2325,9 @@ def format_tradecard_telegram(
         lines.append('Paper only.')
         if explain:
             lines.extend(_tradecard_explain_lines(variant='stale'))
+        stale_card = dict(card)
+        stale_card['reason'] = stale_reason
+        _save_latest(stale_card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
         return strip_stage_markers('\n'.join(lines))
 
     if not effective_ticker:
@@ -2264,6 +2359,8 @@ def format_tradecard_telegram(
         _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='stale'))
+        if is_tradecard_audit_status(status):
+            _save_latest(card, ticker=effective_ticker, status=status, audit_only=True)
         return strip_stage_markers('\n'.join(lines))
 
     if card.get('ok') is False and not ticker and fallback_ticker:
@@ -2284,6 +2381,7 @@ def format_tradecard_telegram(
         return strip_stage_markers('\n'.join(lines))
 
     if _is_tradecard_premarket_phase() and effective_ticker and status != 'VALID_ENTRY':
+        _save_latest(card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
         return _format_tradecard_premarket_watch(
             effective_ticker,
             explain=explain,
@@ -2306,6 +2404,7 @@ def format_tradecard_telegram(
         _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason or 'market closed/after-hours'))
+        _save_latest(card, ticker=effective_ticker, status='NEXT_SESSION_WATCH', audit_only=True)
         return strip_stage_markers('\n'.join(lines))
 
     if status == 'NO_ACTIVE_ENTRY' and 'stop too wide' in reason.lower():
@@ -2323,6 +2422,7 @@ def format_tradecard_telegram(
         _append_freshness(lines)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason))
+        _save_latest(card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
         return strip_stage_markers('\n'.join(lines))
 
     if status == 'ENTRY_MISSED' or status == 'NO_ACTIVE_ENTRY' or str(card.get('entry_zone') or '').strip().upper() == 'NO ACTIVE ENTRY':
@@ -2341,6 +2441,8 @@ def format_tradecard_telegram(
         if explain:
             explain_variant = 'wait' if status in ('WAIT_FOR_PULLBACK', 'WAIT_FOR_VOLUME') else 'entry_missed'
             lines.extend(_tradecard_explain_lines(variant=explain_variant, reason=reason))
+        audit_status = status if is_tradecard_audit_status(status) else 'NO_ACTIVE_ENTRY'
+        _save_latest(card, ticker=effective_ticker, status=audit_status, audit_only=True)
         return strip_stage_markers('\n'.join(lines))
 
     if status in ('NO_TRADE', 'AVOID') or card.get('ok') is False:

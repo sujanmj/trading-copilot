@@ -134,11 +134,99 @@ def build_premarket_close_unavailable_text() -> str:
     ])
 
 
+def _build_research_mode_close_brief_text() -> str:
+    try:
+        from backend.analytics.unified_decision_engine import get_feed_freshness_meta
+
+        meta = get_feed_freshness_meta()
+    except Exception:
+        meta = {'lines': {}}
+
+    lines = [
+        '<b>🔔 Research-mode summary</b>',
+        'Market mode: <code>RESEARCH_MODE</code>',
+    ]
+    freshness_lines = meta.get('lines') if isinstance(meta, dict) else {}
+    for key in ('report', 'scanner', 'news'):
+        line = (freshness_lines or {}).get(key)
+        if line:
+            lines.append(str(line))
+    if not any((freshness_lines or {}).get(k) for k in ('report', 'scanner', 'news')):
+        lines.extend([
+            'Report: unavailable',
+            'Scanner: unavailable',
+            'Latest news cache: unavailable',
+        ])
+    lines.append('No live intraday/EOD confirmation available in research mode.')
+
+    report_stale = bool((meta or {}).get('report_stale') or (meta or {}).get('report_suppressed'))
+    try:
+        from backend.analytics.unified_decision_engine import is_report_display_suppressed
+
+        report_stale = report_stale or is_report_display_suppressed(meta=meta)
+    except Exception:
+        pass
+    if report_stale:
+        lines.extend([
+            '',
+            'Report cache stale — not using old daily pack as current.',
+            'Use /refresh full after market close or wait for scheduled report.',
+        ])
+
+    try:
+        from backend.trading.tradecard_journal import summarize_today_outcomes
+        from backend.trading.tradecard_latest import (
+            find_latest_tradecard_audit,
+            summarize_latest_tradecard_audits,
+        )
+
+        counts = summarize_today_outcomes().get('counts') or {}
+        audits = summarize_latest_tradecard_audits()
+        audit_count = int(audits.get('count') or 0)
+        lines.extend([
+            '',
+            '<b>Tradecards:</b>',
+            f"Generated: {int(counts.get('generated') or 0)}",
+            f"Pending: {int(counts.get('pending') or 0)}",
+            f'Audit-only: {audit_count}',
+        ])
+        latest_audit = find_latest_tradecard_audit()
+        if latest_audit:
+            ticker = str(latest_audit.get('ticker') or '').strip().upper()
+            lines.extend([
+                '',
+                f'{ticker} — NEXT-SESSION WATCH ONLY',
+                'Reason: no active entry in current mode',
+                'Plan: confirm after 09:20 with fresh price + volume',
+            ])
+        else:
+            lines.extend([
+                '',
+                'No clean active watch yet.',
+            ])
+    except Exception:
+        lines.extend([
+            '',
+            '<b>Tradecards:</b>',
+            'Generated: 0',
+            'Pending: 0',
+            'Audit-only: 0',
+        ])
+
+    from backend.telegram.response_format import strip_stage_markers
+    return strip_stage_markers('\n'.join(lines))
+
+
 def build_close_brief_text() -> str:
-    from backend.telegram.india_mode_lock import is_premarket_phase
+    from backend.telegram.india_mode_lock import is_premarket_phase, resolve_telegram_market_phase
 
     if is_premarket_phase():
         return build_premarket_close_unavailable_text()
+    try:
+        if resolve_telegram_market_phase() == 'RESEARCH_MODE':
+            return _build_research_mode_close_brief_text()
+    except Exception:
+        pass
 
     from backend.telegram.lazy_command_runner import run_daily_pack_only, run_memory_only, run_market_only
 

@@ -452,6 +452,25 @@ def format_watchlist_fallback_telegram(mode: str, *, rebuilt: bool = False) -> s
         if str(row.get('action', '')).upper() not in ('AVOID', 'NO_DECISION')
     ]
     if watch_rows:
+        audit = None
+        try:
+            from backend.trading.tradecard_latest import find_latest_tradecard_audit
+
+            for row in watch_rows[:5]:
+                audit = find_latest_tradecard_audit(ticker=str(row.get('ticker') or '').strip().upper())
+                if audit:
+                    break
+        except Exception:
+            audit = None
+        if audit:
+            lines.extend([
+                '',
+                'No clean active watch yet.',
+                f"{audit.get('ticker')} — NEXT-SESSION WATCH ONLY",
+                'Reason: no active entry in current mode',
+                'Plan: confirm after 09:20 with fresh price + volume',
+            ])
+            return '\n'.join(lines)
         lines.extend(['', 'Top watch-for-entry:'])
         for row in watch_rows[:5]:
             action = str(row.get('action') or 'WATCH_FOR_ENTRY').replace('_', ' ').upper()

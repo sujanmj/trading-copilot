@@ -77,6 +77,29 @@ def _entry_missed_only_lines(missed: list[dict[str, Any]]) -> list[str]:
     ]
 
 
+def _latest_audit_for_ticker(ticker: object = '') -> dict[str, Any] | None:
+    try:
+        from backend.trading.tradecard_latest import find_latest_tradecard_audit
+
+        return find_latest_tradecard_audit(ticker=str(ticker or '').strip().upper() or None)
+    except Exception:
+        return None
+
+
+def _no_active_watch_lines(ticker: str, *, no_clean: bool = False) -> list[str]:
+    sym = str(ticker or '').strip().upper() or '—'
+    if no_clean:
+        return [
+            'No clean active watch yet.',
+            f'Research-only watch: {sym} — confirm next session.',
+        ]
+    return [
+        f'{sym} — NEXT-SESSION WATCH ONLY',
+        'Reason: no active entry in current mode',
+        'Plan: confirm after 09:20 with fresh price + volume',
+    ]
+
+
 def decision_source_label(ticker: str) -> str:
     """Catalyst-backed vs scanner-only label for /today and /tradecard."""
     sym = _normalize_ticker(ticker)
@@ -473,6 +496,14 @@ def format_intraday_provisional_unified(payload: Optional[dict[str, Any]] = None
     top = data.get('top_pick')
     decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
     missed = data.get('missed_candidates') or []
+    top_audit = _latest_audit_for_ticker((top or {}).get('ticker') if isinstance(top, dict) else '')
+    if top and _is_clean_top_watch(top) and top_audit:
+        lines.extend(_no_active_watch_lines(str(top.get('ticker') or '')))
+        return '\n'.join(lines)
+    fallback_audit = None if top else _latest_audit_for_ticker()
+    if not top and fallback_audit:
+        lines.extend(_no_active_watch_lines(str(fallback_audit.get('ticker') or ''), no_clean=True))
+        return '\n'.join(lines)
 
     if (not _is_clean_top_watch(top) or decision == 'NO_CLEAN_CANDIDATE') and missed:
         lines.extend(_entry_missed_only_lines(missed))
@@ -516,6 +547,14 @@ def format_tomorrow_unified(payload: Optional[dict[str, Any]] = None) -> str:
     top = data.get('top_pick')
     decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
     missed = data.get('missed_candidates') or []
+    top_audit = _latest_audit_for_ticker((top or {}).get('ticker') if isinstance(top, dict) else '')
+    if top and _is_clean_top_watch(top) and top_audit:
+        lines.extend(_no_active_watch_lines(str(top.get('ticker') or '')))
+        return '\n'.join(lines)
+    fallback_audit = None if top else _latest_audit_for_ticker()
+    if not top and fallback_audit:
+        lines.extend(_no_active_watch_lines(str(fallback_audit.get('ticker') or ''), no_clean=True))
+        return '\n'.join(lines)
 
     if (not _is_clean_top_watch(top) or decision == 'NO_CLEAN_CANDIDATE') and missed:
         lines.extend(_entry_missed_only_lines(missed))
@@ -624,6 +663,14 @@ def format_today_unified(payload: Optional[dict[str, Any]] = None) -> str:
     top = data.get('top_pick')
     decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
     missed = data.get('missed_candidates') or []
+    top_audit = _latest_audit_for_ticker((top or {}).get('ticker') if isinstance(top, dict) else '')
+    if top and _is_clean_top_watch(top) and top_audit:
+        lines.extend(_no_active_watch_lines(str(top.get('ticker') or '')))
+        return '\n'.join(lines)
+    fallback_audit = None if top else _latest_audit_for_ticker()
+    if not top and fallback_audit:
+        lines.extend(_no_active_watch_lines(str(fallback_audit.get('ticker') or ''), no_clean=True))
+        return '\n'.join(lines)
 
     if (not _is_clean_top_watch(top) or decision == 'NO_CLEAN_CANDIDATE') and missed:
         lines.extend(_entry_missed_only_lines(missed))

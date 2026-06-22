@@ -19,6 +19,12 @@ LATEST_FILE = DATA_DIR / 'tradecard_latest_by_chat.json'
 
 NO_LATEST_MESSAGE = 'No active/latest tradecard found. Run /tradecard first.'
 
+AUDIT_ONLY_STATUSES = frozenset({
+    'NO_ACTIVE_ENTRY',
+    'NEXT_SESSION_WATCH',
+    'ENTRY_MISSED',
+})
+
 
 def _today() -> str:
     return datetime.now(IST).strftime('%Y-%m-%d')
@@ -49,18 +55,23 @@ def save_latest_tradecard(
     *,
     ticker: str,
     status: str,
+    audit_only: bool = False,
 ) -> dict[str, Any]:
     """Persist the card shown by the last /tradecard for this chat."""
     sym = str(ticker or card.get('ticker') or '').strip().upper()
     if not sym or not isinstance(card, dict):
         return {}
+    normalized_status = str(status or card.get('status') or '').strip().upper()
+    audit = bool(audit_only or normalized_status in AUDIT_ONLY_STATUSES)
     cid = str(chat_id or 'default')
     record = {
         'chat_id': cid,
         'saved_at': _now_iso(),
         'session_date': _today(),
         'ticker': sym,
-        'status': str(status or card.get('status') or '').strip().upper(),
+        'status': normalized_status,
+        'audit_only': audit,
+        'record_type': 'latest_tradecard_audit' if audit else 'latest_tradecard_active',
         'card': dict(card),
     }
     store = _load_store()
@@ -79,6 +90,57 @@ def is_latest_tradecard_expired(record: dict[str, Any] | None) -> bool:
     if not isinstance(record, dict):
         return True
     return str(record.get('session_date') or '') != _today()
+
+
+def is_tradecard_audit_status(status: object) -> bool:
+    return str(status or '').strip().upper() in AUDIT_ONLY_STATUSES
+
+
+def iter_latest_tradecards(*, session_date: str | None = None) -> list[dict[str, Any]]:
+    day = session_date or _today()
+    rows: list[dict[str, Any]] = []
+    for record in _load_store().values():
+        if not isinstance(record, dict):
+            continue
+        if str(record.get('session_date') or '') != day:
+            continue
+        rows.append(record)
+    rows.sort(key=lambda row: str(row.get('saved_at') or ''), reverse=True)
+    return rows
+
+
+def find_latest_tradecard_audit(
+    *,
+    ticker: str | None = None,
+    session_date: str | None = None,
+) -> dict[str, Any] | None:
+    sym = str(ticker or '').strip().upper()
+    for record in iter_latest_tradecards(session_date=session_date):
+        status = record.get('status')
+        if not (record.get('audit_only') or is_tradecard_audit_status(status)):
+            continue
+        if sym and str(record.get('ticker') or '').strip().upper() != sym:
+            continue
+        return record
+    return None
+
+
+def summarize_latest_tradecard_audits(*, session_date: str | None = None) -> dict[str, Any]:
+    rows = [
+        row
+        for row in iter_latest_tradecards(session_date=session_date)
+        if row.get('audit_only') or is_tradecard_audit_status(row.get('status'))
+    ]
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = str(row.get('status') or '').strip().upper() or 'UNKNOWN'
+        counts[status] = counts.get(status, 0) + 1
+    return {
+        'date': session_date or _today(),
+        'count': len(rows),
+        'counts': counts,
+        'rows': rows,
+    }
 
 
 def refresh_pinned_card_price(card: dict[str, Any], ticker: str) -> dict[str, Any]:
