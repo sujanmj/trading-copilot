@@ -6,6 +6,7 @@ import sys
 from typing import Dict, Optional
 
 from backend.utils.config import PROJECT_ROOT
+from backend.utils.safe_stdio import safe_stream
 
 # Legacy script filename -> Python module
 SCRIPT_MODULES = {
@@ -86,6 +87,10 @@ def popen_script(
     cmd = [sys.executable, '-m', module]
     if args:
         cmd.extend(args)
+    if stdout is not None and not isinstance(stdout, int):
+        stdout = safe_stream('stdout', preferred=stdout)
+    if stderr is not None and not isinstance(stderr, int):
+        stderr = safe_stream('stderr', preferred=stderr)
     return subprocess.Popen(
         cmd,
         env=_base_env(extra_env),

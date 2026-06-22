@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import argparse
 import importlib
-import io
 import json
+import os
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -29,8 +29,30 @@ if str(Path.cwd().resolve()) != str(PROJECT_ROOT.resolve()):
 
     os.chdir(PROJECT_ROOT)
 
+from backend.utils.safe_stdio import (  # noqa: E402
+    configure_smoke_stdio,
+    ensure_safe_standard_streams,
+    safe_output_sink,
+    safe_print,
+)
+
+configure_smoke_stdio()
+
 StepFn = Callable[[], Any]
 StepResult = str  # ok | skipped | failed
+SAFE_SMOKE_SCANNER_STATUS = 'skipped_safe_smoke'
+
+
+def _scanner_safe_smoke_enabled() -> bool:
+    return any(
+        os.environ.get(key, '').strip().lower() in ('1', 'true', 'yes', 'on')
+        for key in (
+            'RAILWAY_SMOKE_LOCAL',
+            'REFRESH_SCANNER_SAFE_SMOKE',
+            'CI',
+            'GITHUB_ACTIONS',
+        )
+    )
 
 
 def _try_import_callable(module: str, attr: str) -> tuple[StepFn | None, str | None]:
@@ -45,14 +67,16 @@ def _try_import_callable(module: str, attr: str) -> tuple[StepFn | None, str | N
 
 
 def _run_step(name: str, fn: StepFn) -> StepResult:
-    buf = io.StringIO()
+    sink = safe_output_sink()
     try:
-        with redirect_stdout(buf), redirect_stderr(buf):
+        with redirect_stdout(sink), redirect_stderr(sink):
             fn()
         return 'ok'
     except Exception as exc:
-        print(f'[REFRESH_LOCAL] {name}_error={exc}', file=sys.stderr)
+        safe_print(f'[REFRESH_LOCAL] {name}_error={exc}', fallback='stderr')
         return 'failed'
+    finally:
+        ensure_safe_standard_streams()
 
 
 def _discover_steps() -> dict[str, tuple[StepFn | None, str | None]]:
@@ -98,7 +122,7 @@ def _refresh_memory_step() -> StepResult:
 
         return 'ok'
     except Exception as exc:
-        print(f'[REFRESH_LOCAL] memory_error={exc}', file=sys.stderr)
+        safe_print(f'[REFRESH_LOCAL] memory_error={exc}', fallback='stderr')
         return 'failed'
 
 
@@ -138,18 +162,23 @@ def _refresh_prices_step(base_fn: StepFn | None, *, limit: int | None = None) ->
         from scripts.enrich_market_memory_prices import run_enrichment
 
         _, before_peak = _count_enriched_symbols()
-        enrich_result = run_enrichment(
-            dry_run=False,
-            limit=limit,
-            promote=False,
-            verbose=False,
-        )
+        sink = safe_output_sink()
+        try:
+            with redirect_stdout(sink), redirect_stderr(sink):
+                enrich_result = run_enrichment(
+                    dry_run=False,
+                    limit=limit,
+                    promote=False,
+                    verbose=False,
+                )
+        finally:
+            ensure_safe_standard_streams()
         after_symbols = int(enrich_result.get('final_symbols') or 0)
         if before_peak and after_symbols < before_peak:
-            print('[PRICE_ENRICH] coverage_below_previous_peak')
+            safe_print('[PRICE_ENRICH] coverage_below_previous_peak')
         return 'ok'
     except Exception as exc:
-        print(f'[REFRESH_LOCAL] prices_enrich_error={exc}', file=sys.stderr)
+        safe_print(f'[REFRESH_LOCAL] prices_enrich_error={exc}', fallback='stderr')
         return 'failed' if result == 'ok' else result
 
 
@@ -162,7 +191,7 @@ def _publish_runtime_wrapper(*, reason: str = 'local_refresh_runtime') -> tuple[
             return 'ok', publish_result
         return 'failed', publish_result
     except Exception as exc:
-        print(f'[REFRESH_LOCAL] runtime_publish_error={exc}', file=sys.stderr)
+        safe_print(f'[REFRESH_LOCAL] runtime_publish_error={exc}', fallback='stderr')
         return 'failed', {'ok': False, 'error': str(exc)}
 
 
@@ -295,7 +324,7 @@ def run_refresh_scoped(scope: str = 'all', *, dry_run: bool = False) -> dict[str
     }
     warnings: list[str] = []
 
-    print(f'[REFRESH_LOCAL] scope={scope_norm} started')
+    safe_print(f'[REFRESH_LOCAL] scope={scope_norm} started')
 
     if dry_run:
         if do_news:
@@ -309,7 +338,7 @@ def run_refresh_scoped(scope: str = 'all', *, dry_run: bool = False) -> dict[str
         if do_runtime:
             fn, _ = _get_discovered().get('snapshot', (None, None))
             results['runtime'] = 'ok' if fn is not None else 'skipped'
-        print('[REFRESH_LOCAL] done (dry-run)')
+        safe_print('[REFRESH_LOCAL] done (dry-run)')
         return {
             'ok': True,
             'scope': scope_norm,
@@ -329,7 +358,7 @@ def run_refresh_scoped(scope: str = 'all', *, dry_run: bool = False) -> dict[str
                 warnings.append(f'news_unavailable:{err}')
         else:
             results['news'] = _run_step('news', fn)
-        print(f"[REFRESH_LOCAL] news={results['news']}")
+        safe_print(f"[REFRESH_LOCAL] news={results['news']}")
 
     scope_results: dict[str, StepResult] = {}
 
@@ -358,16 +387,20 @@ def run_refresh_scoped(scope: str = 'all', *, dry_run: bool = False) -> dict[str
                 warnings.append('govt_refresh_failed')
 
     if do_scanner:
-        fn, err = _get_optional().get('scanner', (None, None))
-        if fn is None:
-            scope_results['scanner'] = 'skipped'
-            if err:
-                warnings.append(f'scanner_unavailable:{err}')
+        if _scanner_safe_smoke_enabled():
+            scope_results['scanner'] = SAFE_SMOKE_SCANNER_STATUS
         else:
-            scanner_result = _run_step('scanner', fn)
-            scope_results['scanner'] = scanner_result
-            if scanner_result == 'failed':
-                warnings.append('scanner_refresh_failed')
+            fn, err = _get_optional().get('scanner', (None, None))
+            if fn is None:
+                scope_results['scanner'] = 'skipped'
+                if err:
+                    warnings.append(f'scanner_unavailable:{err}')
+            else:
+                scanner_result = _run_step('scanner', fn)
+                scope_results['scanner'] = scanner_result
+                if scanner_result == 'failed':
+                    warnings.append('scanner_refresh_failed')
+        safe_print(f"[REFRESH_LOCAL] scanner={scope_results['scanner']}")
 
     if do_tv:
         fn, err = _get_optional().get('tv', (None, None))
@@ -437,17 +470,17 @@ def run_refresh_scoped(scope: str = 'all', *, dry_run: bool = False) -> dict[str
                 warnings.append(f'prices_unavailable:{err}')
         else:
             results['prices'] = _refresh_prices_step(fn)
-        print(f"[REFRESH_LOCAL] prices={results['prices']}")
+        safe_print(f"[REFRESH_LOCAL] prices={results['prices']}")
 
     if do_memory:
         results['memory'] = _refresh_memory_step()
-        print(f"[REFRESH_LOCAL] memory={results['memory']}")
+        safe_print(f"[REFRESH_LOCAL] memory={results['memory']}")
 
     publish_meta: dict[str, Any] = {}
     if do_runtime:
         runtime_result, publish_meta = _refresh_runtime_step(_get_discovered())
         results['runtime'] = runtime_result
-        print(f"[REFRESH_LOCAL] runtime={results['runtime']}")
+        safe_print(f"[REFRESH_LOCAL] runtime={results['runtime']}")
 
     failed = [key for key, status in results.items() if status == 'failed']
     if failed:
@@ -468,7 +501,7 @@ def run_refresh_scoped(scope: str = 'all', *, dry_run: bool = False) -> dict[str
     else:
         ok = not failed
 
-    print('[REFRESH_LOCAL] done')
+    safe_print('[REFRESH_LOCAL] done')
     response: dict[str, Any] = {
         'ok': ok,
         'scope': scope_norm,
@@ -480,9 +513,10 @@ def run_refresh_scoped(scope: str = 'all', *, dry_run: bool = False) -> dict[str
         'warnings': warnings,
         'partial': partial,
     }
+    if scope_norm in optional_scopes:
+        response[scope_norm] = scope_results.get(scope_norm, 'skipped')
     if partial:
         response['reason'] = reason
-        response[scope_norm] = scope_results.get(scope_norm, 'failed')
     if publish_meta:
         response['runtime_publish'] = publish_meta
     return response
@@ -514,7 +548,7 @@ def run_refresh(
         'memory': 'skipped',
     }
 
-    print('[REFRESH_LOCAL] started')
+    safe_print('[REFRESH_LOCAL] started')
 
     if dry_run:
         for key in ('news', 'global', 'prices', 'memory'):
@@ -525,8 +559,8 @@ def run_refresh(
             else:
                 fn, _ = discovered.get(key, (None, None))
                 results[key] = 'ok' if fn is not None else 'skipped'
-            print(f'[REFRESH_LOCAL] {key}={results[key]}')
-        print('[REFRESH_LOCAL] done')
+            safe_print(f'[REFRESH_LOCAL] {key}={results[key]}')
+        safe_print('[REFRESH_LOCAL] done')
         return results
 
     if selected['news']:
@@ -535,7 +569,7 @@ def run_refresh(
             results['news'] = 'skipped'
         else:
             results['news'] = _run_step('news', fn)
-        print(f"[REFRESH_LOCAL] news={results['news']}")
+        safe_print(f"[REFRESH_LOCAL] news={results['news']}")
 
     if selected['global']:
         fn, err = discovered.get('global', (None, None))
@@ -543,7 +577,7 @@ def run_refresh(
             results['global'] = 'skipped'
         else:
             results['global'] = _run_step('global', fn)
-        print(f"[REFRESH_LOCAL] global={results['global']}")
+        safe_print(f"[REFRESH_LOCAL] global={results['global']}")
 
     if include_govt:
         fn, err = discovered.get('govt', (None, None))
@@ -556,11 +590,11 @@ def run_refresh(
             results['prices'] = 'skipped'
         else:
             results['prices'] = _refresh_prices_step(fn)
-        print(f"[REFRESH_LOCAL] prices={results['prices']}")
+        safe_print(f"[REFRESH_LOCAL] prices={results['prices']}")
 
     if selected['memory']:
         results['memory'] = _refresh_memory_step()
-        print(f"[REFRESH_LOCAL] memory={results['memory']}")
+        safe_print(f"[REFRESH_LOCAL] memory={results['memory']}")
 
     if include_snapshot:
         fn, err = discovered.get('snapshot', (None, None))
@@ -578,7 +612,7 @@ def run_refresh(
         except Exception:
             pass
 
-    print('[REFRESH_LOCAL] done')
+    safe_print('[REFRESH_LOCAL] done')
     return results
 
 

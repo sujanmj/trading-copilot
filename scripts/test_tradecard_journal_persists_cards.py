@@ -28,8 +28,8 @@ def main() -> int:
     with isolated_tradecard_journal() as journal:
         no_trade = sample_valid_card(status='NO_TRADE', ticker='KPIL')
         row = persist_tradecard_generation(no_trade)
-        if not row:
-            return _fail('NO_TRADE card must persist')
+        if row is not None:
+            return _fail('NO_TRADE / NO ACTIVE ENTRY must not persist to journal')
         valid = sample_valid_card()
         saved = persist_tradecard_generation(valid)
         if not saved or str(saved.get('outcome_status')) != 'PENDING':
@@ -46,8 +46,8 @@ def main() -> int:
         if 'TRADE CARD' not in text.upper():
             return _fail('/tradecard format must return trade card')
         lines = [ln for ln in journal.read_text(encoding='utf-8').splitlines() if ln.strip()]
-        if len(lines) < 2:
-            return _fail('journal must contain persisted rows after /tradecard')
+        if len(lines) < 1:
+            return _fail('journal must contain VALID_ENTRY row after /tradecard')
         rows = [json.loads(ln) for ln in lines]
         valid_rows = [r for r in rows if str(r.get('status') or '').upper() == 'VALID_ENTRY']
         if len(valid_rows) < 1:

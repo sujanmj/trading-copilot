@@ -645,9 +645,7 @@ def persist_tradecard_generation(
     record = journal_record_from_card(card, freshness_meta=freshness_meta, source_label=label)
     status = str(card.get('status') or '').upper()
     if status != 'VALID_ENTRY':
-        record['outcome_status'] = ''
-        append_journal_record(record)
-        return record
+        return None
     ok, _blocked = can_issue_new_valid_entry(str(card.get('ticker')), card=card)
     if not ok:
         return None
@@ -659,7 +657,7 @@ def summarize_today_outcomes(*, session_date: str | None = None) -> dict[str, An
     day = session_date or _today()
     rows = [r for r in _read_journal() if str(r.get('session_date') or '') == day]
     counts = {
-        'generated': len(rows),
+        'generated': 0,
         'valid_entry': 0,
         'filled': 0,
         'T1': 0,
@@ -675,6 +673,7 @@ def summarize_today_outcomes(*, session_date: str | None = None) -> dict[str, An
     for row in rows:
         if str(row.get('status') or '').upper() == 'VALID_ENTRY':
             counts['valid_entry'] += 1
+            counts['generated'] += 1
         outcome = str(row.get('outcome_status') or '').upper()
         if row.get('filled_at'):
             counts['filled'] += 1

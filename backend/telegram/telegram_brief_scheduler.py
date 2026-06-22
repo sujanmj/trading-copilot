@@ -145,7 +145,16 @@ def build_close_brief_text() -> str:
     pack_res = run_daily_pack_only()
     memory_res = run_memory_only()
     market_res = run_market_only()
-    tomorrow = _build_today_tomorrow_text('tomorrow')
+    try:
+        from backend.telegram.india_mode_lock import is_live_market_hours_phase
+        from backend.trading.unified_live_priority_engine import format_intraday_provisional_unified
+
+        if is_live_market_hours_phase():
+            tomorrow = format_intraday_provisional_unified()
+        else:
+            tomorrow = _build_today_tomorrow_text('tomorrow')
+    except Exception:
+        tomorrow = _build_today_tomorrow_text('tomorrow')
 
     lines = [
         '<b>🔔 Market close summary</b>',

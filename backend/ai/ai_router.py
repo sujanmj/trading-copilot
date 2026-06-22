@@ -4,13 +4,16 @@ AI ROUTER v5 — Tiered orchestration via provider pools (Gemini / Groq / Claude
 
 import os
 import time
+import warnings
 
 import requests
 
 from backend.ai.response_validator import validate_ai_response
 
 try:
-    import google.generativeai as genai
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', FutureWarning)
+        import google.generativeai as genai
     GENAI_AVAILABLE = True
 except ImportError:
     genai = None

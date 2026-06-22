@@ -30,6 +30,10 @@ def sanitize_user_action_label(action: object) -> str:
         return 'ENTRY CANDIDATE'
     if token in ('SELL_CANDIDATE', 'SELL'):
         return 'AVOID CANDIDATE'
+    if token in ('PULLBACK_WATCH_ONLY', 'ENTRY_MISSED_WATCH'):
+        return 'PULLBACK WATCH ONLY'
+    if token == 'ENTRY_MISSED':
+        return 'ENTRY MISSED — WAIT FOR RESET'
     return str(action or '—').replace('_', ' ')
 
 

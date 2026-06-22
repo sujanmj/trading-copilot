@@ -23,6 +23,8 @@ FINAL_CONF_FILE = DATA_DIR / 'final_confidence_report.json'
 
 VALID_MODES = frozenset({'today', 'tomorrow', 'premarket'})
 
+PULLBACK_WATCH_ONLY = 'PULLBACK_WATCH_ONLY'
+
 
 def user_action_label(action: object) -> str:
     token = str(action or '').strip().upper().replace(' ', '_')
@@ -30,7 +32,49 @@ def user_action_label(action: object) -> str:
         return 'ENTRY CANDIDATE'
     if token in ('SELL_CANDIDATE', 'SELL'):
         return 'AVOID CANDIDATE'
+    if token in ('PULLBACK_WATCH_ONLY', 'ENTRY_MISSED_WATCH'):
+        return 'PULLBACK WATCH ONLY'
+    if token == 'ENTRY_MISSED':
+        return 'ENTRY MISSED — WAIT FOR RESET'
     return str(action or '').replace('_', ' ')
+
+
+def _row_entry_missed(row: dict[str, Any] | None) -> bool:
+    if not isinstance(row, dict):
+        return False
+    return bool(row.get('entry_missed')) or str(row.get('entry_status') or '').upper() == 'ENTRY_MISSED'
+
+
+def _is_clean_top_watch(row: dict[str, Any] | None) -> bool:
+    if not isinstance(row, dict) or row.get('action') == 'AVOID':
+        return False
+    if _row_entry_missed(row):
+        return False
+    if str(row.get('action') or '').upper() == PULLBACK_WATCH_ONLY:
+        return False
+    return True
+
+
+def _select_top_pick(ranked: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, str]:
+    for row in ranked:
+        if not _is_clean_top_watch(row):
+            continue
+        return row, str(row.get('action') or 'WATCH_FOR_ENTRY')
+    return None, 'NO_CLEAN_CANDIDATE'
+
+
+def _entry_missed_only_lines(missed: list[dict[str, Any]]) -> list[str]:
+    if not missed:
+        return [
+            '<b>No clean top watch yet.</b>',
+            'Nothing meets live entry criteria right now.',
+        ]
+    lead = missed[0]
+    ticker = str(lead.get('ticker') or '?')
+    return [
+        '<b>No clean top watch yet.</b>',
+        f'Entry missed: {ticker} — wait for pullback/reset.',
+    ]
 
 
 def decision_source_label(ticker: str) -> str:
@@ -252,7 +296,9 @@ def _unified_score(
         action = 'AVOID'
     elif score >= 68 and len(supports) >= 2 and not entry_missed and entry_status == 'VALID_ENTRY':
         action = 'BUY_CANDIDATE'
-    elif entry_missed or entry_status in ('NO_TRADE', 'NO_ACTIVE_ENTRY'):
+    elif entry_missed or entry_status == 'ENTRY_MISSED':
+        action = PULLBACK_WATCH_ONLY
+    elif entry_status in ('NO_TRADE', 'NO_ACTIVE_ENTRY'):
         action = 'WATCH_FOR_ENTRY'
 
     return {
@@ -329,16 +375,9 @@ def build_unified_priority(mode: str = 'today') -> dict[str, Any]:
         reverse=True,
     )
 
-    top_pick: dict[str, Any] | None = None
-    decision = 'NO_CLEAN_CANDIDATE'
-    for row in ranked:
-        if row.get('action') == 'AVOID':
-            continue
-        top_pick = row
-        decision = str(row.get('action') or 'WATCH_FOR_ENTRY')
-        break
+    top_pick, decision = _select_top_pick(ranked)
 
-    missed = [r for r in ranked if r.get('entry_missed') and r.get('action') != 'AVOID']
+    missed = [r for r in ranked if _row_entry_missed(r) and r.get('action') != 'AVOID']
     valid = [r for r in ranked if r.get('entry_status') == 'VALID_ENTRY' and r.get('action') != 'AVOID']
 
     return {
@@ -426,15 +465,63 @@ def format_postmarket_today(payload: dict[str, Any]) -> str:
     return '\n'.join(lines)
 
 
+def format_intraday_provisional_unified(payload: Optional[dict[str, Any]] = None) -> str:
+    """Intraday /close section during market hours — not tomorrow research."""
+    data = payload or build_unified_priority(mode='today')
+    lines = ['<b>AstraEdge — Intraday provisional view</b>', '']
+
+    top = data.get('top_pick')
+    decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
+    missed = data.get('missed_candidates') or []
+
+    if (not _is_clean_top_watch(top) or decision == 'NO_CLEAN_CANDIDATE') and missed:
+        lines.extend(_entry_missed_only_lines(missed))
+        return '\n'.join(lines)
+
+    if top and _is_clean_top_watch(top) and decision != 'NO_CLEAN_CANDIDATE':
+        action = user_action_label(top.get('action') or 'WATCH_FOR_ENTRY')
+        lines.extend([
+            '<b>Top watch:</b>',
+            f"{top.get('ticker')} — {action}",
+            f"Score: {top.get('unified_score', '—')}",
+            decision_source_label(str(top.get('ticker') or '')),
+        ])
+    else:
+        lines.extend(_entry_missed_only_lines(missed))
+
+    pullback = [r for r in (data.get('ranked_candidates') or []) if _row_entry_missed(r)]
+    if pullback and top and _is_clean_top_watch(top):
+        lines.extend(['', '<b>Pullback watch only:</b>'])
+        for row in pullback[:5]:
+            lines.append(
+                f"• {row.get('ticker')} — {user_action_label(PULLBACK_WATCH_ONLY)}"
+            )
+
+    return '\n'.join(lines)
+
+
 def format_tomorrow_unified(payload: Optional[dict[str, Any]] = None) -> str:
     """Telegram body for /tomorrow using unified live priority."""
+    try:
+        from backend.telegram.india_mode_lock import is_live_market_hours_phase
+
+        if is_live_market_hours_phase():
+            return format_intraday_provisional_unified(payload or build_unified_priority(mode='today'))
+    except Exception:
+        pass
+
     data = payload or build_unified_priority(mode='tomorrow')
     lines = ['<b>AstraEdge — Tomorrow</b>', '']
 
     top = data.get('top_pick')
     decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
+    missed = data.get('missed_candidates') or []
 
-    if top and decision != 'NO_CLEAN_CANDIDATE':
+    if (not _is_clean_top_watch(top) or decision == 'NO_CLEAN_CANDIDATE') and missed:
+        lines.extend(_entry_missed_only_lines(missed))
+        return '\n'.join(lines)
+
+    if top and _is_clean_top_watch(top) and decision != 'NO_CLEAN_CANDIDATE':
         action = user_action_label(top.get('action') or 'WATCH_FOR_ENTRY')
         lines.extend([
             '<b>Top watch:</b>',
@@ -538,16 +625,15 @@ def format_today_unified(payload: Optional[dict[str, Any]] = None) -> str:
     decision = data.get('decision') or 'NO_CLEAN_CANDIDATE'
     missed = data.get('missed_candidates') or []
 
-    if data.get('all_entry_missed') and missed:
-        names = '/'.join(str(r.get('ticker') or '?') for r in missed[:5])
-        lines.extend([
-            '<b>NO VALID ENTRY NOW</b>',
-            f'Top missed: {names}',
-            'Next action: wait pullback or tomorrow catalyst watch.',
-        ])
+    if (not _is_clean_top_watch(top) or decision == 'NO_CLEAN_CANDIDATE') and missed:
+        lines.extend(_entry_missed_only_lines(missed))
         return '\n'.join(lines)
 
-    if top and decision != 'NO_CLEAN_CANDIDATE':
+    if data.get('all_entry_missed') and missed:
+        lines.extend(_entry_missed_only_lines(missed))
+        return '\n'.join(lines)
+
+    if top and _is_clean_top_watch(top) and decision != 'NO_CLEAN_CANDIDATE':
         action = user_action_label(top.get('action') or 'WATCH_FOR_ENTRY')
         lines.extend([
             '<b>Top candidate:</b>',

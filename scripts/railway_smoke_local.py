@@ -24,6 +24,7 @@ if str(Path.cwd().resolve()) != str(PROJECT_ROOT.resolve()):
 
 STAGE_MARKER = 'RAILWAY_STAGE_46A_SMOKE_LOCAL'
 
+os.environ.setdefault('RAILWAY_SMOKE_LOCAL', '1')
 os.environ.setdefault('LOCAL_DEV_MODE', '1')
 os.environ.setdefault('LOCAL_ONLY', '1')
 os.environ.setdefault('DISABLE_TRADE_EXECUTION', '1')
@@ -31,6 +32,12 @@ os.environ.setdefault('TELEGRAM_TRADE_COMMANDS_ENABLED', '0')
 os.environ.setdefault('DISABLE_TELEGRAM', '1')
 os.environ.setdefault('DISABLE_TELEGRAM_LISTENER', '1')
 os.environ.setdefault('DISABLE_TELEGRAM_SENDS', '1')
+os.environ.setdefault('REFRESH_SCANNER_SAFE_SMOKE', '1')
+os.environ.setdefault('SAFE_STDIO_FORCE_FD', '1')
+
+from backend.utils.safe_stdio import configure_smoke_stdio, is_stream_usable, safe_print  # noqa: E402
+
+configure_smoke_stdio()
 
 RAILWAY_SCRIPTS = (
     'scripts/run_railway_web.py',
@@ -41,8 +48,20 @@ RAILWAY_SCRIPTS = (
 )
 
 
+def _restore_smoke_stdio() -> None:
+    if is_stream_usable(getattr(sys, '__stdout__', None)):
+        sys.stdout = sys.__stdout__
+    if is_stream_usable(getattr(sys, '__stderr__', None)):
+        sys.stderr = sys.__stderr__
+
+
+def _smoke_print(message: str, *, fallback: str = 'stdout') -> bool:
+    _restore_smoke_stdio()
+    return safe_print(message, fallback=fallback)
+
+
 def _fail(msg: str) -> int:
-    print(f'RAILWAY_SMOKE_LOCAL_FAIL: {msg}', file=sys.stderr)
+    _smoke_print(f'RAILWAY_SMOKE_LOCAL_FAIL: {msg}', fallback='stderr')
     return 1
 
 
@@ -99,6 +118,37 @@ def _check_data_path_writable() -> str | None:
     return None
 
 
+def _short_reason(value: object, limit: int = 160) -> str:
+    text = str(value or '').replace('\r', ' ').replace('\n', ' ').strip()
+    if not text:
+        return 'unknown'
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + '...'
+
+
+def _check_scanner_refresh() -> str | None:
+    try:
+        from scripts.refresh_local_intelligence import SAFE_SMOKE_SCANNER_STATUS, run_refresh_scoped
+
+        result = run_refresh_scoped('scanner', dry_run=False)
+    except Exception as exc:
+        return _short_reason(exc)
+
+    if not isinstance(result, dict):
+        return 'non-dict refresh result'
+
+    status = result.get('scanner')
+    if status in ('ok', 'skipped', SAFE_SMOKE_SCANNER_STATUS):
+        return None
+    if result.get('ok') is True and status is None:
+        return 'missing scanner terminal status'
+    if result.get('ok') is True and status != 'failed':
+        return None
+    reason = result.get('reason') or result.get('error') or status or result.get('warnings') or 'scanner refresh failed'
+    return _short_reason(reason)
+
+
 def _check_telegram_dry_run() -> str | None:
     from backend.telegram.telegram_brief_scheduler import (
         build_close_brief_text,
@@ -135,25 +185,44 @@ def _check_stock_decision_engine() -> str | None:
 
 
 def main() -> int:
-    checks = (
+    pre_scanner_checks = (
         ('api_server_import', _check_api_server_import),
         ('runner_imports', _check_runner_imports),
         ('health_route', _check_health_route),
         ('data_path_writable', _check_data_path_writable),
+    )
+    post_scanner_checks = (
         ('telegram_dry_run', _check_telegram_dry_run),
         ('stock_decision_engine', _check_stock_decision_engine),
     )
 
-    for name, fn in checks:
+    for name, fn in pre_scanner_checks:
         err = fn()
+        _restore_smoke_stdio()
         status = 'ok' if err is None else 'fail'
-        print(f'[RAILWAY_SMOKE] {name}={status}')
+        _smoke_print(f'[RAILWAY_SMOKE] {name}={status}')
         if err:
             return _fail(err)
 
-    print(STAGE_MARKER)
-    print('RAILWAY_SMOKE_LOCAL_OK')
-    return 0
+    _restore_smoke_stdio()
+    scanner_warning = _check_scanner_refresh()
+    _restore_smoke_stdio()
+    if scanner_warning:
+        _smoke_print(f'[RAILWAY_SMOKE] scanner_refresh=warning {_short_reason(scanner_warning)}')
+    else:
+        _smoke_print('[RAILWAY_SMOKE] scanner_refresh=ok')
+
+    for name, fn in post_scanner_checks:
+        err = fn()
+        _restore_smoke_stdio()
+        status = 'ok' if err is None else 'fail'
+        _smoke_print(f'[RAILWAY_SMOKE] {name}={status}')
+        if err:
+            return _fail(err)
+
+    _smoke_print(STAGE_MARKER)
+    printed_ok = _smoke_print('RAILWAY_SMOKE_LOCAL_OK')
+    return 0 if printed_ok else 1
 
 
 if __name__ == '__main__':

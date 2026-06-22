@@ -13,16 +13,26 @@ Signals:
 Cross-references with other tiers (govt, news, reddit) downstream.
 """
 
-import yfinance as yf
 import json
 import time
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import defaultdict
 import warnings
 
+from backend.utils.safe_stdio import (
+    configure_smoke_stdio,
+    in_smoke_local_ci_mode,
+    safe_print,
+    safe_stream,
+)
 from backend.storage.json_io import atomic_write_json
+
+configure_smoke_stdio()
+print = safe_print
+
+import yfinance as yf
+
 warnings.filterwarnings('ignore')
 
 # Add current dir to path for imports
@@ -77,7 +87,7 @@ def fetch_batch(symbols, period='1mo'):
             group_by='ticker',
             auto_adjust=True,
             progress=False,
-            threads=True,
+            threads=not in_smoke_local_ci_mode(),
             timeout=20,
         )
         return data
@@ -585,4 +595,4 @@ if __name__ == "__main__":
     except Exception as e:
         import traceback
         print(f"\n[FATAL ERROR] {e}")
-        traceback.print_exc()
+        traceback.print_exc(file=safe_stream('stderr'))

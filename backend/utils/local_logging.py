@@ -1,9 +1,9 @@
 """File logging helpers for local development."""
 
 import logging
-import sys
 
 from backend.utils.config import LOGS_DIR, ensure_dirs
+from backend.utils.safe_stdio import SafeStreamProxy
 
 
 def setup_logger(name: str, filename: str, level=logging.INFO) -> logging.Logger:
@@ -21,7 +21,7 @@ def setup_logger(name: str, filename: str, level=logging.INFO) -> logging.Logger
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 
-    sh = logging.StreamHandler(sys.stdout)
+    sh = logging.StreamHandler(SafeStreamProxy('stdout'))
     sh.setFormatter(fmt)
     logger.addHandler(sh)
 
