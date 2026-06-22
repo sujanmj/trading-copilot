@@ -962,7 +962,21 @@ def format_stock_decision_telegram(mode: str) -> str:
                 return strip_stage_markers(format_watchlist_fallback_telegram(normalized, rebuilt=True))
             return f'<b>📋 {label}</b>\n{no_candidate_message()}'
 
-    return format_stock_decision_payload(payload, normalized, rebuilt=rebuilt)
+    body = format_stock_decision_payload(payload, normalized, rebuilt=rebuilt)
+    try:
+        from backend.analytics.unified_decision_engine import (
+            get_feed_freshness_meta,
+            is_report_display_suppressed,
+            stale_report_suppression_lines,
+        )
+
+        meta = get_feed_freshness_meta()
+        if is_report_display_suppressed(meta=meta):
+            prefix = '\n'.join(stale_report_suppression_lines(meta=meta))
+            return strip_stage_markers(f'{prefix}\n\n{body}')
+    except Exception:
+        pass
+    return body
 
 
 def format_today_tomorrow(which: str) -> str:
@@ -1943,13 +1957,55 @@ def _tradecard_reviewed_fallback() -> tuple[str, str]:
 
 def _tradecard_postmarket_line() -> str:
     try:
+        from backend.telegram.india_mode_lock import is_premarket_phase
         from backend.trading.unified_live_priority_engine import _is_postmarket_mode
 
+        if is_premarket_phase():
+            return ''
         if _is_postmarket_mode():
             return 'No live entry now. Next-session watch only.'
     except Exception:
         pass
     return ''
+
+
+def _is_tradecard_premarket_phase() -> bool:
+    try:
+        from backend.telegram.india_mode_lock import is_premarket_phase
+
+        return is_premarket_phase()
+    except Exception:
+        return False
+
+
+def _format_tradecard_premarket_watch(
+    ticker: str,
+    *,
+    explain: bool,
+    freshness_meta: dict[str, Any] | None,
+    card: dict[str, Any],
+    effective_ticker: str,
+) -> str:
+    from backend.trading.trade_card_engine import resolve_tradecard_source_label
+    from backend.trading.tradecard_refresh import format_freshness_line
+
+    lines = [
+        '<b>📋 TRADE CARD — PREMARKET WATCH</b>',
+        f'<b>{ticker}</b> · <code>NO ACTIVE ENTRY</code>',
+        'Reason: market not open for confirmed entry yet',
+        'Plan: confirm after 09:20 with fresh price + volume',
+    ]
+    lines.append(resolve_tradecard_source_label(card, effective_ticker))
+    freshness = format_freshness_line(freshness_meta)
+    if freshness:
+        lines.append(freshness)
+    lines.append('Paper only.')
+    if explain:
+        lines.extend(_tradecard_explain_lines(
+            variant='premarket',
+            reason='market not open for confirmed entry yet',
+        ))
+    return strip_stage_markers('\n'.join(lines))
 
 
 def _tradecard_status_label(status: str) -> str:
@@ -1985,6 +2041,13 @@ def _tradecard_explain_lines(
             'Entry logic: no active entry because entry is missed / stop too wide / market closed',
             'Risk logic: no trade until valid entry forms',
             'Next action: wait for pullback/retest or next-session confirmation',
+        ])
+    elif variant == 'premarket':
+        lines.extend([
+            'Reason: market not open for confirmed entry yet',
+            'Entry logic: no active entry until session open + volume confirmation',
+            'Risk logic: premarket levels are research-only',
+            'Next action: confirm after 09:20 with fresh price + volume',
         ])
     elif variant == 'no_trade':
         lines.extend([
@@ -2215,6 +2278,15 @@ def format_tradecard_telegram(
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
         return strip_stage_markers('\n'.join(lines))
+
+    if _is_tradecard_premarket_phase() and effective_ticker and status != 'VALID_ENTRY':
+        return _format_tradecard_premarket_watch(
+            effective_ticker,
+            explain=explain,
+            freshness_meta=freshness_meta,
+            card=card,
+            effective_ticker=effective_ticker,
+        )
 
     if status == 'NEXT_SESSION_WATCH' or (card.get('after_hours') and status != 'VALID_ENTRY'):
         lines = [

@@ -254,6 +254,17 @@ def run_global_only() -> dict[str, Any]:
 
 
 def run_daily_pack_only() -> dict[str, Any]:
+    from backend.analytics.unified_decision_engine import (
+        get_feed_freshness_meta,
+        is_report_display_suppressed,
+        stale_report_suppression_lines,
+    )
+
+    meta = get_feed_freshness_meta()
+    if is_report_display_suppressed(meta=meta):
+        lines = ['<b>📦 Daily report pack</b>', *stale_report_suppression_lines(meta=meta)]
+        return _runner_result('daily_pack', text='\n'.join(lines), payload={}, ok=False)
+
     pack = _load_json(DAILY_PACK_FILE)
     if not pack:
         return _runner_result(

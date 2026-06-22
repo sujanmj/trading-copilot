@@ -117,7 +117,29 @@ def build_morning_brief_text() -> str:
     return strip_stage_markers('\n'.join(line for line in lines if line is not None))
 
 
+def build_premarket_close_unavailable_text() -> str:
+    from backend.telegram.india_mode_lock import resolve_telegram_market_phase
+    from backend.trading.tradecard_journal import summarize_today_outcomes
+
+    phase = resolve_telegram_market_phase()
+    counts = summarize_today_outcomes().get('counts') or {}
+    generated = int(counts.get('generated') or 0)
+    return '\n'.join([
+        '<b>🔔 Close summary not available yet</b>',
+        f'Market mode: <code>{phase}</code>',
+        'Reason: market has not completed today.',
+        'Use /premarket or /today after 09:20.',
+        f'Tradecards today: {generated}',
+        'No final EOD resolution yet.',
+    ])
+
+
 def build_close_brief_text() -> str:
+    from backend.telegram.india_mode_lock import is_premarket_phase
+
+    if is_premarket_phase():
+        return build_premarket_close_unavailable_text()
+
     from backend.telegram.lazy_command_runner import run_daily_pack_only, run_memory_only, run_market_only
 
     pack_res = run_daily_pack_only()
@@ -134,22 +156,35 @@ def build_close_brief_text() -> str:
         lines.append(f'Market mode: <code>{resolve_telegram_market_phase()}</code>')
     except Exception:
         pass
+    report_suppressed = False
     try:
-        from backend.analytics.unified_decision_engine import STALE_CLOSE_REPORT_NOTE, get_feed_freshness_meta
+        from backend.analytics.unified_decision_engine import (
+            STALE_CLOSE_REPORT_NOTE,
+            get_feed_freshness_meta,
+            is_report_display_suppressed,
+            stale_report_suppression_lines,
+        )
 
         meta = get_feed_freshness_meta()
-        for key in ('report', 'scanner', 'news'):
-            line = (meta.get('lines') or {}).get(key)
-            if line:
-                lines.append(line)
-        if meta.get('report_stale'):
-            lines.append(STALE_CLOSE_REPORT_NOTE)
+        report_suppressed = is_report_display_suppressed(meta=meta)
+        if report_suppressed:
+            lines.extend(stale_report_suppression_lines(meta=meta))
+            lines.append('')
+        else:
+            for key in ('report', 'scanner', 'news'):
+                line = (meta.get('lines') or {}).get(key)
+                if line:
+                    lines.append(line)
+            if meta.get('report_stale'):
+                lines.append(STALE_CLOSE_REPORT_NOTE)
     except Exception:
-        pass
-    lines.extend([
-        pack_res.get('text', ''),
-        '',
-    ])
+        report_suppressed = False
+
+    if not report_suppressed:
+        lines.extend([
+            pack_res.get('text', ''),
+            '',
+        ])
     try:
         from backend.telegram.india_mode_lock import is_live_market_hours_phase
         from backend.trading.tradecard_journal import (

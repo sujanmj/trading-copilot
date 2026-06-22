@@ -23,6 +23,8 @@ MAX_NEWS_AGE_SEC = 48 * 3600
 
 WATCH_ONLY_MESSAGE = 'Data refresh incomplete — watch only.'
 PREMARKET_INCOMPLETE_HEADER = '⚠️ DATA REFRESH INCOMPLETE — NO LIVE SETUPS'
+REPORT_CACHE_STALE_LIVE_SCANNER_HEADER = 'REPORT CACHE STALE — LIVE SCANNER ONLY'
+REPORT_CACHE_STALE_LIVE_SCANNER_NOTE = 'Using fresh scanner; ignoring stale report candidates.'
 PREMARKET_WATCHLIST_ONLY_NOTE = 'Watchlist preparation only'
 PREMARKET_OLD_SESSION_NOTE = 'Old scanner/session data detected'
 PREMARKET_WAIT_SCANNER_NOTE = 'Wait for fresh scanner after 09:15'
@@ -126,6 +128,27 @@ def is_current_trading_session(session_date: Optional[str], now: Optional[dateti
     if not session_date:
         return False
     return session_date == get_current_india_trading_date(now)
+
+
+def _resolve_premarket_stale_header(stale_keys: list[str]) -> str:
+    """Pick freshness header — scanner-stale vs report-only stale."""
+    try:
+        from backend.analytics.unified_decision_engine import get_feed_freshness_meta
+
+        meta = get_feed_freshness_meta()
+    except Exception:
+        meta = {}
+    scanner_stale = (
+        'scanner' in stale_keys
+        or 'market' in stale_keys
+        or not meta.get('scanner_fresh')
+    )
+    if not scanner_stale and meta.get('scanner_fresh') and (
+        meta.get('report_stale') or meta.get('report_suppressed')
+        or any(k in stale_keys for k in ('intel', 'watchlist', 'premarket', 'news', 'govt'))
+    ):
+        return REPORT_CACHE_STALE_LIVE_SCANNER_HEADER
+    return PREMARKET_INCOMPLETE_HEADER
 
 
 def is_premarket_hard_stale_window(now: Optional[datetime] = None) -> bool:
@@ -343,7 +366,7 @@ def premarket_hard_stale_lock(
     elif riskoff:
         _log('PREMARKET_HARD_STALE_LOCK', f'riskoff_override=True')
 
-    return True, PREMARKET_INCOMPLETE_HEADER, stale_keys, riskoff
+    return True, _resolve_premarket_stale_header(stale_keys), stale_keys, riskoff
 
 
 def annotate_candidate_session(
@@ -453,7 +476,7 @@ def premarket_freshness_state(
     critical, non_critical = _split_critical_stale_keys(all_stale, now=now)
     if ok:
         return True, '', [], non_critical
-    return False, PREMARKET_INCOMPLETE_HEADER, critical or keys, non_critical
+    return False, _resolve_premarket_stale_header(critical or keys), critical or keys, non_critical
 
 
 def cap_premarket_scores(

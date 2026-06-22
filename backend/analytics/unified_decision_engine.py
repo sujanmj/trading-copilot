@@ -29,6 +29,9 @@ TOMORROW_LIVE_REJECTION_WARNING = (
 STALE_CLOSE_REPORT_NOTE = (
     'Close report is previous-session cache; not live intraday confirmation.'
 )
+REPORT_DISPLAY_MAX_AGE_MINUTES = 24 * 60
+STALE_REPORT_SUPPRESS_LINE = 'Report cache stale · refresh needed'
+STALE_REPORT_SCANNER_OVERRIDE_LINE = 'Live scanner is fresh and will override stale report.'
 NO_CLEAN_LIVE_CANDIDATE = 'No clean live candidate'
 
 LIVE_STRICT_MODES = frozenset({'today', 'intraday', 'postmarket', 'morning', 'close', 'action_plan'})
@@ -280,6 +283,11 @@ def get_feed_freshness_meta() -> dict[str, Any]:
     market_fresh = get_unified_market_freshness()
     report_status = classify_budget_cache_freshness(report_age)
     scanner_status = classify_budget_cache_freshness(scanner_age)
+    report_suppressed = (
+        report_age is not None
+        and report_age >= 0
+        and int(report_age) > REPORT_DISPLAY_MAX_AGE_MINUTES
+    )
     return {
         'report_age_min': report_age,
         'scanner_age_min': scanner_age,
@@ -289,6 +297,7 @@ def get_feed_freshness_meta() -> dict[str, Any]:
         'news_status': news_dual.get('latest_status', 'cache_missing'),
         'scanner_fresh': scanner_status == 'fresh',
         'report_stale': report_status == 'stale',
+        'report_suppressed': report_suppressed,
         'market_fresh': market_fresh.get('is_fresh', False),
         'market_stale': market_fresh.get('is_stale', False),
         'market_reason': market_fresh.get('reason', ''),
@@ -302,6 +311,24 @@ def get_feed_freshness_meta() -> dict[str, Any]:
         'news_dual': news_dual,
         'market': market_fresh,
     }
+
+
+def is_report_display_suppressed(report_age_min: int | None = None, *, meta: dict[str, Any] | None = None) -> bool:
+    """True when daily report pack is too old to present as current session context."""
+    if meta is None:
+        meta = get_feed_freshness_meta()
+    age = report_age_min if report_age_min is not None else meta.get('report_age_min')
+    if age is None or age < 0:
+        return False
+    return int(age) > REPORT_DISPLAY_MAX_AGE_MINUTES
+
+
+def stale_report_suppression_lines(*, meta: dict[str, Any] | None = None) -> list[str]:
+    meta = meta or get_feed_freshness_meta()
+    lines = [f'<i>{STALE_REPORT_SUPPRESS_LINE}</i>']
+    if meta.get('scanner_fresh'):
+        lines.append(f'<i>{STALE_REPORT_SCANNER_OVERRIDE_LINE}</i>')
+    return lines
 
 
 def pick_live_safe_top(

@@ -923,17 +923,22 @@ def format_premarket_telegram(
         PREMARKET_RISKOFF_HEADER,
         PREMARKET_WAIT_SCANNER_NOTE,
         PREMARKET_WATCHLIST_ONLY_NOTE,
+        REPORT_CACHE_STALE_LIVE_SCANNER_HEADER,
+        REPORT_CACHE_STALE_LIVE_SCANNER_NOTE,
     )
 
     lines: list[str] = []
     if not fresh_ok and fresh_header:
         lines.append(f'<b>{fresh_header}</b>')
-        lines.append(f'<i>{PREMARKET_WATCHLIST_ONLY_NOTE}</i>')
-        if hard_stale_lock:
-            lines.append(f'<i>{PREMARKET_OLD_SESSION_NOTE}</i>')
-            lines.append(f'<i>{PREMARKET_WAIT_SCANNER_NOTE}</i>')
-            if riskoff_premarket:
-                lines.append(f'<b>{PREMARKET_RISKOFF_HEADER}</b>')
+        if fresh_header == REPORT_CACHE_STALE_LIVE_SCANNER_HEADER:
+            lines.append(f'<i>{REPORT_CACHE_STALE_LIVE_SCANNER_NOTE}</i>')
+        else:
+            lines.append(f'<i>{PREMARKET_WATCHLIST_ONLY_NOTE}</i>')
+            if hard_stale_lock:
+                lines.append(f'<i>{PREMARKET_OLD_SESSION_NOTE}</i>')
+                lines.append(f'<i>{PREMARKET_WAIT_SCANNER_NOTE}</i>')
+                if riskoff_premarket:
+                    lines.append(f'<b>{PREMARKET_RISKOFF_HEADER}</b>')
         lines.append('')
     elif fresh_ok and non_critical_stale:
         lines.append(f'<i>Context partially stale: {", ".join(non_critical_stale)}</i>')

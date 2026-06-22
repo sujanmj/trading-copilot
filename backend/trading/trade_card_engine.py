@@ -62,6 +62,15 @@ def _is_live_market_hours() -> bool:
         return False
 
 
+def _is_premarket_mode() -> bool:
+    try:
+        from backend.telegram.india_mode_lock import is_premarket_phase
+
+        return is_premarket_phase()
+    except Exception:
+        return False
+
+
 def _is_after_hours_mode() -> bool:
     try:
         from backend.telegram.india_mode_lock import resolve_telegram_market_phase
@@ -71,8 +80,6 @@ def _is_after_hours_mode() -> bool:
             'INDIA_AFTER_HOURS',
             'INDIA_AFTER_HOURS_MODE',
             'INDIA_POSTMARKET_MODE',
-            'INDIA_PREMARKET_MODE',
-            'INDIA_PREOPEN_MODE',
             'RESEARCH_MODE',
         }
     except Exception:
@@ -261,6 +268,12 @@ def _apply_tradecard_safety_gates(card: dict[str, Any]) -> dict[str, Any]:
         )
 
     if not _is_live_market_hours():
+        if _is_premarket_mode():
+            return _strip_actionable_levels(
+                card,
+                reason='market not open for confirmed entry yet',
+                status='NO_ACTIVE_ENTRY',
+            )
         return _strip_actionable_levels(
             card,
             reason='market closed/after-hours',
