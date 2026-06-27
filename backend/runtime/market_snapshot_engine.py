@@ -8,6 +8,7 @@ and existing intelligence modules. Does not reimplement business logic.
 from __future__ import annotations
 
 import json
+import logging
 import time
 import threading
 from datetime import datetime
@@ -25,6 +26,7 @@ _cache_lock = threading.Lock()
 _cached_snapshot: Optional[MarketSnapshot] = None
 _cached_at: float = 0.0
 _CACHE_TTL_SECONDS = 3.0
+_log = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
@@ -288,6 +290,11 @@ def commit_market_snapshot(snapshot: MarketSnapshot) -> Path:
     payload = snapshot.to_dict()
     payload['_committed_at'] = snapshot.published_at
     atomic_write_json(CURRENT_SNAPSHOT_FILE, payload)
+    try:
+        from backend.intelligence.active_snapshot import sync_active_snapshot_from_market_snapshot
+        sync_active_snapshot_from_market_snapshot(payload, source='market_snapshot_commit')
+    except Exception as e:
+        _log.warning('active snapshot sync skipped after current snapshot commit: %s', e)
     try:
         from backend.storage.runtime_snapshot_memory_capture import capture_after_snapshot_publish
 

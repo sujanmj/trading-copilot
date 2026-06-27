@@ -111,9 +111,22 @@ def _invoke_gemini(model_name: str, prompt: str, max_tokens: int, *, use_case: s
     return call_gemini(model_name, prompt, max_tokens, use_case=use_case)
 
 
-def _invoke_groq(model_name: str, prompt: str, max_tokens: int, *, use_case: str) -> Dict[str, Any]:
+def _invoke_groq(
+    model_name: str,
+    prompt: str,
+    max_tokens: int,
+    *,
+    use_case: str,
+    allow_gemini_fallback: bool = True,
+) -> Dict[str, Any]:
     from backend.ai.ai_router import call_groq
-    return call_groq(model_name, prompt, max_tokens, use_case=use_case)
+    return call_groq(
+        model_name,
+        prompt,
+        max_tokens,
+        use_case=use_case,
+        allow_gemini_fallback=allow_gemini_fallback,
+    )
 
 
 def call_strategic_with_cascade(
@@ -132,6 +145,35 @@ def call_strategic_with_cascade(
 
     err = str(raw.get('error') or 'claude_failed')
     reason = 'quota_rate_limit' if is_failover_error(err) else 'claude_failed'
+
+    if use_case == 'fixops_report_analyzer':
+        # Keep Gemini last for FixOps because quota exhaustion must not block triage.
+        log_provider_fallback('claude', 'groq', reason)
+
+        groq_model = MODELS['groq']['model']
+        raw = _invoke_groq(groq_model, prompt, max_tokens, use_case=use_case, allow_gemini_fallback=False)
+        if raw.get('success'):
+            raw['model'] = f"{raw.get('model', 'groq')} (cascade)"
+            raw['routing_tier'] = 'groq'
+            return raw
+
+        err2 = str(raw.get('error') or 'groq_failed')
+        reason2 = 'quota_rate_limit' if is_failover_error(err2) else 'groq_failed'
+        log_provider_fallback('groq', 'gemini', reason2)
+
+        raw = _invoke_gemini('gemini-2.0-flash', prompt, max_tokens, use_case=use_case)
+        if raw.get('success'):
+            raw['model'] = f"{raw.get('model', 'gemini')} (cascade)"
+            raw['routing_tier'] = 'gemini'
+            return raw
+
+        log_provider_fallback('gemini', 'deterministic_rules', str(raw.get('error') or 'gemini_failed'))
+        log_provider_fallback_final()
+        det = synthesize_deterministic_rules(prompt, use_case=use_case)
+        det['routing_tier'] = 'deterministic'
+        det['error'] = None
+        return det
+
     log_provider_fallback('claude', 'gemini', reason)
 
     raw = _invoke_gemini('gemini-2.0-flash', prompt, max_tokens, use_case=use_case)

@@ -629,7 +629,7 @@ def resolve_use_case_tier(use_case: str) -> str:
     }
     strategic = {
         'final_synthesis', 'manual_refresh', 'overnight_brief', 'premarket_brief',
-        'postmortem', 'ask_deep', 'sonnet',
+        'postmortem', 'ask_deep', 'sonnet', 'fixops_report_analyzer',
     }
     if use_case in strategic:
         return 'strategic'

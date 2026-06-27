@@ -9,12 +9,15 @@ from __future__ import annotations
 import json
 import time
 import traceback
+from datetime import datetime
+from typing import Optional
 
 from backend.orchestration.telegram_brain_pusher import safe_print
 from backend.runtime.market_snapshot import MarketSnapshot
 from backend.utils.config import DATA_DIR
 
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
+ACTIVE_SNAPSHOT_FILE = DATA_DIR / 'active_snapshot.json'
 MAX_REVIEW_MESSAGES = 3
 FAILSAFE_TEXT = (
     '⚠ <b>Review temporarily unavailable</b>\n'
@@ -23,12 +26,65 @@ FAILSAFE_TEXT = (
 )
 
 
+def _parse_snapshot_epoch(value: object) -> Optional[float]:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        return dt.timestamp()
+    except Exception:
+        return None
+
+
+def _snapshot_epoch(snap: MarketSnapshot) -> Optional[float]:
+    for value in (snap.published_at, snap.snapshot_built_at, snap.generated_at):
+        parsed = _parse_snapshot_epoch(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _latest_source_mtime() -> Optional[float]:
+    mtimes = []
+    for path in (INTEL_FILE, ACTIVE_SNAPSHOT_FILE):
+        try:
+            if path.exists():
+                mtimes.append(path.stat().st_mtime)
+        except OSError:
+            pass
+    return max(mtimes) if mtimes else None
+
+
+def _committed_snapshot_stale(snap: MarketSnapshot) -> bool:
+    snap_ts = _snapshot_epoch(snap)
+    source_ts = _latest_source_mtime()
+    if snap_ts is None or source_ts is None:
+        return False
+    return source_ts - snap_ts > 60
+
+
+def _build_readonly_current_snapshot() -> MarketSnapshot | None:
+    """Compose a cache-only view from current exports; do not run pipelines."""
+    try:
+        from backend.runtime.market_snapshot_engine import build_market_snapshot
+
+        safe_print('[REVIEW] committed snapshot stale; composing read-only current cache view')
+        return build_market_snapshot(force_refresh=True)
+    except Exception as exc:
+        safe_print(f'[REVIEW] read-only current cache view failed: {exc}')
+        return None
+
+
 def load_review_snapshot() -> MarketSnapshot | None:
     """Load committed snapshot only — no force_refresh, no build_market_snapshot."""
     try:
         from backend.runtime.market_snapshot_engine import load_committed_snapshot
         snap = load_committed_snapshot()
         if snap:
+            if _committed_snapshot_stale(snap):
+                current = _build_readonly_current_snapshot()
+                if current:
+                    return current
             safe_print('[REVIEW] cache loaded from committed snapshot')
             return snap
     except Exception as exc:
@@ -62,6 +118,61 @@ def load_review_snapshot() -> MarketSnapshot | None:
         return None
 
 
+def _current_runtime_blockers(runtime_state: dict) -> list[str]:
+    alert = runtime_state.get('alert_eligibility') or {}
+    secondary = runtime_state.get('secondary_flags') or {}
+    blockers = [str(r) for r in (alert.get('block_reasons') or []) if r]
+    if secondary.get('stale_snapshot') and 'stale_snapshot' not in blockers:
+        blockers.append('stale_snapshot')
+    if secondary.get('scanner_stalled') and 'scanner_stalled' not in blockers:
+        blockers.append('scanner_stalled')
+    return blockers
+
+
+def _current_runtime_warnings(runtime_state: dict) -> list[str]:
+    warnings: list[str] = []
+    intel = runtime_state.get('intelligence_status') or {}
+    if intel.get('degraded') and intel.get('message'):
+        warnings.append(str(intel['message']))
+    stall = runtime_state.get('stall_watchdog') or {}
+    for issue in (stall.get('issues') or [])[:4]:
+        tag = str(issue)
+        if tag not in warnings:
+            warnings.append(tag)
+    return warnings
+
+
+def overlay_current_runtime_health(snap: MarketSnapshot) -> MarketSnapshot:
+    """Keep review intelligence cache-only, but never reuse stale embedded health."""
+    try:
+        from backend.runtime.runtime_state import build_runtime_state
+
+        runtime_state = build_runtime_state(force_refresh=True)
+    except Exception as exc:
+        safe_print(f'[REVIEW] current runtime health overlay failed: {exc}')
+        return snap
+
+    pipeline = runtime_state.get('pipeline') or {}
+    fresh = runtime_state.get('snapshot_freshness') or {}
+    snap.runtime_state = runtime_state
+    snap.lifecycle = runtime_state.get('lifecycle') or {}
+    snap.freshness = fresh
+    snap.metrics = runtime_state.get('metrics') or snap.metrics
+    snap.quality_score = runtime_state.get('quality_score') or snap.quality_score
+    snap.pipeline_health = {
+        'stages': pipeline.get('stages') or {},
+        'stalled_stages': pipeline.get('stalled_stages') or [],
+        'any_stalled': bool(pipeline.get('any_stalled')),
+        'last_stage': pipeline.get('last_stage'),
+        'freshness_tier': fresh.get('health_tier'),
+        'snapshot_stale': bool(fresh.get('stale')),
+        'collectors_active': (runtime_state.get('collector_activity') or {}).get('collectors_active'),
+    }
+    snap.blockers = _current_runtime_blockers(runtime_state)
+    snap.warnings = list(dict.fromkeys(list(snap.warnings or []) + _current_runtime_warnings(runtime_state)))
+    return snap
+
+
 def normalize_review_snapshot(snap: MarketSnapshot | None) -> MarketSnapshot | None:
     """Safe field normalization — no nested assumptions."""
     if snap is None:
@@ -80,7 +191,7 @@ def normalize_review_snapshot(snap: MarketSnapshot | None) -> MarketSnapshot | N
         )
         action = str(snap.action_plan or intel.get('action_plan') or 'Awaiting next cycle')
 
-        return MarketSnapshot(
+        normalized = MarketSnapshot(
             snapshot_id=snap.snapshot_id or 'review_cache',
             generated_at=snap.generated_at or intel.get('generated_at') or '',
             intelligence=intel,
@@ -108,9 +219,10 @@ def normalize_review_snapshot(snap: MarketSnapshot | None) -> MarketSnapshot | N
             confidence=snap.confidence or mood.get('confidence_level'),
             pipeline_health=snap.pipeline_health if isinstance(snap.pipeline_health, dict) else {},
         )
+        return overlay_current_runtime_health(normalized)
     except Exception as exc:
         safe_print(f'[REVIEW] normalize_review_snapshot failed: {exc}')
-        return snap
+        return overlay_current_runtime_health(snap)
 
 
 def _chunk_review_text(text: str, max_len: int = 3900) -> list[str]:

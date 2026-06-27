@@ -80,10 +80,23 @@ def evaluate_scanner_health(*, stall_minutes: int = DEFAULT_STALL_MINUTES) -> Di
             'reason': 'no_scanner_file',
         }
 
-    effective_stall = stall_minutes
     if expect_quiet and not market_hours:
-        effective_stall = max(stall_minutes, 180)
+        return {
+            'healthy': True,
+            'stalled': False,
+            'display': 'Scanner: idle (market closed)',
+            'age_minutes': age,
+            'file_age_minutes': file_age,
+            'heartbeat_age_minutes': hb_age,
+            'stall_minutes': None,
+            'expect_quiet': expect_quiet,
+            'market_hours': market_hours,
+            'lock_hint': '',
+            'scanner_file_exists': SCANNER_FILE.exists(),
+            'checked_at': datetime.now(IST).isoformat(),
+        }
 
+    effective_stall = stall_minutes
     stalled = age >= effective_stall
     if stalled:
         if age >= 60:

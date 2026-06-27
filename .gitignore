@@ -109,3 +109,11 @@ recovery/*.zip
 recovery/*.zip
 
 recovery/*.zip
+
+# FixOps local incident output
+fixops/incidents/*
+!fixops/incidents/.gitkeep
+
+# FixOps local incident output
+fixops/incidents/*
+!fixops/incidents/.gitkeep

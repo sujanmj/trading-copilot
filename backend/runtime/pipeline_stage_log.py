@@ -42,7 +42,7 @@ STAGE_SLA_SECONDS = {
 
 # Stages reset when a canonical snapshot publishes — stale synthesis timestamps must not linger.
 PUBLISH_RESET_STAGES = ('aggregation', 'synthesis', 'snapshot_export')
-SNAPSHOT_FRESH_IGNORE_STAGES = frozenset({'aggregation', 'synthesis'})
+SNAPSHOT_FRESH_IGNORE_STAGES = frozenset({'aggregation', 'synthesis', 'telegram'})
 
 _LOG_FILE = LOGS_DIR / 'pipeline_stages.log'
 _STATE_FILE = DATA_DIR / 'pipeline_stage_state.json'
@@ -146,23 +146,22 @@ def _filter_active_stalls(
     after_hours: bool = False,
 ) -> list:
     """Drop historical stage stalls when a fresh snapshot proves the pipeline ran."""
+    active = [name for name in stalled if not (after_hours and name == 'scanner')]
     if snapshot_age_minutes is None:
-        return list(stalled)
+        return active
     try:
         from backend.runtime.freshness_engine import STALE_MIN_MINUTES
         fresh_threshold = STALE_MIN_MINUTES
     except Exception:
         fresh_threshold = 15
     if snapshot_age_minutes >= fresh_threshold:
-        return list(stalled)
-    active = []
-    for name in stalled:
+        return active
+    filtered = []
+    for name in active:
         if name in SNAPSHOT_FRESH_IGNORE_STAGES:
             continue
-        if after_hours and name in ('scanner',):
-            continue
-        active.append(name)
-    return active
+        filtered.append(name)
+    return filtered
 
 
 def get_pipeline_stage_summary(

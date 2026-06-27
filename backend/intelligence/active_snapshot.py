@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional, Tuple
 import pytz
 
 from backend.storage.json_io import atomic_write_json
-from backend.utils.config import DATA_DIR
+from backend.utils.config import CURRENT_SNAPSHOT_FILE, DATA_DIR
 
 IST = pytz.timezone('Asia/Kolkata')
 INTEL_FILE = DATA_DIR / 'unified_intelligence.json'
@@ -45,6 +45,138 @@ def _load_json(path, default=None):
         return data if data is not None else default
     except Exception:
         return default
+
+
+def _parse_snapshot_dt(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = IST.localize(dt)
+        return dt.astimezone(IST)
+    except Exception:
+        return None
+
+
+def _snapshot_timestamp(payload: dict) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+    for key in ('published_at', '_committed_at', 'snapshot_built_at', 'generated_at'):
+        value = payload.get(key)
+        if value:
+            return str(value)
+    return None
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _file_mtime(path) -> Optional[float]:
+    try:
+        return path.stat().st_mtime if path.exists() else None
+    except Exception:
+        return None
+
+
+def _current_snapshot_is_newer(current: dict, active: dict) -> bool:
+    current_dt = _parse_snapshot_dt(_snapshot_timestamp(current))
+    active_dt = _parse_snapshot_dt(_snapshot_timestamp(active))
+    if current_dt and active_dt:
+        return current_dt > active_dt
+    if current_dt and not active_dt:
+        return True
+    current_mtime = _file_mtime(CURRENT_SNAPSHOT_FILE)
+    active_mtime = _file_mtime(ACTIVE_SNAPSHOT_FILE)
+    return current_mtime is not None and (active_mtime is None or current_mtime > active_mtime)
+
+
+def _active_payload_from_market_snapshot(
+    snapshot_payload: dict,
+    *,
+    snapshot_version: Optional[int] = None,
+    source: str = 'market_snapshot_commit',
+) -> dict:
+    """Project the committed runtime snapshot into the active snapshot schema."""
+    if not isinstance(snapshot_payload, dict):
+        return {}
+    intelligence = snapshot_payload.get('intelligence')
+    if not isinstance(intelligence, dict):
+        intelligence = {}
+    snapshot_id = (
+        snapshot_payload.get('snapshot_id')
+        or snapshot_payload.get('active_snapshot_id')
+        or intelligence.get('active_snapshot_id')
+        or intelligence.get('snapshot_id')
+    )
+    published_at = _snapshot_timestamp(snapshot_payload)
+    if not snapshot_id or not published_at:
+        return {}
+    top_opportunities = (
+        snapshot_payload.get('top_opportunities')
+        or intelligence.get('top_opportunities')
+        or intelligence.get('opportunities')
+        or []
+    )
+    canonical_feed = intelligence.get('canonical_opportunity_feed') or {}
+    if not canonical_feed:
+        canonical_feed = {
+            'source': 'market_snapshot',
+            'top_count': len(top_opportunities) if isinstance(top_opportunities, list) else 0,
+        }
+    version = _safe_int(
+        snapshot_version
+        if snapshot_version is not None
+        else snapshot_payload.get('snapshot_version') or intelligence.get('snapshot_version'),
+        1,
+    )
+    return {
+        'active_snapshot_id': snapshot_id,
+        'snapshot_id': snapshot_id,
+        'snapshot_version': max(1, version),
+        'cycle_id': (
+            intelligence.get('snapshot_cycle_id')
+            or intelligence.get('cycle_id')
+            or snapshot_payload.get('cycle_id')
+            or snapshot_id
+        ),
+        'published_at': published_at,
+        'intelligence_timestamp': (
+            intelligence.get('timestamp')
+            or intelligence.get('generation_time')
+            or snapshot_payload.get('generated_at')
+            or published_at
+        ),
+        'source': source,
+        'sector_rotation': snapshot_payload.get('sector_rotation') or intelligence.get('sector_rotation') or {},
+        'market_mood': snapshot_payload.get('market_mood') or intelligence.get('market_mood') or {},
+        'executive_summary': (
+            snapshot_payload.get('executive_summary')
+            or intelligence.get('executive_summary')
+            or intelligence.get('analysis')
+        ),
+        'action_plan': snapshot_payload.get('action_plan') or intelligence.get('action_plan'),
+        'top_opportunities': top_opportunities if isinstance(top_opportunities, list) else [],
+        'canonical_opportunity_feed': canonical_feed,
+        'runtime_snapshot_id': snapshot_payload.get('snapshot_id'),
+        'runtime_generated_at': snapshot_payload.get('generated_at'),
+    }
+
+
+def _bridge_current_snapshot(active: dict) -> dict:
+    current = _load_json(CURRENT_SNAPSHOT_FILE, {})
+    if not current or not _current_snapshot_is_newer(current, active):
+        return {}
+    version = _safe_int(active.get('snapshot_version') or current.get('snapshot_version'), 1)
+    return _active_payload_from_market_snapshot(
+        current,
+        snapshot_version=version,
+        source='current_snapshot_bridge',
+    )
 
 
 def _next_version() -> int:
@@ -207,8 +339,44 @@ def publish_active_snapshot(
         return payload
 
 
+def sync_active_snapshot_from_market_snapshot(
+    snapshot_payload: dict,
+    *,
+    source: str = 'market_snapshot_commit',
+) -> Optional[dict]:
+    """Keep active_snapshot.json aligned with canonical current_snapshot commits."""
+    if not isinstance(snapshot_payload, dict):
+        return None
+    with _publish_lock:
+        current = _load_json(ACTIVE_SNAPSHOT_FILE, {})
+        payload = _active_payload_from_market_snapshot(
+            snapshot_payload,
+            snapshot_version=_safe_int(current.get('snapshot_version'), 0) + 1,
+            source=source,
+        )
+        ok, schema_issues = validate_snapshot_schema(payload)
+        if not ok:
+            log_snapshot_anomaly('market_snapshot_sync_schema_fail', ','.join(schema_issues))
+            return None
+        atomic_write_json(ACTIVE_SNAPSHOT_FILE, payload)
+        try:
+            from backend.runtime.snapshot_freshness_monitor import record_collector_heartbeat
+            record_collector_heartbeat('intelligence', status='published', detail=payload['snapshot_id'])
+        except Exception:
+            pass
+        _log.info(
+            '[SNAPSHOT] synced active snapshot v%s %s source=%s',
+            payload.get('snapshot_version'),
+            payload.get('snapshot_id'),
+            source,
+        )
+        return payload
+
+
 def load_active_snapshot() -> dict:
-    return _load_json(ACTIVE_SNAPSHOT_FILE, {})
+    active = _load_json(ACTIVE_SNAPSHOT_FILE, {})
+    bridged = _bridge_current_snapshot(active)
+    return bridged or active
 
 
 def get_active_snapshot_meta() -> dict:

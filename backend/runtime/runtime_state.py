@@ -228,11 +228,24 @@ def _load_ai_state(provider_health: dict) -> Dict[str, Any]:
     }
 
 
-def _load_pipeline_status(freshness: dict, lifecycle: dict) -> Dict[str, Any]:
+def _load_pipeline_status(
+    freshness: dict,
+    lifecycle: dict,
+    operational: Optional[dict] = None,
+) -> Dict[str, Any]:
     try:
         from backend.runtime.pipeline_stage_log import get_pipeline_stage_summary
         age = freshness.get('age_minutes')
-        after_hours = bool(lifecycle.get('after_hours_mode'))
+        operational = operational or {}
+        lifecycle_state = str(lifecycle.get('lifecycle_state') or '').upper()
+        period = str(operational.get('period') or '').lower()
+        after_hours = (
+            bool(lifecycle.get('after_hours_mode'))
+            or bool(operational.get('expect_quiet_collectors'))
+            or bool(operational.get('after_hours_mode'))
+            or lifecycle_state in ('WEEKEND', 'HOLIDAY')
+            or period in ('weekend', 'holiday')
+        )
         return get_pipeline_stage_summary(
             snapshot_age_minutes=age,
             after_hours=after_hours,
@@ -280,8 +293,14 @@ def _map_primary_runtime_state(
     if orch == 'RECOVERING':
         return 'RECOVERING'
 
-    after_hours = bool(lifecycle.get('after_hours_mode')) or lifecycle.get('lifecycle_state') in (
-        'AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY',
+    lifecycle_state = str(lifecycle.get('lifecycle_state') or '').upper()
+    period = str(operational.get('period') or '').lower()
+    after_hours = (
+        bool(lifecycle.get('after_hours_mode'))
+        or bool(operational.get('after_hours_mode'))
+        or bool(operational.get('expect_quiet_collectors'))
+        or lifecycle_state in ('AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY')
+        or period in ('post_market', 'after_hours', 'night', 'weekend', 'holiday')
     )
     age = freshness.get('age_minutes')
     try:
@@ -460,7 +479,7 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         pass
 
     operational = get_operational_status()
-    pipeline_status = _load_pipeline_status(freshness, lifecycle)
+    pipeline_status = _load_pipeline_status(freshness, lifecycle, operational)
     scanner_health = _load_scanner_health()
     primary_state = _map_primary_runtime_state(
         lifecycle, operational, freshness, scanner_health, pipeline_status,
@@ -482,7 +501,15 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         lifecycle['suppress_trading_language'] = True
     elif primary_state == 'AFTER_HOURS':
         lifecycle = dict(lifecycle)
-        lifecycle.setdefault('lifecycle_state', 'AFTER_HOURS')
+        if lifecycle.get('lifecycle_state') == 'DEGRADED':
+            lifecycle['lifecycle_state'] = (
+                operational.get('canonical_lifecycle')
+                or operational.get('lifecycle_state')
+                or 'AFTER_HOURS'
+            )
+            lifecycle['lifecycle_display'] = operational.get('display_status') or 'After-Hours Intelligence Mode'
+        else:
+            lifecycle.setdefault('lifecycle_state', 'AFTER_HOURS')
         lifecycle['suppress_trading_language'] = True
     elif primary_state == 'LIVE':
         lifecycle = dict(lifecycle)

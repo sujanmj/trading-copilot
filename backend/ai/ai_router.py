@@ -154,6 +154,7 @@ USE_CASE_ROUTING = {
     'translate': 'gemini_lite',
     'postmortem': 'sonnet',
     'watchdog_refresh': 'gemini',
+    'fixops_report_analyzer': 'final_synthesis',
 }
 
 CONVERSATIONAL_USE_CASES = frozenset({
@@ -330,7 +331,7 @@ def call_gemini(model_name, prompt, max_tokens=2500, *, use_case: str = ''):
     return result
 
 
-def call_groq(model_name, prompt, max_tokens=2500, *, use_case: str = ''):
+def call_groq(model_name, prompt, max_tokens=2500, *, use_case: str = '', allow_gemini_fallback: bool = True):
     from backend.ai.provider_manager import get_gemini_pool, get_groq_pool, ENRICHMENT_UNAVAILABLE_MSG
 
     pool = get_groq_pool()
@@ -347,7 +348,7 @@ def call_groq(model_name, prompt, max_tokens=2500, *, use_case: str = ''):
         return result
 
     # Conversational fallback → Gemini pool
-    if not get_gemini_pool().is_degraded():
+    if allow_gemini_fallback and not get_gemini_pool().is_degraded():
         print('  [AI] Groq pool exhausted — falling back to Gemini for conversational request')
         _log_route(use_case or 'conversational', 'gemini_pool', 'groq-fallback')
         gem = call_gemini('gemini-2.0-flash-lite', prompt, max_tokens, use_case=use_case)
