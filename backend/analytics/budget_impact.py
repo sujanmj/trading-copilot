@@ -870,7 +870,9 @@ def compute_freshness_panel() -> dict[str, Any]:
     govt_age_h = _file_age_hours(govt_path)
     combined_news_age = min(filter(lambda x: x is not None, [news_age_h, govt_age_h]), default=news_age_h)
 
-    cache_refreshed = data.get('cache_refreshed_at') or data.get('generated_at')
+    theme_refreshed_at = data.get('cache_refreshed_at')
+    theme_generated_at = data.get('generated_at')
+    cache_refreshed = theme_refreshed_at or theme_generated_at
     theme_cache_age_h = None
     theme_ts = cache_refreshed
     if cache_refreshed:
@@ -948,13 +950,23 @@ def compute_freshness_panel() -> dict[str, Any]:
     else:
         status = 'fresh'
 
-    legacy_theme_row = {
-        'label': 'Legacy theme cache',
-        'timestamp': theme_ts,
-        'age_hours': theme_cache_age_h,
-        'age_label': _age_label(theme_cache_age_h),
-        'status': _source_freshness_status(theme_cache_age_h),
-    }
+    if theme_refreshed_at:
+        legacy_theme_row = {
+            'label': 'Legacy theme cache',
+            'timestamp': theme_ts,
+            'age_hours': theme_cache_age_h,
+            'age_label': _age_label(theme_cache_age_h),
+            'status': _source_freshness_status(theme_cache_age_h),
+        }
+    else:
+        legacy_theme_row = {
+            'label': 'Legacy theme cache',
+            'timestamp': theme_ts,
+            'age_hours': None,
+            'age_label': 'static wishlist',
+            'status': 'static_wishlist',
+            'static': True,
+        }
 
     return {
         'status': status,
@@ -1765,9 +1777,15 @@ def format_budget_overview_telegram() -> str:
             f"{theme_cache.get('status', 'unknown')}"
         ),
         f"News: {fresh.get('latest_news_age', 'Unavailable')}",
+    ]
+    if budget_cache.get('status') == 'cache_missing':
+        lines.append('Budget refresh unavailable: budget_impact_cache.json missing or not rebuilt by /refresh full.')
+    if theme_cache.get('status') == 'cache_missing':
+        lines.append('Budget theme refresh unavailable: budget/theme catalyst source missing or not rebuilt by /refresh full.')
+    lines.extend([
         '',
         '<b>Top budget themes:</b>',
-    ]
+    ])
     for row in (overview.get('top_themes') or [])[:6]:
         lines.append(f"• {row.get('display_name')} · score {row.get('budget_impact_score', '—')}")
     lines.extend([

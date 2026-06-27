@@ -271,6 +271,30 @@ def _status_feed_line(label: str, row: Optional[dict]) -> str:
     return f"{label}: {age}{_status_stale_suffix(stale)}"
 
 
+def _status_cache_line(label: str, row: Optional[dict]) -> str:
+    row = row if isinstance(row, dict) else {}
+    status = str(row.get('status') or 'missing')
+    if status == 'static_wishlist':
+        return f"{label}: static wishlist"
+    if status == 'optional':
+        reason = row.get('reason') or 'not refreshed by full refresh'
+        return f"{label}: optional / {reason}"
+    age = row.get('age_display') or status or '-'
+    stale = bool(row.get('stale')) or status in ('stale', 'missing')
+    return f"{label}: {age} ({status}){_status_stale_suffix(stale)}"
+
+
+def _status_runtime_snapshot_line(row: Optional[dict]) -> str:
+    row = row if isinstance(row, dict) else {}
+    age = row.get('age_display') or 'freshness unavailable'
+    stale = bool(row.get('stale'))
+    tier = str(row.get('health_tier') or '').lower()
+    status = 'stale' if stale else 'fresh'
+    if tier and tier not in ('healthy', 'fresh'):
+        status = tier
+    return f"Runtime snapshot: {age} ({status}){_status_stale_suffix(stale)}"
+
+
 def format_status(runtime_state: dict) -> str:
     rs = runtime_state if isinstance(runtime_state, dict) else {}
     lc = rs.get('lifecycle') or {}
@@ -286,6 +310,7 @@ def format_status(runtime_state: dict) -> str:
     alert = rs.get('alert_eligibility') or {}
     sources = rs.get('source_freshness') or {}
     brain = rs.get('brain_age') or {}
+    intel = ((rs.get('intelligence_freshness') or {}).get('rows') or {})
     primary = rs.get('primary_state') or '—'
     secondary = rs.get('secondary_flags') or {}
     flags = [k for k, v in secondary.items() if v]
@@ -309,15 +334,22 @@ def format_status(runtime_state: dict) -> str:
         f"suppressed {tg.get('suppressed_today', 0)}"
     )
 
-    lines.append('<b>Feeds</b>')
-    lines.append(
-        f"AI Brain: {brain.get('age_display') or '—'}"
-        f"{_status_stale_suffix(bool(brain.get('stale')))}"
-    )
-    from backend.runtime.feed_registry import status_feed_labels
-    for key, label in status_feed_labels():
-        lines.append(_status_feed_line(label, sources.get(key)))
+    lines.append('<b>Core runtime freshness</b>')
+    lines.append(_status_runtime_snapshot_line(fresh))
+    lines.append(_status_feed_line('Scanner', sources.get('scanner')))
 
+    lines.append('<b>Intelligence freshness</b>')
+    lines.append(_status_cache_line('News', intel.get('news') or sources.get('news')))
+    lines.append(_status_cache_line('Budget', intel.get('budget')))
+    lines.append(_status_cache_line('Theme catalysts', intel.get('theme')))
+    lines.append(_status_cache_line('Catalysts', intel.get('catalysts')))
+    lines.append(_status_cache_line('AIHub brain', intel.get('aihub_brain') or brain))
+    lines.append(_status_cache_line('AIHub govt', intel.get('aihub_govt')))
+    lines.append(_status_cache_line('AIHub market', intel.get('aihub_market')))
+
+    lines.append('<b>Optional</b>')
+    lines.append(_status_cache_line('Legacy report cache', intel.get('legacy_report')))
+    lines.append(_status_cache_line('Broker', intel.get('broker')))
     lines.append('<b>Runtime</b>')
     if sched.get('phase'):
         lines.append(f"Scheduler: {sched.get('phase')}")

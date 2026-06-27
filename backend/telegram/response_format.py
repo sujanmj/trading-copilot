@@ -1767,6 +1767,49 @@ def _format_feed_freshness_line(label: str, path: Path, *, timestamp_key: str = 
     return format_budget_feed_freshness_line(label, file_path, timestamp_key=timestamp_key)
 
 
+def _format_static_theme_freshness_line(path: Path) -> str:
+    try:
+        if path.is_file():
+            payload = json.loads(path.read_text(encoding='utf-8'))
+            if isinstance(payload, dict) and not payload.get('cache_refreshed_at'):
+                return 'Legacy theme cache: static wishlist'
+    except Exception:
+        pass
+    return _format_feed_freshness_line('Legacy theme cache', path)
+
+
+def _format_runtime_snapshot_freshness_line(*, fallback_report_path: Path | None = None) -> str:
+    from backend.storage.data_paths import get_data_path
+    from backend.telegram.freshness_consistency import (
+        compute_feed_age_minutes,
+        format_compact_freshness_line,
+    )
+
+    candidates = (
+        get_data_path('cache/runtime_snapshot.json'),
+        get_data_path('runtime/current_snapshot.json'),
+    )
+    best_age: int | None = None
+    for path in candidates:
+        age, _ = compute_feed_age_minutes(path)
+        if age < 0:
+            continue
+        if best_age is None or age < best_age:
+            best_age = age
+    if best_age is not None:
+        return format_compact_freshness_line('Runtime snapshot', best_age)
+
+    if fallback_report_path is not None:
+        age, _ = compute_feed_age_minutes(fallback_report_path)
+        if age >= 0:
+            return format_compact_freshness_line('Runtime snapshot/report', age)
+    return 'Runtime snapshot: unavailable'
+
+
+def _format_optional_broker_freshness_line() -> str:
+    return 'Broker: optional / not refreshed by full refresh'
+
+
 def format_status_text() -> str:
     lines = ['<b>📡 Status</b>']
     telegram_enabled = False
@@ -1809,39 +1852,14 @@ def format_status_text() -> str:
                     or '—'
                 )
                 lines[-1] = f'Market mode: <code>{market_mode}</code>'
-            report_time = (
-                pack.get('generated_at')
-                or pack.get('package_generated_at')
-                or summary.get('generated_at')
-                or '—'
-            )
-            report_age = -1
-            if DAILY_PACK_FILE.is_file():
-                try:
-                    report_age = max(
-                        0,
-                        int(
-                            (datetime.now(timezone.utc).timestamp() - DAILY_PACK_FILE.stat().st_mtime)
-                            // 60
-                        ),
-                    )
-                except OSError:
-                    report_age = -1
-            from backend.telegram.freshness_consistency import (
-                classify_budget_cache_freshness,
-                format_compact_freshness_line,
-            )
-
-            report_fresh = (
-                classify_budget_cache_freshness(report_age)
-                if report_age >= 0
-                else 'cache_missing'
-            )
-            lines.append(format_compact_freshness_line('Report', report_age))
+            lines.append('<b>Core runtime freshness</b>')
+            lines.append(_format_runtime_snapshot_freshness_line(fallback_report_path=DAILY_PACK_FILE))
         else:
-            lines.append('Latest report: unavailable')
+            lines.append('<b>Core runtime freshness</b>')
+            lines.append(_format_runtime_snapshot_freshness_line(fallback_report_path=DAILY_PACK_FILE))
 
         lines.append(_format_feed_freshness_line('Latest scanner', get_data_path('scanner_data.json')))
+        lines.append('<b>Intelligence freshness</b>')
         lines.append(_format_feed_freshness_line('Latest news', get_data_path('news_feed.json')))
         lines.append(_format_feed_freshness_line('Latest budget cache', get_data_path('budget_impact_cache.json')))
         lines.append(_format_feed_freshness_line(
@@ -1850,7 +1868,14 @@ def format_status_text() -> str:
         ))
         legacy_theme_path = get_data_path('theme_baskets.json')
         if legacy_theme_path.is_file():
-            lines.append(_format_feed_freshness_line('Legacy theme cache', legacy_theme_path))
+            lines.append(_format_static_theme_freshness_line(legacy_theme_path))
+        lines.append(_format_feed_freshness_line('AIHub brain cache', get_data_path('cache/aihub_tabs/brain.json')))
+        lines.append(_format_feed_freshness_line('AIHub govt cache', get_data_path('cache/aihub_tabs/govt.json')))
+        lines.append(_format_feed_freshness_line('AIHub market cache', get_data_path('cache/aihub_tabs/market.json')))
+        if DAILY_PACK_FILE.is_file():
+            lines.append(_format_feed_freshness_line('Legacy report cache', DAILY_PACK_FILE))
+        lines.append('<b>Optional</b>')
+        lines.append(_format_optional_broker_freshness_line())
     except Exception:
         lines.append('Market mode: unavailable')
         lines.append('Latest report: unavailable')

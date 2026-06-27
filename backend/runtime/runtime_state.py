@@ -8,9 +8,11 @@ intelligence status.
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pytz
@@ -407,6 +409,260 @@ def _load_brain_age_display() -> Dict[str, Any]:
         return {'age_display': '—', 'stale': False}
 
 
+_INTELLIGENCE_TIMESTAMP_KEYS = (
+    'refreshed_at',
+    'cache_refreshed_at',
+    'package_generated_at',
+    'generated_at',
+    'updated_at',
+    'last_updated',
+    'timestamp',
+    'published_at',
+    'collected_at',
+)
+
+
+def _parse_intelligence_timestamp(raw: object) -> Optional[datetime]:
+    text = str(raw or '').strip()
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = IST.localize(parsed)
+        return parsed.astimezone(IST)
+    except Exception:
+        return None
+
+
+def _age_seconds_from_dt(dt: Optional[datetime]) -> Optional[float]:
+    if dt is None:
+        return None
+    try:
+        return max(0.0, (datetime.now(IST) - dt.astimezone(IST)).total_seconds())
+    except Exception:
+        return None
+
+
+def _age_display_from_seconds(age_seconds: Optional[float]) -> str:
+    if age_seconds is None:
+        return 'missing'
+    if age_seconds < 60:
+        return f'{int(age_seconds)}s'
+    if age_seconds < 3600:
+        return f'{int(age_seconds // 60)}m'
+    hours = age_seconds / 3600
+    if hours < 24:
+        return f'{hours:.1f}h'
+    return f'{int(hours)}h'
+
+
+def _load_json_payload(path: Path) -> dict:
+    try:
+        if not path.is_file():
+            return {}
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _cache_row(
+    label: str,
+    path: Path,
+    *,
+    timestamp_keys: tuple[str, ...] = _INTELLIGENCE_TIMESTAMP_KEYS,
+    stale_after_seconds: int = 24 * 3600,
+) -> Dict[str, Any]:
+    if not path.is_file():
+        return {
+            'label': label,
+            'status': 'missing',
+            'age_seconds': None,
+            'age_display': 'missing',
+            'stale': True,
+            'file': str(path),
+            'reason': 'cache file missing',
+        }
+
+    payload = _load_json_payload(path)
+    timestamp: Optional[datetime] = None
+    timestamp_key = ''
+    for key in timestamp_keys:
+        timestamp = _parse_intelligence_timestamp(payload.get(key))
+        if timestamp is not None:
+            timestamp_key = key
+            break
+    if timestamp is None:
+        try:
+            timestamp = datetime.fromtimestamp(path.stat().st_mtime, IST)
+            timestamp_key = 'mtime'
+        except OSError:
+            timestamp = None
+
+    age_seconds = _age_seconds_from_dt(timestamp)
+    stale = bool(age_seconds is None or age_seconds > stale_after_seconds)
+    if age_seconds is None:
+        status = 'missing'
+    elif stale:
+        status = 'stale'
+    elif age_seconds > 6 * 3600:
+        status = 'partial'
+    else:
+        status = 'fresh'
+    return {
+        'label': label,
+        'status': status,
+        'age_seconds': int(age_seconds) if age_seconds is not None else None,
+        'age_display': _age_display_from_seconds(age_seconds),
+        'timestamp': timestamp.isoformat() if timestamp is not None else None,
+        'timestamp_key': timestamp_key,
+        'stale': stale,
+        'file': str(path),
+    }
+
+
+def _freshest_cache_row(label: str, paths: tuple[Path, ...]) -> Dict[str, Any]:
+    rows = [_cache_row(label, path) for path in paths]
+    existing = [row for row in rows if row.get('status') != 'missing']
+    if not existing:
+        row = rows[0] if rows else {'status': 'missing', 'age_seconds': None}
+        return {**row, 'label': label, 'source_files': [str(p) for p in paths]}
+    best = min(
+        existing,
+        key=lambda row: row.get('age_seconds') if row.get('age_seconds') is not None else float('inf'),
+    )
+    return {**best, 'label': label, 'source_files': [str(p) for p in paths], 'candidates': rows}
+
+
+def _theme_catalyst_cache_row() -> Dict[str, Any]:
+    try:
+        from backend.analytics.theme_baskets import BASKETS_FILE
+    except Exception:
+        from backend.storage.data_paths import get_data_path
+        BASKETS_FILE = get_data_path('theme_baskets.json')
+
+    payload = _load_json_payload(BASKETS_FILE)
+    if not BASKETS_FILE.is_file():
+        return {
+            'label': 'Theme catalysts',
+            'status': 'missing',
+            'age_seconds': None,
+            'age_display': 'missing',
+            'stale': True,
+            'file': str(BASKETS_FILE),
+            'reason': 'theme_baskets.json missing',
+        }
+
+    refreshed = _parse_intelligence_timestamp(payload.get('cache_refreshed_at'))
+    if refreshed is None:
+        generated = _parse_intelligence_timestamp(payload.get('generated_at'))
+        return {
+            'label': 'Theme catalysts',
+            'status': 'static_wishlist',
+            'age_seconds': None,
+            'age_display': 'static wishlist',
+            'timestamp': generated.isoformat() if generated is not None else None,
+            'timestamp_key': 'generated_at' if generated is not None else '',
+            'stale': False,
+            'file': str(BASKETS_FILE),
+            'reason': 'theme baskets are static until catalyst cache refresh runs',
+        }
+
+    age_seconds = _age_seconds_from_dt(refreshed)
+    stale = bool(age_seconds is None or age_seconds > 24 * 3600)
+    return {
+        'label': 'Theme catalysts',
+        'status': 'stale' if stale else ('partial' if age_seconds and age_seconds > 6 * 3600 else 'fresh'),
+        'age_seconds': int(age_seconds) if age_seconds is not None else None,
+        'age_display': _age_display_from_seconds(age_seconds),
+        'timestamp': refreshed.isoformat(),
+        'timestamp_key': 'cache_refreshed_at',
+        'stale': stale,
+        'file': str(BASKETS_FILE),
+    }
+
+
+def _broker_optional_row(data_dir: Path) -> Dict[str, Any]:
+    row = _freshest_cache_row(
+        'Broker cache',
+        (
+            data_dir / 'broker_intelligence_cache.json',
+            data_dir / 'broker_overview_cache.json',
+            data_dir / 'broker_app_collector_latest.json',
+        ),
+    )
+    age = row.get('age_display')
+    return {
+        **row,
+        'label': 'Broker',
+        'status': 'optional',
+        'age_display': age if age and age != 'missing' else 'not refreshed by full refresh',
+        'stale': False,
+        'optional': True,
+        'reason': 'not refreshed by full refresh',
+    }
+
+
+def _load_intelligence_freshness() -> Dict[str, Any]:
+    """Optional intelligence cache ages used by Telegram status and AI Hub surfaces."""
+    try:
+        from backend.utils.config import DATA_DIR
+    except Exception:
+        from backend.storage.data_paths import get_data_root
+        DATA_DIR = get_data_root()
+
+    try:
+        from backend.analytics.budget_impact import CACHE_FILE as BUDGET_CACHE_FILE
+    except Exception:
+        from backend.storage.data_paths import get_data_path
+        BUDGET_CACHE_FILE = get_data_path('budget_impact_cache.json')
+
+    aihub_dir = DATA_DIR / 'cache' / 'aihub_tabs'
+    rows = {
+        'runtime_snapshot': _freshest_cache_row(
+            'Runtime snapshot',
+            (
+                DATA_DIR / 'cache' / 'runtime_snapshot.json',
+                DATA_DIR / 'runtime' / 'current_snapshot.json',
+            ),
+        ),
+        'legacy_report': _cache_row('Legacy report cache', DATA_DIR / 'daily_report_pack_latest.json'),
+        'news': _freshest_cache_row(
+            'News',
+            (DATA_DIR / 'live_news_feed.json', DATA_DIR / 'news_feed.json'),
+        ),
+        'budget': _cache_row('Budget cache', BUDGET_CACHE_FILE, stale_after_seconds=90 * 60),
+        'theme': _theme_catalyst_cache_row(),
+        'catalysts': _cache_row('Catalyst radar', DATA_DIR / 'stock_catalyst_radar_latest.json'),
+        'aihub_brain': _cache_row('AIHub brain', aihub_dir / 'brain.json'),
+        'aihub_govt': _cache_row('AIHub govt', aihub_dir / 'govt.json'),
+        'aihub_market': _cache_row('AIHub market', aihub_dir / 'market.json'),
+        'broker': _broker_optional_row(DATA_DIR),
+    }
+    optional_keys = (
+        'news',
+        'budget',
+        'theme',
+        'catalysts',
+        'aihub_brain',
+        'aihub_govt',
+        'aihub_market',
+        'broker',
+    )
+    stale_optional = [
+        key for key in optional_keys
+        if rows.get(key, {}).get('stale') and rows.get(key, {}).get('status') != 'static_wishlist'
+    ]
+    return {
+        'rows': rows,
+        'optional_stale_keys': stale_optional,
+        'optional_status': 'stale' if stale_optional else 'fresh',
+    }
+
+
 def _load_db_size_display() -> str:
     try:
         from backend.utils.config import DB_PATH
@@ -536,6 +792,7 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         secondary_flags['runtime_degraded'] = True
     source_freshness = _load_source_freshness(operational)
     brain_age = _load_brain_age_display()
+    intelligence_freshness = _load_intelligence_freshness()
 
     # Metric source trace for duplicate detection (read export file — no full re-export)
     metric_sources = {'sqlite_evaluated': counts['evaluated']}
@@ -559,6 +816,7 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
         'secondary_flags': secondary_flags,
         'source_freshness': source_freshness,
         'brain_age': brain_age,
+        'intelligence_freshness': intelligence_freshness,
         'db_size_display': _load_db_size_display(),
         'lifecycle': lifecycle,
         'session': session,

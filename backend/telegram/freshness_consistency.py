@@ -161,7 +161,11 @@ def get_unified_market_freshness() -> dict[str, Any]:
 
     scanner_age = scanner_cache_age_minutes()
     report_age, _ = compute_feed_age_minutes(DAILY_PACK_FILE)
-    runtime_age, _ = compute_feed_age_minutes(get_data_path('runtime_snapshot.json'))
+    runtime_path = get_data_path('cache/runtime_snapshot.json')
+    legacy_runtime_path = get_data_path('runtime_snapshot.json')
+    if not runtime_path.is_file() and legacy_runtime_path.is_file():
+        runtime_path = legacy_runtime_path
+    runtime_age, _ = compute_feed_age_minutes(runtime_path)
     age_min = scanner_age if scanner_age >= 0 else runtime_age
     if age_min < 0:
         age_min = report_age

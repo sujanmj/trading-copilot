@@ -308,6 +308,100 @@ def _rebuild_canonical_snapshot() -> bool:
         return False
 
 
+def _refresh_intelligence_caches_for_full_refresh(deadline: float) -> list[dict]:
+    """Refresh optional intelligence caches consumed by Telegram read surfaces."""
+    results: list[dict] = []
+
+    def _timed_out() -> bool:
+        return time.time() >= deadline
+
+    def _log_cache(name: str, status: str, detail: str = '') -> None:
+        suffix = f" {detail}" if detail else ''
+        safe_print(f"[REFRESH_CACHE] cache={name} {status}{suffix}")
+
+    def _record(name: str, status: str, detail: str = '') -> None:
+        results.append({'cache': name, 'status': status, 'detail': detail})
+        _log_cache(name, status, detail)
+        try:
+            from backend.runtime.pipeline_stage_log import pipeline_stage_log
+            pipeline_stage_log('cache', status='ok' if status == 'rebuilt' else 'warning', detail=f'{name}:{status}:{detail}'[:180])
+        except Exception:
+            pass
+
+    def _run(name: str, fn) -> None:
+        if _timed_out():
+            _record(name, 'skipped', 'reason=refresh_deadline')
+            return
+        try:
+            payload = fn()
+            if isinstance(payload, dict) and payload.get('ok') is False:
+                reason = str(payload.get('error') or payload.get('message') or 'returned_not_ok')[:140]
+                _record(name, 'skipped', f'reason={reason}')
+                return
+            detail_parts = []
+            if isinstance(payload, dict):
+                for key in ('cache_path', 'generated_at', 'refreshed_at', 'snapshot_id'):
+                    if payload.get(key):
+                        detail_parts.append(f'{key}={payload.get(key)}')
+                if payload.get('theme_refresh'):
+                    theme = payload.get('theme_refresh') or {}
+                    detail_parts.append(f"theme_refreshed_at={theme.get('refreshed_at')}")
+                if payload.get('items') is not None:
+                    detail_parts.append(f"items={len(payload.get('items') or [])}")
+            _record(name, 'rebuilt', ' '.join(detail_parts)[:180])
+        except Exception as exc:
+            _record(name, 'skipped', f'reason={type(exc).__name__}:{str(exc)[:100]}')
+
+    def _verify_latest_news() -> dict:
+        candidates = [DATA_DIR / 'live_news_feed.json', DATA_DIR / 'news_feed.json']
+        existing = [path for path in candidates if path.is_file()]
+        if not existing:
+            return {'ok': False, 'error': 'news_feed_missing_after_news_aggregator'}
+        newest = max(existing, key=lambda path: path.stat().st_mtime)
+        return {'ok': True, 'cache_path': str(newest), 'generated_at': datetime.fromtimestamp(newest.stat().st_mtime).isoformat()}
+
+    _run(
+        'runtime_snapshot',
+        lambda: __import__(
+            'backend.runtime.runtime_snapshot_publisher',
+            fromlist=['publish_runtime_snapshot_wrapper'],
+        ).publish_runtime_snapshot_wrapper(reason='telegram_refresh'),
+    )
+    _run('latest_news', _verify_latest_news)
+    _run(
+        'theme_catalyst',
+        lambda: __import__(
+            'backend.analytics.theme_baskets',
+            fromlist=['refresh_theme_catalyst_cache'],
+        ).refresh_theme_catalyst_cache(persist=True),
+    )
+    _run(
+        'budget',
+        lambda: __import__(
+            'backend.analytics.budget_impact',
+            fromlist=['refresh_budget_intel'],
+        ).refresh_budget_intel(persist=True),
+    )
+    _run(
+        'catalyst_radar',
+        lambda: __import__(
+            'backend.intelligence.stock_catalyst_radar',
+            fromlist=['build_catalyst_radar'],
+        ).build_catalyst_radar(persist=True, force_refresh=True),
+    )
+    for tab in ('brain', 'govt', 'market'):
+        _run(
+            f'aihub_{tab}',
+            lambda tab=tab: __import__(
+                'backend.analytics.aihub_tab_payloads',
+                fromlist=['build_aihub_tab_payload'],
+            ).build_aihub_tab_payload(tab, force_refresh=False),
+        )
+
+    _record('broker', 'skipped', 'reason=broker_refresh_not_run_by_full_refresh')
+    return results
+
+
 def _do_refresh():
     """Heavy lifting for /refresh — force scanner, invalidate cache, rebuild snapshot."""
     from backend.runtime.global_job_locks import duplicate_job_message, job_guard
@@ -384,6 +478,9 @@ def _do_refresh_body():
         if _timed_out():
             break
         run_module(module, status)
+
+    if not _timed_out():
+        _refresh_intelligence_caches_for_full_refresh(deadline)
 
     if not _timed_out():
         try:
