@@ -2094,6 +2094,71 @@ def _is_tradecard_premarket_phase() -> bool:
         return False
 
 
+def _tradecard_evidence_context(
+    *,
+    card: dict[str, Any] | None = None,
+    freshness_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {}
+    if isinstance(card, dict):
+        context['card'] = card
+        if str(card.get('status') or '').strip().upper() == 'VALID_ENTRY':
+            context['live_trigger'] = True
+    if isinstance(freshness_meta, dict):
+        context['tradecard_freshness'] = freshness_meta
+    return context
+
+
+def _append_tradecard_evidence(
+    lines: list[str],
+    ticker: object,
+    *,
+    compact: bool,
+    card: dict[str, Any] | None = None,
+    freshness_meta: dict[str, Any] | None = None,
+) -> None:
+    sym = _normalize_tradecard_ticker(ticker)
+    if not sym:
+        return
+    try:
+        from backend.trading.tradecard_evidence import (
+            build_tradecard_evidence_matrix,
+            format_tradecard_evidence_matrix_telegram,
+        )
+
+        matrix = build_tradecard_evidence_matrix(
+            sym,
+            context=_tradecard_evidence_context(card=card, freshness_meta=freshness_meta),
+        )
+        lines.extend(format_tradecard_evidence_matrix_telegram(matrix, compact=compact).splitlines())
+    except Exception:
+        # Evidence is explanatory only; it must never break the safety-gated card.
+        return
+
+
+def format_tradecard_evidence_explain_telegram(
+    ticker: object,
+    *,
+    freshness_meta: dict[str, Any] | None = None,
+) -> str:
+    """Full evidence matrix for `/tradecard explain <ticker>`."""
+    sym = _normalize_tradecard_ticker(ticker)
+    if not sym:
+        return strip_stage_markers('No ticker supplied for tradecard evidence explain.')
+    lines = [
+        '<b>Tradecard Explain</b>',
+        f'Ticker: <b>{sym}</b>',
+    ]
+    _append_tradecard_evidence(
+        lines,
+        sym,
+        compact=False,
+        card={'ticker': sym, 'status': 'NO_ACTIVE_ENTRY'},
+        freshness_meta=freshness_meta,
+    )
+    return strip_stage_markers('\n'.join(lines))
+
+
 def _format_tradecard_premarket_watch(
     ticker: str,
     *,
@@ -2121,6 +2186,7 @@ def _format_tradecard_premarket_watch(
             variant='premarket',
             reason='market not open for confirmed entry yet',
         ))
+    _append_tradecard_evidence(lines, ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
     return strip_stage_markers('\n'.join(lines))
 
 
@@ -2240,6 +2306,7 @@ def _format_pinned_tradecard_from_latest(
         freshness = format_freshness_line(freshness_meta)
         if freshness:
             lines.append(freshness)
+        _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta)
         lines.append('Paper only.')
         return strip_stage_markers('\n'.join(lines))
 
@@ -2262,6 +2329,7 @@ def _format_pinned_tradecard_from_latest(
     freshness = format_freshness_line(freshness_meta)
     if freshness:
         lines.append(freshness)
+    _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta)
     lines.append('Paper only — you decide and place trades manually.')
     return strip_stage_markers('\n'.join(lines))
 
@@ -2392,6 +2460,7 @@ def format_tradecard_telegram(
             lines.extend(_tradecard_explain_lines(variant='stale'))
         stale_card = dict(card)
         stale_card['reason'] = stale_reason
+        _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=stale_card, freshness_meta=freshness_meta)
         _save_latest(stale_card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
         return strip_stage_markers('\n'.join(lines))
 
@@ -2422,6 +2491,7 @@ def format_tradecard_telegram(
         _append_source(lines)
         lines.append('Paper only — no order execution.')
         _append_freshness(lines)
+        _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='stale'))
         if is_tradecard_audit_status(status):
@@ -2441,6 +2511,7 @@ def format_tradecard_telegram(
         _append_source(lines)
         lines.append('Paper only.')
         _append_freshness(lines)
+        _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
         return strip_stage_markers('\n'.join(lines))
@@ -2467,6 +2538,7 @@ def format_tradecard_telegram(
         _append_source(lines)
         lines.append('Paper only.')
         _append_freshness(lines)
+        _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason or 'market closed/after-hours'))
         _save_latest(card, ticker=effective_ticker, status='NEXT_SESSION_WATCH', audit_only=True)
@@ -2485,6 +2557,7 @@ def format_tradecard_telegram(
         _append_source(lines)
         lines.append('Paper only.')
         _append_freshness(lines)
+        _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason))
         _save_latest(card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
@@ -2503,6 +2576,7 @@ def format_tradecard_telegram(
         _append_source(lines)
         lines.append('Paper only.')
         _append_freshness(lines)
+        _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
         if explain:
             explain_variant = 'wait' if status in ('WAIT_FOR_PULLBACK', 'WAIT_FOR_VOLUME') else 'entry_missed'
             lines.extend(_tradecard_explain_lines(variant=explain_variant, reason=reason))
@@ -2523,6 +2597,7 @@ def format_tradecard_telegram(
         _append_source(lines)
         lines.append('Paper only.')
         _append_freshness(lines)
+        _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
         _persist_tradecard_journal(card)
@@ -2561,6 +2636,7 @@ def format_tradecard_telegram(
                 current_price=_safe_float(card.get('current_price')),
             )]
             _append_freshness(lines)
+            _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=active_card, freshness_meta=freshness_meta)
             _save_latest(active_card, ticker=effective_ticker, status='VALID_ENTRY')
             return strip_stage_markers('\n'.join(lines))
 
@@ -2583,6 +2659,7 @@ def format_tradecard_telegram(
         lines.append(postmarket_line)
     _append_source(lines)
     _append_freshness(lines)
+    _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
     lines.append('Paper only — you decide and place trades manually.')
     _persist_tradecard_journal(card)
     journal_card = dict(card)

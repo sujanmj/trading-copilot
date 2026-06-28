@@ -645,16 +645,21 @@ def run_feed_text_only(args: str = '') -> dict[str, Any]:
 
 
 def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[str, Any]:
-    from backend.telegram.response_format import format_tradecard_telegram
+    from backend.telegram.response_format import format_tradecard_evidence_explain_telegram, format_tradecard_telegram
     from backend.trading.tradecard_journal import format_tradecard_journal_telegram, format_tradecard_outcome_telegram
     from backend.trading.tradecard_latest import (
         NO_LATEST_MESSAGE,
         is_latest_tradecard_expired,
         load_latest_tradecard,
     )
-    from backend.trading.tradecard_refresh import parse_tradecard_args, refresh_tradecard_market_data
+    from backend.trading.tradecard_refresh import (
+        parse_tradecard_args,
+        parse_tradecard_explain_ticker,
+        refresh_tradecard_market_data,
+    )
 
     force, explain, mode = parse_tradecard_args(args)
+    explain_ticker = parse_tradecard_explain_ticker(args)
     effective_chat_id = chat_id or 'default'
     if mode == 'journal':
         text = format_tradecard_journal_telegram()
@@ -663,6 +668,22 @@ def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[st
         text = format_tradecard_outcome_telegram()
         return _runner_result('tradecard_outcome', text=text)
     if explain:
+        if explain_ticker:
+            freshness = refresh_tradecard_market_data(
+                effective_chat_id,
+                force=force,
+                skip_card_rebuild=True,
+            )
+            text = format_tradecard_evidence_explain_telegram(
+                explain_ticker,
+                freshness_meta=freshness,
+            )
+            return _runner_result(
+                'tradecard',
+                text=text,
+                payload={'freshness': freshness, 'ticker': explain_ticker},
+                mode='explain',
+            )
         latest = load_latest_tradecard(effective_chat_id)
         if not latest or is_latest_tradecard_expired(latest):
             return _runner_result('tradecard', text=NO_LATEST_MESSAGE, mode='explain')

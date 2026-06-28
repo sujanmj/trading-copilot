@@ -201,6 +201,23 @@ def parse_tradecard_args(args: str) -> tuple[bool, bool, str]:
     return force, explain, mode
 
 
+def parse_tradecard_explain_ticker(args: str) -> str:
+    """Return ticker from `/tradecard explain <ticker>` without changing legacy tuple parser."""
+    raw_tokens = [t.strip() for t in str(args or '').split() if t.strip()]
+    lower_tokens = [t.lower() for t in raw_tokens]
+    if 'explain' not in lower_tokens:
+        return ''
+    idx = lower_tokens.index('explain')
+    for token in raw_tokens[idx + 1:]:
+        cleaned = token.strip().upper().lstrip('/').replace(',', '')
+        if not cleaned or cleaned.lower() in ('fresh', 'full', 'detail', 'details'):
+            continue
+        if cleaned.lower() in ('journal', 'outcome'):
+            continue
+        return ''.join(ch for ch in cleaned if ch.isalnum() or ch in ('.', '&', '-'))
+    return ''
+
+
 def refresh_tradecard_market_data(
     chat_id: str | None = None,
     *,
