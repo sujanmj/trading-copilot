@@ -3,7 +3,7 @@
 Validate clean Telegram output wiring (Stage 50O).
 
 Prints TELEGRAM_OUTPUT_CLEAN_OK on success.
-Marker: TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL
+Marker: TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(Path.cwd().resolve()) != str(PROJECT_ROOT.resolve()):
     os.chdir(PROJECT_ROOT)
 
-MARKER = 'TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL'
+MARKER = 'TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS'
 BLOCKED_RESPONSE = (
     "I can't place orders. Try /today, /tomorrow, /aihub scan, or /ask ai <question>."
 )

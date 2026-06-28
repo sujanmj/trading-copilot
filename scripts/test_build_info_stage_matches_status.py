@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 50O — build-info stage matches /status Telegram build."""
+"""Stage 51A — build-info stage matches canonical /status Telegram build."""
 
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
-    from backend.telegram.response_format import format_status_text
+    from backend.telegram.lazy_command_runner import format_canonical_status_text
 
     stage = get_astraedge_build_stage()
-    if stage != '50Z' or ASTRAEDGE_BUILD_STAGE != '50Z':
-        return _fail(f'expected build stage 50Z got {stage!r}')
+    if stage != '51A' or ASTRAEDGE_BUILD_STAGE != '51A':
+        return _fail(f'expected build stage 51A got {stage!r}')
 
-    status = format_status_text()
+    status = format_canonical_status_text()
     if ASTRAEDGE_TELEGRAM_BUILD not in status:
         return _fail('/status missing Telegram build label')
 

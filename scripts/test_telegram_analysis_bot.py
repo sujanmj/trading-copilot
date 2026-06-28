@@ -144,7 +144,7 @@ def main() -> int:
         return _fail('telegram_analysis_bot must not reference run_local')
     if STAGE_MARKER not in bot_src:
         return _fail('stage marker missing from bot module')
-    if STAGE_MARKER != 'TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL':
+    if STAGE_MARKER != 'TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS':
         return _fail('unexpected stage marker')
 
     print('TELEGRAM_ANALYSIS_BOT_TEST_OK')

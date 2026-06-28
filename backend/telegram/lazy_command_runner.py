@@ -15,7 +15,19 @@ from typing import Any
 from backend.storage.data_paths import get_data_path
 from backend.utils.config import DATA_DIR
 
-STAGE_MARKER = 'TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL'
+STAGE_MARKER = 'TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS'
+
+CANONICAL_FULL_REFRESH_CACHE_LABELS: dict[str, str] = {
+    'runtime_snapshot': 'Runtime snapshot',
+    'latest_news': 'News',
+    'budget': 'Budget',
+    'theme_catalyst': 'Theme catalysts',
+    'catalyst_radar': 'Catalysts',
+    'aihub_brain': 'AIHub brain',
+    'aihub_govt': 'AIHub govt',
+    'aihub_market': 'AIHub market',
+    'broker': 'Broker (optional/skipped)',
+}
 
 FULL_SNAPSHOT_SEQUENCE: tuple[str, ...] = (
     '/status',
@@ -739,3 +751,105 @@ def run_myfeed_only(args: str = '') -> dict[str, Any]:
     else:
         text = 'Usage: /myfeed list · /myfeed list verified · /myfeed list unverified · /myfeed list all · /myfeed today · /myfeed scan'
     return _runner_result('myfeed', text=text)
+
+
+def format_canonical_status_text() -> str:
+    """Canonical /status — same path as telegram_listener._cmd_status_body."""
+    try:
+        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+        from backend.runtime.runtime_state import get_runtime_state
+        from backend.telegram.formatting.telegram_formatter import format_for_command, format_status
+
+        rs = get_runtime_state(force_refresh=True)
+        msg = format_for_command(format_status(rs), 'status')
+        return f'{msg}\nTelegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>'
+    except Exception as exc:
+        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+
+        return (
+            '<b>📡 System Status</b>\n'
+            f'<i>Runtime state unavailable ({str(exc)[:80]})</i>\n'
+            f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>'
+        )
+
+
+def _format_cache_refresh_lines(cache_results: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for row in cache_results:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get('cache') or '')
+        label = CANONICAL_FULL_REFRESH_CACHE_LABELS.get(
+            name,
+            name.replace('_', ' ').title() or 'Cache',
+        )
+        status = str(row.get('status') or 'unknown')
+        if status == 'rebuilt':
+            status = 'rebuilt/fresh'
+        lines.append(f'• {label}: {status}')
+    return lines
+
+
+def run_canonical_full_refresh(*, timeout_sec: int | None = None) -> dict[str, Any]:
+    """Canonical /refresh full — intelligence cache refresh from telegram_listener."""
+    import os
+    import time
+
+    timeout = timeout_sec or int(os.environ.get('TELEGRAM_REFRESH_TIMEOUT', '600'))
+    started = time.time()
+    deadline = started + timeout
+    cache_results: list[dict[str, Any]] = []
+    try:
+        from backend.orchestration import telegram_listener as listener
+
+        if hasattr(listener, '_invalidate_runtime_cache'):
+            listener._invalidate_runtime_cache('telegram_analysis_refresh')
+        cache_results = listener._refresh_intelligence_caches_for_full_refresh(deadline)
+    except Exception as exc:
+        cache_results = [{'cache': 'refresh', 'status': 'skipped', 'detail': str(exc)[:120]}]
+    try:
+        from backend.runtime.runtime_state import build_runtime_state
+
+        build_runtime_state(force_refresh=True)
+    except Exception:
+        pass
+    elapsed = int(time.time() - started)
+    header = (
+        '<b>✅ Full refresh complete</b>'
+        if elapsed < timeout and cache_results
+        else '<b>⏱️ Full refresh partial</b>'
+    )
+    lines = [
+        header,
+        f'Finished in {elapsed}s · canonical cache refresh',
+        '',
+        '<b>Caches</b>',
+        *_format_cache_refresh_lines(cache_results),
+        '<i>No restart or redeploy.</i>',
+    ]
+    return _runner_result(
+        'refresh_full',
+        text='\n'.join(lines),
+        payload={'caches': cache_results, 'elapsed_sec': elapsed},
+    )
+
+
+def format_canonical_health_text() -> str:
+    """Canonical /health for production analysis bot."""
+    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+
+    lines = [
+        '<b>🩺 Health</b>',
+        'Active bot: <code>telegram_analysis_bot</code>',
+        'Command router: <code>canonical</code>',
+    ]
+    try:
+        from backend.storage.data_paths import data_preserved, get_data_root
+
+        root = get_data_root()
+        lines.append(f'Data root: <code>{root.as_posix()}</code>')
+        lines.append(f"Data preserved: {'yes' if data_preserved() else 'check'}")
+    except Exception as exc:
+        lines.append(f'Status: degraded ({str(exc)[:80]})')
+    lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
+    return '\n'.join(lines)

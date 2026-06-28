@@ -1,8 +1,8 @@
 """
-Telegram Analysis Bot — main user-facing interface (Stage 45TG5).
+Telegram Analysis Bot — main user-facing interface (Stage 51A).
 
 Research-only analysis; trade execution disabled internally.
-Marker: TELEGRAM_STAGE_45TG5_OUTPUT_CLEAN_AIHUB_FULL
+Marker: TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS
 """
 
 from __future__ import annotations
@@ -29,10 +29,13 @@ from backend.telegram.ai_usage_guard import (
 from backend.telegram.lazy_command_runner import (
     FULL_SNAPSHOT_SEQUENCE,
     STAGE_MARKER,
+    format_canonical_health_text,
+    format_canonical_status_text,
     run_action_plan_only,
     run_aihub_brain_full_only,
     run_aihub_full_only,
     run_broker_only,
+    run_canonical_full_refresh,
     run_daily_pack_only,
     run_global_only,
     run_market_only,
@@ -53,7 +56,6 @@ from backend.telegram.response_format import (
     TRADE_EXECUTION_PERMANENTLY_DISABLED,
     format_aihub_menu,
     format_aihub_payload,
-    format_status_text,
     format_why_ticker,
     strip_stage_markers,
 )
@@ -99,7 +101,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 <b>Refresh:</b>
 /refresh — quick scoped refresh
 /refresh quick — quick scoped refresh
-/refresh full — full closed-market refresh
+/refresh full — full canonical cache refresh
 
 <b>AI Hub:</b>
 /aihub — tab menu
@@ -465,14 +467,8 @@ def _handle_refresh(scope: str) -> str:
         ]
         return '\n'.join(lines)
     if scope_norm == 'full':
-        result = _scoped_refresh('closed-market')
-        lines = [
-            '<b>🔄 Full refresh started</b>',
-            f"Status: {'ok' if result.get('ok') else 'partial'}",
-            f"Daily pack: {result.get('daily_pack', '—')}",
-            '<i>Background refresh — DB and /app/data preserved.</i>',
-        ]
-        return '\n'.join(lines)
+        result = run_canonical_full_refresh()
+        return result.get('text') or 'Full refresh failed.'
     result = _scoped_refresh(scope_norm)
     return (
         f"<b>🔄 Refresh ({scope_norm})</b>\n"
@@ -482,28 +478,7 @@ def _handle_refresh(scope: str) -> str:
 
 
 def _handle_health() -> str:
-    lines = ['<b>🩺 Health</b>']
-    try:
-        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
-        from backend.storage.data_paths import data_preserved, get_data_root
-        from backend.utils.telegram_guard import is_telegram_listener_enabled, is_telegram_send_enabled
-
-        root = get_data_root()
-        lines.append(f"Data root: <code>{root.as_posix()}</code>")
-        lines.append(f"Data preserved: {'yes' if data_preserved() else 'check'}")
-        lines.append(
-            f"Telegram listener/sends: "
-            f"{'on' if is_telegram_listener_enabled() and is_telegram_send_enabled() else 'off'}"
-        )
-    except Exception as exc:
-        lines.append(f'Status: degraded ({str(exc)[:80]})')
-    try:
-        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
-
-        lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
-    except Exception:
-        lines.append('Telegram build: <code>AstraEdge 50C</code>')
-    return '\n'.join(lines)
+    return format_canonical_health_text()
 
 
 def _handle_schedule() -> str:
@@ -662,8 +637,8 @@ def handle_analysis_command(
     if cmd in ('start', 'help', 'h', 'commands'):
         response_text = HELP_TEXT
     elif cmd == 'status':
-        result = run_without_ai(lambda: {'text': format_status_text()}, command='status')
-        response_text = result.get('text') or format_status_text()
+        result = run_without_ai(lambda: {'text': format_canonical_status_text()}, command='status')
+        response_text = result.get('text') or format_canonical_status_text()
     elif cmd == 'memory':
         result = run_without_ai(run_memory_only, command='memory')
         response_text = result.get('text') or 'Memory unavailable.'
