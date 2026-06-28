@@ -48,6 +48,14 @@ def enforce_char_limit(text: str, max_chars: int = MAX_TELEGRAM_CHARS) -> str:
     return text[: max_chars - 20] + '\n… (truncated)'
 
 
+def sanitize_telegram_text(text: str) -> str:
+    body = str(text or '')
+    body = re.sub(r'\uFFFD+', '', body)
+    body = body.replace('��', '')
+    body = re.sub(r'[ \t]+\n', '\n', body)
+    return body.strip()
+
+
 def format_for_command(text: str, command: str) -> str:
     cmd = str(command or 'brain').lower().strip().lstrip('/')
     max_lines = COMMAND_LINE_LIMITS.get(cmd, DEFAULT_MAX_LINES)
@@ -59,7 +67,7 @@ def format_for_command(text: str, command: str) -> str:
         out = dedupe_session_banners(out)
     except Exception:
         pass
-    return out
+    return sanitize_telegram_text(out)
 
 
 def _sanitize_section_line(prefix: str, body: str) -> str:
@@ -281,7 +289,26 @@ def _status_cache_line(label: str, row: Optional[dict]) -> str:
         return f"{label}: optional / {reason}"
     age = row.get('age_display') or status or '-'
     stale = bool(row.get('stale')) or status in ('stale', 'missing')
-    return f"{label}: {age} ({status}){_status_stale_suffix(stale)}"
+    suffix = _status_stale_suffix(stale)
+    reason = row.get('reason')
+    if stale and reason:
+        return f"{label}: {age} ({status}){suffix} — {reason}"
+    return f"{label}: {age} ({status}){suffix}"
+
+
+def _active_book_count_label() -> str:
+    try:
+        from backend.lifecycle.prediction_lifecycle_engine import get_active_predictions_payload
+
+        payload = get_active_predictions_payload()
+        count = payload.get('count')
+        if count is None:
+            preds = payload.get('predictions') or []
+            count = len(preds) if isinstance(preds, list) else 0
+        source = payload.get('source') or 'active_predictions'
+        return f"active_book {int(count)} ({source})"
+    except Exception:
+        return "active_book unavailable"
 
 
 def _status_runtime_snapshot_line(row: Optional[dict]) -> str:
@@ -329,10 +356,18 @@ def format_status(runtime_state: dict) -> str:
     alert_line = 'eligible' if alert.get('eligible') else 'blocked'
     if alert.get('execution_eligible') is False and alert.get('eligible'):
         alert_line = 'intel-only'
+    suppressed_today = alert.get('suppression_count') or tg.get('suppressed_today', 0)
     lines.append(
         f"Alerts: {alert_line} · sent {tg.get('alerts_sent_today', 0)} · "
-        f"suppressed {tg.get('suppressed_today', 0)}"
+        f"suppressed {suppressed_today}"
     )
+    if alert.get('last_suppression_reason'):
+        lines.append(f"Last suppression reason: {alert.get('last_suppression_reason')}")
+    if alert.get('duplicate_alerts_avoided') or alert.get('ai_calls_avoided'):
+        lines.append(
+            f"Duplicate alerts avoided: {alert.get('duplicate_alerts_avoided', 0)} · "
+            f"AI calls avoided: {alert.get('ai_calls_avoided', 0)}"
+        )
 
     lines.append('<b>Core runtime freshness</b>')
     lines.append(_status_runtime_snapshot_line(fresh))
@@ -378,8 +413,10 @@ def format_status(runtime_state: dict) -> str:
     archived = sections.get('archived') or {}
     if sections:
         lines.append('<b>Metrics</b>')
+        active_book_label = _active_book_count_label()
+        live_pending = live.get('active_predictions', counts.get('pending', 0))
         lines.append(
-            f"LIVE: active {live.get('active_predictions', counts.get('pending', 0))} · "
+            f"LIVE: {active_book_label} · live_session_pending {live_pending} · "
             f"resolved today {live.get('resolved_today', 0)}"
         )
         lines.append(

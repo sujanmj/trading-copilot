@@ -358,6 +358,21 @@ def _win_rate_line(m: dict, actionable: int) -> str:
     return format_win_rate_line(m)
 
 
+def _active_book_count_label() -> str:
+    try:
+        from backend.lifecycle.prediction_lifecycle_engine import get_active_predictions_payload
+
+        payload = get_active_predictions_payload()
+        count = payload.get('count')
+        if count is None:
+            preds = payload.get('predictions') or []
+            count = len(preds) if isinstance(preds, list) else 0
+        source = payload.get('source') or 'active_predictions'
+        return f"{int(count)} ({source})"
+    except Exception:
+        return "unavailable"
+
+
 def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'today') -> str:
     snap = get_unified_snapshot()
     sections = snap.get('metric_sections') or {}
@@ -375,8 +390,8 @@ def format_stats_telegram(metrics: Optional[dict] = None, *, session: str = 'tod
 
     msg = '<b>📊 Trading Copilot Stats</b>\n\n'
     msg += '<b>LIVE SESSION</b>\n'
-    msg += f"Active predictions: {live.get('active_predictions', live.get('pending', 0))}\n"
-    msg += f"Pending: {live.get('pending', 0)}\n"
+    msg += f"Active book: {_active_book_count_label()}\n"
+    msg += f"Live-session pending: {live.get('active_predictions', live.get('pending', 0))}\n"
     msg += f"Resolved today: {live.get('resolved_today', 0)}"
     if live.get('wins_today') or live.get('losses_today'):
         msg += f" · {live.get('wins_today', 0)}W/{live.get('losses_today', 0)}L"
@@ -412,8 +427,8 @@ def format_outcomes_telegram(metrics: Optional[dict] = None) -> str:
 
     msg = '<b>📊 Outcomes</b>\n\n'
     msg += '<b>LIVE SESSION</b>\n'
-    msg += f"Active predictions: {live.get('active_predictions', live.get('pending', 0))}\n"
-    msg += f"Pending: {live.get('pending', 0)}\n"
+    msg += f"Active book: {_active_book_count_label()}\n"
+    msg += f"Live-session pending: {live.get('active_predictions', live.get('pending', 0))}\n"
     msg += f"Resolved today: {live.get('resolved_today', 0)}\n\n"
 
     msg += '<b>HISTORICAL CALIBRATION</b>\n'

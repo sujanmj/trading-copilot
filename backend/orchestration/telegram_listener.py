@@ -1041,6 +1041,15 @@ def cmd_unsilence():
         SILENCE_FILE.unlink()
     send_message("🔔 Alerts resumed")
 
+def cmd_missed():
+    try:
+        from backend.orchestration.alert_quality_engine import format_missed_opportunities
+
+        send_message(format_missed_opportunities(), command='missed')
+    except Exception as e:
+        send_message(f"âš  Missed opportunities unavailable: {str(e)[:160]}", command='missed')
+
+
 def cmd_review():
     """Consolidated institutional review — cache-only, 3 grouped messages."""
     from backend.orchestration.telegram_command_guard import begin_command, duplicate_command_message, finish_command
@@ -1101,6 +1110,7 @@ def cmd_help():
 <b>📈 INFO:</b>
 /status - System health check
 /stats - Trading accuracy stats
+/missed - Missed-entry opportunities logged today
 
 <b>🔧 CONTROL:</b>
 /silence &lt;min&gt; - Mute alerts (e.g. /silence 60)
@@ -1178,6 +1188,8 @@ def handle_command(text, from_user):
         cmd_status()
     elif cmd in ('stats', 'accuracy'):
         cmd_stats()
+    elif cmd in ('missed', 'misses'):
+        cmd_missed()
     elif cmd in ('ask', 'q', 'question'):
         cmd_ask(args, from_user)
     # Control

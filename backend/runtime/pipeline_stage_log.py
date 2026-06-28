@@ -154,6 +154,12 @@ def _filter_active_stalls(
         fresh_threshold = STALE_MIN_MINUTES
     except Exception:
         fresh_threshold = 15
+    if after_hours:
+        try:
+            from backend.runtime.snapshot_freshness_monitor import CLOSED_MARKET_STALE_MINUTES
+            fresh_threshold = CLOSED_MARKET_STALE_MINUTES
+        except Exception:
+            fresh_threshold = 360
     if snapshot_age_minutes >= fresh_threshold:
         return active
     filtered = []

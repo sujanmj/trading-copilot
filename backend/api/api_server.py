@@ -1382,7 +1382,7 @@ def api_runtime_audit(limit: int = Query(50, ge=1, le=200)):
 def api_runtime_debug():
     """Lightweight debug payload for GUI debug overlay."""
     from backend.runtime.runtime_state import build_runtime_state
-    from backend.logs.alert_suppression import suppression_summary
+    from backend.orchestration.alert_suppression_log import suppression_summary
     from backend.orchestration.alert_deduplication import get_dedup_summary
     from backend.orchestration.alert_filters import get_telegram_alert_obs_summary
 

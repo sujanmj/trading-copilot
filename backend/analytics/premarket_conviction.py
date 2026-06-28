@@ -1109,7 +1109,29 @@ def send_scheduled_premarket(slot: str, *, send_fn: Optional[Callable[[str], boo
     elif slot in ('open_confirmation', 'premarket_confirm'):
         mapped_slot = 'open_confirmation'
 
-    text = format_premarket_telegram(full=full, report=report, slot=mapped_slot)
+    try:
+        from backend.orchestration.alert_quality_engine import (
+            evaluate_scheduled_premarket_alert,
+            record_scheduled_premarket_sent,
+        )
+
+        quality_decision = evaluate_scheduled_premarket_alert(mapped_slot, report, now=now)
+    except Exception as exc:
+        _log(f'alert quality gate failed slot={slot}: {exc}')
+        quality_decision = {'send': True, 'reason': 'quality_gate_unavailable', 'deltas': []}
+
+    if not quality_decision.get('send'):
+        _log(
+            'scheduled premarket suppressed '
+            f"slot={slot} reason={quality_decision.get('reason', 'unknown')}"
+        )
+        return False
+
+    if quality_decision.get('warning_only'):
+        text = str(quality_decision.get('warning_text') or 'No fresh live setups yet — waiting for scanner.')
+    else:
+        text = format_premarket_telegram(full=full, report=report, slot=mapped_slot)
+
     if send_fn:
         sent = bool(send_fn(text))
     else:
@@ -1131,6 +1153,10 @@ def send_scheduled_premarket(slot: str, *, send_fn: Optional[Callable[[str], boo
                 score=65.0 if not fresh_ok else None,
                 reason=f'premarket slot={slot}',
             )
+        except Exception:
+            pass
+        try:
+            record_scheduled_premarket_sent(mapped_slot, quality_decision)
         except Exception:
             pass
     return sent

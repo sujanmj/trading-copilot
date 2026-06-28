@@ -134,7 +134,7 @@ class AlertObservability:
         self._data['low_confidence_skips'] = self._data['low_confidence_skips'][-60:]
         self.persist()
         try:
-            from backend.logs.alert_suppression import log_suppression
+            from backend.orchestration.alert_suppression_log import log_suppression
             log_suppression(
                 reason=reason,
                 category=category,
@@ -152,6 +152,8 @@ class AlertObservability:
         self.persist()
 
     def summary(self) -> dict:
+        recent_suppressed = (self._data.get('suppressed_today') or [])[-8:]
+        last_suppressed = recent_suppressed[-1] if recent_suppressed else {}
         return {
             'date': self._data.get('date'),
             'alerts_sent_today': len(self._data.get('sent_today') or []),
@@ -161,7 +163,10 @@ class AlertObservability:
             'low_confidence_skips': len(self._data.get('low_confidence_skips') or []),
             'emergency_triggers': len(self._data.get('emergency_triggers') or []),
             'recent_sent': (self._data.get('sent_today') or [])[-8:],
-            'recent_suppressed': (self._data.get('suppressed_today') or [])[-8:],
+            'recent_suppressed': recent_suppressed,
+            'last_suppression_reason': last_suppressed.get('reason') or '',
+            'last_suppression_detail': last_suppressed.get('detail') or '',
+            'ai_calls_avoided': len(self._data.get('suppressed_today') or []),
         }
 
 
@@ -283,7 +288,7 @@ def should_send_alert(
             detail = f'age={fresh.get("age_display")}'
             _obs.record_suppressed(category, 'stale_snapshot', detail)
             try:
-                from backend.logs.alert_suppression import log_dispatch_debug
+                from backend.orchestration.alert_suppression_log import log_dispatch_debug
                 log_dispatch_debug(
                     ticker=ticker or category,
                     reason='stale_snapshot',

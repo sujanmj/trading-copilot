@@ -85,6 +85,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /memory — market memory
 /broker — broker intelligence
 /qa — QA status
+/missed — missed-entry opportunities logged today
 
 <b>Action:</b>
 /action plan — final action plan
@@ -801,11 +802,29 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_catalysts_only(args), command='catalysts')
         response_text = result.get('text') or 'Catalyst radar unavailable.'
+    elif cmd in ('missed', 'misses'):
+        from backend.orchestration.alert_quality_engine import format_missed_opportunities
+
+        response_text = run_without_ai(
+            lambda: {'text': format_missed_opportunities()},
+            command='missed',
+        ).get('text') or 'Missed opportunities unavailable.'
     else:
         response_text = format_unknown_command_response(cmd, args)
 
     if not response_text:
         response_text = 'No response generated.'
+    if not dry_run and not in_full_snapshot and cmd in ('premarket', 'morning', 'today', 'tomorrow'):
+        try:
+            from backend.orchestration.alert_quality_engine import evaluate_text_alert, record_text_alert_sent
+
+            gate_cmd = 'premarket_full' if cmd == 'premarket' and (args or '').strip().lower() == 'full' else cmd
+            gate = evaluate_text_alert(gate_cmd, response_text)
+            if not gate.get('send'):
+                return []
+            record_text_alert_sent(gate_cmd, gate)
+        except Exception:
+            pass
     return [send_analysis_message(response_text, command=cmd, dry_run=dry_run)]
 
 

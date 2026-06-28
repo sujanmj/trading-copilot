@@ -806,6 +806,7 @@ def _bullet_lines_from_rows(
 def strip_stage_markers(text: str) -> str:
     """Remove internal stage markers and repeated safety footers from outbound Telegram text."""
     body = str(text or '')
+    body = re.sub(r'\uFFFD+', '', body).replace('��', '')
     body = re.sub(
         r'<code>\s*(TELEGRAM_STAGE|GUI_BUILD_STAGE|BACKEND_STAGE|QA_STAGE)[_\w]*\s*</code>\s*',
         '',
@@ -1778,6 +1779,18 @@ def _format_static_theme_freshness_line(path: Path) -> str:
     return _format_feed_freshness_line('Legacy theme cache', path)
 
 
+def _format_aihub_cache_freshness_line(label: str, path: Path) -> str:
+    from backend.telegram.freshness_consistency import format_compact_freshness_line
+
+    if not path.is_file():
+        return f'{label}: unavailable — cache file missing'
+    try:
+        age_min = max(0, int((datetime.now(timezone.utc).timestamp() - path.stat().st_mtime) // 60))
+    except OSError:
+        return f'{label}: unavailable — cache timestamp unreadable'
+    return format_compact_freshness_line(label, age_min)
+
+
 def _format_runtime_snapshot_freshness_line(*, fallback_report_path: Path | None = None) -> str:
     from backend.storage.data_paths import get_data_path
     from backend.telegram.freshness_consistency import (
@@ -1869,9 +1882,9 @@ def format_status_text() -> str:
         legacy_theme_path = get_data_path('theme_baskets.json')
         if legacy_theme_path.is_file():
             lines.append(_format_static_theme_freshness_line(legacy_theme_path))
-        lines.append(_format_feed_freshness_line('AIHub brain cache', get_data_path('cache/aihub_tabs/brain.json')))
-        lines.append(_format_feed_freshness_line('AIHub govt cache', get_data_path('cache/aihub_tabs/govt.json')))
-        lines.append(_format_feed_freshness_line('AIHub market cache', get_data_path('cache/aihub_tabs/market.json')))
+        lines.append(_format_aihub_cache_freshness_line('AIHub brain cache', get_data_path('cache/aihub_tabs/brain.json')))
+        lines.append(_format_aihub_cache_freshness_line('AIHub govt cache', get_data_path('cache/aihub_tabs/govt.json')))
+        lines.append(_format_aihub_cache_freshness_line('AIHub market cache', get_data_path('cache/aihub_tabs/market.json')))
         if DAILY_PACK_FILE.is_file():
             lines.append(_format_feed_freshness_line('Legacy report cache', DAILY_PACK_FILE))
         lines.append('<b>Optional</b>')
@@ -1883,6 +1896,28 @@ def format_status_text() -> str:
         lines.append('Latest news: unavailable')
         lines.append('Latest budget cache: unavailable')
         lines.append('Latest budget theme cache: unavailable')
+
+    try:
+        from backend.orchestration.alert_suppression_log import suppression_summary
+        from backend.orchestration.alert_filters import get_telegram_alert_obs_summary
+
+        sup = suppression_summary(limit=100)
+        obs = get_telegram_alert_obs_summary()
+        sent = obs.get('alerts_sent_today', 0) or sup.get('sent_count', 0)
+        suppressed = obs.get('suppressed_today', 0) or sup.get('suppression_count', 0)
+        alert_state = 'eligible' if telegram_enabled else 'disabled'
+        lines.append('<b>Alerts</b>')
+        lines.append(f"Alerts: {alert_state} · sent {sent} · suppressed {suppressed}")
+        last_reason = sup.get('last_reason') or obs.get('last_suppression_reason')
+        if last_reason:
+            lines.append(f"Last suppression reason: {last_reason}")
+        if sup.get('duplicate_alerts_avoided') or sup.get('ai_calls_avoided'):
+            lines.append(
+                f"Duplicate alerts avoided: {sup.get('duplicate_alerts_avoided', 0)} · "
+                f"AI calls avoided: {sup.get('ai_calls_avoided', 0)}"
+            )
+    except Exception:
+        pass
 
     try:
         from backend.telegram.lazy_command_runner import (
@@ -1969,6 +2004,9 @@ def format_intraday_anomaly_alert(
         str(signal.get('reason') or signal.get('detail') or signal.get('setup') or 'Scanner anomaly detected'),
         max_len=160,
     )
+    missed_line = ''
+    if label == 'ENTRY MISSED' or str(status).upper() == 'ENTRY MISSED':
+        missed_line = '\nMissed — no chase. Waiting for pullback/retest.'
     return (
         f'<b>⚡ INTRADAY ALERT</b> <code>{ticker}</code>\n'
         f'<b>Move:</b> {chg:+.2f}%\n'
@@ -1977,6 +2015,7 @@ def format_intraday_anomaly_alert(
         f'<b>Action:</b> {label}\n'
         f'<b>Reason:</b> {reason}\n'
         f'<b>Entry status:</b> {status}'
+        f'{missed_line}'
     )
 
 

@@ -373,6 +373,12 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
         )
 
     alert_lines = format_daily_review_alert_lines(summary, tracking)
+    try:
+        from backend.orchestration.alert_quality_engine import format_daily_review_quality_lines
+
+        quality_lines = format_daily_review_quality_lines()
+    except Exception:
+        quality_lines = []
 
     best_lines = [format_outcome_line(r) for r in (summary.get('best') or [])]
     worst_lines = [format_outcome_line(r) for r in (summary.get('worst') or [])]
@@ -392,7 +398,8 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
         f"{alert_lines[0]}\n"
         f"{alert_lines[1] if len(alert_lines) > 1 else ''}\n"
         f"Pending Active: {pending.get('pending_active', 0)} · "
-        f"Expired: {pending.get('expired', summary.get('expired', 0))}\n\n"
+        f"Expired: {pending.get('expired', summary.get('expired', 0))}\n"
+        f"{chr(10).join(quality_lines)}\n\n"
         f"<b>Best:</b>\n{chr(10).join(best_lines) if best_lines else '—'}\n\n"
         f"<b>Worst:</b>\n{chr(10).join(worst_lines) if worst_lines else '—'}\n\n"
         f"<b>Premarket:</b>\n"

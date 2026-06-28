@@ -7,6 +7,7 @@ When stale: intelligence degraded, confidence suppressed, elite outputs blocked,
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ from backend.utils.config import DATA_DIR
 
 IST = pytz.timezone('Asia/Kolkata')
 HEARTBEAT_FILE = DATA_DIR / 'collector_heartbeats.json'
+CLOSED_MARKET_STALE_MINUTES = int(os.environ.get('CLOSED_MARKET_SNAPSHOT_STALE_MINUTES', '360'))
 
 DEFAULT_SLA_SECONDS = {
     'intelligence': 1800,
@@ -103,6 +105,27 @@ def _pipeline_stalled() -> bool:
         return False
 
 
+def _closed_market_context() -> dict[str, Any]:
+    try:
+        from backend.utils.market_hours import get_operational_status
+
+        op = get_operational_status()
+        period = str(op.get('period') or '').lower()
+        state = str(op.get('canonical_lifecycle') or op.get('lifecycle_state') or '').upper()
+        closed = (
+            bool(op.get('after_hours_mode'))
+            or bool(op.get('expect_quiet_collectors'))
+            or op.get('market_hours') is False
+            or period in ('post_market', 'after_hours', 'night', 'weekend', 'holiday')
+            or state in ('AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY')
+        )
+        premarket = period in ('pre_market', 'premarket') or state in ('PREMARKET', 'PRE_MARKET')
+        live = bool(op.get('market_hours')) or state in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE')
+        return {'closed': bool(closed and not premarket and not live), 'period': period, 'state': state}
+    except Exception:
+        return {'closed': False, 'period': '', 'state': ''}
+
+
 def evaluate_snapshot_freshness() -> Dict[str, Any]:
     """Assess active snapshot + collector heartbeats against SLA."""
     from backend.intelligence.active_snapshot import get_active_snapshot_meta
@@ -118,8 +141,26 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
     age_minutes = _snapshot_age_minutes_direct()
     tier = freshness_health_tier(age_minutes)
     pipeline_stalled = _pipeline_stalled()
-    stale = tier == 'stale'
+    market_ctx = _closed_market_context()
+    closed_market = bool(market_ctx.get('closed'))
+    closed_threshold = CLOSED_MARKET_STALE_MINUTES
+    closed_market_within_threshold = (
+        closed_market
+        and age_minutes is not None
+        and age_minutes < closed_threshold
+        and not pipeline_stalled
+    )
+    if closed_market_within_threshold:
+        tier = 'healthy'
+    stale = bool(tier == 'stale')
     degraded = is_snapshot_degraded(age_minutes, pipeline_stalled=pipeline_stalled)
+    if closed_market:
+        if age_minutes is not None and age_minutes < closed_threshold and not pipeline_stalled:
+            stale = False
+            degraded = False
+        elif age_minutes is not None and age_minutes >= closed_threshold:
+            stale = True
+            degraded = True
     score = 100
 
     heartbeats = _load_heartbeats().get('sources') or {}
@@ -140,7 +181,10 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         warnings.append('Snapshot timestamp unreadable')
     elif stale:
         score = max(0, score - 40)
-        warnings.append(f'Snapshot older than {STALE_MIN_MINUTES} minutes')
+        if closed_market:
+            warnings.append(f'Snapshot older than closed-market threshold {closed_threshold} minutes')
+        else:
+            warnings.append(f'Snapshot older than {STALE_MIN_MINUTES} minutes')
     elif tier == 'aging':
         score = max(0, score - 10)
     if degraded and not stale:
@@ -164,6 +208,11 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'age_minutes': age_minutes,
         'stale_threshold_minutes': STALE_MIN_MINUTES,
         'degraded_threshold_minutes': DEGRADED_MAX_MINUTES,
+        'closed_market_relaxed': bool(closed_market_within_threshold),
+        'closed_market_stale_threshold_minutes': closed_threshold,
+        'market_closed': closed_market,
+        'market_period': market_ctx.get('period'),
+        'market_state': market_ctx.get('state'),
         'pipeline_stalled': pipeline_stalled,
         'snapshot_version': meta.get('snapshot_version'),
         'active_snapshot_id': meta.get('active_snapshot_id'),
@@ -176,7 +225,19 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'warnings': warnings + collector_issues,
         'collectors_active': len(collector_issues) < len(DEFAULT_SLA_SECONDS),
     }
-    return merge_freshness_payload(result, timestamp=meta.get('published_at'))
+    merged = merge_freshness_payload(result, timestamp=meta.get('published_at'))
+    if closed_market_within_threshold:
+        merged.update({
+            'fresh': True,
+            'stale': False,
+            'degraded': False,
+            'health_tier': 'healthy',
+            'status_label': 'fresh',
+            'suppress_confidence': False,
+            'block_elite_outputs': False,
+            'quality_score_penalty': 0.0,
+        })
+    return merged
 
 
 def apply_stale_degradation(intelligence: dict, freshness: Optional[dict] = None) -> dict:

@@ -310,9 +310,11 @@ def _map_primary_runtime_state(
     except (TypeError, ValueError):
         age_n = None
 
-    snapshot_degraded = bool(freshness.get('degraded')) or (
-        age_n is not None and age_n >= 15
-    )
+    closed_threshold = int(freshness.get('closed_market_stale_threshold_minutes') or 360)
+    strict_age_degraded = age_n is not None and age_n >= 15
+    if after_hours and age_n is not None and age_n < closed_threshold:
+        strict_age_degraded = False
+    snapshot_degraded = bool(freshness.get('degraded')) or strict_age_degraded
     pipeline_stalled = bool(pipeline.get('any_stalled'))
     scanner_ok = bool(scanner_health.get('healthy', True)) and not scanner_health.get('stalled')
     if age_n is not None and age_n < 15 and not pipeline_stalled:
@@ -537,6 +539,55 @@ def _freshest_cache_row(label: str, paths: tuple[Path, ...]) -> Dict[str, Any]:
     return {**best, 'label': label, 'source_files': [str(p) for p in paths], 'candidates': rows}
 
 
+def _cache_mtime_row(
+    label: str,
+    path: Path,
+    *,
+    stale_after_seconds: int = 24 * 3600,
+) -> Dict[str, Any]:
+    if not path.is_file():
+        return {
+            'label': label,
+            'status': 'missing',
+            'age_seconds': None,
+            'age_display': 'missing',
+            'stale': True,
+            'file': str(path),
+            'reason': 'cache file missing',
+        }
+    try:
+        timestamp = datetime.fromtimestamp(path.stat().st_mtime, IST)
+    except OSError:
+        timestamp = None
+    age_seconds = _age_seconds_from_dt(timestamp)
+    stale = bool(age_seconds is None or age_seconds > stale_after_seconds)
+    return {
+        'label': label,
+        'status': 'stale' if stale else ('partial' if age_seconds and age_seconds > 6 * 3600 else 'fresh'),
+        'age_seconds': int(age_seconds) if age_seconds is not None else None,
+        'age_display': _age_display_from_seconds(age_seconds),
+        'timestamp': timestamp.isoformat() if timestamp is not None else None,
+        'timestamp_key': 'mtime',
+        'stale': stale,
+        'file': str(path),
+    }
+
+
+def _aihub_cache_row(label: str, path: Path, tab_meta: dict | None = None) -> Dict[str, Any]:
+    row = _cache_mtime_row(label, path, stale_after_seconds=24 * 3600)
+    meta = tab_meta or {}
+    source_age_h = meta.get('data_age_hours') if 'data_age_hours' in meta else meta.get('age_hours')
+    if source_age_h is not None:
+        try:
+            row['source_age_display'] = _age_display_from_seconds(float(source_age_h) * 3600)
+        except (TypeError, ValueError):
+            pass
+    if meta.get('stale') and not row.get('stale'):
+        row['source_status'] = 'underlying_source_stale'
+        row['reason'] = 'AIHub cache refreshed; underlying source is older than tab SLA'
+    return row
+
+
 def _theme_catalyst_cache_row() -> Dict[str, Any]:
     try:
         from backend.analytics.theme_baskets import BASKETS_FILE
@@ -621,6 +672,12 @@ def _load_intelligence_freshness() -> Dict[str, Any]:
         BUDGET_CACHE_FILE = get_data_path('budget_impact_cache.json')
 
     aihub_dir = DATA_DIR / 'cache' / 'aihub_tabs'
+    try:
+        from backend.analytics.aihub_tab_freshness import get_aihub_tab_freshness_report
+
+        aihub_tabs = (get_aihub_tab_freshness_report().get('tabs') or {})
+    except Exception:
+        aihub_tabs = {}
     rows = {
         'runtime_snapshot': _freshest_cache_row(
             'Runtime snapshot',
@@ -637,9 +694,9 @@ def _load_intelligence_freshness() -> Dict[str, Any]:
         'budget': _cache_row('Budget cache', BUDGET_CACHE_FILE, stale_after_seconds=90 * 60),
         'theme': _theme_catalyst_cache_row(),
         'catalysts': _cache_row('Catalyst radar', DATA_DIR / 'stock_catalyst_radar_latest.json'),
-        'aihub_brain': _cache_row('AIHub brain', aihub_dir / 'brain.json'),
-        'aihub_govt': _cache_row('AIHub govt', aihub_dir / 'govt.json'),
-        'aihub_market': _cache_row('AIHub market', aihub_dir / 'market.json'),
+        'aihub_brain': _aihub_cache_row('AIHub brain', aihub_dir / 'brain.json', aihub_tabs.get('brain')),
+        'aihub_govt': _aihub_cache_row('AIHub govt', aihub_dir / 'govt.json', aihub_tabs.get('govt')),
+        'aihub_market': _aihub_cache_row('AIHub market', aihub_dir / 'market.json', aihub_tabs.get('mkt')),
         'broker': _broker_optional_row(DATA_DIR),
     }
     optional_keys = (
@@ -692,7 +749,7 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
     if ai_blocked and intelligence_status.get('status') == 'degraded':
         reasons.append('missing_ai_confirmation')
     try:
-        from backend.logs.alert_suppression import suppression_summary
+        from backend.orchestration.alert_suppression_log import suppression_summary
         sup = suppression_summary(limit=100)
     except Exception:
         sup = {'suppression_count': 0, 'by_reason': {}}
@@ -708,6 +765,10 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
         'block_reasons': reasons,
         'suppression_count': sup.get('suppression_count', 0),
         'suppression_by_reason': sup.get('by_reason') or {},
+        'last_suppression_reason': sup.get('last_reason') or sup.get('last_suppression_reason') or '',
+        'last_suppression_detail': sup.get('last_detail') or sup.get('last_suppression_detail') or '',
+        'duplicate_alerts_avoided': sup.get('duplicate_alerts_avoided', 0),
+        'ai_calls_avoided': sup.get('ai_calls_avoided', 0),
     }
 
 

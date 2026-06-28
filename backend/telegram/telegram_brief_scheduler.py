@@ -361,6 +361,15 @@ def send_brief(slot: str, *, send_fn: Callable[[str], bool] | None = None) -> bo
     from backend.telegram.response_format import strip_stage_markers
 
     text = strip_stage_markers(builder())
+    try:
+        from backend.orchestration.alert_quality_engine import evaluate_text_alert, record_text_alert_sent
+
+        gate = evaluate_text_alert(f'brief_{slot}', text)
+        if not gate.get('send'):
+            return False
+        record_text_alert_sent(f'brief_{slot}', gate)
+    except Exception:
+        pass
     if send_fn is None:
         from backend.telegram.telegram_analysis_bot import send_analysis_message
 

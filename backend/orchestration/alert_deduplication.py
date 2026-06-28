@@ -127,7 +127,7 @@ def check_duplicate(
             records[fp] = existing
             _save_state(state)
             try:
-                from backend.logs.alert_suppression import log_suppression
+                from backend.orchestration.alert_suppression_log import log_suppression
                 log_suppression(
                     reason='dedupe',
                     category='alert',

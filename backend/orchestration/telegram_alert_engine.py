@@ -230,7 +230,7 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
     except Exception:
         pass
     try:
-        from backend.logs.alert_suppression import log_alert_sent
+        from backend.orchestration.alert_suppression_log import log_alert_sent
         log_alert_sent(category=category, ticker=ticker, detail=detail, confidence=confidence)
     except Exception:
         pass
@@ -490,6 +490,13 @@ def try_intraday_events() -> int:
 
     eligible = []
     for ev in events[:6]:
+        try:
+            from backend.orchestration.alert_quality_engine import should_suppress_entry_missed_intraday
+
+            if should_suppress_entry_missed_intraday(ev):
+                continue
+        except Exception:
+            pass
         ok, _ = should_send_alert(
             INTRADAY_EVENT, ev['confidence'],
             ticker=ev.get('ticker', ''),
@@ -523,6 +530,15 @@ def try_intraday_events() -> int:
     else:
         conf = max(e['confidence'] for e in to_send)
         text = format_intraday_batch(partition, regime)
+        try:
+            from backend.orchestration.alert_quality_engine import evaluate_text_alert, record_text_alert_sent
+
+            gate = evaluate_text_alert('intraday_batch', text)
+            if not gate.get('send'):
+                return 0
+            record_text_alert_sent('intraday_batch', gate)
+        except Exception:
+            pass
         dedupe = f"batch_{datetime.now().strftime('%Y-%m-%d-%H')}"
         if _dispatch(INTRADAY_EVENT, text, conf, 'intraday batch', dedupe_key=dedupe, regime=regime, volatility=vol):
             for ev in to_send:

@@ -306,8 +306,9 @@ def _format_active_predictions_block(ctx: dict) -> str:
     payload = ctx.get('active_payload') or {}
     active = ctx.get('active_list') or []
     count = payload.get('count') or len(active)
+    source = payload.get('source') or 'active_predictions'
     if not active:
-        return f"Active predictions: {count} · none listed in cache"
+        return f"Active book ({source}): {count} · none listed in cache"
     rows = []
     for p in active[:6]:
         if not isinstance(p, dict):
@@ -317,7 +318,7 @@ def _format_active_predictions_block(ctx: dict) -> str:
         cat = p.get('category') or 'opportunity'
         rows.append(f"• <b>{sym}</b> · {state} · {cat}")
     body = '\n'.join(rows) if rows else 'None detailed'
-    return f"Active predictions: {count}\n{body}"
+    return f"Active book ({source}): {count}\n{body}"
 
 
 def _format_system_calibration(snap: MarketSnapshot, ctx: dict) -> str:
@@ -369,6 +370,26 @@ def _format_system_calibration(snap: MarketSnapshot, ctx: dict) -> str:
     resolved_today = live.get('resolved_today', 0)
     wins_today = live.get('wins_today', 0)
     losses_today = live.get('losses_today', 0)
+    try:
+        from backend.orchestration.alert_quality_engine import format_daily_review_quality_lines
+
+        quality_lines = format_daily_review_quality_lines()
+    except Exception:
+        quality_lines = [
+            f"Research watchlist sent: {sent_today}",
+            f"Live confirmed setups: {resolved_today}",
+            "Rejected setups: 0",
+            "Missed opportunities: 0",
+            f"Tradecards generated/filled/resolved W/L/N/P: 0/0/{resolved_today} {wins_today}/{losses_today}/0/{pending}",
+            "Actual learning sample updated: 0",
+            "No tradecard fills today. Watchlist accuracy only.",
+        ]
+    last_suppression = alert.get('last_suppression_reason') or ''
+    duplicate_avoided = int(alert.get('duplicate_alerts_avoided') or 0)
+    ai_avoided = int(alert.get('ai_calls_avoided') or 0)
+    alert_detail_line = (
+        f"Duplicate alerts avoided: {duplicate_avoided} · AI calls avoided: {ai_avoided}"
+    )
 
     active_block = _format_active_predictions_block(ctx)
 
@@ -388,9 +409,8 @@ def _format_system_calibration(snap: MarketSnapshot, ctx: dict) -> str:
         '<b>Active book</b>',
         active_block,
         '',
-        '<b>Live session</b>',
-        f"Pending: {pending} · Resolved today: {resolved_today}",
-        f"Today outcomes: {wins_today}W / {losses_today}L",
+        '<b>Daily review buckets</b>',
+        *quality_lines,
         '',
         '<b>Historical calibration</b>',
         f"Sample: {hist.get('evaluated_sample', metrics.get('evaluated', 0))} · "
@@ -404,6 +424,8 @@ def _format_system_calibration(snap: MarketSnapshot, ctx: dict) -> str:
         f"Partials: {metrics.get('partials', hist.get('partials', 0))}",
         '',
         '<b>Alerts & suppression</b>',
+        alert_detail_line,
+        f"Last suppression reason: {last_suppression}" if last_suppression else '',
         f"State: {alert_state} · sent today {sent_today} · suppressions {suppress}",
         '',
         '<i>End of master desk review — cache-only, no pipelines executed.</i>',
