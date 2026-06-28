@@ -44,9 +44,12 @@ def _truncate(text: str, max_chars: int = 480) -> str:
 
 
 def _cap_message(text: str, max_chars: int = MAX_MSG_CHARS) -> str:
+    from backend.telegram.formatting.telegram_formatter import sanitize_telegram_text
+
+    text = sanitize_telegram_text(text)
     if len(text) <= max_chars:
         return text
-    return text[: max_chars - 20].rsplit('\n', 1)[0] + '\n… (truncated)'
+    return sanitize_telegram_text(text[: max_chars - 20].rsplit('\n', 1)[0] + '\n… (truncated)')
 
 
 def _section_header(title: str) -> str:

@@ -346,6 +346,7 @@ def _load_secondary_flags(
     issues = stall_report.get('issues') or []
     return {
         'stale_snapshot': bool(freshness.get('stale')),
+        'closed_market_snapshot_aging': bool(freshness.get('closed_market_aging')),
         'scanner_stalled': bool(scanner_health.get('stalled')),
         'cache_only': any('export:' in str(i) for i in issues),
     }
@@ -732,28 +733,40 @@ def _load_db_size_display() -> str:
 
 
 def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_status: dict) -> Dict[str, Any]:
-    lc_state = lifecycle.get('lifecycle_state')
-    after_hours = bool(lifecycle.get('after_hours_mode'))
+    lc_state = str(lifecycle.get('lifecycle_state') or '').upper()
+    after_hours = bool(lifecycle.get('after_hours_mode')) or bool(freshness.get('market_closed'))
+    premarket = (
+        lc_state in ('PREMARKET', 'PRE_MARKET', 'PRE_MARKET_PREP')
+        or str(freshness.get('market_state') or '').upper() in ('PREMARKET', 'PRE_MARKET')
+        or str(freshness.get('market_period') or '').lower() in ('pre_market', 'premarket')
+    )
     stale = bool(freshness.get('stale'))
     ai_blocked = intelligence_status.get('elite_blocked')
-    eligible = not stale and lc_state not in ('DEGRADED',) and not after_hours
-    execution_eligible = eligible and not after_hours
-    reasons = []
-    if stale:
-        reasons.append('stale_snapshot')
+    degraded_lifecycle = lc_state in ('DEGRADED',)
     if after_hours:
-        reasons.append('after_hours_block')
-        reasons.append('execution_alerts_suppressed')
-    if lc_state == 'DEGRADED':
+        eligible = not degraded_lifecycle and not bool(freshness.get('degraded'))
+        execution_eligible = False
+    elif premarket:
+        eligible = not degraded_lifecycle
+        execution_eligible = eligible and not stale and not bool(freshness.get('degraded'))
+    else:
+        eligible = not stale and not degraded_lifecycle
+        execution_eligible = eligible
+    reasons = []
+    if stale and not (after_hours or premarket):
+        reasons.append('stale_snapshot')
+    if stale and premarket:
+        reasons.append('stale_snapshot_live_setup_block')
+    if degraded_lifecycle:
         reasons.append('lifecycle_mismatch')
-    if ai_blocked and intelligence_status.get('status') == 'degraded':
+    if ai_blocked and intelligence_status.get('status') == 'degraded' and not (after_hours or premarket):
         reasons.append('missing_ai_confirmation')
     try:
         from backend.orchestration.alert_suppression_log import suppression_summary
         sup = suppression_summary(limit=100)
     except Exception:
         sup = {'suppression_count': 0, 'by_reason': {}}
-    if sup.get('suppression_count', 0) > 0:
+    if sup.get('suppression_count', 0) > 0 and not (after_hours or premarket):
         top = sorted((sup.get('by_reason') or {}).items(), key=lambda x: -x[1])[:2]
         for reason, _count in top:
             tag = f'suppressed:{reason}'
@@ -762,6 +775,7 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
     return {
         'eligible': eligible,
         'execution_eligible': execution_eligible,
+        'watchlist_only': bool(eligible and not execution_eligible),
         'block_reasons': reasons,
         'suppression_count': sup.get('suppression_count', 0),
         'suppression_by_reason': sup.get('by_reason') or {},

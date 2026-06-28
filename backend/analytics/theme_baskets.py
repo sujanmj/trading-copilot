@@ -1957,8 +1957,26 @@ def format_theme_overview_telegram() -> str:
 
 
 def format_theme_budget_telegram() -> str:
+    try:
+        from backend.analytics.budget_impact import compute_freshness_panel, _log_budget_command_source
+
+        freshness = compute_freshness_panel()
+        _log_budget_command_source(freshness)
+    except Exception:
+        freshness = {}
+    budget_cache = (freshness.get('budget_cache') or {}) if isinstance(freshness, dict) else {}
+    theme_cache = (freshness.get('theme_cache') or {}) if isinstance(freshness, dict) else {}
     lines = [
         '<b>🏛️ Budget Theme Monitor</b>',
+        '',
+        (
+            f"Budget cache: {budget_cache.get('age_label', 'Unavailable')} · "
+            f"{budget_cache.get('status', 'unknown')}"
+        ),
+        (
+            f"Theme cache: {theme_cache.get('age_label', 'Unavailable')} · "
+            f"{theme_cache.get('status', 'unknown')}"
+        ),
         '',
         'Top themes likely affected by budget/govt spending:',
     ]

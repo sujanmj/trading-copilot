@@ -54,6 +54,9 @@ _brain_stale_prefix = ''
 
 def send_message(text, parse_mode='HTML', *, command='', cycle_id='', message_kind='final'):
     from backend.utils.telegram_guard import is_telegram_send_enabled, telegram_send_skipped
+    from backend.telegram.formatting.telegram_formatter import sanitize_telegram_text
+
+    text = sanitize_telegram_text(text)
     if not is_telegram_send_enabled():
         telegram_send_skipped('telegram_brain_pusher.send_message')
         return False

@@ -43,6 +43,7 @@ STAGE_SLA_SECONDS = {
 # Stages reset when a canonical snapshot publishes — stale synthesis timestamps must not linger.
 PUBLISH_RESET_STAGES = ('aggregation', 'synthesis', 'snapshot_export')
 SNAPSHOT_FRESH_IGNORE_STAGES = frozenset({'aggregation', 'synthesis', 'telegram'})
+CLOSED_MARKET_SLA_IGNORE_STAGES = frozenset({'scanner', 'aggregation', 'synthesis', 'snapshot_export'})
 
 _LOG_FILE = LOGS_DIR / 'pipeline_stages.log'
 _STATE_FILE = DATA_DIR / 'pipeline_stage_state.json'
@@ -144,9 +145,25 @@ def _filter_active_stalls(
     *,
     snapshot_age_minutes: Optional[int] = None,
     after_hours: bool = False,
+    stage_rows: Optional[dict] = None,
 ) -> list:
     """Drop historical stage stalls when a fresh snapshot proves the pipeline ran."""
-    active = [name for name in stalled if not (after_hours and name == 'scanner')]
+    rows = stage_rows or {}
+    active = []
+    for name in stalled:
+        if after_hours and name in CLOSED_MARKET_SLA_IGNORE_STAGES:
+            row = rows.get(name) or {}
+            status = str(row.get('status') or '').lower()
+            detail = str(row.get('detail') or '').lower()
+            active_failure = (
+                status in ('start', 'running', 'error', 'failed', 'fail', 'timeout')
+                or 'error' in detail
+                or 'failed' in detail
+                or 'timeout' in detail
+            )
+            if not active_failure:
+                continue
+        active.append(name)
     if snapshot_age_minutes is None:
         return active
     try:
@@ -218,6 +235,7 @@ def get_pipeline_stage_summary(
         stalled,
         snapshot_age_minutes=snapshot_age_minutes,
         after_hours=after_hours,
+        stage_rows=rows,
     )
 
     return {

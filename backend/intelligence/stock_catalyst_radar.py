@@ -229,6 +229,34 @@ def _parse_ts(value: object) -> Optional[datetime]:
         return None
 
 
+def _cache_age_label(payload: dict[str, Any] | None = None) -> tuple[str, str]:
+    data = payload if isinstance(payload, dict) else {}
+    generated_at = str(data.get('generated_at') or data.get('refreshed_at') or '').strip()
+    ts = _parse_ts(generated_at)
+    if ts is None and CACHE_FILE.is_file():
+        try:
+            ts = datetime.fromtimestamp(CACHE_FILE.stat().st_mtime, IST)
+            generated_at = ts.replace(microsecond=0).isoformat()
+        except OSError:
+            ts = None
+    if ts is None:
+        return 'missing', generated_at or 'unknown'
+    age_seconds = max(0.0, (datetime.now(IST) - ts.astimezone(IST)).total_seconds())
+    if age_seconds < 3600:
+        age = f'{int(age_seconds // 60)}m'
+    else:
+        age = f'{age_seconds / 3600:.1f}h'
+    return age, generated_at or ts.replace(microsecond=0).isoformat()
+
+
+def _log_catalyst_command_source(payload: dict[str, Any] | None = None) -> None:
+    age, generated_at = _cache_age_label(payload)
+    try:
+        print(f'[CATALYST_COMMAND] source={CACHE_FILE} age={age} generated_at={generated_at}', flush=True)
+    except Exception:
+        pass
+
+
 def resolve_tickers_from_text(text: str, *, known: Optional[frozenset[str]] = None) -> list[str]:
     """Map company names and valid tickers from headline/body text."""
     blob = str(text or '')
@@ -933,6 +961,7 @@ def build_catalyst_radar(*, persist: bool = True, force_refresh: bool = False) -
         'stage': STAGE,
         'session_date': session_date,
         'generated_at': _now_iso(),
+        'cache_path': str(CACHE_FILE),
         'items': scored[:40],
         'priority_list': priority_list,
         'bullish_watch': bullish[:8],
@@ -1074,11 +1103,18 @@ def format_catalyst_radar_telegram(*, today_only: bool = False, explain_ticker: 
         return '\n'.join(lines)
 
     radar = get_clean_catalyst_radar(today_only=today_only)
+    _log_catalyst_command_source(radar)
     items = radar.get('priority_list') or []
+    age, _generated_at = _cache_age_label(radar)
 
     lines = ['<b>📡 STOCK CATALYST RADAR</b> <i>(news-first · paper only)</i>']
+    lines.append(f'Cache: fresh · {age}' if age != 'missing' else f'Cache missing: {CACHE_FILE}')
     if not items:
-        lines.append('No fresh actionable catalysts in cache — check again after news refresh.')
+        if CACHE_FILE.is_file():
+            scope = 'today' if today_only else 'current cache'
+            lines.append(f'Fresh cache: no actionable catalysts for {scope}.')
+        else:
+            lines.append(f'Catalyst radar cache unavailable: missing canonical path {CACHE_FILE}. Run /refresh full.')
     for idx, row in enumerate(items[:10], start=1):
         row = _finalize_catalyst_display_row(_apply_live_ticker_classification(dict(row)))
         lines.append('')

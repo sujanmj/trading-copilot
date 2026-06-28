@@ -7,12 +7,15 @@ import json
 import os
 import sys
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
+IST = ZoneInfo('Asia/Kolkata')
 
 
 def _fail(message: str) -> int:
@@ -66,6 +69,36 @@ def _assert_source_wiring() -> None:
     ):
         if needle not in response_format:
             raise AssertionError(f'status response missing {needle!r}')
+
+    budget_impact = _read('backend/analytics/budget_impact.py')
+    for needle in (
+        "CACHE_FILE = get_data_path('budget_impact_cache.json')",
+        "payload['cache_path'] = str(CACHE_FILE)",
+        '[BUDGET_COMMAND] source=',
+        'compute_freshness_panel()',
+    ):
+        if needle not in budget_impact:
+            raise AssertionError(f'budget command wiring missing {needle!r}')
+
+    catalyst_radar = _read('backend/intelligence/stock_catalyst_radar.py')
+    for needle in (
+        "CACHE_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'",
+        "'cache_path': str(CACHE_FILE)",
+        '[CATALYST_COMMAND] source=',
+        'Fresh cache: no actionable catalysts',
+    ):
+        if needle not in catalyst_radar:
+            raise AssertionError(f'catalyst command wiring missing {needle!r}')
+
+    theme_baskets = _read('backend/analytics/theme_baskets.py')
+    for needle in (
+        'format_theme_budget_telegram',
+        'compute_freshness_panel',
+        'Budget cache:',
+        'Theme cache:',
+    ):
+        if needle not in theme_baskets:
+            raise AssertionError(f'theme budget wiring missing {needle!r}')
 
 
 def _assert_formatter_sections() -> None:
@@ -175,11 +208,152 @@ def _assert_static_theme_helper() -> None:
         raise AssertionError(f'broker optional helper returned {broker_line!r}')
 
 
+def _fake_theme_payload(old_iso: str, fresh_iso: str) -> dict:
+    return {
+        'generated_at': old_iso,
+        'cache_refreshed_at': fresh_iso,
+        'baskets': [
+            {
+                'theme_id': 'infrastructure',
+                'display_name': 'Infrastructure',
+                'category': 'Government/Budget',
+                'stocks': {'direct': ['LT'], 'avoid_or_risk': []},
+                'direct_beneficiary_sectors': ['Roads'],
+                'indirect_beneficiary_sectors': ['Cement'],
+                'raw_material_beneficiaries': [],
+                'risk_sectors': [],
+            }
+        ],
+        'catalyst_cache': {
+            'infrastructure': [
+                {
+                    'theme_id': 'infrastructure',
+                    'headline': 'Government clears road project package',
+                    'impact_10': 7,
+                    'catalyst_score': 70,
+                    'why': 'fresh policy project',
+                    'action': 'watch only',
+                    'relevant': True,
+                }
+            ]
+        },
+    }
+
+
+def _assert_budget_commands_use_canonical_refreshed_cache() -> None:
+    import backend.analytics.budget_impact as bi
+    import backend.analytics.theme_baskets as tb
+
+    old_iso = (datetime.now(IST) - timedelta(hours=300)).replace(microsecond=0).isoformat()
+    fresh_iso = datetime.now(IST).replace(microsecond=0).isoformat()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        budget_path = tmp_path / 'budget_impact_cache.json'
+        theme_path = tmp_path / 'theme_baskets.json'
+        theme_payload = _fake_theme_payload(old_iso, fresh_iso)
+        theme_path.write_text(json.dumps(theme_payload), encoding='utf-8')
+        budget_path.write_text(
+            json.dumps(
+                {
+                    'ok': True,
+                    'generated_at': old_iso,
+                    'refreshed_at': fresh_iso,
+                    'freshness': {
+                        'status': 'stale',
+                        'budget_cache': {
+                            'timestamp': old_iso,
+                            'age_hours': 300,
+                            'age_label': '300.0h ago',
+                            'status': 'stale',
+                        },
+                        'theme_cache': {
+                            'timestamp': old_iso,
+                            'age_hours': 300,
+                            'age_label': '300.0h ago',
+                            'status': 'stale',
+                        },
+                    },
+                    'top_themes': [{'theme_id': 'infrastructure', 'display_name': 'Infrastructure', 'budget_impact_score': 70}],
+                    'top_catalysts': [],
+                    'beneficiary_map': {},
+                    'risk_map': {},
+                    'stock_rankings': [],
+                    'source_counts': {'themes': 1, 'budget_themes': 1, 'catalysts': 1},
+                },
+                default=str,
+            ),
+            encoding='utf-8',
+        )
+
+        original_budget_cache = bi.CACHE_FILE
+        original_theme_file = tb.BASKETS_FILE
+        original_budget_ids = tb.BUDGET_THEME_IDS
+        try:
+            bi.CACHE_FILE = budget_path
+            tb.BASKETS_FILE = theme_path
+            tb.BUDGET_THEME_IDS = ('infrastructure',)
+
+            fresh = bi.compute_freshness_panel()
+            if fresh.get('budget_cache', {}).get('status') != 'fresh':
+                raise AssertionError(f'budget canonical cache not fresh: {fresh.get("budget_cache")}')
+            if fresh.get('theme_cache', {}).get('status') != 'fresh':
+                raise AssertionError(f'budget theme canonical cache not fresh: {fresh.get("theme_cache")}')
+
+            budget_text = bi.handle_budget_command('overview')
+            if '300.0h ago' in budget_text or 'Budget cache: 300' in budget_text:
+                raise AssertionError('budget command used stale embedded freshness instead of canonical refreshed_at')
+            if 'Budget cache: 0m ago' not in budget_text or 'Theme cache: 0m ago' not in budget_text:
+                raise AssertionError(f'budget command did not show fresh canonical cache: {budget_text}')
+
+            theme_text = tb.format_theme_budget_telegram()
+            if '300.0h ago' in theme_text or 'stale' in theme_text.lower():
+                raise AssertionError('theme budget command surfaced stale legacy cache despite fresh canonical cache')
+            if 'Budget cache: 0m ago' not in theme_text or 'Theme cache: 0m ago' not in theme_text:
+                raise AssertionError(f'theme budget command did not use canonical budget freshness: {theme_text}')
+        finally:
+            bi.CACHE_FILE = original_budget_cache
+            tb.BASKETS_FILE = original_theme_file
+            tb.BUDGET_THEME_IDS = original_budget_ids
+
+
+def _assert_catalysts_today_uses_canonical_radar_cache() -> None:
+    import backend.intelligence.stock_catalyst_radar as scr
+
+    fresh_iso = datetime.now(IST).replace(microsecond=0).isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        catalyst_path = Path(tmp) / 'stock_catalyst_radar_latest.json'
+        catalyst_path.write_text(
+            json.dumps({
+                'ok': True,
+                'session_date': scr._today(),
+                'generated_at': fresh_iso,
+                'cache_path': str(catalyst_path),
+                'items': [],
+                'priority_list': [],
+                'bullish_watch': [],
+            }),
+            encoding='utf-8',
+        )
+        original_cache = scr.CACHE_FILE
+        try:
+            scr.CACHE_FILE = catalyst_path
+            text = scr.format_catalyst_radar_telegram(today_only=True)
+            if 'check again after news refresh' in text:
+                raise AssertionError('catalysts today still uses stale/missing wording for fresh canonical cache')
+            if 'Fresh cache: no actionable catalysts for today.' not in text:
+                raise AssertionError(f'catalysts today did not read canonical radar cache: {text}')
+        finally:
+            scr.CACHE_FILE = original_cache
+
+
 def main() -> int:
     try:
         _assert_source_wiring()
         _assert_formatter_sections()
         _assert_static_theme_helper()
+        _assert_budget_commands_use_canonical_refreshed_cache()
+        _assert_catalysts_today_uses_canonical_radar_cache()
     except Exception as exc:
         return _fail(str(exc))
     print('INTELLIGENCE_CACHE_FRESHNESS_OK')

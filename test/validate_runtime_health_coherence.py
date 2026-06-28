@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -50,15 +51,118 @@ def main() -> int:
     if primary != 'AFTER_HOURS':
         return _fail(f'weekend fresh snapshot should be AFTER_HOURS, got {primary}')
 
+    weekend_aging = rs._map_primary_runtime_state(
+        {'lifecycle_state': 'DEGRADED', 'after_hours_mode': False},
+        {'period': 'weekend', 'expect_quiet_collectors': True, 'after_hours_mode': False},
+        {
+            'age_minutes': 86,
+            'degraded': False,
+            'stale': False,
+            'closed_market_aging': True,
+            'closed_market_stale_threshold_minutes': 360,
+        },
+        {'healthy': True, 'stalled': False, 'idle': True},
+        {'any_stalled': False, 'stalled_stages': []},
+    )
+    if weekend_aging != 'AFTER_HOURS':
+        return _fail(f'weekend snapshot_age=86m should not be DEGRADED, got {weekend_aging}')
+
+    market_aging = rs._map_primary_runtime_state(
+        {'lifecycle_state': 'MARKET_ACTIVE', 'after_hours_mode': False},
+        {'period': 'market', 'market_hours': True, 'after_hours_mode': False},
+        {'age_minutes': 86, 'degraded': True, 'stale': True},
+        {'healthy': True, 'stalled': False},
+        {'any_stalled': False, 'stalled_stages': []},
+    )
+    if market_aging != 'DEGRADED':
+        return _fail(f'market-hours snapshot_age=86m must remain DEGRADED, got {market_aging}')
+
+    closed_alert = rs._load_alert_eligibility(
+        {'lifecycle_state': 'AFTER_HOURS', 'after_hours_mode': True},
+        {'stale': False, 'degraded': False, 'market_closed': True, 'closed_market_aging': True},
+        {'elite_blocked': False, 'status': 'ready'},
+    )
+    if not closed_alert.get('eligible') or closed_alert.get('block_reasons'):
+        return _fail(f'after-hours aging should not block research alerts: {closed_alert}')
+    if closed_alert.get('execution_eligible') is not False:
+        return _fail('after-hours execution eligibility must remain false')
+
+    from backend.telegram.formatting.telegram_formatter import format_status
+
+    closed_status = format_status({
+        'primary_state': 'AFTER_HOURS',
+        'lifecycle': {'lifecycle_state': 'AFTER_HOURS'},
+        'session': {'session_display': 'After-hours intelligence mode', 'after_hours_mode': True},
+        'snapshot_freshness': {
+            'age_display': '1h 26m',
+            'health_tier': 'closed-market aging',
+            'stale': False,
+            'closed_market_aging': True,
+        },
+        'scanner_health': {'display': 'Scanner: idle market closed', 'stalled': False},
+        'alert_eligibility': closed_alert,
+        'telegram_metrics': {'alerts_sent_today': 0, 'suppressed_today': 0},
+        'source_freshness': {},
+        'intelligence_freshness': {'rows': {}},
+        'pipeline': {'stalled_stages': [], 'any_stalled': False},
+        'metrics': {},
+        'prediction_counts': {},
+        'win_rate': {},
+        'secondary_flags': {'closed_market_snapshot_aging': True},
+    })
+    if 'Alerts: eligible' not in closed_status:
+        return _fail(f'/status should show closed-market research alerts eligible: {closed_status}')
+    if '<b>Blockers</b>' in closed_status:
+        return _fail(f'/status should not show closed-market aging as blocker: {closed_status}')
+
+    premarket_alert = rs._load_alert_eligibility(
+        {'lifecycle_state': 'PREMARKET', 'after_hours_mode': False},
+        {'stale': True, 'degraded': True, 'market_state': 'PREMARKET'},
+        {'elite_blocked': True, 'status': 'degraded'},
+    )
+    if not premarket_alert.get('eligible') or premarket_alert.get('execution_eligible'):
+        return _fail(f'premarket stale data should allow watchlist-only, got {premarket_alert}')
+    if 'stale_snapshot_live_setup_block' not in (premarket_alert.get('block_reasons') or []):
+        return _fail('premarket stale data must block live setup explicitly')
+
     from backend.runtime.pipeline_stage_log import _filter_active_stalls
 
     active = _filter_active_stalls(
         ['scanner', 'aggregation', 'snapshot_export'],
-        snapshot_age_minutes=240,
+        snapshot_age_minutes=86,
         after_hours=True,
     )
-    if 'scanner' in active or 'snapshot_export' not in active:
-        return _fail('quiet-period stage filtering should drop only scanner from stale pipeline')
+    if active:
+        return _fail(f'closed-market stage filtering should suppress historical scanner/snapshot stalls, got {active}')
+
+    active_failure = _filter_active_stalls(
+        ['snapshot_export'],
+        snapshot_age_minutes=86,
+        after_hours=True,
+        stage_rows={'snapshot_export': {'status': 'error', 'detail': 'active refresh failed'}},
+    )
+    if active_failure != ['snapshot_export']:
+        return _fail('active refresh failures must remain visible during closed market')
+
+    from backend.runtime.pipeline_stage_log import get_pipeline_stage_summary
+
+    old_stage_state = {
+        'stages': {
+            'snapshot_export': {
+                'status': 'ok',
+                'at_unix': time.time() - 7200,
+                'last_success_unix': time.time() - 7200,
+            }
+        },
+        'last_stage': 'snapshot_export',
+    }
+    with patch('backend.runtime.pipeline_stage_log._load_state', return_value=old_stage_state):
+        closed_pipeline = get_pipeline_stage_summary(snapshot_age_minutes=86, after_hours=True)
+        if closed_pipeline.get('any_stalled') or 'snapshot_export' in (closed_pipeline.get('stalled_stages') or []):
+            return _fail('closed-market snapshot_export:sla_exceeded must be warning-only')
+        live_pipeline = get_pipeline_stage_summary(snapshot_age_minutes=86, after_hours=False)
+        if 'snapshot_export' not in (live_pipeline.get('stalled_stages') or []):
+            return _fail('market-hours snapshot_export:sla_exceeded must remain blocking')
 
     active_fresh = _filter_active_stalls(
         ['aggregation', 'synthesis', 'telegram'],
@@ -81,6 +185,36 @@ def main() -> int:
         scanner = evaluate_scanner_health()
         if scanner.get('stalled') or not scanner.get('healthy'):
             return _fail('quiet-period scanner should report idle/healthy, not stalled')
+
+    from backend.runtime.snapshot_freshness_monitor import evaluate_snapshot_freshness
+
+    with (
+        patch('backend.runtime.snapshot_freshness_monitor._snapshot_age_minutes_direct', return_value=86),
+        patch('backend.runtime.snapshot_freshness_monitor._pipeline_stalled', return_value=False),
+        patch('backend.runtime.snapshot_freshness_monitor._load_heartbeats', return_value={'sources': {}}),
+        patch(
+            'backend.runtime.snapshot_freshness_monitor._closed_market_context',
+            return_value={'closed': True, 'period': 'weekend', 'state': 'WEEKEND'},
+        ),
+    ):
+        closed_freshness = evaluate_snapshot_freshness()
+    if closed_freshness.get('degraded') or closed_freshness.get('stale'):
+        return _fail(f'closed-market snapshot_age=86m should not degrade runtime: {closed_freshness}')
+    if not closed_freshness.get('closed_market_aging'):
+        return _fail('closed-market snapshot_age=86m should carry closed_market_aging warning')
+
+    with (
+        patch('backend.runtime.snapshot_freshness_monitor._snapshot_age_minutes_direct', return_value=86),
+        patch('backend.runtime.snapshot_freshness_monitor._pipeline_stalled', return_value=False),
+        patch('backend.runtime.snapshot_freshness_monitor._load_heartbeats', return_value={'sources': {}}),
+        patch(
+            'backend.runtime.snapshot_freshness_monitor._closed_market_context',
+            return_value={'closed': False, 'period': 'market', 'state': 'INDIA_MARKET_HOURS'},
+        ),
+    ):
+        live_freshness = evaluate_snapshot_freshness()
+    if not live_freshness.get('degraded') or not live_freshness.get('stale'):
+        return _fail('market-hours snapshot_age=86m must remain degraded/stale')
 
     from backend.orchestration.telegram_review import normalize_review_snapshot
     from backend.runtime.market_snapshot import MarketSnapshot

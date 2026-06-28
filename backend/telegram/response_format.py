@@ -805,8 +805,9 @@ def _bullet_lines_from_rows(
 
 def strip_stage_markers(text: str) -> str:
     """Remove internal stage markers and repeated safety footers from outbound Telegram text."""
-    body = str(text or '')
-    body = re.sub(r'\uFFFD+', '', body).replace('��', '')
+    from backend.telegram.formatting.telegram_formatter import sanitize_telegram_text
+
+    body = sanitize_telegram_text(text)
     body = re.sub(
         r'<code>\s*(TELEGRAM_STAGE|GUI_BUILD_STAGE|BACKEND_STAGE|QA_STAGE)[_\w]*\s*</code>\s*',
         '',
@@ -828,7 +829,7 @@ def strip_stage_markers(text: str) -> str:
         lines.append(line)
     while lines and not lines[-1].strip():
         lines.pop()
-    return '\n'.join(lines).strip()
+    return sanitize_telegram_text('\n'.join(lines).strip())
 
 
 def _latest_tradecard_audit_for_ticker(ticker: object = '') -> dict[str, Any] | None:

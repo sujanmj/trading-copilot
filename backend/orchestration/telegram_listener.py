@@ -103,6 +103,9 @@ def send_message(
     message_kind='final',
 ):
     from backend.utils.telegram_guard import is_telegram_send_enabled, telegram_send_skipped
+    from backend.telegram.formatting.telegram_formatter import sanitize_telegram_text
+
+    text = sanitize_telegram_text(text)
     if not is_telegram_send_enabled():
         telegram_send_skipped('telegram_listener.send_message')
         return False

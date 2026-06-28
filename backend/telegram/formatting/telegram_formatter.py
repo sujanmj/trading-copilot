@@ -48,11 +48,26 @@ def enforce_char_limit(text: str, max_chars: int = MAX_TELEGRAM_CHARS) -> str:
     return text[: max_chars - 20] + '\n… (truncated)'
 
 
+def _sanitize_telegram_text_clean(text: str) -> str:
+    body = str(text or '')
+    marker = r'(?:\uFFFD+|(?:\u00ef\u00bf\u00bd)+|\?{2,})'
+    body = re.sub(rf'^[ \t]*{marker}[ \t]+(?=<|\w)', '', body, flags=re.MULTILINE)
+    body = re.sub(rf'(?<=\S)[ \t]*{marker}[ \t]*(?=\S)', ' · ', body)
+    body = re.sub(marker, '', body)
+    body = re.sub(r'[ \t]+·[ \t]+', ' · ', body)
+    body = re.sub(r'[ \t]+\n', '\n', body)
+    body = re.sub(r'\n{3,}', '\n\n', body)
+    return body.strip()
+
+
 def sanitize_telegram_text(text: str) -> str:
     body = str(text or '')
+    return _sanitize_telegram_text_clean(body)
     body = re.sub(r'\uFFFD+', '', body)
-    body = body.replace('��', '')
+    body = re.sub(r'(?:ï¿½)+', '', body)
+    body = re.sub(r'^[ \t]*\?{2,}[ \t]+(?=<)', '', body, flags=re.MULTILINE)
     body = re.sub(r'[ \t]+\n', '\n', body)
+    body = re.sub(r'\n{3,}', '\n\n', body)
     return body.strip()
 
 
@@ -354,7 +369,7 @@ def format_status(runtime_state: dict) -> str:
     lines.append(f"Snapshot: {age} ({tier}){_status_stale_suffix(bool(fresh.get('stale')))}")
     lines.append(scanner.get('display') or 'Scanner: —')
     alert_line = 'eligible' if alert.get('eligible') else 'blocked'
-    if alert.get('execution_eligible') is False and alert.get('eligible'):
+    if alert.get('execution_eligible') is False and alert.get('eligible') and not alert.get('watchlist_only'):
         alert_line = 'intel-only'
     suppressed_today = alert.get('suppression_count') or tg.get('suppressed_today', 0)
     lines.append(

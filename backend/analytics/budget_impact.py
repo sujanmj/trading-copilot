@@ -110,8 +110,54 @@ def _log(msg: str) -> None:
     print(f'[BUDGET_IMPACT] {msg}', flush=True)
 
 
+def _log_budget_command_source(freshness: dict[str, Any] | None = None) -> None:
+    fresh = freshness or {}
+    budget_cache = fresh.get('budget_cache') or {}
+    generated_at = (
+        budget_cache.get('timestamp')
+        or fresh.get('cache_refreshed_at')
+        or _freshest_payload_timestamp(_load_cache())[0]
+        or 'unknown'
+    )
+    age = budget_cache.get('age_label') or _age_label(budget_cache.get('age_hours'))
+    try:
+        print(f'[BUDGET_COMMAND] source={CACHE_FILE} age={age} generated_at={generated_at}', flush=True)
+    except Exception:
+        pass
+
+
 def _now_iso() -> str:
     return datetime.now(IST).replace(microsecond=0).isoformat()
+
+
+def _parse_iso_timestamp(value: Any) -> Optional[datetime]:
+    text = str(value or '').strip()
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        ts = datetime.fromisoformat(text)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=IST)
+        return ts.astimezone(IST)
+    except (TypeError, ValueError):
+        return None
+
+
+def _freshest_payload_timestamp(payload: dict[str, Any] | None) -> tuple[Optional[str], Optional[float]]:
+    candidates: list[tuple[datetime, str]] = []
+    for key in ('cache_refreshed_at', 'refreshed_at', 'generated_at', 'updated_at', 'timestamp'):
+        if not isinstance(payload, dict):
+            continue
+        raw = payload.get(key)
+        parsed = _parse_iso_timestamp(raw)
+        if parsed is not None:
+            candidates.append((parsed, str(raw)))
+    if not candidates:
+        return None, None
+    newest, raw_text = max(candidates, key=lambda item: item[0])
+    return raw_text, max(0.0, (datetime.now(IST) - newest).total_seconds() / 3600.0)
 
 
 def _sanitize_text(text: str) -> str:
@@ -141,6 +187,7 @@ def _load_cache() -> dict[str, Any]:
 def _save_cache(payload: dict[str, Any]) -> None:
     payload['stage'] = STAGE
     payload['engine'] = ENGINE_NAME
+    payload['cache_path'] = str(CACHE_FILE)
     payload.setdefault('generated_at', payload.get('refreshed_at') or _now_iso())
     if not payload.get('themes_by_id'):
         payload.update(build_budget_cache_indexes(payload, freshness=payload.get('freshness')))
@@ -870,34 +917,21 @@ def compute_freshness_panel() -> dict[str, Any]:
     govt_age_h = _file_age_hours(govt_path)
     combined_news_age = min(filter(lambda x: x is not None, [news_age_h, govt_age_h]), default=news_age_h)
 
+    theme_ts, theme_cache_age_h = _freshest_payload_timestamp(data)
+    cache_refreshed = theme_ts
     theme_refreshed_at = data.get('cache_refreshed_at')
-    theme_generated_at = data.get('generated_at')
-    cache_refreshed = theme_refreshed_at or theme_generated_at
-    theme_cache_age_h = None
-    theme_ts = cache_refreshed
-    if cache_refreshed:
-        try:
-            ts = datetime.fromisoformat(str(cache_refreshed))
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=IST)
-            theme_cache_age_h = (datetime.now(IST) - ts.astimezone(IST)).total_seconds() / 3600.0
-        except (TypeError, ValueError):
-            theme_cache_age_h = _file_age_hours(BASKETS_FILE)
-            theme_ts = _file_timestamp_iso(BASKETS_FILE)
+    if theme_ts is None and (data.get('cache_refreshed_at') or data.get('generated_at')):
+        theme_cache_age_h = _file_age_hours(BASKETS_FILE)
+        theme_ts = _file_timestamp_iso(BASKETS_FILE)
 
     scanner_age_h = _file_age_hours(scanner_path)
     budget_cache_age_h = _file_age_hours(CACHE_FILE)
     budget_ts = _file_timestamp_iso(CACHE_FILE)
     cached = _load_cache()
-    if cached.get('generated_at') or cached.get('refreshed_at'):
-        budget_ts = cached.get('refreshed_at') or cached.get('generated_at')
-        try:
-            ts = datetime.fromisoformat(str(budget_ts))
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=IST)
-            budget_cache_age_h = (datetime.now(IST) - ts.astimezone(IST)).total_seconds() / 3600.0
-        except (TypeError, ValueError):
-            pass
+    payload_ts, payload_age_h = _freshest_payload_timestamp(cached)
+    if payload_ts is not None:
+        budget_ts = payload_ts
+        budget_cache_age_h = payload_age_h
 
     news_row = _build_source_freshness_row(label='News', path=news_path)
     if govt_age_h is not None and (news_age_h is None or govt_age_h < news_age_h):
@@ -909,15 +943,9 @@ def compute_freshness_panel() -> dict[str, Any]:
 
     budget_theme_ts = budget_ts
     budget_theme_age_h = budget_cache_age_h
-    if cached.get('generated_at') or cached.get('refreshed_at'):
-        budget_theme_ts = cached.get('refreshed_at') or cached.get('generated_at')
-        try:
-            ts = datetime.fromisoformat(str(budget_theme_ts))
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=IST)
-            budget_theme_age_h = (datetime.now(IST) - ts.astimezone(IST)).total_seconds() / 3600.0
-        except (TypeError, ValueError):
-            budget_theme_age_h = budget_cache_age_h
+    if payload_ts is not None:
+        budget_theme_ts = payload_ts
+        budget_theme_age_h = payload_age_h
     if budget_theme_age_h is None and theme_cache_age_h is not None:
         budget_theme_ts = theme_ts
         budget_theme_age_h = theme_cache_age_h
@@ -1275,8 +1303,9 @@ def get_budget_overview(*, cache_only: bool = False, lite: bool = False) -> dict
                 'from_cache': True,
                 'stage': STAGE,
                 'engine': ENGINE_NAME,
-                'generated_at': cached.get('generated_at') or cached.get('refreshed_at'),
-                'freshness': cached.get('freshness') or {
+                'generated_at': cached.get('refreshed_at') or cached.get('cache_refreshed_at') or cached.get('generated_at'),
+                'cache_path': str(CACHE_FILE),
+                'freshness': compute_freshness_panel() or {
                     'status': 'cached',
                     'latest_news_age': 'Unavailable',
                     'latest_theme_cache_age': 'Unavailable',
@@ -1317,8 +1346,8 @@ def get_budget_overview(*, cache_only: bool = False, lite: bool = False) -> dict
             cached['from_cache'] = True
             cached.setdefault('stage', STAGE)
             cached.setdefault('engine', ENGINE_NAME)
-            if 'freshness' not in cached:
-                cached['freshness'] = compute_freshness_panel()
+            cached['cache_path'] = str(CACHE_FILE)
+            cached['freshness'] = compute_freshness_panel()
             return cached
         return {
             'ok': True,
@@ -1741,12 +1770,31 @@ def refresh_budget_intel(*, persist: bool = True) -> dict[str, Any]:
 
     theme_refresh = refresh_theme_catalyst_cache(persist=persist)
     overview = get_budget_overview()
+    refreshed_at = _now_iso()
     overview['theme_refresh'] = {
         'themes_matched': theme_refresh.get('themes_matched'),
         'total_matches': theme_refresh.get('total_matches'),
         'refreshed_at': theme_refresh.get('refreshed_at'),
     }
-    overview['refreshed_at'] = _now_iso()
+    overview['refreshed_at'] = refreshed_at
+    overview['cache_path'] = str(CACHE_FILE)
+    overview['freshness'] = compute_freshness_panel()
+    overview['freshness']['budget_cache'].update({
+        'timestamp': refreshed_at,
+        'age_hours': 0.0,
+        'age_label': '0m ago',
+        'status': 'fresh',
+    })
+    overview['freshness']['theme_cache'].update({
+        'timestamp': refreshed_at,
+        'age_hours': 0.0,
+        'age_label': '0m ago',
+        'status': 'fresh',
+    })
+    overview['freshness']['latest_budget_cache_age'] = '0m ago'
+    overview['freshness']['latest_budget_theme_cache_age'] = '0m ago'
+    if overview['freshness'].get('status') != 'cache_missing':
+        overview['freshness']['status'] = 'fresh'
     if persist:
         _save_cache(overview)
         _append_event_log({
@@ -1761,7 +1809,9 @@ def refresh_budget_intel(*, persist: bool = True) -> dict[str, Any]:
 
 def format_budget_overview_telegram() -> str:
     overview = get_budget_overview()
-    fresh = overview.get('freshness') or {}
+    fresh = compute_freshness_panel()
+    overview['freshness'] = fresh
+    _log_budget_command_source(fresh)
     budget_cache = fresh.get('budget_cache') or {}
     theme_cache = fresh.get('theme_cache') or {}
     lines = [
@@ -1779,9 +1829,9 @@ def format_budget_overview_telegram() -> str:
         f"News: {fresh.get('latest_news_age', 'Unavailable')}",
     ]
     if budget_cache.get('status') == 'cache_missing':
-        lines.append('Budget refresh unavailable: budget_impact_cache.json missing or not rebuilt by /refresh full.')
+        lines.append(f'Budget refresh unavailable: canonical cache missing at {CACHE_FILE}. Run /refresh full.')
     if theme_cache.get('status') == 'cache_missing':
-        lines.append('Budget theme refresh unavailable: budget/theme catalyst source missing or not rebuilt by /refresh full.')
+        lines.append(f'Budget theme refresh unavailable: canonical budget/theme cache missing at {CACHE_FILE}. Run /refresh full.')
     lines.extend([
         '',
         '<b>Top budget themes:</b>',
@@ -1798,6 +1848,7 @@ def format_budget_overview_telegram() -> str:
 def format_budget_theme_telegram(theme_key: str) -> str:
     from backend.analytics.theme_baskets import format_theme_detail_telegram, resolve_theme_id
 
+    _log_budget_command_source(compute_freshness_panel())
     resolved = resolve_theme_id(theme_key)
     if not resolved:
         return f'Unknown theme: <code>{theme_key}</code>. Try /budget or /budget theme infra.'

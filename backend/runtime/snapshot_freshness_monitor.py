@@ -93,7 +93,16 @@ def _pipeline_stalled() -> bool:
         after_hours = False
         try:
             from backend.utils.market_hours import get_operational_status
-            after_hours = bool(get_operational_status().get('expect_quiet_collectors'))
+            op = get_operational_status()
+            period = str(op.get('period') or '').lower()
+            state = str(op.get('canonical_lifecycle') or op.get('lifecycle_state') or '').upper()
+            after_hours = (
+                bool(op.get('expect_quiet_collectors'))
+                or bool(op.get('after_hours_mode'))
+                or op.get('market_hours') is False
+                or period in ('post_market', 'after_hours', 'night', 'weekend', 'holiday')
+                or state in ('AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY')
+            )
         except Exception:
             pass
         pipeline = get_pipeline_stage_summary(
@@ -150,6 +159,11 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         and age_minutes < closed_threshold
         and not pipeline_stalled
     )
+    closed_market_aging = (
+        closed_market_within_threshold
+        and age_minutes is not None
+        and age_minutes >= STALE_MIN_MINUTES
+    )
     if closed_market_within_threshold:
         tier = 'healthy'
     stale = bool(tier == 'stale')
@@ -187,6 +201,8 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
             warnings.append(f'Snapshot older than {STALE_MIN_MINUTES} minutes')
     elif tier == 'aging':
         score = max(0, score - 10)
+    if closed_market_aging:
+        warnings.append('Closed-market snapshot aging — refresh before live entry.')
     if degraded and not stale:
         score = max(0, score - 25)
         warnings.append(f'Snapshot older than {DEGRADED_MAX_MINUTES} minutes')
@@ -209,6 +225,7 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'stale_threshold_minutes': STALE_MIN_MINUTES,
         'degraded_threshold_minutes': DEGRADED_MAX_MINUTES,
         'closed_market_relaxed': bool(closed_market_within_threshold),
+        'closed_market_aging': bool(closed_market_aging),
         'closed_market_stale_threshold_minutes': closed_threshold,
         'market_closed': closed_market,
         'market_period': market_ctx.get('period'),
@@ -231,11 +248,12 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
             'fresh': True,
             'stale': False,
             'degraded': False,
-            'health_tier': 'healthy',
-            'status_label': 'fresh',
+            'health_tier': 'closed-market aging' if closed_market_aging else 'healthy',
+            'status_label': 'closed-market aging' if closed_market_aging else 'fresh',
             'suppress_confidence': False,
             'block_elite_outputs': False,
             'quality_score_penalty': 0.0,
+            'closed_market_aging': bool(closed_market_aging),
         })
     return merged
 

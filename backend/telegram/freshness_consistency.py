@@ -72,9 +72,9 @@ def compute_feed_age_minutes(
         if isinstance(payload, dict):
             embedded = (
                 payload.get(timestamp_key)
-                or payload.get('generated_at')
                 or payload.get('cache_refreshed_at')
                 or payload.get('refreshed_at')
+                or payload.get('generated_at')
                 or payload.get('updated_at')
                 or payload.get('timestamp')
                 or payload.get('last_updated')

@@ -38,7 +38,12 @@ def _utc_now() -> str:
 def _as_text(value: Any) -> str:
     if value is None:
         return ""
-    return str(value)
+    try:
+        from backend.telegram.formatting.telegram_formatter import sanitize_telegram_text
+
+        return sanitize_telegram_text(value)
+    except Exception:
+        return str(value).replace("\ufffd", "")
 
 
 @dataclass
