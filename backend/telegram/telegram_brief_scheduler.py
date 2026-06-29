@@ -274,6 +274,15 @@ def _pack_generated_at(pack: dict[str, Any]) -> datetime | None:
     return _parse_dt_ist(pack.get('generated_at') or pack.get('package_generated_at'))
 
 
+def _safe_log(line: str) -> None:
+    try:
+        from backend.utils.safe_stdio import safe_print
+
+        safe_print(line, flush=True)
+    except Exception:
+        pass
+
+
 def _is_fresh_postmarket_pack(pack: dict[str, Any], *, now: datetime | None = None) -> bool:
     if not pack or pack.get('ok') is not True:
         return False
@@ -314,6 +323,31 @@ def _format_pack_summary(pack: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _fresh_postmarket_meta(pack: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+    now = now or _now_ist()
+    generated = _pack_generated_at(pack)
+    age = _age_minutes(generated, now)
+    report_line = f'Report: fresh \u00b7 {_age_label(age)}'
+    try:
+        from backend.analytics.unified_decision_engine import get_feed_freshness_meta
+
+        current = get_feed_freshness_meta()
+    except Exception:
+        current = {'lines': {}}
+    current_lines = current.get('lines') if isinstance(current, dict) else {}
+    return {
+        **(current if isinstance(current, dict) else {}),
+        'report_age_min': age,
+        'report_status': 'fresh',
+        'report_stale': False,
+        'report_suppressed': False,
+        'lines': {
+            **(current_lines if isinstance(current_lines, dict) else {}),
+            'report': report_line,
+        },
+    }
+
+
 def _run_safe_postmarket_pack_catchup_once() -> dict[str, Any]:
     try:
         from backend.scheduler.daily_report_pack_job import run_daily_report_pack_job
@@ -332,7 +366,7 @@ def _run_safe_postmarket_pack_catchup_once() -> dict[str, Any]:
         return {'ok': False, 'method': 'daily_report_pack_job', 'reason': str(exc)[:180]}
 
 
-def _postmarket_close_pack_lines() -> tuple[list[str], bool]:
+def _postmarket_close_pack_lines(*, force_rebuild: bool = False) -> tuple[list[str], bool, dict[str, Any]]:
     from backend.analytics.unified_decision_engine import (
         STALE_CLOSE_REPORT_NOTE,
         get_feed_freshness_meta,
@@ -344,7 +378,7 @@ def _postmarket_close_pack_lines() -> tuple[list[str], bool]:
     path = _daily_pack_path()
     pack = _load_json_file(path)
     catchup: dict[str, Any] = {}
-    if not _is_fresh_postmarket_pack(pack, now=now):
+    if force_rebuild or not _is_fresh_postmarket_pack(pack, now=now):
         catchup = _run_safe_postmarket_pack_catchup_once()
         pack = _load_json_file(path)
 
@@ -352,13 +386,22 @@ def _postmarket_close_pack_lines() -> tuple[list[str], bool]:
         generated = _pack_generated_at(pack)
         age = _age_minutes(generated, now)
         generated_label = generated.strftime('%Y-%m-%d %H:%M IST') if generated else 'unknown'
+        generated_raw = generated.isoformat() if generated else str(pack.get('generated_at') or 'unknown')
+        meta = _fresh_postmarket_meta(pack, now=now)
+        _safe_log(f'[POSTMARKET_CLOSE_PACK] source=fresh generated_at={generated_raw}')
         lines = [
             f'Report: fresh \u00b7 {_age_label(age)}',
             f'Post-market pack generated at {generated_label}',
             *_format_pack_summary(pack),
             '',
         ]
-        return lines, False
+        return lines, False, {
+            'fresh': True,
+            'pack': pack,
+            'generated_at': generated_raw,
+            'age_min': age,
+            'freshness_meta': meta,
+        }
 
     try:
         meta = get_feed_freshness_meta()
@@ -383,7 +426,8 @@ def _postmarket_close_pack_lines() -> tuple[list[str], bool]:
     reason = str(catchup.get('reason') or 'fresh post-market pack not available')
     lines.append(f'Post-market pack unavailable - {reason}')
     lines.append('')
-    return lines, True
+    _safe_log(f'[POSTMARKET_CLOSE_PACK] source=stale generated_at={pack.get("generated_at") or "unknown"}')
+    return lines, True, {'fresh': False, 'pack': pack, 'freshness_meta': meta}
 
 
 def _tradecard_resolution_line(counts: dict[str, Any]) -> str:
@@ -413,8 +457,6 @@ def build_close_brief_text() -> str:
 
     from backend.telegram.lazy_command_runner import run_memory_only, run_market_only
 
-    memory_res = run_memory_only()
-    market_res = run_market_only()
     provisional = False
     try:
         from backend.telegram.india_mode_lock import is_live_market_hours_phase
@@ -437,6 +479,16 @@ def build_close_brief_text() -> str:
         lines.append(f'Market mode: <code>{resolve_telegram_market_phase()}</code>')
     except Exception:
         pass
+    close_resolution: dict[str, Any] = {}
+    if not provisional:
+        try:
+            from backend.trading.tradecard_journal import resolve_close_pending_tradecards
+
+            close_resolution = resolve_close_pending_tradecards(refresh=True)
+        except Exception:
+            close_resolution = {}
+
+    pack_info: dict[str, Any] = {}
     if provisional:
         from backend.telegram.lazy_command_runner import run_daily_pack_only
 
@@ -471,7 +523,9 @@ def build_close_brief_text() -> str:
                 '',
             ])
     else:
-        pack_lines, _report_suppressed = _postmarket_close_pack_lines()
+        pack_lines, _report_suppressed, pack_info = _postmarket_close_pack_lines(
+            force_rebuild=int(close_resolution.get('updated') or 0) > 0,
+        )
         lines.extend(pack_lines)
     try:
         from backend.trading.tradecard_journal import (
@@ -480,10 +534,11 @@ def build_close_brief_text() -> str:
             summarize_today_outcomes,
         )
 
-        sample_and_resolve_pending_tradecards(
-            expire_at_close=not provisional,
-            refresh=True,
-        )
+        if provisional:
+            sample_and_resolve_pending_tradecards(
+                expire_at_close=False,
+                refresh=True,
+            )
         lines.append(format_tradecard_review_section(provisional=provisional))
         if not provisional:
             counts = summarize_today_outcomes().get('counts') or {}
@@ -491,10 +546,27 @@ def build_close_brief_text() -> str:
         lines.append('')
     except Exception:
         pass
+    memory_res = run_memory_only()
+    market_kwargs: dict[str, Any] = {}
+    if not provisional and (pack_info.get('freshness_meta') or {}).get('lines'):
+        market_kwargs['freshness_meta'] = pack_info.get('freshness_meta')
+    try:
+        market_res = run_market_only(**market_kwargs)
+    except TypeError:
+        market_res = run_market_only()
+    market_text = market_res.get('text', '')
+    stale_embedded = 'Report: stale' in str(market_text)
+    top_source = 'fresh' if pack_info.get('fresh') else 'stale' if pack_info else 'live'
+    internal_source = 'stale' if stale_embedded else 'fresh' if pack_info.get('fresh') else 'live'
+    if not provisional:
+        _safe_log(
+            f'[CLOSE_PAYLOAD_SOURCE] top={top_source} internal={internal_source} '
+            f'stale_embedded={str(stale_embedded).lower()}'
+        )
     lines.extend([
         memory_res.get('text', ''),
         '',
-        market_res.get('text', ''),
+        market_text,
         '',
         tomorrow,
     ])

@@ -79,6 +79,11 @@ def _close_patch_context(pack_path: Path, catchup):
             'news': 'News: fresh',
         },
     }
+    market_payload = {
+        'market_mode': 'INDIA_AFTER_HOURS',
+        'summary': {'market_mode': 'INDIA_AFTER_HOURS'},
+        'cache_age_seconds': 0,
+    }
     return (
         patch.object(scheduler, '_now_ist', return_value=fixed_now),
         patch.object(scheduler, '_run_safe_postmarket_pack_catchup_once', side_effect=catchup),
@@ -87,7 +92,7 @@ def _close_patch_context(pack_path: Path, catchup):
         patch('backend.telegram.india_mode_lock.resolve_telegram_market_phase', return_value='INDIA_POSTMARKET_MODE'),
         patch('backend.telegram.india_mode_lock.is_live_market_hours_phase', return_value=False),
         patch('backend.telegram.lazy_command_runner.run_memory_only', return_value={'text': 'memory'}),
-        patch('backend.telegram.lazy_command_runner.run_market_only', return_value={'text': 'market'}),
+        patch('backend.analytics.aihub_tab_payloads.build_market_payload', return_value=market_payload),
         patch('backend.telegram.telegram_brief_scheduler._build_today_tomorrow_text', return_value='tomorrow'),
         patch('backend.analytics.unified_decision_engine.get_feed_freshness_meta', return_value=meta),
     )
@@ -135,6 +140,10 @@ def test_close_runs_postmarket_catchup_and_resolves_no_fill() -> int:
             return _fail('/close should show post-market pack generation time')
         if 'Close report is previous-session cache' in text:
             return _fail('/close should not warn stale when fresh post-market pack exists')
+        if 'Report: stale' in text:
+            return _fail('/close fresh top pack must not contain stale internal Market payload')
+        if 'Market payload' not in text or 'Mode: <code>' not in text:
+            return _fail('/close should include fresh post-market Market payload source')
         for marker in ('Generated: 1', 'Filled: 0', 'No fill: 1', 'Pending: 0'):
             if marker not in text:
                 return _fail(f'missing tradecard EOD marker: {marker}')
@@ -192,6 +201,49 @@ def test_close_refuses_stale_pack_when_catchup_fails() -> int:
     return 0
 
 
+def test_close_resolver_marks_unsampled_pending_no_fill() -> int:
+    from scripts._tradecard_journal_test_helpers import isolated_tradecard_store
+    from backend.trading import tradecard_journal as tcj
+
+    with isolated_tradecard_store():
+        _append_sample_card()
+        with patch.object(tcj, '_today', return_value='2026-06-29'), \
+             patch.object(tcj, '_now_iso', return_value='2026-06-29T15:55:00+05:30'), \
+             patch.object(tcj, '_load_market_data_with_optional_refresh', return_value=None):
+            result = tcj.resolve_close_pending_tradecards(
+                session_date='2026-06-29',
+                refresh=False,
+            )
+
+        if int(result.get('no_fill') or 0) != 1:
+            return _fail('close resolver should mark unsampled same-day pending card NO_FILL')
+        if int(result.get('pending') or 0) != 0:
+            return _fail('unsampled same-day pending card must not remain pending after close')
+    return 0
+
+
+def test_next_session_watch_only_not_today_pending() -> int:
+    from scripts._tradecard_journal_test_helpers import isolated_tradecard_store
+    from backend.trading import tradecard_journal as tcj
+
+    with isolated_tradecard_store():
+        card = _append_sample_card()
+        tcj.update_journal_record(str(card.get('id')), {
+            'reason': 'NEXT-SESSION WATCH ONLY',
+            'path_note': 'next-session watch only',
+        })
+        with patch.object(tcj, '_today', return_value='2026-06-29'), \
+             patch.object(tcj, '_now_iso', return_value='2026-06-29T15:55:00+05:30'), \
+             patch.object(tcj, '_load_market_data_with_optional_refresh', return_value=None):
+            tcj.resolve_close_pending_tradecards(session_date='2026-06-29', refresh=False)
+        counts = tcj.summarize_today_outcomes(session_date='2026-06-29').get('counts') or {}
+        if int(counts.get('pending') or 0) != 0:
+            return _fail('NEXT-SESSION WATCH ONLY must not remain as today pending tradecard')
+        if int(counts.get('no_fill') or 0) != 1:
+            return _fail('NEXT-SESSION WATCH ONLY same-day card should be closed as NO_FILL')
+    return 0
+
+
 def test_no_fill_resolver_has_no_ai_dependency() -> int:
     from scripts._tradecard_journal_test_helpers import isolated_tradecard_store
     from backend.trading import tradecard_journal as tcj
@@ -216,9 +268,8 @@ def test_no_fill_resolver_has_no_ai_dependency() -> int:
 
         with patch.object(tcj, '_today', return_value='2026-06-29'), \
              patch.dict(sys.modules, {'backend.ai.ai_router': fake_ai_router}):
-            result = tcj.sample_and_resolve_pending_tradecards(
+            result = tcj.resolve_close_pending_tradecards(
                 session_date='2026-06-29',
-                expire_at_close=True,
                 refresh=False,
             )
 
@@ -234,6 +285,8 @@ def main() -> int:
     for test in (
         test_close_runs_postmarket_catchup_and_resolves_no_fill,
         test_close_refuses_stale_pack_when_catchup_fails,
+        test_close_resolver_marks_unsampled_pending_no_fill,
+        test_next_session_watch_only_not_today_pending,
         test_no_fill_resolver_has_no_ai_dependency,
     ):
         code = test()

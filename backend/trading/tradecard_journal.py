@@ -311,6 +311,8 @@ def sample_and_resolve_pending_tradecards(
             continue
         if str(row.get('status') or '').upper() != 'VALID_ENTRY':
             continue
+        if expire_at_close and str(row.get('carry_forward_next_session') or '').strip().lower() in ('1', 'true', 'yes', 'on'):
+            continue
         prior = str(row.get('outcome_status') or OUTCOME_PENDING).upper()
         if prior not in ACTIVE_OUTCOMES:
             continue
@@ -336,6 +338,86 @@ def sample_and_resolve_pending_tradecards(
                 summary['updated'] += 1
         except Exception:
             summary['errors'] += 1
+    return summary
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def resolve_close_pending_tradecards(
+    *,
+    session_date: str | None = None,
+    refresh: bool = True,
+) -> dict[str, Any]:
+    """Resolve same-day paper tradecards at close without calling AI providers."""
+    day = session_date or _today()
+    summary = sample_and_resolve_pending_tradecards(
+        session_date=day,
+        expire_at_close=True,
+        refresh=refresh,
+    )
+    now_iso = _now_iso()
+    rows = _read_journal()
+    changed = False
+    for row in rows:
+        if str(row.get('session_date') or '') != day:
+            continue
+        if str(row.get('status') or '').upper() != 'VALID_ENTRY':
+            continue
+        if _truthy(row.get('carry_forward_next_session')):
+            continue
+        outcome = str(row.get('outcome_status') or OUTCOME_PENDING).upper()
+        if outcome != OUTCOME_PENDING:
+            continue
+        if row.get('filled_at'):
+            row.update({
+                'outcome_status': OUTCOME_EXPIRED,
+                'outcome_time': now_iso,
+                'outcome_price': row.get('latest_sample_price'),
+                'path_note': row.get('path_note') or 'expired at close without SL/T1/T2',
+                'conservative_result': '',
+            })
+        else:
+            row.update({
+                'outcome_status': OUTCOME_NO_FILL,
+                'outcome_time': now_iso,
+                'outcome_price': row.get('latest_sample_price'),
+                'path_note': row.get('path_note') or 'market closed; entry trigger not confirmed',
+                'filled_at': '',
+                'conservative_result': '',
+            })
+        summary['updated'] = int(summary.get('updated') or 0) + 1
+        changed = True
+    if changed:
+        _write_journal(rows)
+    counts = summarize_today_outcomes(session_date=day).get('counts') or {}
+    resolved = (
+        int(counts.get('T1') or 0)
+        + int(counts.get('T2') or 0)
+        + int(counts.get('SL') or 0)
+        + int(counts.get('expired') or 0)
+        + int(counts.get('ambiguous') or 0)
+    )
+    summary.update({
+        'generated': int(counts.get('generated') or 0),
+        'no_fill': int(counts.get('no_fill') or 0),
+        'pending': int(counts.get('pending') or 0),
+        'resolved': resolved,
+    })
+    try:
+        from backend.utils.safe_stdio import safe_print
+
+        safe_print(
+            f"[TRADECARD_CLOSE_RESOLVER] generated={summary['generated']} "
+            f"no_fill={summary['no_fill']} pending={summary['pending']} "
+            f"resolved={summary['resolved']}",
+            flush=True,
+        )
+    except Exception:
+        pass
     return summary
 
 
@@ -665,6 +747,7 @@ def summarize_today_outcomes(*, session_date: str | None = None) -> dict[str, An
         'SL': 0,
         'no_fill': 0,
         'pending': 0,
+        'carry_forward': 0,
         'expired': 0,
         'ambiguous': 0,
     }
@@ -686,7 +769,10 @@ def summarize_today_outcomes(*, session_date: str | None = None) -> dict[str, An
         elif outcome == OUTCOME_NO_FILL:
             counts['no_fill'] += 1
         elif outcome == OUTCOME_PENDING:
-            counts['pending'] += 1
+            if _truthy(row.get('carry_forward_next_session')):
+                counts['carry_forward'] += 1
+            else:
+                counts['pending'] += 1
         elif outcome == OUTCOME_EXPIRED:
             counts['expired'] += 1
         elif outcome == OUTCOME_AMBIGUOUS:

@@ -195,7 +195,7 @@ def run_scan_only() -> dict[str, Any]:
     return _runner_result('scan', text='\n'.join(lines), payload=payload)
 
 
-def run_market_only(*, force: bool = False) -> dict[str, Any]:
+def run_market_only(*, force: bool = False, freshness_meta: dict[str, Any] | None = None) -> dict[str, Any]:
     from backend.analytics.aihub_tab_payloads import build_market_payload
 
     from backend.telegram.india_mode_lock import resolve_telegram_market_mode
@@ -207,9 +207,12 @@ def run_market_only(*, force: bool = False) -> dict[str, Any]:
         summary_mode=summary.get('market_mode'),
     )
     age_min = int(payload.get('cache_age_seconds') or 0) // 60
-    from backend.analytics.unified_decision_engine import get_feed_freshness_meta
+    if freshness_meta is None:
+        from backend.analytics.unified_decision_engine import get_feed_freshness_meta
 
-    meta = get_feed_freshness_meta()
+        meta = get_feed_freshness_meta()
+    else:
+        meta = freshness_meta
     freshness_lines = meta.get('lines') or {}
     lines = [
         '<b>📈 Market payload</b>',
