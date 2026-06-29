@@ -29,6 +29,8 @@ from backend.storage.data_paths import get_data_path, get_data_root, is_railway_
 
 RESOLVER_VERSION = '49D'
 SIGNAL_QUALITY_HOLDING_PERIOD = 'signal_quality'
+ACTUAL_LEARNING_HOLDING_PERIOD = 'actual_learning'
+SUMMARY_HOLDING_PERIODS = (SIGNAL_QUALITY_HOLDING_PERIOD, ACTUAL_LEARNING_HOLDING_PERIOD)
 CALIBRATION_MIN_SAMPLE = 20
 
 
@@ -365,9 +367,29 @@ def refresh_memory_dashboard_cache(*, limit: int = 50) -> bool:
         return False
 
 
+def _holding_period_filter(holding_period: str | tuple[str, ...] | list[str]) -> tuple[str, list[str]]:
+    if isinstance(holding_period, (tuple, list)):
+        periods = [str(p) for p in holding_period if str(p or '').strip()]
+    else:
+        periods = [str(holding_period or SIGNAL_QUALITY_HOLDING_PERIOD)]
+    periods = periods or [SIGNAL_QUALITY_HOLDING_PERIOD]
+    placeholders = ','.join('?' for _ in periods)
+    return placeholders, periods
+
+
+def _is_win_like(resolved_as: str) -> bool:
+    token = str(resolved_as or '').upper()
+    return token in ('WIN', 'HIT', 'AVOID_SUCCESS') or token.startswith('WIN')
+
+
+def _is_loss_like(resolved_as: str) -> bool:
+    token = str(resolved_as or '').upper()
+    return token in ('LOSS', 'MISS', 'AVOID_FAIL') or token.startswith('LOSS')
+
+
 def compute_signal_quality_metrics(
     *,
-    holding_period: str = SIGNAL_QUALITY_HOLDING_PERIOD,
+    holding_period: str | tuple[str, ...] | list[str] = SIGNAL_QUALITY_HOLDING_PERIOD,
 ) -> dict[str, Any]:
     """Aggregate hit rates from signal_quality outcomes."""
     metrics: dict[str, Any] = {
@@ -383,23 +405,26 @@ def compute_signal_quality_metrics(
         init_market_memory_db()
         conn = get_connection()
         try:
+            placeholders, periods = _holding_period_filter(holding_period)
             rows = conn.execute(
-                """
+                f"""
                 SELECT p.direction, p.raw_payload, p.signal_stack, o.resolved_as, o.raw_payload AS outcome_raw, o.updated_at
                 FROM outcomes o
                 JOIN predictions p ON p.prediction_id = o.prediction_id
-                WHERE o.holding_period = ?
+                WHERE o.holding_period IN ({placeholders})
                 ORDER BY o.updated_at DESC
                 """,
-                (holding_period,),
+                periods,
             ).fetchall()
             pending = conn.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS cnt FROM predictions p
-                LEFT JOIN outcomes o ON o.prediction_id = p.prediction_id AND o.holding_period = ?
+                LEFT JOIN outcomes o
+                  ON o.prediction_id = p.prediction_id
+                 AND o.holding_period IN ({placeholders})
                 WHERE o.id IS NULL
                 """,
-                (holding_period,),
+                periods,
             ).fetchone()
             metrics['pending'] = int(pending['cnt']) if pending else 0
         finally:
@@ -414,9 +439,9 @@ def compute_signal_quality_metrics(
             resolved_as = str(item.get('resolved_as') or '').upper()
             if resolved_as == 'NEUTRAL':
                 neutral += 1
-            elif resolved_as in ('WIN', 'HIT') or resolved_as.startswith('WIN'):
+            elif _is_win_like(resolved_as):
                 wins += 1
-            elif resolved_as in ('LOSS', 'MISS') or resolved_as.startswith('LOSS'):
+            elif _is_loss_like(resolved_as):
                 losses += 1
 
             pred = {
@@ -425,7 +450,7 @@ def compute_signal_quality_metrics(
                 'signal_stack': item.get('signal_stack'),
             }
             bearish = is_bearish_signal(pred)
-            is_hit = resolved_as in ('WIN', 'HIT') or str(resolved_as).startswith('WIN')
+            is_hit = _is_win_like(resolved_as)
             if bearish:
                 bear_t += 1
                 if is_hit:
@@ -583,7 +608,7 @@ def _record_resolver_run(summary: dict[str, Any]) -> None:
 
 def get_canonical_outcome_stats() -> dict[str, Any]:
     """Canonical resolver-store stats for /memory, /aihub calib, and status scripts."""
-    metrics = compute_signal_quality_metrics()
+    metrics = compute_signal_quality_metrics(holding_period=SUMMARY_HOLDING_PERIODS)
     state = _load_resolver_state()
     last_summary = state.get('last_summary') if isinstance(state.get('last_summary'), dict) else {}
     last_run = state.get('last_run_at') or state.get('last_run_date')

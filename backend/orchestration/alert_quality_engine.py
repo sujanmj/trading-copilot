@@ -536,7 +536,9 @@ def daily_review_quality_buckets(
     *,
     alert_summary: dict[str, Any] | None = None,
     tradecard_counts: dict[str, Any] | None = None,
+    actual_learning_summary: dict[str, Any] | None = None,
 ) -> dict[str, int]:
+    tradecard_counts_provided = tradecard_counts is not None
     if alert_summary is None:
         try:
             from backend.orchestration.alert_filters import get_telegram_alert_obs_summary
@@ -557,6 +559,18 @@ def daily_review_quality_buckets(
     generated = int(tradecard_counts.get('generated') or 0)
     filled = int(tradecard_counts.get('filled') or 0)
     resolved = int(tradecard_counts.get('T1') or 0) + int(tradecard_counts.get('T2') or 0) + int(tradecard_counts.get('SL') or 0)
+    if actual_learning_summary is None and not tradecard_counts_provided:
+        try:
+            from backend.analytics.actual_learning_resolver import load_latest_actual_learning_summary
+
+            actual_learning_summary = load_latest_actual_learning_summary()
+        except Exception:
+            actual_learning_summary = {}
+    actual = actual_learning_summary if isinstance(actual_learning_summary, dict) else {}
+    watch = actual.get('watchlist') if isinstance(actual.get('watchlist'), dict) else {}
+    avoid = actual.get('avoid') if isinstance(actual.get('avoid'), dict) else {}
+    tradecard_actual = actual.get('tradecard') if isinstance(actual.get('tradecard'), dict) else {}
+    learning_sample_updated = int(actual.get('sample_updated') or resolved)
     return {
         'research_watchlist_sent': research_watchlist,
         'live_confirmed_setups': int(tradecard_counts.get('valid_entry') or 0),
@@ -569,7 +583,14 @@ def daily_review_quality_buckets(
         'tradecard_losses': int(tradecard_counts.get('SL') or 0),
         'tradecard_neutral': int(tradecard_counts.get('no_fill') or 0),
         'tradecard_pending': int(tradecard_counts.get('pending') or 0),
-        'learning_sample_updated': resolved,
+        'learning_sample_updated': learning_sample_updated,
+        'watchlist_win': int(watch.get('win') or 0),
+        'watchlist_loss': int(watch.get('loss') or 0),
+        'watchlist_neutral': int(watch.get('neutral') or 0),
+        'avoid_success': int(avoid.get('success') or 0),
+        'avoid_fail': int(avoid.get('fail') or 0),
+        'tradecard_actual_resolved': int(tradecard_actual.get('resolved') or resolved),
+        'tradecard_actual_no_fill': int(tradecard_actual.get('no_fill') or tradecard_counts.get('no_fill') or 0),
     }
 
 
@@ -577,8 +598,13 @@ def format_daily_review_quality_lines(
     *,
     alert_summary: dict[str, Any] | None = None,
     tradecard_counts: dict[str, Any] | None = None,
+    actual_learning_summary: dict[str, Any] | None = None,
 ) -> list[str]:
-    b = daily_review_quality_buckets(alert_summary=alert_summary, tradecard_counts=tradecard_counts)
+    b = daily_review_quality_buckets(
+        alert_summary=alert_summary,
+        tradecard_counts=tradecard_counts,
+        actual_learning_summary=actual_learning_summary,
+    )
     lines = [
         f"Research watchlist sent: {b['research_watchlist_sent']}",
         f"Live confirmed setups: {b['live_confirmed_setups']}",
@@ -588,6 +614,18 @@ def format_daily_review_quality_lines(
             "Tradecards generated/filled/resolved W/L/N/P: "
             f"{b['tradecards_generated']}/{b['tradecards_filled']}/{b['tradecards_resolved']} "
             f"{b['tradecard_wins']}/{b['tradecard_losses']}/{b['tradecard_neutral']}/{b['tradecard_pending']}"
+        ),
+        (
+            'Watchlist resolved: '
+            f"{b['watchlist_win']}/{b['watchlist_loss']}/{b['watchlist_neutral']}"
+        ),
+        (
+            'Avoid resolved: '
+            f"success {b['avoid_success']} / fail {b['avoid_fail']}"
+        ),
+        (
+            'Tradecard resolved/no-fill: '
+            f"{b['tradecard_actual_resolved']}/{b['tradecard_actual_no_fill']}"
         ),
         f"Actual learning sample updated: {b['learning_sample_updated']}",
     ]

@@ -546,6 +546,20 @@ def build_close_brief_text() -> str:
         lines.append('')
     except Exception:
         pass
+    learning_summary: dict[str, Any] = {}
+    if not provisional:
+        try:
+            from backend.analytics.actual_learning_resolver import (
+                format_actual_learning_close_lines,
+                run_actual_learning_resolver,
+            )
+
+            learning_summary = run_actual_learning_resolver(refresh_cache=True)
+            lines.extend(format_actual_learning_close_lines(learning_summary))
+            lines.append('')
+        except Exception:
+            lines.append('Actual learning sample updated: 0')
+            lines.append('')
     memory_res = run_memory_only()
     market_kwargs: dict[str, Any] = {}
     if not provisional and (pack_info.get('freshness_meta') or {}).get('lines'):
@@ -665,15 +679,27 @@ def _maybe_run_after_close_outcome_resolver(now: datetime) -> None:
         from backend.storage.outcome_resolver import run_after_close_outcome_resolver_if_due
 
         summary = run_after_close_outcome_resolver_if_due(now=now.astimezone(timezone.utc))
-        if summary.get('skipped'):
-            return
-        print(
-            '[TG_BRIEF] outcome_resolver '
-            f"resolved_new={summary.get('resolved_new', 0)} "
-            f"pending_after={summary.get('pending_after', 0)} "
-            f"errors={summary.get('errors', 0)}",
-            flush=True,
-        )
+        if not summary.get('skipped'):
+            print(
+                '[TG_BRIEF] outcome_resolver '
+                f"resolved_new={summary.get('resolved_new', 0)} "
+                f"pending_after={summary.get('pending_after', 0)} "
+                f"errors={summary.get('errors', 0)}",
+                flush=True,
+            )
+        try:
+            from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+
+            learning = run_actual_learning_resolver(refresh_cache=True)
+            print(
+                '[TG_BRIEF] actual_learning '
+                f"sample_updated={learning.get('sample_updated', 0)} "
+                f"pending_data={learning.get('pending_data', 0)} "
+                f"errors={learning.get('errors', 0)}",
+                flush=True,
+            )
+        except Exception as exc:
+            print(f'[TG_BRIEF] actual_learning hook failed: {exc}', flush=True)
     except Exception as exc:
         print(f'[TG_BRIEF] outcome_resolver hook failed: {exc}', flush=True)
 

@@ -14,8 +14,8 @@ from backend.storage.market_memory_db import get_connection, get_market_memory_s
 
 LOW_SAMPLE_THRESHOLD = 5
 
-WIN_TOKENS = frozenset({'WIN', 'TARGET_HIT', 'TARGET_HIT_BY_PRICE'})
-LOSS_TOKENS = frozenset({'LOSS', 'STOP_LOSS_HIT', 'STOP_LOSS_HIT_BY_PRICE'})
+WIN_TOKENS = frozenset({'WIN', 'TARGET_HIT', 'TARGET_HIT_BY_PRICE', 'AVOID_SUCCESS'})
+LOSS_TOKENS = frozenset({'LOSS', 'STOP_LOSS_HIT', 'STOP_LOSS_HIT_BY_PRICE', 'AVOID_FAIL'})
 
 VALID_GROUP_BY = frozenset({
     'confidence',
