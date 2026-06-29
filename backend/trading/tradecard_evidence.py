@@ -609,9 +609,9 @@ def _decision(
         if direct_catalyst and adjusted >= 65:
             return 'NEXT-SESSION WATCH ONLY', 'Market is closed; wait for fresh price and volume confirmation next session.', min(adjusted, 79.0)
         return 'MOMENTUM-ONLY WATCH', 'Scanner confirms momentum, but market is closed or catalyst support is limited.', min(adjusted, 72.0)
-    if score >= 80 and direct_catalyst:
+    if score >= 75 and direct_catalyst:
         if _is_live_mode(mode) and live_trigger:
-            return 'VALID ENTRY', 'Scanner, catalyst, and risk checks align; still paper-only/manual.', score
+            return 'VALID_ENTRY', 'Scanner, catalyst, and risk checks align; still paper-only/manual.', score
         return 'HIGH CONVICTION WATCH', 'Scanner plus direct catalyst align; wait for live trigger confirmation.', score
     if scanner_confirmed and not direct_catalyst and score >= 60:
         return 'MOMENTUM-ONLY WATCH', 'Scanner confirms price/volume, but no fresh direct catalyst was found.', min(score, 72.0)

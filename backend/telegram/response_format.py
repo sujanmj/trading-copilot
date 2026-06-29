@@ -2109,6 +2109,62 @@ def _tradecard_evidence_context(
     return context
 
 
+def _build_tradecard_evidence_matrix(
+    ticker: object,
+    *,
+    card: dict[str, Any] | None = None,
+    freshness_meta: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    sym = _normalize_tradecard_ticker(ticker)
+    if not sym:
+        return None
+    try:
+        from backend.trading.tradecard_evidence import build_tradecard_evidence_matrix
+
+        return build_tradecard_evidence_matrix(
+            sym,
+            context=_tradecard_evidence_context(card=card, freshness_meta=freshness_meta),
+        )
+    except Exception:
+        return None
+
+
+def _evidence_decision(matrix: dict[str, Any] | None, fallback: object = '') -> str:
+    decision = str((matrix or {}).get('decision') or fallback or '').strip().upper()
+    if decision == 'VALID ENTRY':
+        return 'VALID_ENTRY'
+    return decision or 'NO_ACTIVE_ENTRY'
+
+
+def _evidence_confidence(matrix: dict[str, Any] | None, fallback: object = '') -> str:
+    confidence = str((matrix or {}).get('confidence') or fallback or '').strip().upper()
+    return confidence or 'LOW'
+
+
+def _evidence_allows_valid_entry(matrix: dict[str, Any] | None) -> bool:
+    return _evidence_decision(matrix) == 'VALID_ENTRY'
+
+
+def _evidence_keeps_active_tracking_header(matrix: dict[str, Any] | None) -> bool:
+    decision = _evidence_decision(matrix)
+    return decision in ('VALID_ENTRY', 'HIGH CONVICTION WATCH')
+
+
+def _capital_plan_for_evidence_decision(decision: object, fallback: object = '') -> str:
+    label = str(decision or '').strip().upper()
+    if label == 'VALID_ENTRY':
+        return 'Paper entry allowed only if manually confirmed with fresh price + volume; no auto execution.'
+    if 'MOMENTUM-ONLY' in label:
+        return 'Watch only; no chase. Wait for pullback/retest or fresh catalyst confirmation.'
+    if 'RESEARCH' in label:
+        return 'Research only; wait for scanner/catalyst confirmation.'
+    if 'NO TRADE' in label or 'REJECTED' in label or 'AVOID' in label or 'BLOCKED' in label:
+        return 'No entry. Wait for a fresh, cleaner setup.'
+    if 'WATCH' in label:
+        return 'Watch only; confirm fresh price + volume before any paper action.'
+    return str(fallback or 'Paper only.').strip() or 'Paper only.'
+
+
 def _append_tradecard_evidence(
     lines: list[str],
     ticker: object,
@@ -2116,21 +2172,21 @@ def _append_tradecard_evidence(
     compact: bool,
     card: dict[str, Any] | None = None,
     freshness_meta: dict[str, Any] | None = None,
+    matrix: dict[str, Any] | None = None,
 ) -> None:
     sym = _normalize_tradecard_ticker(ticker)
     if not sym:
         return
     try:
-        from backend.trading.tradecard_evidence import (
-            build_tradecard_evidence_matrix,
-            format_tradecard_evidence_matrix_telegram,
-        )
+        from backend.trading.tradecard_evidence import format_tradecard_evidence_matrix_telegram
 
-        matrix = build_tradecard_evidence_matrix(
+        evidence = matrix or _build_tradecard_evidence_matrix(
             sym,
-            context=_tradecard_evidence_context(card=card, freshness_meta=freshness_meta),
+            card=card,
+            freshness_meta=freshness_meta,
         )
-        lines.extend(format_tradecard_evidence_matrix_telegram(matrix, compact=compact).splitlines())
+        if evidence:
+            lines.extend(format_tradecard_evidence_matrix_telegram(evidence, compact=compact).splitlines())
     except Exception:
         # Evidence is explanatory only; it must never break the safety-gated card.
         return
@@ -2273,6 +2329,9 @@ def _format_pinned_tradecard_from_latest(
     display = refresh_pinned_card_price(card, ticker)
     reason = clean_avoid_reason_text(str(display.get('reason') or ''), max_len=200)
     postmarket_line = _tradecard_postmarket_line()
+    evidence_matrix = _build_tradecard_evidence_matrix(ticker, card=display, freshness_meta=freshness_meta)
+    evidence_decision = _evidence_decision(evidence_matrix, status)
+    evidence_confidence = _evidence_confidence(evidence_matrix, display.get('confidence'))
     audit_only = (
         bool(latest.get('audit_only'))
         or is_tradecard_audit_status(status)
@@ -2306,7 +2365,7 @@ def _format_pinned_tradecard_from_latest(
         freshness = format_freshness_line(freshness_meta)
         if freshness:
             lines.append(freshness)
-        _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta)
+        _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta, matrix=evidence_matrix)
         lines.append('Paper only.')
         return strip_stage_markers('\n'.join(lines))
 
@@ -2321,6 +2380,9 @@ def _format_pinned_tradecard_from_latest(
         f'Reason: {reason or "—"}',
         f"Invalid if: {clean_avoid_reason_text(str(display.get('invalid_if') or ''), max_len=120)}",
     ]
+    lines[1] = f'<b>{ticker}</b> · <code>{evidence_decision}</code>'
+    lines[5] = f"R:R {display.get('risk_reward') or '—'} · Confidence: {evidence_confidence}"
+    lines[6] = f"Capital plan: {_capital_plan_for_evidence_decision(evidence_decision, display.get('capital_plan'))}"
     if explain:
         lines.extend(_tradecard_explain_lines(variant='valid_entry', reason=reason, card=display))
     if postmarket_line:
@@ -2329,7 +2391,7 @@ def _format_pinned_tradecard_from_latest(
     freshness = format_freshness_line(freshness_meta)
     if freshness:
         lines.append(freshness)
-    _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta)
+    _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta, matrix=evidence_matrix)
     lines.append('Paper only — you decide and place trades manually.')
     return strip_stage_markers('\n'.join(lines))
 
@@ -2442,6 +2504,15 @@ def format_tradecard_telegram(
     def _append_source(lines: list[str]) -> None:
         if effective_ticker:
             lines.append(resolve_tradecard_source_label(card, effective_ticker))
+
+    evidence_matrix = _build_tradecard_evidence_matrix(
+        effective_ticker,
+        card=card,
+        freshness_meta=freshness_meta,
+    )
+    evidence_decision = _evidence_decision(evidence_matrix, _tradecard_status_label(status))
+    evidence_confidence = _evidence_confidence(evidence_matrix, card.get('confidence'))
+    evidence_valid_entry = _evidence_allows_valid_entry(evidence_matrix)
 
     if data_stale and effective_ticker:
         stale_reason = reason or 'quote/scanner refresh failed — cache too old for live entry'
@@ -2631,12 +2702,47 @@ def format_tradecard_telegram(
                 'reason': active.get('reason') or 'active card tracking',
                 'confidence': active.get('confidence') or '—',
             }
-            lines = [format_active_card_exists(
-                active,
-                current_price=_safe_float(card.get('current_price')),
-            )]
+            active_evidence_matrix = _build_tradecard_evidence_matrix(
+                effective_ticker,
+                card=active_card,
+                freshness_meta=freshness_meta,
+            )
+            active_evidence_decision = _evidence_decision(active_evidence_matrix, 'VALID_ENTRY')
+            active_evidence_confidence = _evidence_confidence(active_evidence_matrix, active_card.get('confidence'))
+            if _evidence_keeps_active_tracking_header(active_evidence_matrix):
+                lines = [format_active_card_exists(
+                    active,
+                    current_price=_safe_float(card.get('current_price')),
+                )]
+                lines.append(f'Confidence: {active_evidence_confidence}')
+            else:
+                current = _safe_float(card.get('current_price'))
+                outcome = str(active.get('outcome_status') or 'PENDING').upper()
+                entry_zone = (
+                    f"{active.get('entry_low')}–{active.get('entry_high')}"
+                    if active.get('entry_low') is not None and active.get('entry_high') is not None
+                    else '—'
+                )
+                lines = [
+                    '<b>📋 TRADE CARD — EXISTING PAPER CARD</b>',
+                    f'<b>{effective_ticker}</b> · <code>EVIDENCE DOWNGRADED: {active_evidence_decision}</code>',
+                    f"Current: {current if current is not None else '—'}",
+                    f"Entry zone: {entry_zone}",
+                    f"Stop: {active.get('stop') or '—'} · T1: {active.get('t1') or '—'} · T2: {active.get('t2') or '—'}",
+                    f'Outcome: {outcome}',
+                    f'Confidence: {active_evidence_confidence}',
+                    'Plan: Track old paper card only. No new entry. No duplicate card. Do not chase.',
+                    f"Capital plan: {_capital_plan_for_evidence_decision(active_evidence_decision)}",
+                ]
             _append_freshness(lines)
-            _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=active_card, freshness_meta=freshness_meta)
+            _append_tradecard_evidence(
+                lines,
+                effective_ticker,
+                compact=not explain,
+                card=active_card,
+                freshness_meta=freshness_meta,
+                matrix=active_evidence_matrix,
+            )
             _save_latest(active_card, ticker=effective_ticker, status='VALID_ENTRY')
             return strip_stage_markers('\n'.join(lines))
 
@@ -2651,6 +2757,9 @@ def format_tradecard_telegram(
         f'Reason: {reason or "—"}',
         f"Invalid if: {clean_avoid_reason_text(str(card.get('invalid_if') or ''), max_len=120)}",
     ]
+    lines[1] = f'<b>{effective_ticker}</b> · <code>{evidence_decision}</code>'
+    lines[5] = f"R:R {card.get('risk_reward') or '—'} · Confidence: {evidence_confidence}"
+    lines[6] = f"Capital plan: {_capital_plan_for_evidence_decision(evidence_decision, card.get('capital_plan'))}"
     if explain:
         lines.extend(_tradecard_explain_lines(variant='valid_entry', reason=reason, card=card))
     else:
@@ -2659,11 +2768,18 @@ def format_tradecard_telegram(
         lines.append(postmarket_line)
     _append_source(lines)
     _append_freshness(lines)
-    _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
+    _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta, matrix=evidence_matrix)
     lines.append('Paper only — you decide and place trades manually.')
-    _persist_tradecard_journal(card)
     journal_card = dict(card)
     journal_card['ticker'] = effective_ticker
-    journal_card['status'] = status
-    _save_latest(journal_card, ticker=effective_ticker, status=status)
+    journal_card['evidence_decision'] = evidence_decision
+    journal_card['confidence'] = evidence_confidence
+    if evidence_valid_entry and status == 'VALID_ENTRY':
+        journal_card['status'] = 'VALID_ENTRY'
+        _persist_tradecard_journal(journal_card)
+        _save_latest(journal_card, ticker=effective_ticker, status='VALID_ENTRY')
+    else:
+        journal_card['status'] = 'NO_ACTIVE_ENTRY'
+        journal_card['entry_zone'] = 'NO ACTIVE ENTRY'
+        _save_latest(journal_card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
     return strip_stage_markers('\n'.join(lines))

@@ -77,7 +77,7 @@ def main() -> int:
 
     strong = build_tradecard_evidence_matrix('TATAMOTORS', _base_context())
     assert strong['consensus_score'] >= 80, strong
-    assert strong['decision'] in ('HIGH CONVICTION WATCH', 'VALID ENTRY'), strong
+    assert strong['decision'] in ('HIGH CONVICTION WATCH', 'VALID_ENTRY'), strong
     assert any(row['module'] == 'scanner' for row in strong['direct_confirms'])
     assert any(row['module'] == 'news' for row in strong['direct_confirms'])
 
@@ -144,6 +144,240 @@ def main() -> int:
         response_format._tradecard_reviewed_fallback = original_fallback
     assert 'Evidence Matrix' in tradecard_text, tradecard_text
     assert 'Use /tradecard explain TATAMOTORS' in tradecard_text, tradecard_text
+
+    import backend.trading.tradecard_journal as tradecard_journal
+
+    mismatch_matrix = {
+        'ticker': 'MISMATCHX',
+        'direct_confirms': [{
+            'module': 'scanner',
+            'scope': 'direct',
+            'verdict': 'confirm',
+            'weight': 20,
+            'freshness': '1m',
+            'reason': 'Price/volume confirmation',
+            'tickers_matched': ['MISMATCHX'],
+            'sectors_matched': [],
+        }],
+        'indirect_confirms': [{
+            'module': 'theme',
+            'scope': 'indirect',
+            'verdict': 'confirm',
+            'weight': 5,
+            'freshness': '1m',
+            'reason': 'sector basket support',
+            'tickers_matched': ['MISMATCHX'],
+            'sectors_matched': ['pharma'],
+        }],
+        'risk_filters': [{
+            'module': 'global',
+            'scope': 'risk',
+            'verdict': 'warn',
+            'weight': -8,
+            'freshness': '1m',
+            'reason': 'Macro risk tone: war',
+            'tickers_matched': [],
+            'sectors_matched': [],
+        }],
+        'missing_modules': [
+            {'module': 'news', 'scope': 'no_data', 'verdict': 'neutral', 'weight': 0, 'freshness': 'missing', 'reason': 'No direct stock catalyst'},
+            {'module': 'my_feed', 'scope': 'no_data', 'verdict': 'neutral', 'weight': 0, 'freshness': 'missing', 'reason': 'No direct feed catalyst'},
+            {'module': 'broker', 'scope': 'no_data', 'verdict': 'neutral', 'weight': 0, 'freshness': 'missing', 'reason': 'No broker confirmation'},
+            {'module': 'budget', 'scope': 'no_data', 'verdict': 'neutral', 'weight': 0, 'freshness': 'missing', 'reason': 'No budget link'},
+        ],
+        'consensus_score': 64,
+        'confidence': 'LOW',
+        'decision': 'MOMENTUM-ONLY WATCH',
+        'final_reason': 'Scanner confirms price/volume, but no fresh direct catalyst was found.',
+        'market_mode': 'LIVE',
+        'selection_basis_ok': True,
+        'scanner_confirmed': True,
+        'direct_catalyst_confirmed': False,
+    }
+    original_get_trade_card = trade_card_engine.get_trade_card
+    original_is_stale = trade_card_engine.is_trade_card_stale
+    original_source = trade_card_engine.resolve_tradecard_source_label
+    original_top = response_format._tradecard_unified_today_top
+    original_fallback = response_format._tradecard_reviewed_fallback
+    original_matrix = response_format._build_tradecard_evidence_matrix
+    original_active = tradecard_journal.get_active_valid_entry
+    try:
+        trade_card_engine.get_trade_card = lambda rebuild=False: {
+            'ok': True,
+            'session_date': '2026-06-29',
+            'generated_at': _now(),
+            'ticker': 'MISMATCHX',
+            'status': 'VALID_ENTRY',
+            'current_price': 100.0,
+            'entry_zone': '99.80-100.30',
+            'stop_loss': 99.0,
+            'target_1': 101.0,
+            'target_2': 102.0,
+            'risk_reward': 1.8,
+            'confidence': 'MEDIUM',
+            'capital_plan': 'Paper only',
+            'reason': 'legacy card says valid',
+            'invalid_if': 'volume fades',
+            'paper_only': True,
+        }
+        trade_card_engine.is_trade_card_stale = lambda card: False
+        trade_card_engine.resolve_tradecard_source_label = lambda card, ticker: 'Source: scanner-confirmed'
+        response_format._tradecard_unified_today_top = lambda: ('', '')
+        response_format._tradecard_reviewed_fallback = lambda: ('', '')
+        response_format._build_tradecard_evidence_matrix = lambda ticker, card=None, freshness_meta=None: mismatch_matrix
+        tradecard_journal.get_active_valid_entry = lambda ticker: None
+        mismatch_text = response_format.format_tradecard_telegram(freshness_meta={'refresh_skipped': True})
+    finally:
+        trade_card_engine.get_trade_card = original_get_trade_card
+        trade_card_engine.is_trade_card_stale = original_is_stale
+        trade_card_engine.resolve_tradecard_source_label = original_source
+        response_format._tradecard_unified_today_top = original_top
+        response_format._tradecard_reviewed_fallback = original_fallback
+        response_format._build_tradecard_evidence_matrix = original_matrix
+        tradecard_journal.get_active_valid_entry = original_active
+    assert '<b>MISMATCHX</b>' in mismatch_text, mismatch_text
+    assert '<code>MOMENTUM-ONLY WATCH</code>' in mismatch_text, mismatch_text
+    assert '<b>MISMATCHX</b> · <code>VALID_ENTRY</code>' not in mismatch_text, mismatch_text
+    assert 'Confidence: LOW' in mismatch_text, mismatch_text
+    assert 'Decision: <code>MOMENTUM-ONLY WATCH</code>' in mismatch_text, mismatch_text
+    assert 'Capital plan: Watch only; no chase.' in mismatch_text, mismatch_text
+
+    def _active_row(ticker='MISMATCHX'):
+        return {
+            'ticker': ticker,
+            'status': 'VALID_ENTRY',
+            'price_at_signal': 100.0,
+            'entry_low': 99.8,
+            'entry_high': 100.3,
+            'stop': 99.0,
+            't1': 101.0,
+            't2': 102.0,
+            'outcome_status': 'PENDING',
+            'confidence': 'MEDIUM',
+            'reason': 'old paper card',
+        }
+
+    original_get_trade_card = trade_card_engine.get_trade_card
+    original_is_stale = trade_card_engine.is_trade_card_stale
+    original_source = trade_card_engine.resolve_tradecard_source_label
+    original_top = response_format._tradecard_unified_today_top
+    original_fallback = response_format._tradecard_reviewed_fallback
+    original_matrix = response_format._build_tradecard_evidence_matrix
+    original_active = tradecard_journal.get_active_valid_entry
+    original_track = tradecard_journal.track_active_tradecard_outcome
+    try:
+        trade_card_engine.get_trade_card = lambda rebuild=False: {
+            'ok': True,
+            'session_date': '2026-06-29',
+            'generated_at': _now(),
+            'ticker': 'MISMATCHX',
+            'status': 'VALID_ENTRY',
+            'current_price': 100.1,
+            'entry_zone': '99.80-100.30',
+            'stop_loss': 99.0,
+            'target_1': 101.0,
+            'target_2': 102.0,
+            'risk_reward': 1.8,
+            'confidence': 'MEDIUM',
+            'reason': 'legacy active card',
+            'invalid_if': 'volume fades',
+            'paper_only': True,
+        }
+        trade_card_engine.is_trade_card_stale = lambda card: False
+        trade_card_engine.resolve_tradecard_source_label = lambda card, ticker: 'Source: scanner-confirmed'
+        response_format._tradecard_unified_today_top = lambda: ('', '')
+        response_format._tradecard_reviewed_fallback = lambda: ('', '')
+        response_format._build_tradecard_evidence_matrix = lambda ticker, card=None, freshness_meta=None: mismatch_matrix
+        tradecard_journal.get_active_valid_entry = lambda ticker: _active_row(ticker)
+        tradecard_journal.track_active_tradecard_outcome = lambda active, refresh=False, source='': active
+        active_downgraded_text = response_format.format_tradecard_telegram(freshness_meta={'refresh_skipped': True})
+    finally:
+        trade_card_engine.get_trade_card = original_get_trade_card
+        trade_card_engine.is_trade_card_stale = original_is_stale
+        trade_card_engine.resolve_tradecard_source_label = original_source
+        response_format._tradecard_unified_today_top = original_top
+        response_format._tradecard_reviewed_fallback = original_fallback
+        response_format._build_tradecard_evidence_matrix = original_matrix
+        tradecard_journal.get_active_valid_entry = original_active
+        tradecard_journal.track_active_tradecard_outcome = original_track
+    assert 'TRADE CARD — EXISTING PAPER CARD' in active_downgraded_text, active_downgraded_text
+    assert 'EVIDENCE DOWNGRADED: MOMENTUM-ONLY WATCH' in active_downgraded_text, active_downgraded_text
+    assert 'ACTIVE CARD EXISTS' not in active_downgraded_text, active_downgraded_text
+    assert '· <code>TRACKING</code>' not in active_downgraded_text, active_downgraded_text
+    assert 'Plan: Track old paper card only. No new entry. No duplicate card. Do not chase.' in active_downgraded_text, active_downgraded_text
+    assert 'Confidence: LOW' in active_downgraded_text, active_downgraded_text
+    assert 'Decision: <code>MOMENTUM-ONLY WATCH</code>' in active_downgraded_text, active_downgraded_text
+
+    valid_active_matrix = {
+        **mismatch_matrix,
+        'consensus_score': 82,
+        'confidence': 'HIGH',
+        'decision': 'VALID_ENTRY',
+        'final_reason': 'Scanner and direct catalyst align.',
+        'direct_catalyst_confirmed': True,
+        'direct_confirms': [
+            *mismatch_matrix['direct_confirms'],
+            {
+                'module': 'news',
+                'scope': 'direct',
+                'verdict': 'confirm',
+                'weight': 15,
+                'freshness': '1m',
+                'reason': 'fresh direct catalyst',
+                'tickers_matched': ['MISMATCHX'],
+                'sectors_matched': [],
+            },
+        ],
+        'risk_filters': [],
+    }
+    original_get_trade_card = trade_card_engine.get_trade_card
+    original_is_stale = trade_card_engine.is_trade_card_stale
+    original_source = trade_card_engine.resolve_tradecard_source_label
+    original_top = response_format._tradecard_unified_today_top
+    original_fallback = response_format._tradecard_reviewed_fallback
+    original_matrix = response_format._build_tradecard_evidence_matrix
+    original_active = tradecard_journal.get_active_valid_entry
+    original_track = tradecard_journal.track_active_tradecard_outcome
+    try:
+        trade_card_engine.get_trade_card = lambda rebuild=False: {
+            'ok': True,
+            'session_date': '2026-06-29',
+            'generated_at': _now(),
+            'ticker': 'MISMATCHX',
+            'status': 'VALID_ENTRY',
+            'current_price': 100.1,
+            'entry_zone': '99.80-100.30',
+            'stop_loss': 99.0,
+            'target_1': 101.0,
+            'target_2': 102.0,
+            'risk_reward': 1.8,
+            'confidence': 'MEDIUM',
+            'reason': 'legacy active card',
+            'invalid_if': 'volume fades',
+            'paper_only': True,
+        }
+        trade_card_engine.is_trade_card_stale = lambda card: False
+        trade_card_engine.resolve_tradecard_source_label = lambda card, ticker: 'Source: catalyst-backed + scanner-confirmed'
+        response_format._tradecard_unified_today_top = lambda: ('', '')
+        response_format._tradecard_reviewed_fallback = lambda: ('', '')
+        response_format._build_tradecard_evidence_matrix = lambda ticker, card=None, freshness_meta=None: valid_active_matrix
+        tradecard_journal.get_active_valid_entry = lambda ticker: _active_row(ticker)
+        tradecard_journal.track_active_tradecard_outcome = lambda active, refresh=False, source='': active
+        active_valid_text = response_format.format_tradecard_telegram(freshness_meta={'refresh_skipped': True})
+    finally:
+        trade_card_engine.get_trade_card = original_get_trade_card
+        trade_card_engine.is_trade_card_stale = original_is_stale
+        trade_card_engine.resolve_tradecard_source_label = original_source
+        response_format._tradecard_unified_today_top = original_top
+        response_format._tradecard_reviewed_fallback = original_fallback
+        response_format._build_tradecard_evidence_matrix = original_matrix
+        tradecard_journal.get_active_valid_entry = original_active
+        tradecard_journal.track_active_tradecard_outcome = original_track
+    assert 'TRADE CARD — ACTIVE CARD EXISTS' in active_valid_text, active_valid_text
+    assert '· <code>TRACKING</code>' in active_valid_text, active_valid_text
+    assert 'EVIDENCE DOWNGRADED' not in active_valid_text, active_valid_text
+    assert 'Confidence: HIGH' in active_valid_text, active_valid_text
+    assert 'Decision: <code>VALID_ENTRY</code>' in active_valid_text, active_valid_text
 
     empty_ctx = {
         'market_mode': 'LIVE',
