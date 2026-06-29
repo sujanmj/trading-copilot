@@ -330,6 +330,8 @@ def _status_runtime_snapshot_line(row: Optional[dict]) -> str:
     row = row if isinstance(row, dict) else {}
     age = row.get('age_display') or 'freshness unavailable'
     stale = bool(row.get('stale'))
+    if row.get('live_lite_snapshot') or row.get('source') == 'live_lite_scanner':
+        return f"Runtime snapshot: {age} (fresh/lite from scanner)"
     tier = str(row.get('health_tier') or '').lower()
     status = 'stale' if stale else 'fresh'
     if tier and tier not in ('healthy', 'fresh'):

@@ -208,6 +208,10 @@ def main() -> int:
         patch('backend.runtime.snapshot_freshness_monitor._pipeline_stalled', return_value=False),
         patch('backend.runtime.snapshot_freshness_monitor._load_heartbeats', return_value={'sources': {}}),
         patch(
+            'backend.runtime.live_lite_snapshot.maybe_publish_live_lite_snapshot',
+            return_value={'ok': False, 'skipped': True, 'reason': 'test_disabled', 'ai_calls': 0},
+        ),
+        patch(
             'backend.runtime.snapshot_freshness_monitor._closed_market_context',
             return_value={'closed': False, 'period': 'market', 'state': 'INDIA_MARKET_HOURS'},
         ),
@@ -320,6 +324,10 @@ def main() -> int:
             with (
                 patch('backend.runtime.snapshot_freshness_monitor._pipeline_stalled', return_value=False),
                 patch('backend.runtime.snapshot_freshness_monitor._load_heartbeats', return_value={'sources': {}}),
+                patch(
+                    'backend.runtime.live_lite_snapshot.maybe_publish_live_lite_snapshot',
+                    return_value={'ok': False, 'skipped': True, 'reason': 'test_disabled', 'ai_calls': 0},
+                ),
             ):
                 freshness = evaluate_snapshot_freshness()
             if freshness.get('stale') or freshness.get('age_minutes') is None or freshness.get('age_minutes') > 1:

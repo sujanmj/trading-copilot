@@ -304,6 +304,11 @@ def _map_primary_runtime_state(
         or lifecycle_state in ('AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY')
         or period in ('post_market', 'after_hours', 'night', 'weekend', 'holiday')
     )
+    live_market = (
+        bool(operational.get('market_hours'))
+        or lifecycle_state in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE')
+        or period in ('market', 'market_hours', 'regular')
+    )
     age = freshness.get('age_minutes')
     try:
         age_n = int(age) if age is not None else None
@@ -316,12 +321,30 @@ def _map_primary_runtime_state(
         strict_age_degraded = False
     snapshot_degraded = bool(freshness.get('degraded')) or strict_age_degraded
     pipeline_stalled = bool(pipeline.get('any_stalled'))
-    scanner_ok = bool(scanner_health.get('healthy', True)) and not scanner_health.get('stalled')
-    if age_n is not None and age_n < 15 and not pipeline_stalled:
+    scanner_age = scanner_health.get('age_minutes')
+    try:
+        scanner_age_n = int(scanner_age) if scanner_age is not None else None
+    except (TypeError, ValueError):
+        scanner_age_n = None
+    live_scanner_threshold = int(freshness.get('live_scanner_stale_minutes') or 5)
+    live_scanner_stale = (
+        live_market
+        and scanner_age_n is not None
+        and scanner_age_n >= live_scanner_threshold
+    )
+    scanner_ok = (
+        bool(scanner_health.get('healthy', True))
+        and not scanner_health.get('stalled')
+        and not live_scanner_stale
+    )
+    if scanner_age_n is None and age_n is not None and age_n < 15 and not pipeline_stalled:
         scanner_ok = True
 
     if after_hours:
         return 'DEGRADED' if snapshot_degraded else 'AFTER_HOURS'
+
+    if live_scanner_stale:
+        return 'DEGRADED'
 
     if snapshot_degraded or pipeline_stalled:
         return 'DEGRADED'

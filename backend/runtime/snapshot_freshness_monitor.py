@@ -130,9 +130,24 @@ def _closed_market_context() -> dict[str, Any]:
         )
         premarket = period in ('pre_market', 'premarket') or state in ('PREMARKET', 'PRE_MARKET')
         live = bool(op.get('market_hours')) or state in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE')
-        return {'closed': bool(closed and not premarket and not live), 'period': period, 'state': state}
+        return {
+            'closed': bool(closed and not premarket and not live),
+            'period': period,
+            'state': state,
+            'market_hours': bool(op.get('market_hours')),
+        }
     except Exception:
-        return {'closed': False, 'period': '', 'state': ''}
+        return {'closed': False, 'period': '', 'state': '', 'market_hours': False}
+
+
+def _live_market_context(ctx: dict[str, Any]) -> bool:
+    state = str((ctx or {}).get('state') or '').upper()
+    period = str((ctx or {}).get('period') or '').lower()
+    return bool((ctx or {}).get('market_hours')) or state in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE') or period in (
+        'market',
+        'market_hours',
+        'regular',
+    )
 
 
 def evaluate_snapshot_freshness() -> Dict[str, Any]:
@@ -149,8 +164,28 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
     meta = get_active_snapshot_meta() or {}
     age_minutes = _snapshot_age_minutes_direct()
     tier = freshness_health_tier(age_minutes)
-    pipeline_stalled = _pipeline_stalled()
     market_ctx = _closed_market_context()
+    lite_result: dict[str, Any] = {}
+    if _live_market_context(market_ctx):
+        try:
+            from backend.runtime.live_lite_snapshot import maybe_publish_live_lite_snapshot
+
+            lite_result = maybe_publish_live_lite_snapshot(
+                snapshot_age_minutes=age_minutes,
+                reason='snapshot_freshness_monitor',
+            ) or {}
+            if lite_result.get('ok'):
+                meta = get_active_snapshot_meta() or {}
+                age_minutes = _snapshot_age_minutes_direct()
+                tier = freshness_health_tier(age_minutes)
+        except Exception as exc:
+            lite_result = {
+                'ok': False,
+                'skipped': True,
+                'reason': f'live_lite_error:{exc}',
+                'ai_calls': 0,
+            }
+    pipeline_stalled = _pipeline_stalled()
     closed_market = bool(market_ctx.get('closed'))
     closed_threshold = CLOSED_MARKET_STALE_MINUTES
     closed_market_within_threshold = (
@@ -230,6 +265,8 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'market_closed': closed_market,
         'market_period': market_ctx.get('period'),
         'market_state': market_ctx.get('state'),
+        'live_lite_snapshot': bool(lite_result.get('ok')),
+        'live_lite_result': lite_result,
         'pipeline_stalled': pipeline_stalled,
         'snapshot_version': meta.get('snapshot_version'),
         'active_snapshot_id': meta.get('active_snapshot_id'),
@@ -243,6 +280,21 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'collectors_active': len(collector_issues) < len(DEFAULT_SLA_SECONDS),
     }
     merged = merge_freshness_payload(result, timestamp=meta.get('published_at'))
+    if lite_result.get('ok'):
+        merged.update({
+            'fresh': True,
+            'stale': False,
+            'degraded': False,
+            'health_tier': 'lite from scanner',
+            'status_label': 'fresh/lite from scanner',
+            'source': 'live_lite_scanner',
+            'live_lite_snapshot': True,
+            'scanner_age_minutes': lite_result.get('scanner_age_minutes'),
+            'suppress_confidence': False,
+            'block_elite_outputs': False,
+            'quality_score_penalty': 0.0,
+            'ai_calls': 0,
+        })
     if closed_market_within_threshold:
         merged.update({
             'fresh': True,
