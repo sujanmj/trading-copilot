@@ -117,6 +117,8 @@ def main() -> int:
                     ],
                 },
             )
+            scanner_age_ts = time.time() - (8 * 60)
+            os.utime(scanner_file, (scanner_age_ts, scanner_age_ts))
             _write_json(
                 market_file,
                 {
@@ -155,6 +157,44 @@ def main() -> int:
                 return _fail('lite snapshot did not carry top scanner candidate')
             if not current.get('risk_list') or current['risk_list'][0].get('symbol') != 'RISKY':
                 return _fail('lite snapshot did not carry avoid candidates')
+            if current.get('snapshot_freshness', {}).get('ai_calls') != 0:
+                return _fail('live-lite freshness must carry ai_calls=0')
+            if current.get('snapshot_freshness', {}).get('scanner_status') != 'aging':
+                return _fail(f'8m scanner should be aging in lite snapshot: {current.get("snapshot_freshness")}')
+
+            aging_freshness = {
+                'age_minutes': 6,
+                'age_display': '6m',
+                'health_tier': 'aging',
+                'degraded': False,
+                'stale': False,
+                'source': 'live_lite_scanner',
+                'live_lite_snapshot': True,
+                'market_state': 'INDIA_MARKET_HOURS',
+                'market_period': 'market',
+                'live_scanner_stale_minutes': 10,
+                'ai_calls': 0,
+            }
+            aging_scanner = rs._apply_live_scanner_policy(
+                {'healthy': True, 'stalled': False, 'age_minutes': 8},
+                {'period': 'market', 'market_hours': True},
+                aging_freshness,
+                {'lifecycle_state': 'DEGRADED'},
+            )
+            if aging_scanner.get('live_scanner_status') != 'aging':
+                return _fail(f'8m scanner should classify as aging: {aging_scanner}')
+            if aging_scanner.get('display') != 'Scanner: aging · 8m':
+                return _fail(f'8m scanner display should be aging, got {aging_scanner.get("display")}')
+
+            aging_state = rs._map_primary_runtime_state(
+                {'lifecycle_state': 'DEGRADED', 'after_hours_mode': False},
+                {'period': 'market', 'market_hours': True, 'after_hours_mode': False},
+                aging_freshness,
+                aging_scanner,
+                {'any_stalled': False, 'stalled_stages': []},
+            )
+            if aging_state != 'LIVE':
+                return _fail(f'live-lite scanner aging should remain LIVE, got {aging_state}')
 
             live_state = rs._map_primary_runtime_state(
                 {'lifecycle_state': 'MARKET_ACTIVE', 'after_hours_mode': False},
@@ -176,11 +216,11 @@ def main() -> int:
                 {'lifecycle_state': 'MARKET_ACTIVE', 'after_hours_mode': False},
                 {'period': 'market', 'market_hours': True, 'after_hours_mode': False},
                 {'age_minutes': 0, 'degraded': False, 'stale': False},
-                {'healthy': True, 'stalled': False, 'age_minutes': 6},
+                {'healthy': True, 'stalled': False, 'age_minutes': 11},
                 {'any_stalled': False, 'stalled_stages': []},
             )
             if stale_scanner_state != 'DEGRADED':
-                return _fail(f'live scanner stale >5m must degrade, got {stale_scanner_state}')
+                return _fail(f'live scanner stale >10m must degrade, got {stale_scanner_state}')
 
             with patch(
                 'backend.orchestration.alert_suppression_log.suppression_summary',
@@ -199,22 +239,67 @@ def main() -> int:
             if not alert.get('eligible') or alert.get('block_reasons'):
                 return _fail(f'optional stale intelligence should not block live scanner alerts: {alert}')
 
+            with patch(
+                'backend.orchestration.alert_suppression_log.suppression_summary',
+                return_value={
+                    'suppression_count': 2,
+                    'by_reason': {'stale_cache': 1, 'stale_snapshot': 1},
+                },
+            ):
+                aging_alert = rs._load_alert_eligibility(
+                    {'lifecycle_state': 'DEGRADED', 'after_hours_mode': False},
+                    aging_freshness,
+                    {'elite_blocked': False, 'status': 'ready'},
+                    scanner_health=aging_scanner,
+                )
+            if not aging_alert.get('eligible') or aging_alert.get('block_reasons'):
+                return _fail(f'aging live-lite scanner should keep alerts eligible: {aging_alert}')
+            warning_reasons = aging_alert.get('warning_reasons') or []
+            for expected_warning in (
+                'lifecycle_mismatch_ignored_live_lite',
+                'suppressed:stale_cache',
+                'suppressed:stale_snapshot',
+            ):
+                if expected_warning not in warning_reasons:
+                    return _fail(f'missing warning {expected_warning}: {aging_alert}')
+
+            stale_scanner = rs._apply_live_scanner_policy(
+                {'healthy': True, 'stalled': False, 'age_minutes': 11},
+                {'period': 'market', 'market_hours': True},
+                aging_freshness,
+                {'lifecycle_state': 'MARKET_ACTIVE'},
+            )
+            with patch(
+                'backend.orchestration.alert_suppression_log.suppression_summary',
+                return_value={'suppression_count': 0, 'by_reason': {}},
+            ):
+                stale_alert = rs._load_alert_eligibility(
+                    {'lifecycle_state': 'MARKET_ACTIVE', 'after_hours_mode': False},
+                    aging_freshness,
+                    {'elite_blocked': False, 'status': 'ready'},
+                    scanner_health=stale_scanner,
+                )
+            if stale_alert.get('eligible') or 'scanner_stale' not in (stale_alert.get('block_reasons') or []):
+                return _fail(f'scanner >10m should block alerts with scanner_stale: {stale_alert}')
+
             status_text = format_status({
                 'primary_state': 'LIVE',
                 'lifecycle': {'lifecycle_state': 'MARKET_ACTIVE'},
                 'session': {'session_display': 'India market hours', 'after_hours_mode': False},
                 'snapshot_freshness': {
-                    'age_display': '0m',
-                    'health_tier': 'lite from scanner',
+                    'age_display': '6m',
+                    'health_tier': 'aging',
                     'stale': False,
                     'source': 'live_lite_scanner',
                     'live_lite_snapshot': True,
+                    'ai_calls': 0,
                 },
-                'scanner_health': {'display': 'Scanner: healthy', 'stalled': False},
-                'alert_eligibility': alert,
+                'scanner_health': aging_scanner,
+                'alert_eligibility': aging_alert,
                 'telegram_metrics': {'alerts_sent_today': 0, 'suppressed_today': 0},
-                'source_freshness': {'scanner': {'age_display': '2s', 'stale': False}},
+                'source_freshness': {'scanner': {'age_display': '8m', 'stale': False}},
                 'intelligence_freshness': {
+                    'optional_stale_keys': ['budget', 'aihub_brain'],
                     'rows': {
                         'budget': {'label': 'Budget', 'age_display': '5h', 'status': 'stale', 'stale': True},
                         'aihub_brain': {'label': 'AIHub brain', 'age_display': '5h', 'status': 'stale', 'stale': True},
@@ -224,14 +309,25 @@ def main() -> int:
                 'metrics': {},
                 'prediction_counts': {},
                 'win_rate': {},
-                'secondary_flags': {},
+                'secondary_flags': {'live_lite_snapshot_aging': True},
                 'provider_health': {'status': 'ok'},
                 'scheduler': {'phase': 'RUNNING'},
             })
-            if 'Runtime snapshot: 0m (fresh/lite from scanner)' not in status_text:
-                return _fail(f'/status did not label scanner-lite snapshot: {status_text}')
-            if 'Alerts: eligible' not in status_text or '<b>Blockers</b>' in status_text:
-                return _fail(f'/status should warn optional stale caches without blocking: {status_text}')
+            for expected_text in (
+                'State: <code>LIVE</code>',
+                'Lifecycle: <code>MARKET_ACTIVE</code>',
+                'Snapshot: 6m (aging)',
+                'Scanner: aging · 8m',
+                'Runtime snapshot: 6m (aging)',
+                'Alerts: eligible',
+                'Flags: live_lite_snapshot_aging',
+                '<b>Warnings</b>:',
+                '<b>Blockers</b>: none',
+            ):
+                if expected_text not in status_text:
+                    return _fail(f'/status missing {expected_text}: {status_text}')
+            if 'lifecycle_mismatch' in status_text.split('<b>Blockers</b>:')[-1]:
+                return _fail(f'lifecycle mismatch should not appear as blocker: {status_text}')
 
             _write_json(
                 gate_state,

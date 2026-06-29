@@ -331,7 +331,14 @@ def _status_runtime_snapshot_line(row: Optional[dict]) -> str:
     age = row.get('age_display') or 'freshness unavailable'
     stale = bool(row.get('stale'))
     if row.get('live_lite_snapshot') or row.get('source') == 'live_lite_scanner':
-        return f"Runtime snapshot: {age} (fresh/lite from scanner)"
+        tier = str(row.get('health_tier') or row.get('status_label') or '').lower()
+        if tier in ('aging', 'stale'):
+            status = tier
+        elif tier and tier not in ('healthy', 'fresh', 'lite from scanner'):
+            status = tier
+        else:
+            status = 'fresh/lite from scanner'
+        return f"Runtime snapshot: {age} ({status}){_status_stale_suffix(stale)}"
     tier = str(row.get('health_tier') or '').lower()
     status = 'stale' if stale else 'fresh'
     if tier and tier not in ('healthy', 'fresh'):
@@ -455,10 +462,23 @@ def format_status(runtime_state: dict) -> str:
     blockers = list(alert.get('block_reasons') or [])
     if secondary.get('stale_snapshot') and 'stale_snapshot' not in blockers:
         blockers.append('stale_snapshot')
-    if secondary.get('scanner_stalled') and 'scanner_stalled' not in blockers:
+    if secondary.get('scanner_stale') and 'scanner_stale' not in blockers:
+        blockers.append('scanner_stale')
+    elif secondary.get('scanner_stalled') and 'scanner_stalled' not in blockers:
         blockers.append('scanner_stalled')
+    warnings = list(alert.get('warning_reasons') or [])
+    if fresh.get('live_lite_snapshot') or fresh.get('source') == 'live_lite_scanner':
+        stale_optional = (rs.get('intelligence_freshness') or {}).get('optional_stale_keys') or []
+        if stale_optional and 'stale intelligence/report cache' not in warnings:
+            warnings.append('stale intelligence/report cache')
+        if secondary.get('live_lite_snapshot_aging') and 'live_lite_snapshot_aging' not in warnings:
+            warnings.append('live_lite_snapshot_aging')
+    if warnings:
+        lines.append(f"<b>Warnings</b>: {', '.join(warnings[:6])}")
     if blockers:
         lines.append(f"<b>Blockers</b>: {', '.join(blockers[:6])}")
+    elif fresh.get('live_lite_snapshot') or fresh.get('source') == 'live_lite_scanner':
+        lines.append('<b>Blockers</b>: none')
     if session.get('after_hours_mode'):
         lines.append('<i>After-hours: execution alerts suppressed</i>')
     return '\n'.join(lines)

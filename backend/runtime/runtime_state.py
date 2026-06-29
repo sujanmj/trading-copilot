@@ -9,6 +9,7 @@ intelligence status.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from datetime import datetime
@@ -25,6 +26,13 @@ _cached_at: float = 0.0
 _CACHE_TTL_SECONDS = 3.0
 
 PRIMARY_RUNTIME_STATES = frozenset({'LIVE', 'AFTER_HOURS', 'DEGRADED', 'RECOVERING'})
+LIVE_SCANNER_FRESH_MINUTES = int(os.environ.get('LIVE_LITE_SCANNER_FRESH_MINUTES', '5'))
+LIVE_SCANNER_AGING_MAX_MINUTES = int(
+    os.environ.get(
+        'LIVE_LITE_SCANNER_AGING_MAX_MINUTES',
+        os.environ.get('LIVE_LITE_SCANNER_MAX_AGE_MINUTES', '10'),
+    )
+)
 
 def _source_files() -> Dict[str, str]:
     from backend.runtime.feed_registry import feed_files
@@ -283,6 +291,76 @@ def _load_overnight_posture() -> Dict[str, Any]:
         return {}
 
 
+def _is_live_market_context(lifecycle: dict, operational: dict) -> bool:
+    lifecycle_state = str(lifecycle.get('lifecycle_state') or '').upper()
+    period = str(operational.get('period') or '').lower()
+    return (
+        bool(operational.get('market_hours'))
+        or lifecycle_state in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE')
+        or period in ('market', 'market_hours', 'regular')
+    )
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _live_scanner_status(age_minutes: Optional[int]) -> str:
+    if age_minutes is None:
+        return 'unknown'
+    if age_minutes <= LIVE_SCANNER_FRESH_MINUTES:
+        return 'fresh'
+    if age_minutes <= LIVE_SCANNER_AGING_MAX_MINUTES:
+        return 'aging'
+    return 'stale'
+
+
+def _apply_live_scanner_policy(
+    scanner_health: dict,
+    operational: dict,
+    freshness: Optional[dict] = None,
+    lifecycle: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """Normalize scanner health for live-market runtime decisions."""
+    out = dict(scanner_health or {})
+    lifecycle = lifecycle or {}
+    if not _is_live_market_context(lifecycle, operational):
+        return out
+    age = _safe_int(out.get('age_minutes'))
+    if age is None and freshness:
+        age = _safe_int(freshness.get('scanner_age_minutes'))
+    status = _live_scanner_status(age)
+    out['live_scanner_status'] = status
+    out['live_scanner_fresh_minutes'] = LIVE_SCANNER_FRESH_MINUTES
+    out['live_scanner_stale_minutes'] = LIVE_SCANNER_AGING_MAX_MINUTES
+    if age is None:
+        out['healthy'] = False
+        out['stalled'] = True
+        out['display'] = 'Scanner: stale'
+        out['reason'] = out.get('reason') or 'scanner_age_unavailable'
+        return out
+    out['age_minutes'] = age
+    if status == 'fresh':
+        out['healthy'] = True
+        out['stalled'] = False
+        out['display'] = f'Scanner: fresh · {age}m'
+    elif status == 'aging':
+        out['healthy'] = True
+        out['stalled'] = False
+        out['aging'] = True
+        out['display'] = f'Scanner: aging · {age}m'
+    else:
+        out['healthy'] = False
+        out['stalled'] = True
+        out['stale'] = True
+        out['display'] = f'Scanner: stale · {age}m'
+        out['reason'] = 'scanner_stale'
+    return out
+
+
 def _map_primary_runtime_state(
     lifecycle: dict,
     operational: dict,
@@ -304,16 +382,9 @@ def _map_primary_runtime_state(
         or lifecycle_state in ('AFTER_HOURS', 'POST_MARKET', 'WEEKEND', 'HOLIDAY')
         or period in ('post_market', 'after_hours', 'night', 'weekend', 'holiday')
     )
-    live_market = (
-        bool(operational.get('market_hours'))
-        or lifecycle_state in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE')
-        or period in ('market', 'market_hours', 'regular')
-    )
+    live_market = _is_live_market_context(lifecycle, operational)
     age = freshness.get('age_minutes')
-    try:
-        age_n = int(age) if age is not None else None
-    except (TypeError, ValueError):
-        age_n = None
+    age_n = _safe_int(age)
 
     closed_threshold = int(freshness.get('closed_market_stale_threshold_minutes') or 360)
     strict_age_degraded = age_n is not None and age_n >= 15
@@ -322,16 +393,25 @@ def _map_primary_runtime_state(
     snapshot_degraded = bool(freshness.get('degraded')) or strict_age_degraded
     pipeline_stalled = bool(pipeline.get('any_stalled'))
     scanner_age = scanner_health.get('age_minutes')
-    try:
-        scanner_age_n = int(scanner_age) if scanner_age is not None else None
-    except (TypeError, ValueError):
-        scanner_age_n = None
-    live_scanner_threshold = int(freshness.get('live_scanner_stale_minutes') or 5)
+    scanner_age_n = _safe_int(scanner_age)
+    live_scanner_threshold = int(freshness.get('live_scanner_stale_minutes') or LIVE_SCANNER_AGING_MAX_MINUTES)
     live_scanner_stale = (
         live_market
         and scanner_age_n is not None
-        and scanner_age_n >= live_scanner_threshold
+        and scanner_age_n > live_scanner_threshold
     )
+    live_lite_available = bool(
+        freshness.get('live_lite_snapshot')
+        or freshness.get('source') == 'live_lite_scanner'
+    )
+    live_lite_scanner_ok = (
+        live_market
+        and live_lite_available
+        and scanner_age_n is not None
+        and scanner_age_n <= live_scanner_threshold
+    )
+    if live_lite_scanner_ok:
+        snapshot_degraded = False
     scanner_ok = (
         bool(scanner_health.get('healthy', True))
         and not scanner_health.get('stalled')
@@ -345,6 +425,9 @@ def _map_primary_runtime_state(
 
     if live_scanner_stale:
         return 'DEGRADED'
+
+    if live_lite_scanner_ok and not pipeline_stalled:
+        return 'LIVE'
 
     if snapshot_degraded or pipeline_stalled:
         return 'DEGRADED'
@@ -367,10 +450,23 @@ def _load_secondary_flags(
     stall_report: dict,
 ) -> Dict[str, bool]:
     issues = stall_report.get('issues') or []
+    live_lite = bool(
+        freshness.get('live_lite_snapshot')
+        or freshness.get('source') == 'live_lite_scanner'
+    )
+    scanner_status = str(scanner_health.get('live_scanner_status') or '').lower()
     return {
         'stale_snapshot': bool(freshness.get('stale')),
         'closed_market_snapshot_aging': bool(freshness.get('closed_market_aging')),
+        'live_lite_snapshot_aging': bool(
+            live_lite
+            and (
+                scanner_status == 'aging'
+                or str(freshness.get('health_tier') or '').lower() == 'aging'
+            )
+        ),
         'scanner_stalled': bool(scanner_health.get('stalled')),
+        'scanner_stale': scanner_status == 'stale',
         'cache_only': any('export:' in str(i) for i in issues),
     }
 
@@ -755,7 +851,12 @@ def _load_db_size_display() -> str:
     return '—'
 
 
-def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_status: dict) -> Dict[str, Any]:
+def _load_alert_eligibility(
+    lifecycle: dict,
+    freshness: dict,
+    intelligence_status: dict,
+    scanner_health: Optional[dict] = None,
+) -> Dict[str, Any]:
     lc_state = str(lifecycle.get('lifecycle_state') or '').upper()
     after_hours = bool(lifecycle.get('after_hours_mode')) or bool(freshness.get('market_closed'))
     premarket = (
@@ -765,7 +866,33 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
     )
     stale = bool(freshness.get('stale'))
     ai_blocked = intelligence_status.get('elite_blocked')
+    scanner = scanner_health or {}
+    scanner_status = str(scanner.get('live_scanner_status') or '').lower()
+    scanner_age = _safe_int(scanner.get('age_minutes') or freshness.get('scanner_age_minutes'))
+    live_lite_available = bool(
+        freshness.get('live_lite_snapshot')
+        or freshness.get('source') == 'live_lite_scanner'
+    )
+    live_market = (
+        str(freshness.get('market_state') or '').upper() in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE')
+        or str(freshness.get('market_period') or '').lower() in ('market', 'market_hours', 'regular')
+        or lc_state in ('INDIA_MARKET_HOURS', 'MARKET_ACTIVE', 'LIVE')
+    )
+    live_scanner_usable = (
+        live_lite_available
+        and live_market
+        and scanner_status in ('fresh', 'aging')
+        and scanner_age is not None
+        and scanner_age <= int(freshness.get('live_scanner_stale_minutes') or LIVE_SCANNER_AGING_MAX_MINUTES)
+    )
+    warning_reasons: list[str] = []
+    if stale and live_scanner_usable:
+        stale = False
+        warning_reasons.append('stale_snapshot_warning')
     degraded_lifecycle = lc_state in ('DEGRADED',)
+    if degraded_lifecycle and live_scanner_usable:
+        degraded_lifecycle = False
+        warning_reasons.append('lifecycle_mismatch_ignored_live_lite')
     if after_hours:
         eligible = not degraded_lifecycle and not bool(freshness.get('degraded'))
         execution_eligible = False
@@ -776,6 +903,10 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
         eligible = not stale and not degraded_lifecycle
         execution_eligible = eligible
     reasons = []
+    if live_market and scanner_status == 'stale':
+        eligible = False
+        execution_eligible = False
+        reasons.append('scanner_stale')
     if stale and not (after_hours or premarket):
         reasons.append('stale_snapshot')
     if stale and premarket:
@@ -793,6 +924,10 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
         top = sorted((sup.get('by_reason') or {}).items(), key=lambda x: -x[1])[:2]
         for reason, _count in top:
             tag = f'suppressed:{reason}'
+            if live_scanner_usable and reason in ('stale_cache', 'stale_snapshot'):
+                if tag not in warning_reasons:
+                    warning_reasons.append(tag)
+                continue
             if tag not in reasons:
                 reasons.append(tag)
     return {
@@ -800,6 +935,7 @@ def _load_alert_eligibility(lifecycle: dict, freshness: dict, intelligence_statu
         'execution_eligible': execution_eligible,
         'watchlist_only': bool(eligible and not execution_eligible),
         'block_reasons': reasons,
+        'warning_reasons': warning_reasons,
         'suppression_count': sup.get('suppression_count', 0),
         'suppression_by_reason': sup.get('by_reason') or {},
         'last_suppression_reason': sup.get('last_reason') or sup.get('last_suppression_reason') or '',
@@ -835,6 +971,12 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     operational = get_operational_status()
     pipeline_status = _load_pipeline_status(freshness, lifecycle, operational)
     scanner_health = _load_scanner_health()
+    scanner_health = _apply_live_scanner_policy(
+        scanner_health,
+        operational,
+        freshness,
+        lifecycle,
+    )
     primary_state = _map_primary_runtime_state(
         lifecycle, operational, freshness, scanner_health, pipeline_status,
     )
@@ -868,8 +1010,13 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     elif primary_state == 'LIVE':
         lifecycle = dict(lifecycle)
         if lifecycle.get('lifecycle_state') == 'DEGRADED':
-            lifecycle['lifecycle_state'] = lifecycle.get('market_session_open') and 'MARKET_ACTIVE' or 'PRE_MARKET'
-            lifecycle['lifecycle_display'] = lifecycle.get('lifecycle_display') or 'Market Active'
+            lifecycle['lifecycle_state'] = (
+                operational.get('canonical_lifecycle')
+                or operational.get('lifecycle_state')
+                or (operational.get('market_hours') and 'MARKET_ACTIVE')
+                or 'PRE_MARKET'
+            )
+            lifecycle['lifecycle_display'] = operational.get('display_status') or 'Market Active'
         lifecycle['suppress_trading_language'] = False
     overnight_posture = _load_overnight_posture()
     session = _load_session_status(lifecycle, operational)
@@ -884,7 +1031,12 @@ def build_runtime_state(*, force_refresh: bool = False) -> Dict[str, Any]:
     intelligence_status = _load_intelligence_status(freshness)
     scheduler = _load_scheduler_phase(lifecycle, operational)
     ai_state = _load_ai_state(provider_health)
-    alert_eligibility = _load_alert_eligibility(lifecycle, freshness, intelligence_status)
+    alert_eligibility = _load_alert_eligibility(
+        lifecycle,
+        freshness,
+        intelligence_status,
+        scanner_health=scanner_health,
+    )
     secondary_flags = _load_secondary_flags(freshness, scanner_health, stall_report)
     if primary_state == 'DEGRADED':
         secondary_flags['runtime_degraded'] = True

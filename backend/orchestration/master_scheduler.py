@@ -260,7 +260,7 @@ def _job_market_close_intel():
 def _job_postmarket_report_pack():
     from backend.scheduler.daily_report_pack_job import run_daily_report_pack_job
 
-    result = run_daily_report_pack_job(mode='postmarket')
+    result = run_daily_report_pack_job(mode='postmarket', allow_runtime=True)
     print(
         f"[DAILY_PACK_JOB] postmarket generated={result.get('generated')} "
         f"mode={result.get('market_mode')} warnings={len(result.get('warnings') or [])}",

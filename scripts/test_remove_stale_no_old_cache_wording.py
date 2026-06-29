@@ -64,6 +64,12 @@ def main() -> int:
     ), patch(
         'backend.telegram.lazy_command_runner.run_memory_only',
         return_value={'text': 'Memory ok'},
+    ), patch(
+        'backend.telegram.telegram_brief_scheduler._load_json_file',
+        return_value={'ok': True, 'generated_at': '2026-05-01T15:30:00+05:30'},
+    ), patch(
+        'backend.telegram.telegram_brief_scheduler._run_safe_postmarket_pack_catchup_once',
+        return_value={'ok': False, 'reason': 'test stale pack'},
     ):
         morning = strip_stage_markers(build_morning_brief_text())
         close = strip_stage_markers(build_close_brief_text())

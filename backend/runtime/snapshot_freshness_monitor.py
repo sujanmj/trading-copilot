@@ -251,12 +251,15 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
     block_elite = stale or degraded
     quality_penalty = 0.35 if degraded else (0.15 if stale else (0.08 if tier == 'aging' else 0.0))
 
+    meta_source = meta.get('source')
+    source_is_live_lite = meta_source == 'live_lite_scanner'
     result = {
         'fresh': tier == 'healthy',
         'stale': stale,
         'degraded': degraded,
         'health_tier': tier,
         'age_minutes': age_minutes,
+        'source': meta_source,
         'stale_threshold_minutes': STALE_MIN_MINUTES,
         'degraded_threshold_minutes': DEGRADED_MAX_MINUTES,
         'closed_market_relaxed': bool(closed_market_within_threshold),
@@ -265,8 +268,12 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
         'market_closed': closed_market,
         'market_period': market_ctx.get('period'),
         'market_state': market_ctx.get('state'),
-        'live_lite_snapshot': bool(lite_result.get('ok')),
+        'live_lite_snapshot': bool(lite_result.get('ok') or source_is_live_lite),
         'live_lite_result': lite_result,
+        'scanner_age_minutes': lite_result.get('scanner_age_minutes'),
+        'scanner_status': lite_result.get('scanner_status'),
+        'live_scanner_fresh_minutes': lite_result.get('live_scanner_fresh_minutes'),
+        'live_scanner_stale_minutes': lite_result.get('live_scanner_stale_minutes'),
         'pipeline_stalled': pipeline_stalled,
         'snapshot_version': meta.get('snapshot_version'),
         'active_snapshot_id': meta.get('active_snapshot_id'),
@@ -290,6 +297,9 @@ def evaluate_snapshot_freshness() -> Dict[str, Any]:
             'source': 'live_lite_scanner',
             'live_lite_snapshot': True,
             'scanner_age_minutes': lite_result.get('scanner_age_minutes'),
+            'scanner_status': lite_result.get('scanner_status'),
+            'live_scanner_fresh_minutes': lite_result.get('live_scanner_fresh_minutes'),
+            'live_scanner_stale_minutes': lite_result.get('live_scanner_stale_minutes'),
             'suppress_confidence': False,
             'block_elite_outputs': False,
             'quality_score_penalty': 0.0,

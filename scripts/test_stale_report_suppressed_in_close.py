@@ -36,6 +36,14 @@ def main() -> int:
 
     with patch('backend.telegram.india_mode_lock.is_premarket_phase', return_value=False), \
          patch('backend.telegram.india_mode_lock.is_live_market_hours_phase', return_value=False), \
+         patch('backend.telegram.telegram_brief_scheduler._load_json_file', return_value={
+             'ok': True,
+             'generated_at': '2026-05-01T15:30:00+05:30',
+         }), \
+         patch('backend.telegram.telegram_brief_scheduler._run_safe_postmarket_pack_catchup_once', return_value={
+             'ok': False,
+             'reason': 'test stale pack',
+         }), \
          patch('backend.telegram.lazy_command_runner.run_daily_pack_only', return_value={'text': stale_pack}), \
          patch('backend.telegram.lazy_command_runner.run_memory_only', return_value={'text': 'memory'}), \
          patch('backend.telegram.lazy_command_runner.run_market_only', return_value={'text': 'market'}), \

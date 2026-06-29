@@ -169,6 +169,7 @@ def run_daily_report_pack_job(
     *,
     dry_run: bool = False,
     limit: int = DEFAULT_LIMIT,
+    allow_runtime: bool = False,
 ) -> dict[str, Any]:
     """
     Run scheduled daily report pack generation.
@@ -180,7 +181,7 @@ def run_daily_report_pack_job(
     warnings: list[str] = []
     files = _relative_files()
 
-    if not _local_allowed():
+    if not (allow_runtime or _local_allowed()):
         return {
             'ok': False,
             'mode': requested,
@@ -250,7 +251,7 @@ def run_daily_report_pack_job(
     if effective == 'postmarket' and refresh_status.get('calibration') == 'fail':
         warnings.append('calibration refresh failed')
 
-    pack = generate_daily_report_pack(refresh=False, limit=limit)
+    pack = generate_daily_report_pack(refresh=False, limit=limit, pack_mode=effective)
     generated = pack.get('ok') is True
 
     if stats_before:

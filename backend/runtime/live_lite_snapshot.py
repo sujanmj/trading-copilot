@@ -29,7 +29,13 @@ SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 MARKET_FILE = DATA_DIR / 'latest_market_data.json'
 ENRICHED_MARKET_FILE = DATA_DIR / 'latest_market_data_memory_enriched.json'
 
-LIVE_SCANNER_MAX_AGE_MINUTES = int(os.environ.get('LIVE_LITE_SCANNER_MAX_AGE_MINUTES', '5'))
+LIVE_SCANNER_FRESH_MINUTES = int(os.environ.get('LIVE_LITE_SCANNER_FRESH_MINUTES', '5'))
+LIVE_SCANNER_AGING_MAX_MINUTES = int(
+    os.environ.get(
+        'LIVE_LITE_SCANNER_AGING_MAX_MINUTES',
+        os.environ.get('LIVE_LITE_SCANNER_MAX_AGE_MINUTES', '10'),
+    )
+)
 LIVE_LITE_MIN_INTERVAL_SECONDS = int(os.environ.get('LIVE_LITE_MIN_INTERVAL_SECONDS', '180'))
 
 
@@ -221,15 +227,15 @@ def _scanner_health() -> dict[str, Any]:
     try:
         from backend.runtime.scanner_heartbeat_monitor import evaluate_scanner_health
 
-        health = evaluate_scanner_health(stall_minutes=LIVE_SCANNER_MAX_AGE_MINUTES) or {}
+        health = evaluate_scanner_health(stall_minutes=LIVE_SCANNER_AGING_MAX_MINUTES + 1) or {}
     except Exception:
         health = {}
     if health.get('age_minutes') is None:
         file_age = _file_age_minutes(SCANNER_FILE)
         if file_age is not None:
             health['age_minutes'] = file_age
-            health['healthy'] = file_age < LIVE_SCANNER_MAX_AGE_MINUTES
-            health['stalled'] = file_age >= LIVE_SCANNER_MAX_AGE_MINUTES
+            health['healthy'] = file_age <= LIVE_SCANNER_AGING_MAX_MINUTES
+            health['stalled'] = file_age > LIVE_SCANNER_AGING_MAX_MINUTES
     return health
 
 
@@ -255,12 +261,12 @@ def publish_live_lite_snapshot(
     scanner_stale = (
         scanner_age is None
         or bool(health.get('stalled'))
-        or int(scanner_age) >= LIVE_SCANNER_MAX_AGE_MINUTES
+        or int(scanner_age) > LIVE_SCANNER_AGING_MAX_MINUTES
     )
     if scanner_stale:
         print(
             f'[LIVE_LITE_SNAPSHOT] ai_calls=0 scanner_age={scanner_age} '
-            f'snapshot_age={snapshot_age_minutes} status=scanner_stale',
+            f'snapshot_age={snapshot_age_minutes} status=stale',
             flush=True,
         )
         return {
@@ -316,7 +322,9 @@ def publish_live_lite_snapshot(
         'source': 'live_lite_scanner',
         'live_lite_snapshot': True,
         'scanner_age_minutes': scanner_age,
-        'live_scanner_stale_minutes': LIVE_SCANNER_MAX_AGE_MINUTES,
+        'scanner_status': 'aging' if int(scanner_age or 0) > LIVE_SCANNER_FRESH_MINUTES else 'fresh',
+        'live_scanner_fresh_minutes': LIVE_SCANNER_FRESH_MINUTES,
+        'live_scanner_stale_minutes': LIVE_SCANNER_AGING_MAX_MINUTES,
         'stale_intelligence_warnings': warnings,
         'suppress_confidence': False,
         'block_elite_outputs': False,
@@ -436,6 +444,9 @@ def publish_live_lite_snapshot(
         'reason': reason,
         'ai_calls': 0,
         'scanner_age_minutes': scanner_age,
+        'scanner_status': freshness.get('scanner_status'),
+        'live_scanner_fresh_minutes': LIVE_SCANNER_FRESH_MINUTES,
+        'live_scanner_stale_minutes': LIVE_SCANNER_AGING_MAX_MINUTES,
         'snapshot_age_minutes': snapshot_age_minutes,
         'current_snapshot_path': str(CURRENT_SNAPSHOT_FILE),
         'runtime_snapshot_path': str(RUNTIME_SNAPSHOT_CACHE),

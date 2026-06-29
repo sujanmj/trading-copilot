@@ -15,7 +15,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from backend.utils.config import DATA_DIR
@@ -217,6 +217,189 @@ def _build_research_mode_close_brief_text() -> str:
     return strip_stage_markers('\n'.join(lines))
 
 
+def _now_ist() -> datetime:
+    return datetime.now(IST)
+
+
+def _load_json_file(path: Path) -> dict[str, Any]:
+    try:
+        if not path.is_file():
+            return {}
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _daily_pack_path() -> Path:
+    try:
+        from backend.telegram import lazy_command_runner
+
+        return Path(lazy_command_runner.DAILY_PACK_FILE)
+    except Exception:
+        return DATA_DIR / 'daily_report_pack_latest.json'
+
+
+def _parse_dt_ist(value: Any) -> datetime | None:
+    if value in (None, ''):
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=IST)
+        return dt.astimezone(IST)
+    except Exception:
+        return None
+
+
+def _age_minutes(generated_at: datetime | None, now: datetime | None = None) -> int | None:
+    if generated_at is None:
+        return None
+    now = now or _now_ist()
+    return max(0, int((now - generated_at).total_seconds() // 60))
+
+
+def _age_label(age_min: int | None) -> str:
+    if age_min is None:
+        return 'unknown'
+    if age_min < 60:
+        return f'{age_min}m'
+    hours, minutes = divmod(age_min, 60)
+    if minutes:
+        return f'{hours}h {minutes}m'
+    return f'{hours}h'
+
+
+def _pack_generated_at(pack: dict[str, Any]) -> datetime | None:
+    return _parse_dt_ist(pack.get('generated_at') or pack.get('package_generated_at'))
+
+
+def _is_fresh_postmarket_pack(pack: dict[str, Any], *, now: datetime | None = None) -> bool:
+    if not pack or pack.get('ok') is not True:
+        return False
+    now = now or _now_ist()
+    generated = _pack_generated_at(pack)
+    if generated is None or generated.date() != now.date():
+        return False
+    age = _age_minutes(generated, now)
+    if age is None or age > 24 * 60:
+        return False
+    pack_mode = str(pack.get('pack_mode') or pack.get('package_mode') or '').strip().lower()
+    if pack_mode == 'postmarket':
+        return True
+    return (generated.hour, generated.minute) >= (15, 30)
+
+
+def _format_pack_summary(pack: dict[str, Any]) -> list[str]:
+    from backend.telegram.india_mode_lock import resolve_telegram_market_mode
+
+    generated = pack.get('generated_at') or pack.get('package_generated_at') or 'unknown'
+    summary = pack.get('summary') or {}
+    mode = resolve_telegram_market_mode(
+        pack_mode=pack.get('market_mode'),
+        summary_mode=summary.get('market_mode'),
+        active_mode=(pack.get('final_confidence') or {}).get('active_mode'),
+    )
+    lines = [
+        '<b>Daily report pack</b>',
+        f'Generated: {generated}',
+        f'Market mode: {mode}',
+    ]
+    fc = pack.get('final_confidence') or {}
+    if isinstance(fc, dict):
+        lines.append(
+            f"Final confidence - watch: {fc.get('watch', '?')} \u00b7 "
+            f"avoid: {fc.get('avoid', '?')} \u00b7 entry_candidates: {fc.get('buy_candidate', '?')}"
+        )
+    return lines
+
+
+def _run_safe_postmarket_pack_catchup_once() -> dict[str, Any]:
+    try:
+        from backend.scheduler.daily_report_pack_job import run_daily_report_pack_job
+
+        result = run_daily_report_pack_job(
+            mode='postmarket',
+            limit=25,
+            allow_runtime=True,
+        )
+        if result.get('generated') is True:
+            return {'ok': True, 'method': 'daily_report_pack_job', 'result': result}
+        warnings = result.get('warnings') or []
+        reason = '; '.join(str(w) for w in warnings[:3]) or 'postmarket pack not generated'
+        return {'ok': False, 'method': 'daily_report_pack_job', 'reason': reason, 'result': result}
+    except Exception as exc:
+        return {'ok': False, 'method': 'daily_report_pack_job', 'reason': str(exc)[:180]}
+
+
+def _postmarket_close_pack_lines() -> tuple[list[str], bool]:
+    from backend.analytics.unified_decision_engine import (
+        STALE_CLOSE_REPORT_NOTE,
+        get_feed_freshness_meta,
+        is_report_display_suppressed,
+        stale_report_suppression_lines,
+    )
+
+    now = _now_ist()
+    path = _daily_pack_path()
+    pack = _load_json_file(path)
+    catchup: dict[str, Any] = {}
+    if not _is_fresh_postmarket_pack(pack, now=now):
+        catchup = _run_safe_postmarket_pack_catchup_once()
+        pack = _load_json_file(path)
+
+    if _is_fresh_postmarket_pack(pack, now=now):
+        generated = _pack_generated_at(pack)
+        age = _age_minutes(generated, now)
+        generated_label = generated.strftime('%Y-%m-%d %H:%M IST') if generated else 'unknown'
+        lines = [
+            f'Report: fresh \u00b7 {_age_label(age)}',
+            f'Post-market pack generated at {generated_label}',
+            *_format_pack_summary(pack),
+            '',
+        ]
+        return lines, False
+
+    try:
+        meta = get_feed_freshness_meta()
+    except Exception:
+        meta = {'lines': {}}
+
+    lines: list[str] = []
+    if is_report_display_suppressed(meta=meta):
+        lines.extend(stale_report_suppression_lines(meta=meta))
+    else:
+        report_line = (meta.get('lines') or {}).get('report')
+        if report_line:
+            lines.append(str(report_line))
+
+    generated = _pack_generated_at(pack)
+    pack_age = _age_minutes(generated, now)
+    if pack_age is not None:
+        lines.append(f'Report: stale \u00b7 {_age_label(pack_age)}')
+    else:
+        lines.append('Report: unavailable')
+    lines.append(STALE_CLOSE_REPORT_NOTE)
+    reason = str(catchup.get('reason') or 'fresh post-market pack not available')
+    lines.append(f'Post-market pack unavailable - {reason}')
+    lines.append('')
+    return lines, True
+
+
+def _tradecard_resolution_line(counts: dict[str, Any]) -> str:
+    resolved = (
+        int(counts.get('T1') or 0)
+        + int(counts.get('T2') or 0)
+        + int(counts.get('SL') or 0)
+        + int(counts.get('expired') or 0)
+        + int(counts.get('ambiguous') or 0)
+    )
+    return (
+        f"Tradecard resolution: no fill {int(counts.get('no_fill') or 0)} / "
+        f"pending {int(counts.get('pending') or 0)} / resolved {resolved}"
+    )
+
+
 def build_close_brief_text() -> str:
     from backend.telegram.india_mode_lock import is_premarket_phase, resolve_telegram_market_phase
 
@@ -228,16 +411,17 @@ def build_close_brief_text() -> str:
     except Exception:
         pass
 
-    from backend.telegram.lazy_command_runner import run_daily_pack_only, run_memory_only, run_market_only
+    from backend.telegram.lazy_command_runner import run_memory_only, run_market_only
 
-    pack_res = run_daily_pack_only()
     memory_res = run_memory_only()
     market_res = run_market_only()
+    provisional = False
     try:
         from backend.telegram.india_mode_lock import is_live_market_hours_phase
         from backend.trading.unified_live_priority_engine import format_intraday_provisional_unified
 
-        if is_live_market_hours_phase():
+        provisional = is_live_market_hours_phase()
+        if provisional:
             tomorrow = format_intraday_provisional_unified()
         else:
             tomorrow = _build_today_tomorrow_text('tomorrow')
@@ -253,48 +437,57 @@ def build_close_brief_text() -> str:
         lines.append(f'Market mode: <code>{resolve_telegram_market_phase()}</code>')
     except Exception:
         pass
-    report_suppressed = False
-    try:
-        from backend.analytics.unified_decision_engine import (
-            STALE_CLOSE_REPORT_NOTE,
-            get_feed_freshness_meta,
-            is_report_display_suppressed,
-            stale_report_suppression_lines,
-        )
+    if provisional:
+        from backend.telegram.lazy_command_runner import run_daily_pack_only
 
-        meta = get_feed_freshness_meta()
-        report_suppressed = is_report_display_suppressed(meta=meta)
-        if report_suppressed:
-            lines.extend(stale_report_suppression_lines(meta=meta))
-            lines.append('')
-        else:
-            for key in ('report', 'scanner', 'news'):
-                line = (meta.get('lines') or {}).get(key)
-                if line:
-                    lines.append(line)
-            if meta.get('report_stale'):
-                lines.append(STALE_CLOSE_REPORT_NOTE)
-    except Exception:
+        pack_res = run_daily_pack_only()
         report_suppressed = False
+        try:
+            from backend.analytics.unified_decision_engine import (
+                STALE_CLOSE_REPORT_NOTE,
+                get_feed_freshness_meta,
+                is_report_display_suppressed,
+                stale_report_suppression_lines,
+            )
 
-    if not report_suppressed:
-        lines.extend([
-            pack_res.get('text', ''),
-            '',
-        ])
+            meta = get_feed_freshness_meta()
+            report_suppressed = is_report_display_suppressed(meta=meta)
+            if report_suppressed:
+                lines.extend(stale_report_suppression_lines(meta=meta))
+                lines.append('')
+            else:
+                for key in ('report', 'scanner', 'news'):
+                    line = (meta.get('lines') or {}).get(key)
+                    if line:
+                        lines.append(line)
+                if meta.get('report_stale'):
+                    lines.append(STALE_CLOSE_REPORT_NOTE)
+        except Exception:
+            report_suppressed = False
+
+        if not report_suppressed:
+            lines.extend([
+                pack_res.get('text', ''),
+                '',
+            ])
+    else:
+        pack_lines, _report_suppressed = _postmarket_close_pack_lines()
+        lines.extend(pack_lines)
     try:
-        from backend.telegram.india_mode_lock import is_live_market_hours_phase
         from backend.trading.tradecard_journal import (
             format_tradecard_review_section,
             sample_and_resolve_pending_tradecards,
+            summarize_today_outcomes,
         )
 
-        provisional = is_live_market_hours_phase()
         sample_and_resolve_pending_tradecards(
             expire_at_close=not provisional,
             refresh=True,
         )
         lines.append(format_tradecard_review_section(provisional=provisional))
+        if not provisional:
+            counts = summarize_today_outcomes().get('counts') or {}
+            lines.append(_tradecard_resolution_line(counts))
         lines.append('')
     except Exception:
         pass

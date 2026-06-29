@@ -369,7 +369,12 @@ def _refresh_component_reports(*, limit: int) -> dict[str, str]:
     return statuses
 
 
-def generate_daily_report_pack(*, refresh: bool = False, limit: int = 25) -> dict[str, Any]:
+def generate_daily_report_pack(
+    *,
+    refresh: bool = False,
+    limit: int = 25,
+    pack_mode: str | None = None,
+) -> dict[str, Any]:
     """Build daily report pack from live modules and/or cached JSON files."""
     refresh_status: dict[str, str] = {}
     if refresh:
@@ -477,6 +482,7 @@ def generate_daily_report_pack(*, refresh: bool = False, limit: int = 25) -> dic
     pack = {
         'ok': True,
         'generated_at': _now_iso(),
+        'pack_mode': str(pack_mode or '').strip().lower(),
         'shadow_mode': SHADOW_MODE,
         'market_mode': market_mode,
         'market_router': market_router,

@@ -48,6 +48,14 @@ def _common_patches():
         patch('backend.telegram.lazy_command_runner.run_market_only', return_value={'text': 'Market: open soon'}),
         patch('backend.telegram.lazy_command_runner.run_daily_pack_only', return_value={'text': 'Pack: ready'}),
         patch('backend.telegram.lazy_command_runner.run_memory_only', return_value={'text': 'Memory: ok'}),
+        patch('backend.telegram.telegram_brief_scheduler._load_json_file', return_value={
+            'ok': True,
+            'generated_at': '2026-05-01T15:30:00+05:30',
+        }),
+        patch('backend.telegram.telegram_brief_scheduler._run_safe_postmarket_pack_catchup_once', return_value={
+            'ok': False,
+            'reason': 'test stale pack',
+        }),
         patch('backend.trading.unified_live_priority_engine._freshness_meta', return_value=FRESH_META),
         patch('backend.trading.unified_live_priority_engine._load_json', side_effect=lambda p: fake_fc if 'final_confidence' in str(p) else {}),
         patch('backend.trading.unified_live_priority_engine._live_registry', return_value={}),
@@ -82,7 +90,12 @@ def main() -> int:
     for label, text in ('morning', morning), ('close', close):
         if 'AVANTIFEED' in text:
             return _fail(f'{label} brief must not embed stale AVANTIFEED')
-        if 'SONATSOFTW' not in text and 'NO VALID ENTRY NOW' not in text and 'No clean candidate' not in text:
+        if (
+            'SONATSOFTW' not in text
+            and 'NO VALID ENTRY NOW' not in text
+            and 'No clean candidate' not in text
+            and 'No clean active watch' not in text
+        ):
             return _fail(f'{label} brief missing live scanner context')
 
     print('MORNING_CLOSE_NO_STALE_TODAY_TOMORROW_EMBED_TEST_OK')
