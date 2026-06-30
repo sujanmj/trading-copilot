@@ -874,6 +874,137 @@ def test_no_reference_price_remains_pending_if_fallbacks_fail() -> int:
     return 0
 
 
+def test_same_scanner_snapshot_is_insufficient_delta_evidence() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'ZEROSNAP',
+                'action': 'WATCH',
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    scanner_hits = {
+        'ZEROSNAP': [
+            {
+                'ticker': 'ZEROSNAP',
+                'price': 100.0,
+                'timestamp': '2026-06-30T15:31:00+05:30',
+                'source': 'scanner_data',
+            }
+        ]
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver._scanner_price_hits', return_value=scanner_hits), \
+         patch('backend.analytics.actual_learning_resolver._active_prediction_price_hits', return_value={}), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            market_mode='INDIA_AFTER_HOURS',
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if (summary.get('pending_reasons') or {}).get('insufficient_price_delta_evidence') != 1:
+        return _fail(f'same scanner snapshot should be insufficient delta evidence: {summary!r}')
+    if summary.get('latest_outcomes'):
+        return _fail(f'same scanner snapshot must not create NEUTRAL +0.00: {summary!r}')
+    return 0
+
+
+def test_same_price_different_timestamps_is_genuine_neutral() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'GENUINEZERO',
+                'action': 'WATCH',
+                'price': 100.0,
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    market_data = {
+        'last_updated': '2026-06-30T15:35:00+05:30',
+        'prices': {
+            'GENUINEZERO': {'price': 100.0, 'timestamp': '2026-06-30T15:31:00+05:30'},
+        },
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data=market_data,
+            market_mode='INDIA_AFTER_HOURS',
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if int(summary.get('sample_updated') or 0) != 1:
+        return _fail(f'genuine zero move with distinct timestamps should resolve: {summary!r}')
+    latest = summary.get('latest_outcomes') or []
+    evidence = (latest[0].get('price_evidence') if latest else {}) or {}
+    if latest[0].get('resolved_as') != 'NEUTRAL' or abs(float(latest[0].get('actual_move') or 0)) > 1e-9:
+        return _fail(f'genuine zero move should be neutral: {summary!r}')
+    if evidence.get('price_delta_evidence_reason') != 'genuine_zero_move':
+        return _fail(f'genuine zero guard reason missing: {summary!r}')
+    return 0
+
+
+def test_alert_reference_and_later_close_resolves() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    emitted_rows = [
+        {
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'alert_type': 'intraday',
+            'category': 'INTRADAY_EVENT',
+            'tickers': ['KEC'],
+            'direction': 'BULLISH',
+            'score': 0.88,
+            'price_at_alert': 100.0,
+            'reason_preview': 'live scanner watch',
+        }
+    ]
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
+         patch('backend.orchestration.alert_quality_engine._load_json', return_value={'date': '2026-06-30'}), \
+         patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._candidate_store_candidates', return_value=[]), \
+         patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
+         patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'rows': [], 'counts': {}}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            market_data={
+                'last_updated': '2026-06-30T15:35:00+05:30',
+                'prices': {'KEC': {'price': 102.0, 'timestamp': '2026-06-30T15:31:00+05:30'}},
+            },
+            market_mode='INDIA_AFTER_HOURS',
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if summary.get('watchlist') != {'win': 1, 'loss': 0, 'neutral': 0}:
+        return _fail(f'KEC-like alert reference and later close should resolve as win: {summary!r}')
+    evidence = ((summary.get('latest_outcomes') or [{}])[0].get('price_evidence') or {})
+    if evidence.get('price_delta_evidence_reason') != 'independent_price_points':
+        return _fail(f'alert/close evidence should be independent: {summary!r}')
+    return 0
+
+
 def test_bad_zero_neutral_outcomes_are_quarantined() -> int:
     from backend.analytics.market_memory_dashboard import _fetch_latest_outcomes, bad_outcome_quarantine_reason
     from backend.storage import market_memory_db as mmdb
@@ -896,6 +1027,34 @@ def test_bad_zero_neutral_outcomes_are_quarantined() -> int:
             'resolved_as': 'NEUTRAL',
             'holding_period': 'actual_learning',
             'raw_payload': {'source': 'actual_learning_resolver', 'session_date': '2026-06-30'},
+        })
+        same_snapshot_pred = {
+            'ticker': 'HCG',
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'source': 'actual_learning:top_watch',
+            'direction': 'BULLISH',
+            'raw_payload': {'prediction_date': '2026-06-30'},
+        }
+        same_snapshot_pid = mmdb.upsert_prediction(same_snapshot_pred)
+        mmdb.upsert_outcome({
+            'prediction_id': same_snapshot_pid,
+            'actual_move': 0.0,
+            'expiry_result': 'NEUTRAL',
+            'resolved_as': 'NEUTRAL',
+            'holding_period': 'actual_learning',
+            'raw_payload': {
+                'source': 'actual_learning_resolver',
+                'session_date': '2026-06-30',
+                'eod_price_evidence': {
+                    'status': 'valid',
+                    'ref_source': 'scanner_data:first_after_emit',
+                    'close_source': 'scanner_data',
+                    'ref_price': 100.0,
+                    'close_price': 100.0,
+                    'ref_timestamp': '2026-06-30T15:31:00+05:30',
+                    'close_timestamp': '2026-06-30T15:31:00+05:30',
+                },
+            },
         })
         valid_pred = {
             'ticker': 'KEC',
@@ -920,6 +1079,11 @@ def test_bad_zero_neutral_outcomes_are_quarantined() -> int:
                     'close_source': 'scanner_data',
                     'ref_price': 100.0,
                     'close_price': 100.0,
+                    'ref_timestamp': '2026-06-30T10:00:00+05:30',
+                    'close_timestamp': '2026-06-30T15:31:00+05:30',
+                    'independent_price_points': True,
+                    'price_delta_evidence_status': 'valid',
+                    'price_delta_evidence_reason': 'genuine_zero_move',
                 },
             },
         })
@@ -932,12 +1096,87 @@ def test_bad_zero_neutral_outcomes_are_quarantined() -> int:
         }
         if not bad_outcome_quarantine_reason(bad_row):
             return _fail('MARUTI-like fake neutral zero outcome should be quarantined')
+        same_snapshot_row = {
+            'ticker': 'HCG',
+            'resolved_as': 'NEUTRAL',
+            'actual_move': 0.0,
+            'holding_period': 'actual_learning',
+            'outcome_raw_payload': {
+                'source': 'actual_learning_resolver',
+                'session_date': '2026-06-30',
+                'eod_price_evidence': {
+                    'status': 'valid',
+                    'ref_source': 'scanner_data:first_after_emit',
+                    'close_source': 'scanner_data',
+                    'ref_price': 100.0,
+                    'close_price': 100.0,
+                    'ref_timestamp': '2026-06-30T15:31:00+05:30',
+                    'close_timestamp': '2026-06-30T15:31:00+05:30',
+                },
+            },
+        }
+        if bad_outcome_quarantine_reason(same_snapshot_row) != 'insufficient_price_delta_evidence':
+            return _fail('same-snapshot neutral zero outcome should be quarantined')
         latest = _fetch_latest_outcomes(5)
     tickers = {row.get('ticker') for row in latest}
     if 'MARUTI' in tickers:
         return _fail(f'fake MARUTI neutral zero leaked into latest outcomes: {latest!r}')
+    if 'HCG' in tickers:
+        return _fail(f'same-snapshot neutral zero leaked into latest outcomes: {latest!r}')
     if 'KEC' not in tickers:
         return _fail(f'valid zero-move outcome with evidence should remain visible: {latest!r}')
+    return 0
+
+
+def test_best_worst_ignore_fake_zero_neutral() -> int:
+    from backend.analytics.actual_learning_resolver import _build_explanation
+
+    explanation = _build_explanation([
+        {
+            'ticker': 'FAKEZERO',
+            'resolved_as': 'NEUTRAL',
+            'actual_move': 0.0,
+            'price_evidence': {
+                'status': 'valid',
+                'ref_source': 'scanner_data:first_after_emit',
+                'close_source': 'scanner_data',
+                'ref_price': 100.0,
+                'close_price': 100.0,
+                'ref_timestamp': '2026-06-30T15:31:00+05:30',
+                'close_timestamp': '2026-06-30T15:31:00+05:30',
+            },
+        },
+        {
+            'ticker': 'REALWIN',
+            'resolved_as': 'WIN',
+            'actual_move': 1.2,
+            'price_evidence': {
+                'status': 'valid',
+                'ref_source': 'alert_event_log',
+                'close_source': 'scanner_data',
+                'ref_timestamp': '2026-06-30T10:00:00+05:30',
+                'close_timestamp': '2026-06-30T15:31:00+05:30',
+            },
+        },
+        {
+            'ticker': 'REALLOSS',
+            'resolved_as': 'LOSS',
+            'actual_move': -0.8,
+            'price_evidence': {
+                'status': 'valid',
+                'ref_source': 'alert_event_log',
+                'close_source': 'scanner_data',
+                'ref_timestamp': '2026-06-30T10:00:00+05:30',
+                'close_timestamp': '2026-06-30T15:31:00+05:30',
+            },
+        },
+    ])
+    if 'FAKEZERO' in explanation.get('best_signal_today', '') or 'FAKEZERO' in explanation.get('worst_signal_today', ''):
+        return _fail(f'fake zero neutral should not be best/worst: {explanation!r}')
+    if 'REALWIN' not in explanation.get('best_signal_today', ''):
+        return _fail(f'real winner should be best signal: {explanation!r}')
+    if 'REALLOSS' not in explanation.get('worst_signal_today', ''):
+        return _fail(f'real loser should be worst signal: {explanation!r}')
     return 0
 
 
@@ -1068,7 +1307,11 @@ def main() -> int:
         test_after_hours_missing_symbol_is_missing_symbol_price,
         test_no_reference_price_fallback_uses_scanner_evidence,
         test_no_reference_price_remains_pending_if_fallbacks_fail,
+        test_same_scanner_snapshot_is_insufficient_delta_evidence,
+        test_same_price_different_timestamps_is_genuine_neutral,
+        test_alert_reference_and_later_close_resolves,
         test_bad_zero_neutral_outcomes_are_quarantined,
+        test_best_worst_ignore_fake_zero_neutral,
         test_live_scanner_saved_candidate_included,
         test_daily_review_learning_runs_before_formatting,
         test_daily_review_learning_helper_order,

@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -173,16 +174,39 @@ def _emitted_symbols_for_date(session_date: str) -> set[str]:
     return symbols
 
 
-def _valid_price_evidence(raw: dict[str, Any]) -> bool:
+def _parse_dt(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace('Z', '+00:00'))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except Exception:
+        return None
+
+
+def _price_evidence_from_raw(raw: dict[str, Any]) -> dict[str, Any]:
     evidence = raw.get('eod_price_evidence')
     if not isinstance(evidence, dict):
         result = raw.get('result') if isinstance(raw.get('result'), dict) else {}
         evidence = result.get('price_evidence') if isinstance(result.get('price_evidence'), dict) else {}
+    return evidence if isinstance(evidence, dict) else {}
+
+
+def _valid_price_evidence(raw: dict[str, Any]) -> bool:
+    evidence = _price_evidence_from_raw(raw)
     if not isinstance(evidence, dict):
         return False
     if evidence.get('status') != 'valid':
         return False
-    return bool(evidence.get('ref_source') and evidence.get('close_source'))
+    if not (evidence.get('ref_source') and evidence.get('close_source')):
+        return False
+    ref_ts = _parse_dt(evidence.get('ref_timestamp'))
+    close_ts = _parse_dt(evidence.get('close_timestamp'))
+    if ref_ts is None or close_ts is None:
+        return False
+    return ref_ts.astimezone(timezone.utc) != close_ts.astimezone(timezone.utc)
 
 
 def bad_outcome_quarantine_reason(row: dict[str, Any]) -> str:
@@ -198,6 +222,8 @@ def bad_outcome_quarantine_reason(row: dict[str, Any]) -> str:
     raw = _json_dict(row.get('outcome_raw_payload'))
     if _valid_price_evidence(raw):
         return ''
+    if _price_evidence_from_raw(raw):
+        return 'insufficient_price_delta_evidence'
     holding = str(row.get('holding_period') or '')
     source = str(raw.get('source') or '')
     if holding != 'actual_learning' and source != 'actual_learning_resolver':

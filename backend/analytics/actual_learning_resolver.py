@@ -197,6 +197,94 @@ def _log_eod_freshness_policy(
     )
 
 
+def _same_utc_timestamp(left: Any, right: Any) -> bool:
+    left_dt = _parse_dt(left)
+    right_dt = _parse_dt(right)
+    if left_dt is None or right_dt is None:
+        return False
+    return left_dt.astimezone(timezone.utc) == right_dt.astimezone(timezone.utc)
+
+
+def _same_price(left: Any, right: Any) -> bool:
+    left_price = _safe_float(left)
+    right_price = _safe_float(right)
+    if left_price is None or right_price is None:
+        return False
+    return abs(left_price - right_price) <= 1e-9
+
+
+def _base_price_source(source: Any) -> str:
+    text = str(source or '')
+    return text.split(':', 1)[0]
+
+
+def _price_delta_evidence_guard(
+    *,
+    symbol: str,
+    ref: dict[str, Any],
+    close: dict[str, Any],
+) -> tuple[bool, str]:
+    ref_ts = _parse_dt(ref.get('timestamp'))
+    close_ts = _parse_dt(close.get('timestamp'))
+    ref_price = _safe_float(ref.get('price'))
+    close_price = _safe_float(close.get('price'))
+    ref_source = str(ref.get('source') or '')
+    close_source = str(close.get('source') or '')
+    same_timestamp = (
+        ref_ts is not None
+        and close_ts is not None
+        and ref_ts.astimezone(timezone.utc) == close_ts.astimezone(timezone.utc)
+    )
+    same_price = _same_price(ref_price, close_price)
+    same_source = _base_price_source(ref_source) == _base_price_source(close_source)
+
+    if ref_ts is None or close_ts is None:
+        return False, 'no_independent_reference'
+    if same_timestamp and same_price and (same_source or ref_source.endswith(':first_after_emit')):
+        return False, 'same_price_snapshot'
+    if same_timestamp:
+        return False, 'same_timestamp'
+    if ref_source.endswith(':first_after_emit') and same_source and same_price and same_timestamp:
+        return False, 'same_price_snapshot'
+    if same_price:
+        return True, 'genuine_zero_move'
+    return True, 'independent_price_points'
+
+
+def _log_zero_move_guard(*, symbol: str, accepted: bool, reason: str) -> None:
+    safe_print(
+        f"[ZERO_MOVE_GUARD] symbol={symbol or '-'} "
+        f"status={'accepted' if accepted else 'pending'} reason={reason}",
+        flush=True,
+    )
+
+
+def _log_price_delta_evidence(
+    *,
+    symbol: str,
+    ref: dict[str, Any],
+    close: dict[str, Any],
+    status: str,
+) -> None:
+    safe_print(
+        f"[PRICE_DELTA_EVIDENCE] symbol={symbol or '-'} "
+        f"ref={_safe_float(ref.get('price'))} ref_ts={ref.get('timestamp') or '-'} "
+        f"close={_safe_float(close.get('price'))} close_ts={close.get('timestamp') or '-'} "
+        f"status={status}",
+        flush=True,
+    )
+
+
+def _has_independent_price_delta(evidence: dict[str, Any] | None) -> bool:
+    if not isinstance(evidence, dict) or evidence.get('status') != 'valid':
+        return False
+    ref_ts = evidence.get('ref_timestamp')
+    close_ts = evidence.get('close_timestamp')
+    if not ref_ts or not close_ts:
+        return False
+    return not _same_utc_timestamp(ref_ts, close_ts)
+
+
 def _price_from_row(row: dict[str, Any]) -> float | None:
     for key in CLOSE_PRICE_FIELDS:
         val = _safe_float(row.get(key))
@@ -1147,19 +1235,23 @@ def _build_price_evidence(
     )
     if close is None:
         return None, close_reason
-    if str(ref.get('source') or '').endswith(':first_after_emit'):
-        ref_dt = _parse_dt(ref.get('timestamp'))
-        close_dt = _parse_dt(close.get('timestamp'))
-        if (
-            ref_dt is not None
-            and close_dt is not None
-            and close_dt.astimezone(timezone.utc) == ref_dt.astimezone(timezone.utc)
-            and _safe_float(ref.get('price')) == _safe_float(close.get('price'))
-        ):
-            return None, 'no_reference_price'
     move = _actual_move(_safe_float(ref.get('price')), _safe_float(close.get('price')))
     if move is None:
         return None, 'missing_eod_price'
+    independent, delta_reason = _price_delta_evidence_guard(
+        symbol=str(item.get('ticker') or ''),
+        ref=ref,
+        close=close,
+    )
+    _log_zero_move_guard(symbol=str(item.get('ticker') or ''), accepted=independent, reason=delta_reason)
+    _log_price_delta_evidence(
+        symbol=str(item.get('ticker') or ''),
+        ref=ref,
+        close=close,
+        status='valid' if independent else 'pending',
+    )
+    if not independent:
+        return None, 'insufficient_price_delta_evidence'
     return {
         'status': 'valid',
         'ticker': item.get('ticker'),
@@ -1171,6 +1263,9 @@ def _build_price_evidence(
         'close_timestamp': close.get('timestamp'),
         'close_reason': close_reason,
         'move_pct': move,
+        'independent_price_points': True,
+        'price_delta_evidence_status': 'valid',
+        'price_delta_evidence_reason': delta_reason,
         'high': close.get('high'),
         'low': close.get('low'),
     }, 'valid'
@@ -1417,7 +1512,14 @@ def _counts_as_learning_sample(resolved_as: str) -> bool:
 
 
 def _build_explanation(outcomes: list[dict[str, Any]]) -> dict[str, str]:
-    scored = [row for row in outcomes if isinstance(row.get('actual_move'), (int, float))]
+    def _displayable_score(row: dict[str, Any]) -> bool:
+        if not isinstance(row.get('actual_move'), (int, float)):
+            return False
+        if str(row.get('resolved_as') or '').upper() == NEUTRAL and abs(float(row.get('actual_move') or 0)) <= 1e-9:
+            return _has_independent_price_delta(row.get('price_evidence') if isinstance(row.get('price_evidence'), dict) else None)
+        return True
+
+    scored = [row for row in outcomes if _displayable_score(row)]
     best = max(scored, key=lambda r: float(r.get('actual_move') or 0), default=None)
     worst = min(scored, key=lambda r: float(r.get('actual_move') or 0), default=None)
     winners = [row for row in outcomes if str(row.get('resolved_as') or '').upper() in (WIN, AVOID_SUCCESS)]
