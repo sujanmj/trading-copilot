@@ -63,7 +63,7 @@ def _append_sample_card() -> dict:
     return tcj.append_journal_record(record)
 
 
-def _close_patch_context(pack_path: Path, catchup, *, last_refresh_at=None):
+def _close_patch_context(pack_path: Path, catchup, *, last_refresh_at=None, phase='INDIA_POSTMARKET_MODE'):
     from backend.telegram import telegram_brief_scheduler as scheduler
     from backend.telegram import lazy_command_runner
 
@@ -90,7 +90,7 @@ def _close_patch_context(pack_path: Path, catchup, *, last_refresh_at=None):
         patch.object(scheduler, '_run_safe_postmarket_pack_catchup_once', side_effect=catchup),
         patch.object(lazy_command_runner, 'DAILY_PACK_FILE', pack_path),
         patch('backend.telegram.india_mode_lock.is_premarket_phase', return_value=False),
-        patch('backend.telegram.india_mode_lock.resolve_telegram_market_phase', return_value='INDIA_POSTMARKET_MODE'),
+        patch('backend.telegram.india_mode_lock.resolve_telegram_market_phase', return_value=phase),
         patch('backend.telegram.india_mode_lock.is_live_market_hours_phase', return_value=False),
         patch('backend.telegram.lazy_command_runner.run_memory_only', return_value={'text': 'memory'}),
         patch('backend.analytics.aihub_tab_payloads.build_market_payload', return_value=market_payload),
@@ -278,12 +278,102 @@ def test_refresh_after_pack_regenerates_postmarket_pack() -> int:
     return 0
 
 
+def test_after_hours_close_forces_pack_rebuild_even_when_fresh() -> int:
+    from backend.telegram.telegram_brief_scheduler import build_close_brief_text
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pack_path = Path(tmp) / 'daily_report_pack_latest.json'
+        _write_json(pack_path, _pack('2026-06-29T11:02:00+00:00', pack_mode='postmarket'))
+        catchup_calls: list[str] = []
+
+        def _catchup():
+            catchup_calls.append('called')
+            _write_json(pack_path, _pack('2026-06-29T11:06:00+00:00', pack_mode='postmarket'))
+            return {'ok': True, 'method': 'test'}
+
+        learning_summary = {
+            'sample_updated': 0,
+            'watchlist': {'win': 0, 'loss': 0, 'neutral': 0},
+            'avoid': {'success': 0, 'fail': 0, 'neutral': 0},
+            'tradecard': {'resolved': 0, 'no_fill': 0},
+            'pending_data': 1,
+            'pending_reasons': {'missing_symbol_price': 1},
+            'explanation': {},
+        }
+        patches = _close_patch_context(pack_path, _catchup, phase='INDIA_AFTER_HOURS')
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], \
+             patch('backend.trading.tradecard_journal.resolve_close_pending_tradecards', return_value={'updated': 0}), \
+             patch('backend.trading.tradecard_journal.format_tradecard_review_section', return_value='<b>Tradecards:</b>\nGenerated: 0\nFilled: 0\nNo fill: 0\nPending: 0'), \
+             patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'counts': {'generated': 0, 'no_fill': 0, 'pending': 0}}), \
+             patch('backend.analytics.actual_learning_resolver.run_actual_learning_resolver', return_value=learning_summary), \
+             patch('backend.storage.outcome_resolver.refresh_memory_dashboard_cache', return_value=True):
+            text = build_close_brief_text()
+
+        if catchup_calls != ['called']:
+            return _fail('/close after-hours must force regenerate postmarket pack even when old pack is fresh')
+        if 'Market mode: <code>INDIA_AFTER_HOURS</code>' not in text:
+            return _fail(f'/close should show after-hours mode: {text}')
+        if 'Close cache: rebuilt · reason=force_after_hours_close' not in text:
+            return _fail(f'/close should show temporary force rebuild debug line: {text}')
+        if 'Learning version: 4A3_price_bridge' not in text:
+            return _fail(f'/close should show learning version debug line: {text}')
+        if 'Post-market pack generated at 2026-06-29 16:36 IST' not in text:
+            return _fail(f'/close should show current forced pack timestamp: {text}')
+        if 'Post-market pack generated at 2026-06-29 16:32 IST' in text:
+            return _fail('/close must not display old 16:32 postmarket pack after force rebuild')
+        if 'Pending data reasons: missing_symbol_price 1' not in text:
+            return _fail(f'/close learning section should come from current resolver: {text}')
+        if 'stale_price' in text:
+            return _fail('stale_price from cached pack must not persist when current resolver returns different reasons')
+    return 0
+
+
+def test_repeated_after_hours_close_does_not_double_count_no_fill() -> int:
+    from scripts._tradecard_journal_test_helpers import isolated_tradecard_store
+    from backend.telegram.telegram_brief_scheduler import build_close_brief_text
+    from backend.trading import tradecard_journal as tcj
+
+    with tempfile.TemporaryDirectory() as tmp, isolated_tradecard_store():
+        pack_path = Path(tmp) / 'daily_report_pack_latest.json'
+        _write_json(pack_path, _pack('2026-06-29T11:02:00+00:00', pack_mode='postmarket'))
+        _append_sample_card()
+        catchup_calls: list[str] = []
+
+        def _catchup():
+            catchup_calls.append('called')
+            minute = 5 + len(catchup_calls)
+            _write_json(pack_path, _pack(f'2026-06-29T11:{minute:02d}:00+00:00', pack_mode='postmarket'))
+            return {'ok': True, 'method': 'test'}
+
+        market_data = {'prices': {'TESTCO': {'price': 99.40, 'high': 99.80, 'low': 99.10}}}
+        patches = _close_patch_context(pack_path, _catchup, phase='INDIA_AFTER_HOURS')
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], \
+             patch.object(tcj, '_today', return_value='2026-06-29'), \
+             patch.object(tcj, '_now_iso', return_value='2026-06-29T15:55:00+05:30'), \
+             patch.object(tcj, '_load_market_data_with_optional_refresh', return_value=market_data), \
+             patch('backend.analytics.actual_learning_resolver.run_actual_learning_resolver', return_value={'sample_updated': 0, 'pending_data': 0, 'pending_reasons': {}}), \
+             patch('backend.storage.outcome_resolver.refresh_memory_dashboard_cache', return_value=True):
+            first = build_close_brief_text()
+            second = build_close_brief_text()
+
+        if catchup_calls != ['called', 'called']:
+            return _fail('/close after-hours should force pack rebuild on every invocation')
+        counts = tcj.summarize_today_outcomes(session_date='2026-06-29').get('counts') or {}
+        if int(counts.get('no_fill') or 0) != 1:
+            return _fail(f'repeated /close should not double count no-fill outcomes: {counts!r}')
+        if int(counts.get('pending') or 0) != 0:
+            return _fail(f'repeated /close should leave pending cleared: {counts!r}')
+        if 'No fill: 1' not in first or 'No fill: 1' not in second:
+            return _fail('both repeated close outputs should show stable no-fill count')
+    return 0
+
+
 def test_close_runs_learning_before_pack_output() -> int:
     from backend.telegram.telegram_brief_scheduler import build_close_brief_text
 
     order: list[str] = []
 
-    def _pack_lines(*, force_rebuild=False):
+    def _pack_lines(*, force_rebuild=False, force_reason='force_learning_refresh'):
         if order != ['learning']:
             raise AssertionError(f'pack formatted before learning refresh: {order!r}')
         return (
@@ -398,6 +488,8 @@ def main() -> int:
         test_close_refuses_stale_pack_when_catchup_fails,
         test_close_rebuilds_learning_section_when_pack_learning_version_old,
         test_refresh_after_pack_regenerates_postmarket_pack,
+        test_after_hours_close_forces_pack_rebuild_even_when_fresh,
+        test_repeated_after_hours_close_does_not_double_count_no_fill,
         test_close_runs_learning_before_pack_output,
         test_close_resolver_marks_unsampled_pending_no_fill,
         test_next_session_watch_only_not_today_pending,

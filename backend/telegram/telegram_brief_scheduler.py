@@ -339,11 +339,12 @@ def _postmarket_pack_cache_decision(
     *,
     now: datetime | None = None,
     force_rebuild: bool = False,
+    force_reason: str = 'force_learning_refresh',
 ) -> dict[str, Any]:
     now = now or _now_ist()
     generated = _pack_generated_at(pack)
     if force_rebuild:
-        return {'action': 'rebuild', 'reason': 'force_learning_refresh', 'generated_at': generated}
+        return {'action': 'rebuild', 'reason': force_reason, 'generated_at': generated}
     if not _is_fresh_postmarket_pack(pack, now=now):
         return {'action': 'rebuild', 'reason': 'not_fresh', 'generated_at': generated}
     refresh_at = _last_canonical_refresh_at()
@@ -438,7 +439,11 @@ def _run_safe_postmarket_pack_catchup_once() -> dict[str, Any]:
         return {'ok': False, 'method': 'daily_report_pack_job', 'reason': str(exc)[:180]}
 
 
-def _postmarket_close_pack_lines(*, force_rebuild: bool = False) -> tuple[list[str], bool, dict[str, Any]]:
+def _postmarket_close_pack_lines(
+    *,
+    force_rebuild: bool = False,
+    force_reason: str = 'force_learning_refresh',
+) -> tuple[list[str], bool, dict[str, Any]]:
     from backend.analytics.unified_decision_engine import (
         STALE_CLOSE_REPORT_NOTE,
         get_feed_freshness_meta,
@@ -449,16 +454,32 @@ def _postmarket_close_pack_lines(*, force_rebuild: bool = False) -> tuple[list[s
     now = _now_ist()
     path = _daily_pack_path()
     pack = _load_json_file(path)
+    previous_generated = _pack_generated_at(pack)
     catchup: dict[str, Any] = {}
-    decision = _postmarket_pack_cache_decision(pack, now=now, force_rebuild=force_rebuild)
+    decision = _postmarket_pack_cache_decision(
+        pack,
+        now=now,
+        force_rebuild=force_rebuild,
+        force_reason=force_reason,
+    )
     _safe_log(
         f"[CLOSE_PACK_CACHE] action={decision.get('action')} reason={decision.get('reason')}"
     )
     if decision.get('action') == 'rebuild':
         catchup = _run_safe_postmarket_pack_catchup_once()
         pack = _load_json_file(path)
+    forced_rebuild_still_old = False
+    if decision.get('reason') == 'force_after_hours_close':
+        rebuilt_generated = _pack_generated_at(pack)
+        forced_rebuild_still_old = (
+            rebuilt_generated is None
+            or (
+                previous_generated is not None
+                and rebuilt_generated.astimezone(IST) <= previous_generated.astimezone(IST)
+            )
+        )
 
-    if _is_fresh_postmarket_pack(pack, now=now):
+    if _is_fresh_postmarket_pack(pack, now=now) and not forced_rebuild_still_old:
         generated = _pack_generated_at(pack)
         age = _age_minutes(generated, now)
         generated_label = generated.strftime('%Y-%m-%d %H:%M IST') if generated else 'unknown'
@@ -503,6 +524,8 @@ def _postmarket_close_pack_lines(*, force_rebuild: bool = False) -> tuple[list[s
         lines.append('Report: unavailable')
     lines.append(STALE_CLOSE_REPORT_NOTE)
     reason = str(catchup.get('reason') or 'fresh post-market pack not available')
+    if forced_rebuild_still_old:
+        reason = 'force_after_hours_close rebuild did not produce a newer pack'
     lines.append(f'Post-market pack unavailable - {reason}')
     lines.append('')
     _safe_log(f'[POSTMARKET_CLOSE_PACK] source=stale generated_at={pack.get("generated_at") or "unknown"}')
@@ -556,12 +579,18 @@ def _run_close_learning_refresh() -> dict[str, Any]:
 
 
 def build_close_brief_text() -> str:
-    from backend.telegram.india_mode_lock import is_premarket_phase, resolve_telegram_market_phase
+    from backend.telegram.india_mode_lock import (
+        is_after_hours_phase,
+        is_premarket_phase,
+        resolve_telegram_market_phase,
+    )
 
     if is_premarket_phase():
         return build_premarket_close_unavailable_text()
+    market_phase = 'RESEARCH_MODE'
     try:
-        if resolve_telegram_market_phase() == 'RESEARCH_MODE':
+        market_phase = resolve_telegram_market_phase()
+        if market_phase == 'RESEARCH_MODE':
             return _build_research_mode_close_brief_text()
     except Exception:
         pass
@@ -584,12 +613,7 @@ def build_close_brief_text() -> str:
     lines = [
         '<b>🔔 Market close summary</b>',
     ]
-    try:
-        from backend.telegram.india_mode_lock import resolve_telegram_market_phase
-
-        lines.append(f'Market mode: <code>{resolve_telegram_market_phase()}</code>')
-    except Exception:
-        pass
+    lines.append(f'Market mode: <code>{market_phase}</code>')
     close_resolution: dict[str, Any] = {}
     if not provisional:
         try:
@@ -601,6 +625,7 @@ def build_close_brief_text() -> str:
     learning_summary: dict[str, Any] = {}
     if not provisional:
         learning_summary = _run_close_learning_refresh()
+    force_after_hours_close = (not provisional) and is_after_hours_phase(market_phase)
 
     pack_info: dict[str, Any] = {}
     if provisional:
@@ -637,9 +662,17 @@ def build_close_brief_text() -> str:
                 '',
             ])
     else:
+        force_pack_rebuild = force_after_hours_close or int(close_resolution.get('updated') or 0) > 0
+        force_reason = 'force_after_hours_close' if force_after_hours_close else 'force_learning_refresh'
+        if force_after_hours_close:
+            _safe_log('[TELEGRAM_CLOSE_FORCE_REBUILD] true reason=after_hours_close')
         pack_lines, _report_suppressed, pack_info = _postmarket_close_pack_lines(
-            force_rebuild=int(close_resolution.get('updated') or 0) > 0,
+            force_rebuild=force_pack_rebuild,
+            force_reason=force_reason,
         )
+        if force_after_hours_close:
+            lines.append('Close cache: rebuilt \u00b7 reason=force_after_hours_close')
+            lines.append(f'Learning version: {_learning_pack_version()}')
         lines.extend(pack_lines)
     try:
         from backend.trading.tradecard_journal import (
