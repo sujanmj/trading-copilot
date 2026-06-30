@@ -27,6 +27,7 @@ HOLDING_PERIOD = 'actual_learning'
 RESOLVER_VERSION = '4A'
 
 STATE_FILE_NAME = 'actual_learning_last_run.json'
+CANDIDATE_FILE_NAME = 'actual_learning_candidates.jsonl'
 
 WIN = 'WIN'
 LOSS = 'LOSS'
@@ -38,15 +39,12 @@ MISSED_OPPORTUNITY = 'MISSED_OPPORTUNITY'
 
 NON_WL_OUTCOMES = frozenset({NO_FILL, MISSED_OPPORTUNITY})
 
-PRICE_FIELDS = (
+CLOSE_PRICE_FIELDS = (
     'close',
     'last_price',
     'ltp',
     'price',
     'current_price',
-    'reference_price',
-    'entry_price',
-    'price_at_signal',
 )
 
 REFERENCE_PRICE_FIELDS = (
@@ -68,6 +66,10 @@ def _today() -> str:
 
 def _state_path() -> Path:
     return get_data_path(STATE_FILE_NAME)
+
+
+def _candidate_path(path: Path | None = None) -> Path:
+    return path or get_data_path(CANDIDATE_FILE_NAME)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -143,7 +145,7 @@ def _iso_dt(value: datetime | None) -> str:
 
 
 def _price_from_row(row: dict[str, Any]) -> float | None:
-    for key in PRICE_FIELDS:
+    for key in CLOSE_PRICE_FIELDS:
         val = _safe_float(row.get(key))
         if val is not None and val > 0:
             return val
@@ -179,6 +181,128 @@ def _is_next_session_only(row: dict[str, Any]) -> bool:
         or 'NO ACTIVE ENTRY' in upper
         or str(row.get('carry_forward_next_session') or '').strip().lower() in ('1', 'true', 'yes', 'on')
     )
+
+
+def record_learning_candidate(
+    *,
+    symbol: str | None = None,
+    ticker: str | None = None,
+    emitted_at: str | None = None,
+    trading_date: str | None = None,
+    source: str = '',
+    reference_price: Any = None,
+    reference_price_source: str = '',
+    scanner_timestamp: str | None = None,
+    initial_move: Any = None,
+    volume: Any = None,
+    direction: str = 'BULLISH',
+    score: Any = None,
+    category: str = '',
+    raw: dict[str, Any] | None = None,
+    state_path: Path | None = None,
+) -> dict[str, Any]:
+    """Persist a sent/emitted symbol as a future EOD learning candidate."""
+    sym = str(symbol or ticker or '').strip().upper()
+    ts = emitted_at or _now_ist().isoformat()
+    day = trading_date or _dt_session_date(_parse_dt(ts)) or _today()
+    row = {
+        'symbol': sym,
+        'emitted_at': ts,
+        'trading_date': day,
+        'source': str(source or 'unknown'),
+        'reference_price': _safe_float(reference_price),
+        'reference_price_source': str(reference_price_source or ''),
+        'scanner_timestamp': scanner_timestamp or '',
+        'initial_move': _safe_float(initial_move),
+        'volume': _safe_float(volume),
+        'direction': str(direction or 'BULLISH').upper(),
+        'score': _safe_float(score),
+        'category': str(category or ''),
+        'raw': dict(raw or {}),
+        'recorded_at': _now_ist().isoformat(),
+    }
+    if not sym:
+        return row
+    try:
+        path = _candidate_path(state_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a', encoding='utf-8') as fh:
+            fh.write(json.dumps(row, ensure_ascii=False, default=str) + '\n')
+        safe_print(
+            f"[LEARNING_CANDIDATE_CAPTURE] symbol={sym} source={row['source']} "
+            f"ref={row['reference_price']} ts={ts}",
+            flush=True,
+        )
+    except Exception:
+        pass
+    return row
+
+
+def load_learning_candidates_for_date(
+    session_date: str,
+    *,
+    state_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    path = _candidate_path(state_path)
+    if not path.is_file():
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding='utf-8').splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            emitted = _parse_dt(row.get('emitted_at'))
+            day = str(row.get('trading_date') or _dt_session_date(emitted) or '')
+            if day == session_date:
+                rows.append(row)
+    except Exception:
+        return []
+    return rows
+
+
+def _candidate_store_candidates(session_date: str) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in load_learning_candidates_for_date(session_date):
+        sym = str(row.get('symbol') or row.get('ticker') or '').strip().upper()
+        if not sym:
+            continue
+        source = str(row.get('source') or 'learning_candidate_store')
+        category = str(row.get('category') or '').strip().lower()
+        if category not in ('top_watch', 'scanner_watch', 'avoid', 'missed', 'tradecard'):
+            if str(row.get('direction') or '').upper() == 'BEARISH' or 'avoid' in source.lower():
+                category = 'avoid'
+            elif 'intraday' in source.lower() or 'open' in source.lower():
+                category = 'scanner_watch'
+            else:
+                category = 'top_watch'
+        item = _candidate(
+            {
+                'ticker': sym,
+                'timestamp': row.get('emitted_at'),
+                'direction': row.get('direction') or 'BULLISH',
+                'score': row.get('score'),
+                'price': row.get('reference_price'),
+                'reference_price': row.get('reference_price'),
+                'volume_ratio': row.get('volume'),
+                'reason': source,
+            },
+            category=category,
+            session_date=session_date,
+            source=source,
+        )
+        if item:
+            raw = item.get('raw') if isinstance(item.get('raw'), dict) else {}
+            raw['learning_candidate_record'] = dict(row)
+            item['raw'] = raw
+            out.append(item)
+    return out
 
 
 def _candidate(
@@ -340,6 +464,7 @@ def _scanner_saved_candidates(session_date: str) -> list[dict[str, Any]]:
 def _emitted_source_candidates(session_date: str) -> list[dict[str, Any]]:
     return _dedupe_candidates(
         _alert_event_candidates(session_date)
+        + _candidate_store_candidates(session_date)
         + _quality_state_signature_candidates(session_date)
         + _suppression_sent_candidates(session_date)
         + _scanner_saved_candidates(session_date)
@@ -569,6 +694,45 @@ def _market_data_price_hits(
     return out
 
 
+def _market_data_context(
+    data: dict[str, Any] | None,
+    *,
+    source: str,
+) -> dict[str, Any] | None:
+    if not isinstance(data, dict):
+        return None
+    ts = None
+    for key in ('last_updated', 'generated_at', 'timestamp', 'as_of'):
+        ts = _parse_dt(data.get(key))
+        if ts is not None:
+            break
+    if ts is None:
+        return None
+    return {
+        'source': source,
+        'timestamp': _iso_dt(ts),
+        'session_date': _dt_session_date(ts),
+    }
+
+
+def _scanner_global_context() -> dict[str, Any] | None:
+    scanner = _load_json(get_data_path('scanner_data.json'))
+    if not scanner:
+        return None
+    ts = None
+    for key in ('last_updated', 'scan_time_local', 'generated_at', 'timestamp'):
+        ts = _parse_dt(scanner.get(key))
+        if ts is not None:
+            break
+    if ts is None:
+        return None
+    return {
+        'source': 'scanner_data',
+        'timestamp': _iso_dt(ts),
+        'session_date': _dt_session_date(ts),
+    }
+
+
 def _scanner_price_hits() -> dict[str, list[dict[str, Any]]]:
     scanner = _load_json(get_data_path('scanner_data.json'))
     if not scanner:
@@ -654,6 +818,36 @@ def capture_eod_price_evidence(
     return out
 
 
+def capture_eod_price_context(market_data: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Return global freshness context for runtime/scanner sources."""
+    contexts: list[dict[str, Any]] = []
+    for ctx in (
+        _market_data_context(market_data, source='runtime_market_data') if market_data is not None else None,
+        _market_data_context(load_latest_market_data(get_data_path('latest_market_data_memory_enriched.json')), source='latest_market_data_memory_enriched'),
+        _market_data_context(load_latest_market_data(get_data_path('latest_market_data.json')), source='latest_market_data'),
+        _scanner_global_context(),
+    ):
+        if ctx:
+            contexts.append(ctx)
+    return contexts
+
+
+def _has_fresh_global_context(
+    contexts: list[dict[str, Any]] | None,
+    *,
+    session_date: str,
+    after_timestamp: datetime | None,
+) -> bool:
+    for ctx in contexts or []:
+        ts = _parse_dt(ctx.get('timestamp'))
+        if ts is None or _dt_session_date(ts) != session_date:
+            continue
+        if after_timestamp is not None and ts.astimezone(timezone.utc) <= after_timestamp.astimezone(timezone.utc):
+            continue
+        return True
+    return False
+
+
 def _active_prediction_reference_evidence(ticker: str, *, session_date: str) -> dict[str, Any] | None:
     symbol = str(ticker or '').upper()
     if not symbol:
@@ -692,6 +886,7 @@ def _reference_price_evidence(
     item: dict[str, Any],
     *,
     session_date: str,
+    evidence_by_symbol: dict[str, list[dict[str, Any]]] | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     signal = _safe_float(item.get('signal_price'))
     ticker = str(item.get('ticker') or '').upper()
@@ -710,6 +905,27 @@ def _reference_price_evidence(
     fallback = _active_prediction_reference_evidence(ticker, session_date=session_date)
     if fallback is not None:
         return fallback, 'valid'
+    rows = (evidence_by_symbol or {}).get(ticker) or []
+    valid: list[dict[str, Any]] = []
+    for row in rows:
+        price = _safe_float(row.get('price'))
+        ts = _parse_dt(row.get('timestamp'))
+        if price is None or price <= 0 or ts is None:
+            continue
+        if _dt_session_date(ts) != session_date:
+            continue
+        if signal_ts is not None and ts.astimezone(timezone.utc) < signal_ts.astimezone(timezone.utc):
+            continue
+        valid.append(row)
+    if valid:
+        valid.sort(key=lambda row: _parse_dt(row.get('timestamp')) or datetime.min.replace(tzinfo=timezone.utc))
+        first = valid[0]
+        return {
+            'ticker': ticker,
+            'price': _safe_float(first.get('price')),
+            'timestamp': first.get('timestamp'),
+            'source': f"{first.get('source') or 'price_evidence'}:first_after_emit",
+        }, 'valid'
     return None, 'no_reference_price'
 
 
@@ -718,32 +934,48 @@ def _close_price_evidence(
     *,
     session_date: str,
     evidence_by_symbol: dict[str, list[dict[str, Any]]],
+    evidence_context: list[dict[str, Any]] | None = None,
+    after_timestamp: datetime | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     ticker = str(item.get('ticker') or '').upper()
     rows = evidence_by_symbol.get(ticker) or []
+    signal_ts = after_timestamp or _parse_dt(item.get('timestamp'))
     if not rows:
+        if _has_fresh_global_context(evidence_context, session_date=session_date, after_timestamp=signal_ts):
+            return None, 'missing_symbol_price'
         return None, 'missing_eod_price'
-    signal_ts = _parse_dt(item.get('timestamp'))
     wrong_date_seen = False
     stale_seen = False
+    same_day_seen = False
+    stale_sources: set[str] = set()
     valid: list[dict[str, Any]] = []
     for row in rows:
         ts = _parse_dt(row.get('timestamp'))
         if ts is None:
             stale_seen = True
+            stale_sources.add(str(row.get('source') or 'unknown'))
             continue
         if _dt_session_date(ts) != session_date:
             wrong_date_seen = True
             continue
+        same_day_seen = True
         if signal_ts is not None and ts.astimezone(timezone.utc) <= signal_ts.astimezone(timezone.utc):
             stale_seen = True
+            stale_sources.add(str(row.get('source') or 'unknown'))
             continue
         valid.append(row)
     if not valid:
-        if wrong_date_seen:
+        if wrong_date_seen and not same_day_seen:
             return None, 'wrong_date'
         if stale_seen:
+            if (
+                _has_fresh_global_context(evidence_context, session_date=session_date, after_timestamp=signal_ts)
+                and not any(source in {'scanner_data', 'runtime_market_data'} for source in stale_sources)
+            ):
+                return None, 'missing_symbol_price'
             return None, 'stale_price'
+        if _has_fresh_global_context(evidence_context, session_date=session_date, after_timestamp=signal_ts):
+            return None, 'missing_symbol_price'
         return None, 'missing_eod_price'
     valid.sort(key=lambda row: _parse_dt(row.get('timestamp')) or datetime.min.replace(tzinfo=timezone.utc))
     return valid[-1], 'valid'
@@ -754,14 +986,22 @@ def _build_price_evidence(
     *,
     session_date: str,
     evidence_by_symbol: dict[str, list[dict[str, Any]]],
+    evidence_context: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
-    ref, ref_reason = _reference_price_evidence(item, session_date=session_date)
+    ref, ref_reason = _reference_price_evidence(
+        item,
+        session_date=session_date,
+        evidence_by_symbol=evidence_by_symbol,
+    )
     if ref is None:
         return None, ref_reason
+    ref_ts = _parse_dt(ref.get('timestamp')) or _parse_dt(item.get('timestamp'))
     close, close_reason = _close_price_evidence(
         item,
         session_date=session_date,
         evidence_by_symbol=evidence_by_symbol,
+        evidence_context=evidence_context,
+        after_timestamp=ref_ts,
     )
     if close is None:
         return None, close_reason
@@ -843,6 +1083,7 @@ def _classify_item(
     *,
     session_date: str,
     evidence_by_symbol: dict[str, list[dict[str, Any]]] | None = None,
+    evidence_context: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     category = str(item.get('category') or '')
     if category == 'tradecard':
@@ -851,15 +1092,13 @@ def _classify_item(
             return {'status': 'pending_data', 'reason': expiry_result or 'tradecard pending'}
         return {'status': 'resolved', 'resolved_as': resolved_as, 'expiry_result': expiry_result, 'actual_move': move}
 
-    signal = _safe_float(item.get('signal_price'))
-    if signal is None or signal <= 0:
-        return {'status': 'pending_data', 'reason': 'no_reference_price'}
     if not evidence_by_symbol:
         return {'status': 'pending_data', 'reason': 'missing_eod_price'}
     evidence, price_reason = _build_price_evidence(
         item,
         session_date=session_date,
         evidence_by_symbol=evidence_by_symbol or {},
+        evidence_context=evidence_context,
     )
     if evidence is None:
         return {'status': 'pending_data', 'reason': price_reason}
@@ -1109,6 +1348,7 @@ def run_actual_learning_resolver(
         session_date=day,
         market_data=data if isinstance(data, dict) else None,
     )
+    evidence_context = capture_eod_price_context(data if isinstance(data, dict) else None)
     summary['price_evidence'] = {
         ticker: rows[:3]
         for ticker, rows in evidence_by_symbol.items()
@@ -1127,6 +1367,7 @@ def run_actual_learning_resolver(
                 data,
                 session_date=day,
                 evidence_by_symbol=evidence_by_symbol,
+                evidence_context=evidence_context,
             )
             if result.get('status') == 'pending_data':
                 summary['pending_data'] += 1
@@ -1141,6 +1382,11 @@ def run_actual_learning_resolver(
                     f"[EOD_PRICE_EVIDENCE] symbol={item.get('ticker')} source=- "
                     f"ref={item.get('signal_price')} close=- move=- "
                     f"status=pending reason={result.get('reason')}",
+                    flush=True,
+                )
+                safe_print(
+                    f"[PRICE_EVIDENCE_BRIDGE] symbol={item.get('ticker')} "
+                    f"ref_source=- close_source=- status=pending reason={result.get('reason')}",
                     flush=True,
                 )
                 safe_print(
@@ -1173,6 +1419,13 @@ def run_actual_learning_resolver(
                     f"ref={ev.get('ref_price', item.get('signal_price'))} "
                     f"close={ev.get('close_price', '-')} move={result.get('actual_move')} "
                     "status=valid",
+                    flush=True,
+                )
+                safe_print(
+                    f"[PRICE_EVIDENCE_BRIDGE] symbol={item.get('ticker')} "
+                    f"ref_source={ev.get('ref_source') or 'tradecard'} "
+                    f"close_source={ev.get('close_source') or 'tradecard'} "
+                    "status=valid reason=valid",
                     flush=True,
                 )
                 safe_print(
@@ -1228,6 +1481,13 @@ def run_actual_learning_resolver(
                 f"ref={ev.get('ref_price', item.get('signal_price'))} "
                 f"close={ev.get('close_price', '-')} move={result.get('actual_move')} "
                 "status=valid",
+                flush=True,
+            )
+            safe_print(
+                f"[PRICE_EVIDENCE_BRIDGE] symbol={item.get('ticker')} "
+                f"ref_source={ev.get('ref_source') or 'tradecard'} "
+                f"close_source={ev.get('close_source') or 'tradecard'} "
+                "status=valid reason=valid",
                 flush=True,
             )
             safe_print(

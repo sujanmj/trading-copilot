@@ -350,6 +350,7 @@ def test_source_binding_uses_emitted_symbols_only() -> int:
          patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
          patch('backend.orchestration.alert_quality_engine._load_json', return_value=quality_state), \
          patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._candidate_store_candidates', return_value=[]), \
          patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
          patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'rows': [], 'counts': {}}):
         summary = run_actual_learning_resolver(
@@ -392,6 +393,7 @@ def test_missing_price_is_pending_not_zero_neutral() -> int:
          patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
          patch('backend.orchestration.alert_quality_engine._load_json', return_value={'date': '2026-06-30'}), \
          patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._candidate_store_candidates', return_value=[]), \
          patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
          patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'rows': [], 'counts': {}}):
         summary = run_actual_learning_resolver(
@@ -475,6 +477,7 @@ def test_wrong_date_price_stays_pending() -> int:
          patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
          patch('backend.orchestration.alert_quality_engine._load_json', return_value={'date': '2026-06-30'}), \
          patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._candidate_store_candidates', return_value=[]), \
          patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
          patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
         summary = run_actual_learning_resolver(
@@ -492,6 +495,229 @@ def test_wrong_date_price_stays_pending() -> int:
         return _fail(f'wrong-date pending reason missing: {summary!r}')
     if summary.get('latest_outcomes'):
         return _fail(f'wrong-date price must not create outcome: {summary!r}')
+    return 0
+
+
+def test_candidate_capture_store_roundtrip() -> int:
+    from backend.analytics.actual_learning_resolver import (
+        load_learning_candidates_for_date,
+        record_learning_candidate,
+    )
+
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / 'actual_learning_candidates.jsonl'
+        row = record_learning_candidate(
+            symbol='KEC',
+            emitted_at='2026-06-30T10:00:00+05:30',
+            trading_date='2026-06-30',
+            source='alert_event:intraday',
+            reference_price=100.0,
+            reference_price_source='alert_event_log.price_at_alert',
+            scanner_timestamp='2026-06-30T10:00:00+05:30',
+            volume=2.5,
+            score=0.86,
+            category='scanner_watch',
+            state_path=path,
+        )
+        if row.get('symbol') != 'KEC':
+            return _fail(f'candidate capture returned wrong symbol: {row!r}')
+        rows = load_learning_candidates_for_date('2026-06-30', state_path=path)
+    if len(rows) != 1 or rows[0].get('reference_price') != 100.0:
+        return _fail(f'candidate capture store did not roundtrip: {rows!r}')
+    return 0
+
+
+def test_fresh_scanner_missing_symbol_is_not_stale_price() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    emitted_rows = [
+        {
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'alert_type': 'intraday',
+            'category': 'INTRADAY_EVENT',
+            'tickers': ['HONASA'],
+            'direction': 'BULLISH',
+            'score': 0.82,
+            'price_at_alert': 100.0,
+            'reason_preview': 'live scanner watch',
+        }
+    ]
+    stale_active_prediction = {
+        'HONASA': [
+            {
+                'ticker': 'HONASA',
+                'price': 99.0,
+                'timestamp': '2026-06-30T09:00:00+05:30',
+                'source': 'active_predictions',
+            }
+        ]
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
+         patch('backend.orchestration.alert_quality_engine._load_json', return_value={'date': '2026-06-30'}), \
+         patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._candidate_store_candidates', return_value=[]), \
+         patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
+         patch('backend.analytics.actual_learning_resolver._scanner_price_hits', return_value={}), \
+         patch('backend.analytics.actual_learning_resolver._active_prediction_price_hits', return_value=stale_active_prediction), \
+         patch('backend.analytics.actual_learning_resolver._scanner_global_context', return_value={
+             'source': 'scanner_data',
+             'timestamp': '2026-06-30T15:31:00+05:30',
+             'session_date': '2026-06-30',
+         }), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}), \
+         patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'rows': [], 'counts': {}}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    reasons = summary.get('pending_reasons') or {}
+    if reasons.get('missing_symbol_price') != 1:
+        return _fail(f'fresh scanner with absent symbol should be missing_symbol_price: {summary!r}')
+    if reasons.get('stale_price'):
+        return _fail(f'fresh scanner absent symbol must not be stale_price: {summary!r}')
+    return 0
+
+
+def test_stale_per_symbol_timestamp_stays_stale_price() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'STALESYM',
+                'action': 'WATCH',
+                'price': 100.0,
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    stale_scanner_hit = {
+        'STALESYM': [
+            {
+                'ticker': 'STALESYM',
+                'price': 101.0,
+                'timestamp': '2026-06-30T09:00:00+05:30',
+                'source': 'scanner_data',
+            }
+        ]
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver._scanner_price_hits', return_value=stale_scanner_hit), \
+         patch('backend.analytics.actual_learning_resolver._scanner_global_context', return_value={
+             'source': 'scanner_data',
+             'timestamp': '2026-06-30T15:31:00+05:30',
+             'session_date': '2026-06-30',
+         }), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if (summary.get('pending_reasons') or {}).get('stale_price') != 1:
+        return _fail(f'stale per-symbol scanner timestamp should stay stale_price: {summary!r}')
+    return 0
+
+
+def test_no_reference_price_fallback_uses_scanner_evidence() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'FALLBACK',
+                'action': 'WATCH',
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    scanner_hits = {
+        'FALLBACK': [
+            {
+                'ticker': 'FALLBACK',
+                'price': 100.0,
+                'timestamp': '2026-06-30T10:05:00+05:30',
+                'source': 'scanner_data',
+            },
+            {
+                'ticker': 'FALLBACK',
+                'price': 102.0,
+                'timestamp': '2026-06-30T15:31:00+05:30',
+                'source': 'scanner_data',
+            },
+        ]
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver._scanner_price_hits', return_value=scanner_hits), \
+         patch('backend.analytics.actual_learning_resolver._scanner_global_context', return_value={
+             'source': 'scanner_data',
+             'timestamp': '2026-06-30T15:31:00+05:30',
+             'session_date': '2026-06-30',
+         }), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if int(summary.get('sample_updated') or 0) != 1:
+        return _fail(f'fallback scanner reference should resolve one sample: {summary!r}')
+    evidence = ((summary.get('latest_outcomes') or [{}])[0].get('price_evidence') or {})
+    if evidence.get('ref_source') != 'scanner_data:first_after_emit' or evidence.get('close_source') != 'scanner_data':
+        return _fail(f'fallback reference/close source mismatch: {summary!r}')
+    if evidence.get('ref_price') != 100.0 or evidence.get('close_price') != 102.0:
+        return _fail(f'fallback reference should use first scanner price and later close: {summary!r}')
+    return 0
+
+
+def test_no_reference_price_remains_pending_if_fallbacks_fail() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'NOREF',
+                'action': 'WATCH',
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver._scanner_price_hits', return_value={}), \
+         patch('backend.analytics.actual_learning_resolver._active_prediction_price_hits', return_value={}), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if (summary.get('pending_reasons') or {}).get('no_reference_price') != 1:
+        return _fail(f'no reference should remain no_reference_price when all fallbacks fail: {summary!r}')
+    if summary.get('latest_outcomes'):
+        return _fail(f'no-reference candidate must not resolve without evidence: {summary!r}')
     return 0
 
 
@@ -680,6 +906,11 @@ def main() -> int:
         test_missing_price_is_pending_not_zero_neutral,
         test_scanner_close_price_resolves_watchlist_item,
         test_wrong_date_price_stays_pending,
+        test_candidate_capture_store_roundtrip,
+        test_fresh_scanner_missing_symbol_is_not_stale_price,
+        test_stale_per_symbol_timestamp_stays_stale_price,
+        test_no_reference_price_fallback_uses_scanner_evidence,
+        test_no_reference_price_remains_pending_if_fallbacks_fail,
         test_bad_zero_neutral_outcomes_are_quarantined,
         test_live_scanner_saved_candidate_included,
         test_daily_review_learning_runs_before_formatting,

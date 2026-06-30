@@ -91,6 +91,26 @@ def log_alert_event(
             fh.write(json.dumps(entry, ensure_ascii=False) + '\n')
     except OSError as exc:
         _log(f'write failed: {exc}')
+    try:
+        from backend.analytics.actual_learning_resolver import record_learning_candidate
+
+        for ticker in ticker_list:
+            record_learning_candidate(
+                symbol=ticker,
+                emitted_at=ts,
+                trading_date=ts[:10] if len(ts) >= 10 else None,
+                source=f"alert_event:{entry['alert_type']}",
+                reference_price=price_at_alert,
+                reference_price_source='alert_event_log.price_at_alert' if price_at_alert else '',
+                scanner_timestamp=ts,
+                volume=volume_at_alert,
+                direction=entry['direction'],
+                score=entry['score'],
+                category='scanner_watch' if entry['alert_type'] in ('open', 'intraday') else 'top_watch',
+                raw=entry,
+            )
+    except Exception:
+        pass
     return entry
 
 
