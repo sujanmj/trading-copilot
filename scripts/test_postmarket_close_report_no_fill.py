@@ -26,11 +26,12 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
 
 
-def _pack(generated_at: str, *, pack_mode: str = '') -> dict:
+def _pack(generated_at: str, *, pack_mode: str = '', learning_version: str = '4A3_price_bridge') -> dict:
     return {
         'ok': True,
         'generated_at': generated_at,
         'pack_mode': pack_mode,
+        'learning_pack_version': learning_version,
         'market_mode': 'INDIA_POSTMARKET_MODE',
         'summary': {'market_mode': 'INDIA_POSTMARKET_MODE'},
         'final_confidence': {
@@ -62,7 +63,7 @@ def _append_sample_card() -> dict:
     return tcj.append_journal_record(record)
 
 
-def _close_patch_context(pack_path: Path, catchup):
+def _close_patch_context(pack_path: Path, catchup, *, last_refresh_at=None):
     from backend.telegram import telegram_brief_scheduler as scheduler
     from backend.telegram import lazy_command_runner
 
@@ -95,6 +96,7 @@ def _close_patch_context(pack_path: Path, catchup):
         patch('backend.analytics.aihub_tab_payloads.build_market_payload', return_value=market_payload),
         patch('backend.telegram.telegram_brief_scheduler._build_today_tomorrow_text', return_value='tomorrow'),
         patch('backend.analytics.unified_decision_engine.get_feed_freshness_meta', return_value=meta),
+        patch.object(scheduler, '_last_canonical_refresh_at', return_value=last_refresh_at),
     )
 
 
@@ -126,7 +128,7 @@ def test_close_runs_postmarket_catchup_and_resolves_no_fill() -> int:
             return {'ok': True, 'method': 'test'}
 
         patches = _close_patch_context(pack_path, _catchup)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], \
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], \
              patch.object(tcj, '_today', return_value='2026-06-29'), \
              patch.object(tcj, '_now_iso', return_value='2026-06-29T15:55:00+05:30'), \
              patch.object(tcj, '_load_market_data_with_optional_refresh', return_value=market_data):
@@ -187,7 +189,7 @@ def test_close_refuses_stale_pack_when_catchup_fails() -> int:
             return {'ok': False, 'reason': 'source unavailable'}
 
         patches = _close_patch_context(pack_path, _catchup)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], \
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], \
              patch.object(tcj, '_today', return_value='2026-06-29'), \
              patch.object(tcj, '_load_market_data_with_optional_refresh', return_value=None):
             text = build_close_brief_text()
@@ -198,6 +200,115 @@ def test_close_refuses_stale_pack_when_catchup_fails() -> int:
             return _fail('/close should include exact catchup failure reason')
         if old_generated in text:
             return _fail('/close must not show stale morning pack as current report body')
+    return 0
+
+
+def test_close_rebuilds_learning_section_when_pack_learning_version_old() -> int:
+    from backend.telegram.telegram_brief_scheduler import build_close_brief_text
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pack_path = Path(tmp) / 'daily_report_pack_latest.json'
+        _write_json(
+            pack_path,
+            _pack('2026-06-29T11:02:00+00:00', pack_mode='postmarket', learning_version='4A2_old'),
+        )
+        catchup_calls: list[str] = []
+
+        def _catchup():
+            catchup_calls.append('called')
+            return {'ok': False, 'reason': 'should not run for learning-version-only refresh'}
+
+        learning_summary = {
+            'sample_updated': 0,
+            'watchlist': {'win': 0, 'loss': 0, 'neutral': 0},
+            'avoid': {'success': 0, 'fail': 0, 'neutral': 0},
+            'tradecard': {'resolved': 0, 'no_fill': 0},
+            'pending_data': 1,
+            'pending_reasons': {'missing_symbol_price': 1},
+            'explanation': {},
+        }
+        patches = _close_patch_context(pack_path, _catchup)
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], \
+             patch('backend.trading.tradecard_journal.resolve_close_pending_tradecards', return_value={'updated': 0}), \
+             patch('backend.trading.tradecard_journal.format_tradecard_review_section', return_value='<b>Tradecards:</b>\nGenerated: 0\nFilled: 0\nNo fill: 0\nPending: 0'), \
+             patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'counts': {'generated': 0, 'no_fill': 0, 'pending': 0}}), \
+             patch('backend.analytics.actual_learning_resolver.run_actual_learning_resolver', return_value=learning_summary), \
+             patch('backend.storage.outcome_resolver.refresh_memory_dashboard_cache', return_value=True):
+            text = build_close_brief_text()
+
+        if catchup_calls:
+            return _fail('old learning version should rebuild learning section without regenerating report pack')
+        if 'Pending data reasons: missing_symbol_price 1' not in text:
+            return _fail(f'/close should show current resolver pending reason: {text}')
+        if 'stale_price' in text:
+            return _fail('old stale_price reason from cached pack must not persist')
+    return 0
+
+
+def test_refresh_after_pack_regenerates_postmarket_pack() -> int:
+    from backend.telegram.telegram_brief_scheduler import build_close_brief_text
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pack_path = Path(tmp) / 'daily_report_pack_latest.json'
+        _write_json(pack_path, _pack('2026-06-29T11:02:00+00:00', pack_mode='postmarket'))
+        catchup_calls: list[str] = []
+
+        def _catchup():
+            catchup_calls.append('called')
+            _write_json(pack_path, _pack('2026-06-29T11:05:00+00:00', pack_mode='postmarket'))
+            return {'ok': True, 'method': 'test'}
+
+        patches = _close_patch_context(
+            pack_path,
+            _catchup,
+            last_refresh_at=datetime.fromisoformat('2026-06-29T16:34:00+05:30'),
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], \
+             patch('backend.trading.tradecard_journal.resolve_close_pending_tradecards', return_value={'updated': 0}), \
+             patch('backend.trading.tradecard_journal.format_tradecard_review_section', return_value='<b>Tradecards:</b>\nGenerated: 0\nFilled: 0\nNo fill: 0\nPending: 0'), \
+             patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'counts': {'generated': 0, 'no_fill': 0, 'pending': 0}}), \
+             patch('backend.analytics.actual_learning_resolver.run_actual_learning_resolver', return_value={'sample_updated': 0, 'pending_data': 0, 'pending_reasons': {}}), \
+             patch('backend.storage.outcome_resolver.refresh_memory_dashboard_cache', return_value=True):
+            text = build_close_brief_text()
+
+        if catchup_calls != ['called']:
+            return _fail('/close should regenerate postmarket pack when refresh full ran after pack')
+        if 'Post-market pack generated at 2026-06-29 16:35 IST' not in text:
+            return _fail(f'/close should show regenerated postmarket pack: {text}')
+    return 0
+
+
+def test_close_runs_learning_before_pack_output() -> int:
+    from backend.telegram.telegram_brief_scheduler import build_close_brief_text
+
+    order: list[str] = []
+
+    def _pack_lines(*, force_rebuild=False):
+        if order != ['learning']:
+            raise AssertionError(f'pack formatted before learning refresh: {order!r}')
+        return (
+            ['Report: fresh · 0m', 'Post-market pack generated at 2026-06-29 16:35 IST', ''],
+            False,
+            {'fresh': True, 'freshness_meta': {'lines': {'report': 'Report: fresh · 0m'}}},
+        )
+
+    with patch('backend.telegram.india_mode_lock.is_premarket_phase', return_value=False), \
+         patch('backend.telegram.india_mode_lock.resolve_telegram_market_phase', return_value='INDIA_POSTMARKET_MODE'), \
+         patch('backend.telegram.india_mode_lock.is_live_market_hours_phase', return_value=False), \
+         patch('backend.trading.tradecard_journal.resolve_close_pending_tradecards', return_value={'updated': 0}), \
+         patch('backend.analytics.actual_learning_resolver.run_actual_learning_resolver', side_effect=lambda refresh_cache=True: order.append('learning') or {'sample_updated': 0, 'pending_data': 0, 'pending_reasons': {}}), \
+         patch('backend.storage.outcome_resolver.refresh_memory_dashboard_cache', return_value=True), \
+         patch('backend.telegram.telegram_brief_scheduler._postmarket_close_pack_lines', side_effect=_pack_lines), \
+         patch('backend.trading.tradecard_journal.format_tradecard_review_section', return_value='<b>Tradecards:</b>\nGenerated: 0'), \
+         patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'counts': {'generated': 0}}), \
+         patch('backend.telegram.lazy_command_runner.run_memory_only', return_value={'text': 'memory'}), \
+         patch('backend.telegram.lazy_command_runner.run_market_only', return_value={'text': '<b>Market payload</b>\nReport: fresh · 0m'}), \
+         patch('backend.telegram.telegram_brief_scheduler._build_today_tomorrow_text', return_value='tomorrow'):
+        text = build_close_brief_text()
+    if order != ['learning']:
+        return _fail(f'learning resolver should run exactly once before output: {order!r}')
+    if 'Actual learning sample updated: 0' not in text:
+        return _fail('/close should include current learning section')
     return 0
 
 
@@ -285,6 +396,9 @@ def main() -> int:
     for test in (
         test_close_runs_postmarket_catchup_and_resolves_no_fill,
         test_close_refuses_stale_pack_when_catchup_fails,
+        test_close_rebuilds_learning_section_when_pack_learning_version_old,
+        test_refresh_after_pack_regenerates_postmarket_pack,
+        test_close_runs_learning_before_pack_output,
         test_close_resolver_marks_unsampled_pending_no_fill,
         test_next_session_watch_only_not_today_pending,
         test_no_fill_resolver_has_no_ai_dependency,

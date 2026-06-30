@@ -25,6 +25,7 @@ from backend.utils.safe_stdio import safe_print
 IST = ZoneInfo('Asia/Kolkata')
 HOLDING_PERIOD = 'actual_learning'
 RESOLVER_VERSION = '4A'
+LEARNING_PACK_VERSION = '4A3_price_bridge'
 
 STATE_FILE_NAME = 'actual_learning_last_run.json'
 CANDIDATE_FILE_NAME = 'actual_learning_candidates.jsonl'

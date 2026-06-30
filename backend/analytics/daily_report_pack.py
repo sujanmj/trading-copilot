@@ -16,6 +16,11 @@ from typing import Any
 
 from backend.utils.config import DATA_DIR
 
+try:
+    from backend.analytics.actual_learning_resolver import LEARNING_PACK_VERSION
+except Exception:
+    LEARNING_PACK_VERSION = '4A3_price_bridge'
+
 SHADOW_MODE = True
 DISCLAIMER = 'Shadow analysis only — not trade execution.'
 
@@ -483,6 +488,7 @@ def generate_daily_report_pack(
         'ok': True,
         'generated_at': _now_iso(),
         'pack_mode': str(pack_mode or '').strip().lower(),
+        'learning_pack_version': LEARNING_PACK_VERSION,
         'shadow_mode': SHADOW_MODE,
         'market_mode': market_mode,
         'market_router': market_router,

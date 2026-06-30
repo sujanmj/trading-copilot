@@ -240,6 +240,41 @@ def _daily_pack_path() -> Path:
         return DATA_DIR / 'daily_report_pack_latest.json'
 
 
+def _canonical_refresh_state_path() -> Path:
+    return DATA_DIR / 'runtime' / 'canonical_refresh_state.json'
+
+
+def _learning_pack_version() -> str:
+    try:
+        from backend.analytics.actual_learning_resolver import LEARNING_PACK_VERSION
+
+        return LEARNING_PACK_VERSION
+    except Exception:
+        return '4A3_price_bridge'
+
+
+def mark_canonical_refresh_complete(*, source: str = 'telegram_refresh') -> dict[str, Any]:
+    """Record the latest full canonical refresh for close-pack invalidation."""
+    ts = _now_ist().isoformat()
+    payload = {
+        'ok': True,
+        'last_canonical_refresh_at': ts,
+        'source': source,
+    }
+    try:
+        path = _canonical_refresh_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, default=str), encoding='utf-8')
+    except Exception:
+        pass
+    return payload
+
+
+def _last_canonical_refresh_at() -> datetime | None:
+    state = _load_json_file(_canonical_refresh_state_path())
+    return _parse_dt_ist(state.get('last_canonical_refresh_at'))
+
+
 def _parse_dt_ist(value: Any) -> datetime | None:
     if value in (None, ''):
         return None
@@ -297,6 +332,43 @@ def _is_fresh_postmarket_pack(pack: dict[str, Any], *, now: datetime | None = No
     if pack_mode == 'postmarket':
         return True
     return (generated.hour, generated.minute) >= (15, 30)
+
+
+def _postmarket_pack_cache_decision(
+    pack: dict[str, Any],
+    *,
+    now: datetime | None = None,
+    force_rebuild: bool = False,
+) -> dict[str, Any]:
+    now = now or _now_ist()
+    generated = _pack_generated_at(pack)
+    if force_rebuild:
+        return {'action': 'rebuild', 'reason': 'force_learning_refresh', 'generated_at': generated}
+    if not _is_fresh_postmarket_pack(pack, now=now):
+        return {'action': 'rebuild', 'reason': 'not_fresh', 'generated_at': generated}
+    refresh_at = _last_canonical_refresh_at()
+    if (
+        refresh_at is not None
+        and generated is not None
+        and refresh_at.astimezone(IST) > generated.astimezone(IST)
+    ):
+        return {
+            'action': 'rebuild',
+            'reason': 'refresh_after_pack',
+            'generated_at': generated,
+            'last_canonical_refresh_at': refresh_at,
+        }
+    current_version = _learning_pack_version()
+    cached_version = str(pack.get('learning_pack_version') or '').strip()
+    if cached_version != current_version:
+        return {
+            'action': 'reuse',
+            'reason': 'version_changed',
+            'generated_at': generated,
+            'cached_learning_pack_version': cached_version,
+            'learning_pack_version': current_version,
+        }
+    return {'action': 'reuse', 'reason': 'fresh', 'generated_at': generated}
 
 
 def _format_pack_summary(pack: dict[str, Any]) -> list[str]:
@@ -378,7 +450,11 @@ def _postmarket_close_pack_lines(*, force_rebuild: bool = False) -> tuple[list[s
     path = _daily_pack_path()
     pack = _load_json_file(path)
     catchup: dict[str, Any] = {}
-    if force_rebuild or not _is_fresh_postmarket_pack(pack, now=now):
+    decision = _postmarket_pack_cache_decision(pack, now=now, force_rebuild=force_rebuild)
+    _safe_log(
+        f"[CLOSE_PACK_CACHE] action={decision.get('action')} reason={decision.get('reason')}"
+    )
+    if decision.get('action') == 'rebuild':
         catchup = _run_safe_postmarket_pack_catchup_once()
         pack = _load_json_file(path)
 
@@ -401,6 +477,9 @@ def _postmarket_close_pack_lines(*, force_rebuild: bool = False) -> tuple[list[s
             'generated_at': generated_raw,
             'age_min': age,
             'freshness_meta': meta,
+            'cache_action': decision.get('action'),
+            'cache_reason': decision.get('reason'),
+            'learning_pack_version': _learning_pack_version(),
         }
 
     try:
@@ -427,7 +506,14 @@ def _postmarket_close_pack_lines(*, force_rebuild: bool = False) -> tuple[list[s
     lines.append(f'Post-market pack unavailable - {reason}')
     lines.append('')
     _safe_log(f'[POSTMARKET_CLOSE_PACK] source=stale generated_at={pack.get("generated_at") or "unknown"}')
-    return lines, True, {'fresh': False, 'pack': pack, 'freshness_meta': meta}
+    return lines, True, {
+        'fresh': False,
+        'pack': pack,
+        'freshness_meta': meta,
+        'cache_action': decision.get('action'),
+        'cache_reason': decision.get('reason'),
+        'learning_pack_version': _learning_pack_version(),
+    }
 
 
 def _tradecard_resolution_line(counts: dict[str, Any]) -> str:
@@ -442,6 +528,31 @@ def _tradecard_resolution_line(counts: dict[str, Any]) -> str:
         f"Tradecard resolution: no fill {int(counts.get('no_fill') or 0)} / "
         f"pending {int(counts.get('pending') or 0)} / resolved {resolved}"
     )
+
+
+def _run_close_learning_refresh() -> dict[str, Any]:
+    try:
+        from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+        from backend.storage.outcome_resolver import refresh_memory_dashboard_cache
+
+        summary = run_actual_learning_resolver(refresh_cache=True)
+        try:
+            refresh_memory_dashboard_cache()
+        except Exception:
+            pass
+    except Exception:
+        summary = {
+            'sample_updated': 0,
+            'pending_data': 0,
+            'pending_reasons': {'learning_refresh_error': 1},
+        }
+    reasons = summary.get('pending_reasons') if isinstance(summary.get('pending_reasons'), dict) else {}
+    reason_summary = ','.join(f'{key}:{val}' for key, val in sorted(reasons.items())) or '-'
+    _safe_log(
+        f"[CLOSE_LEARNING_REFRESH] sample_updated={int(summary.get('sample_updated') or 0)} "
+        f"pending_data={int(summary.get('pending_data') or 0)} reasons={reason_summary}"
+    )
+    return summary
 
 
 def build_close_brief_text() -> str:
@@ -487,6 +598,9 @@ def build_close_brief_text() -> str:
             close_resolution = resolve_close_pending_tradecards(refresh=True)
         except Exception:
             close_resolution = {}
+    learning_summary: dict[str, Any] = {}
+    if not provisional:
+        learning_summary = _run_close_learning_refresh()
 
     pack_info: dict[str, Any] = {}
     if provisional:
@@ -546,15 +660,10 @@ def build_close_brief_text() -> str:
         lines.append('')
     except Exception:
         pass
-    learning_summary: dict[str, Any] = {}
     if not provisional:
         try:
-            from backend.analytics.actual_learning_resolver import (
-                format_actual_learning_close_lines,
-                run_actual_learning_resolver,
-            )
+            from backend.analytics.actual_learning_resolver import format_actual_learning_close_lines
 
-            learning_summary = run_actual_learning_resolver(refresh_cache=True)
             lines.extend(format_actual_learning_close_lines(learning_summary))
             lines.append('')
         except Exception:

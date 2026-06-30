@@ -512,6 +512,12 @@ def _do_refresh_body():
             "Partial updates may have landed — check /status."
         )
     else:
+        try:
+            from backend.telegram.telegram_brief_scheduler import mark_canonical_refresh_complete
+
+            mark_canonical_refresh_complete(source='telegram_refresh_full')
+        except Exception:
+            pass
         send_message(
             "✅ <b>Refresh complete!</b>\n\n"
             f"Finished in {elapsed}s. Brain pushed above.\n"
