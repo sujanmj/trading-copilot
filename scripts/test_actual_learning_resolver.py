@@ -486,6 +486,7 @@ def test_wrong_date_price_stays_pending() -> int:
                 'last_updated': '2026-06-29T15:31:00+05:30',
                 'prices': {'WELCORP': {'price': 102.0, 'timestamp': '2026-06-29T15:31:00+05:30'}},
             },
+            market_mode='INDIA_MARKET_HOURS',
             refresh_cache=False,
             state_path=state_path,
         )
@@ -572,6 +573,7 @@ def test_fresh_scanner_missing_symbol_is_not_stale_price() -> int:
         summary = run_actual_learning_resolver(
             session_date='2026-06-30',
             market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            market_mode='INDIA_MARKET_HOURS',
             refresh_cache=False,
             state_path=state_path,
         )
@@ -622,11 +624,162 @@ def test_stale_per_symbol_timestamp_stays_stale_price() -> int:
             session_date='2026-06-30',
             sources=sources,
             market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            market_mode='INDIA_MARKET_HOURS',
             refresh_cache=False,
             state_path=state_path,
         )
     if (summary.get('pending_reasons') or {}).get('stale_price') != 1:
         return _fail(f'stale per-symbol scanner timestamp should stay stale_price: {summary!r}')
+    return 0
+
+
+def test_after_hours_same_day_price_30m_old_resolves() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'EOD30',
+                'action': 'WATCH',
+                'price': 100.0,
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    market_data = {
+        'last_updated': '2026-06-30T16:20:00+05:30',
+        'prices': {
+            'EOD30': {'last_price': 101.0, 'timestamp': '2026-06-30T15:50:00+05:30'},
+        },
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data=market_data,
+            market_mode='INDIA_AFTER_HOURS',
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if int(summary.get('sample_updated') or 0) != 1:
+        return _fail(f'after-hours 30m-old same-day price should resolve: {summary!r}')
+    evidence = ((summary.get('latest_outcomes') or [{}])[0].get('price_evidence') or {})
+    if evidence.get('close_reason') != 'valid_eod_after_hours':
+        return _fail(f'after-hours close reason mismatch: {summary!r}')
+    return 0
+
+
+def test_after_hours_same_day_price_90m_old_resolves() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'EOD90',
+                'action': 'WATCH',
+                'price': 100.0,
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    market_data = {
+        'last_updated': '2026-06-30T16:36:00+05:30',
+        'prices': {
+            'EOD90': {'ltp': 102.0, 'timestamp': '2026-06-30T15:06:00+05:30'},
+        },
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data=market_data,
+            market_mode='INDIA_AFTER_HOURS',
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if int(summary.get('sample_updated') or 0) != 1:
+        return _fail(f'after-hours 90m-old same-day price should resolve: {summary!r}')
+    if summary.get('pending_reasons'):
+        return _fail(f'after-hours same-day EOD price should not stay pending: {summary!r}')
+    return 0
+
+
+def test_after_hours_previous_day_price_stays_stale_price() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'OLDPRICE',
+                'action': 'WATCH',
+                'price': 100.0,
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data={
+                'last_updated': '2026-06-30T16:36:00+05:30',
+                'prices': {'OLDPRICE': {'price': 101.0, 'timestamp': '2026-06-29T15:30:00+05:30'}},
+            },
+            market_mode='INDIA_AFTER_HOURS',
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if (summary.get('pending_reasons') or {}).get('stale_price') != 1:
+        return _fail(f'after-hours previous-day price should be stale_price: {summary!r}')
+    return 0
+
+
+def test_after_hours_missing_symbol_is_missing_symbol_price() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'MISSINGSYM',
+                'action': 'WATCH',
+                'price': 100.0,
+                'timestamp': '2026-06-30T10:00:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data={'last_updated': '2026-06-30T16:36:00+05:30', 'prices': {}},
+            market_mode='INDIA_AFTER_HOURS',
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if (summary.get('pending_reasons') or {}).get('missing_symbol_price') != 1:
+        return _fail(f'after-hours missing symbol should be missing_symbol_price: {summary!r}')
+    if (summary.get('pending_reasons') or {}).get('stale_price'):
+        return _fail(f'after-hours missing symbol must not be stale_price: {summary!r}')
     return 0
 
 
@@ -909,6 +1062,10 @@ def main() -> int:
         test_candidate_capture_store_roundtrip,
         test_fresh_scanner_missing_symbol_is_not_stale_price,
         test_stale_per_symbol_timestamp_stays_stale_price,
+        test_after_hours_same_day_price_30m_old_resolves,
+        test_after_hours_same_day_price_90m_old_resolves,
+        test_after_hours_previous_day_price_stays_stale_price,
+        test_after_hours_missing_symbol_is_missing_symbol_price,
         test_no_reference_price_fallback_uses_scanner_evidence,
         test_no_reference_price_remains_pending_if_fallbacks_fail,
         test_bad_zero_neutral_outcomes_are_quarantined,

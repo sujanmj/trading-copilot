@@ -6,7 +6,7 @@ Uses stored EOD/latest prices only. Does not call external AI providers.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, time as dt_time, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -29,6 +29,7 @@ LEARNING_PACK_VERSION = '4A3_price_bridge'
 
 STATE_FILE_NAME = 'actual_learning_last_run.json'
 CANDIDATE_FILE_NAME = 'actual_learning_candidates.jsonl'
+INDIA_MARKET_OPEN_TIME = dt_time(9, 15)
 
 WIN = 'WIN'
 LOSS = 'LOSS'
@@ -143,6 +144,57 @@ def _dt_session_date(value: datetime | None) -> str:
 
 def _iso_dt(value: datetime | None) -> str:
     return value.isoformat() if value is not None else ''
+
+
+def _market_mode_token(value: Any) -> str:
+    return str(value or '').strip().upper().replace(' ', '_')
+
+
+def _is_after_hours_eod_mode(market_mode: Any) -> bool:
+    token = _market_mode_token(market_mode)
+    return 'AFTER_HOURS' in token or 'POSTMARKET' in token
+
+
+def _resolve_learning_market_mode(
+    market_data: dict[str, Any] | None = None,
+    *,
+    market_mode: str | None = None,
+) -> str:
+    explicit = _market_mode_token(market_mode)
+    if explicit:
+        return explicit
+    if isinstance(market_data, dict):
+        for key in ('market_mode', 'mode', 'phase', 'active_mode'):
+            token = _market_mode_token(market_data.get(key))
+            if token:
+                return token
+    try:
+        from backend.telegram.india_mode_lock import resolve_telegram_market_phase
+
+        return _market_mode_token(resolve_telegram_market_phase())
+    except Exception:
+        return ''
+
+
+def _is_after_market_open_ts(value: datetime | None) -> bool:
+    if value is None:
+        return False
+    return value.astimezone(IST).time() >= INDIA_MARKET_OPEN_TIME
+
+
+def _log_eod_freshness_policy(
+    *,
+    market_mode: str,
+    symbol: str,
+    timestamp: datetime | None,
+    status: str,
+    reason: str,
+) -> None:
+    safe_print(
+        f"[EOD_FRESHNESS_POLICY] mode={market_mode or '-'} symbol={symbol or '-'} "
+        f"ts={_iso_dt(timestamp) or '-'} status={status} reason={reason}",
+        flush=True,
+    )
 
 
 def _price_from_row(row: dict[str, Any]) -> float | None:
@@ -838,10 +890,16 @@ def _has_fresh_global_context(
     *,
     session_date: str,
     after_timestamp: datetime | None,
+    market_mode: str = '',
 ) -> bool:
+    after_hours = _is_after_hours_eod_mode(market_mode)
     for ctx in contexts or []:
         ts = _parse_dt(ctx.get('timestamp'))
         if ts is None or _dt_session_date(ts) != session_date:
+            continue
+        if after_hours:
+            if _is_after_market_open_ts(ts):
+                return True
             continue
         if after_timestamp is not None and ts.astimezone(timezone.utc) <= after_timestamp.astimezone(timezone.utc):
             continue
@@ -937,49 +995,130 @@ def _close_price_evidence(
     evidence_by_symbol: dict[str, list[dict[str, Any]]],
     evidence_context: list[dict[str, Any]] | None = None,
     after_timestamp: datetime | None = None,
+    market_mode: str = '',
 ) -> tuple[dict[str, Any] | None, str]:
     ticker = str(item.get('ticker') or '').upper()
     rows = evidence_by_symbol.get(ticker) or []
     signal_ts = after_timestamp or _parse_dt(item.get('timestamp'))
+    after_hours = _is_after_hours_eod_mode(market_mode)
     if not rows:
-        if _has_fresh_global_context(evidence_context, session_date=session_date, after_timestamp=signal_ts):
+        if _has_fresh_global_context(
+            evidence_context,
+            session_date=session_date,
+            after_timestamp=signal_ts,
+            market_mode=market_mode,
+        ):
+            _log_eod_freshness_policy(
+                market_mode=market_mode,
+                symbol=ticker,
+                timestamp=None,
+                status='rejected',
+                reason='missing_symbol_price',
+            )
             return None, 'missing_symbol_price'
+        _log_eod_freshness_policy(
+            market_mode=market_mode,
+            symbol=ticker,
+            timestamp=None,
+            status='rejected',
+            reason='missing_eod_price',
+        )
         return None, 'missing_eod_price'
     wrong_date_seen = False
     stale_seen = False
     same_day_seen = False
     stale_sources: set[str] = set()
-    valid: list[dict[str, Any]] = []
+    valid: list[tuple[dict[str, Any], str]] = []
     for row in rows:
         ts = _parse_dt(row.get('timestamp'))
         if ts is None:
             stale_seen = True
             stale_sources.add(str(row.get('source') or 'unknown'))
+            _log_eod_freshness_policy(
+                market_mode=market_mode,
+                symbol=ticker,
+                timestamp=None,
+                status='rejected',
+                reason='stale_price',
+            )
             continue
         if _dt_session_date(ts) != session_date:
             wrong_date_seen = True
+            _log_eod_freshness_policy(
+                market_mode=market_mode,
+                symbol=ticker,
+                timestamp=ts,
+                status='rejected',
+                reason='stale_price' if after_hours else 'wrong_date',
+            )
             continue
         same_day_seen = True
+        if after_hours:
+            if not _is_after_market_open_ts(ts):
+                stale_seen = True
+                stale_sources.add(str(row.get('source') or 'unknown'))
+                _log_eod_freshness_policy(
+                    market_mode=market_mode,
+                    symbol=ticker,
+                    timestamp=ts,
+                    status='rejected',
+                    reason='stale_price',
+                )
+                continue
+            _log_eod_freshness_policy(
+                market_mode=market_mode,
+                symbol=ticker,
+                timestamp=ts,
+                status='accepted',
+                reason='valid_eod_after_hours',
+            )
+            valid.append((row, 'valid_eod_after_hours'))
+            continue
         if signal_ts is not None and ts.astimezone(timezone.utc) <= signal_ts.astimezone(timezone.utc):
             stale_seen = True
             stale_sources.add(str(row.get('source') or 'unknown'))
+            _log_eod_freshness_policy(
+                market_mode=market_mode,
+                symbol=ticker,
+                timestamp=ts,
+                status='rejected',
+                reason='stale_price',
+            )
             continue
-        valid.append(row)
+        _log_eod_freshness_policy(
+            market_mode=market_mode,
+            symbol=ticker,
+            timestamp=ts,
+            status='accepted',
+            reason='same_day_eod',
+        )
+        valid.append((row, 'valid'))
     if not valid:
         if wrong_date_seen and not same_day_seen:
-            return None, 'wrong_date'
+            return None, 'stale_price' if after_hours else 'wrong_date'
         if stale_seen:
             if (
-                _has_fresh_global_context(evidence_context, session_date=session_date, after_timestamp=signal_ts)
+                not after_hours
+                and _has_fresh_global_context(
+                    evidence_context,
+                    session_date=session_date,
+                    after_timestamp=signal_ts,
+                    market_mode=market_mode,
+                )
                 and not any(source in {'scanner_data', 'runtime_market_data'} for source in stale_sources)
             ):
                 return None, 'missing_symbol_price'
             return None, 'stale_price'
-        if _has_fresh_global_context(evidence_context, session_date=session_date, after_timestamp=signal_ts):
+        if _has_fresh_global_context(
+            evidence_context,
+            session_date=session_date,
+            after_timestamp=signal_ts,
+            market_mode=market_mode,
+        ):
             return None, 'missing_symbol_price'
         return None, 'missing_eod_price'
-    valid.sort(key=lambda row: _parse_dt(row.get('timestamp')) or datetime.min.replace(tzinfo=timezone.utc))
-    return valid[-1], 'valid'
+    valid.sort(key=lambda pair: _parse_dt(pair[0].get('timestamp')) or datetime.min.replace(tzinfo=timezone.utc))
+    return valid[-1]
 
 
 def _build_price_evidence(
@@ -988,6 +1127,7 @@ def _build_price_evidence(
     session_date: str,
     evidence_by_symbol: dict[str, list[dict[str, Any]]],
     evidence_context: list[dict[str, Any]] | None = None,
+    market_mode: str = '',
 ) -> tuple[dict[str, Any] | None, str]:
     ref, ref_reason = _reference_price_evidence(
         item,
@@ -1003,9 +1143,20 @@ def _build_price_evidence(
         evidence_by_symbol=evidence_by_symbol,
         evidence_context=evidence_context,
         after_timestamp=ref_ts,
+        market_mode=market_mode,
     )
     if close is None:
         return None, close_reason
+    if str(ref.get('source') or '').endswith(':first_after_emit'):
+        ref_dt = _parse_dt(ref.get('timestamp'))
+        close_dt = _parse_dt(close.get('timestamp'))
+        if (
+            ref_dt is not None
+            and close_dt is not None
+            and close_dt.astimezone(timezone.utc) == ref_dt.astimezone(timezone.utc)
+            and _safe_float(ref.get('price')) == _safe_float(close.get('price'))
+        ):
+            return None, 'no_reference_price'
     move = _actual_move(_safe_float(ref.get('price')), _safe_float(close.get('price')))
     if move is None:
         return None, 'missing_eod_price'
@@ -1018,6 +1169,7 @@ def _build_price_evidence(
         'close_price': _safe_float(close.get('price')),
         'close_source': close.get('source'),
         'close_timestamp': close.get('timestamp'),
+        'close_reason': close_reason,
         'move_pct': move,
         'high': close.get('high'),
         'low': close.get('low'),
@@ -1085,6 +1237,7 @@ def _classify_item(
     session_date: str,
     evidence_by_symbol: dict[str, list[dict[str, Any]]] | None = None,
     evidence_context: list[dict[str, Any]] | None = None,
+    market_mode: str = '',
 ) -> dict[str, Any]:
     category = str(item.get('category') or '')
     if category == 'tradecard':
@@ -1100,6 +1253,7 @@ def _classify_item(
         session_date=session_date,
         evidence_by_symbol=evidence_by_symbol or {},
         evidence_context=evidence_context,
+        market_mode=market_mode,
     )
     if evidence is None:
         return {'status': 'pending_data', 'reason': price_reason}
@@ -1329,6 +1483,7 @@ def run_actual_learning_resolver(
     *,
     session_date: str | None = None,
     market_data: dict[str, Any] | None = None,
+    market_mode: str | None = None,
     sources: dict[str, Any] | None = None,
     dry_run: bool = False,
     refresh_cache: bool = True,
@@ -1340,6 +1495,8 @@ def run_actual_learning_resolver(
     day = session_date or _today()
     summary = _empty_summary(day)
     data = market_data if market_data is not None else load_latest_market_data()
+    resolved_market_mode = _resolve_learning_market_mode(data if isinstance(data, dict) else None, market_mode=market_mode)
+    summary['market_mode'] = resolved_market_mode
     candidates = _source_candidates(day, sources=sources)
     summary['candidates'] = len(candidates)
     sent_symbols = sorted({str(item.get('ticker') or '').upper() for item in candidates if item.get('ticker')})
@@ -1369,6 +1526,7 @@ def run_actual_learning_resolver(
                 session_date=day,
                 evidence_by_symbol=evidence_by_symbol,
                 evidence_context=evidence_context,
+                market_mode=resolved_market_mode,
             )
             if result.get('status') == 'pending_data':
                 summary['pending_data'] += 1
@@ -1426,7 +1584,7 @@ def run_actual_learning_resolver(
                     f"[PRICE_EVIDENCE_BRIDGE] symbol={item.get('ticker')} "
                     f"ref_source={ev.get('ref_source') or 'tradecard'} "
                     f"close_source={ev.get('close_source') or 'tradecard'} "
-                    "status=valid reason=valid",
+                    f"status=valid reason={ev.get('close_reason') or 'valid'}",
                     flush=True,
                 )
                 safe_print(
@@ -1488,7 +1646,7 @@ def run_actual_learning_resolver(
                 f"[PRICE_EVIDENCE_BRIDGE] symbol={item.get('ticker')} "
                 f"ref_source={ev.get('ref_source') or 'tradecard'} "
                 f"close_source={ev.get('close_source') or 'tradecard'} "
-                "status=valid reason=valid",
+                f"status=valid reason={ev.get('close_reason') or 'valid'}",
                 flush=True,
             )
             safe_print(
