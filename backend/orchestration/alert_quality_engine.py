@@ -537,7 +537,7 @@ def daily_review_quality_buckets(
     alert_summary: dict[str, Any] | None = None,
     tradecard_counts: dict[str, Any] | None = None,
     actual_learning_summary: dict[str, Any] | None = None,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     tradecard_counts_provided = tradecard_counts is not None
     if alert_summary is None:
         try:
@@ -572,6 +572,7 @@ def daily_review_quality_buckets(
     tradecard_actual = actual.get('tradecard') if isinstance(actual.get('tradecard'), dict) else {}
     learning_sample_updated = int(actual.get('sample_updated') or resolved)
     pending_data = int(actual.get('pending_data') or 0)
+    pending_reasons = actual.get('pending_reasons') if isinstance(actual.get('pending_reasons'), dict) else {}
     return {
         'research_watchlist_sent': research_watchlist,
         'live_confirmed_setups': int(tradecard_counts.get('valid_entry') or 0),
@@ -593,6 +594,7 @@ def daily_review_quality_buckets(
         'tradecard_actual_resolved': int(tradecard_actual.get('resolved') or resolved),
         'tradecard_actual_no_fill': int(tradecard_actual.get('no_fill') or tradecard_counts.get('no_fill') or 0),
         'pending_data': pending_data,
+        'pending_reasons': pending_reasons,
     }
 
 
@@ -607,6 +609,8 @@ def format_daily_review_quality_lines(
         tradecard_counts=tradecard_counts,
         actual_learning_summary=actual_learning_summary,
     )
+    pending_reasons = b.get('pending_reasons') if isinstance(b.get('pending_reasons'), dict) else {}
+    reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
     lines = [
         f"Research watchlist sent: {b['research_watchlist_sent']}",
         f"Live confirmed setups: {b['live_confirmed_setups']}",
@@ -626,6 +630,7 @@ def format_daily_review_quality_lines(
             f"success {b['avoid_success']} / fail {b['avoid_fail']}"
         ),
         f"Pending data: {b['pending_data']}",
+        f"Pending data reasons: {reason_text}",
         (
             'Tradecard resolved/no-fill: '
             f"{b['tradecard_actual_resolved']}/{b['tradecard_actual_no_fill']}"

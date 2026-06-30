@@ -342,6 +342,12 @@ def run_memory_only() -> dict[str, Any]:
     learning = dashboard.get('learning') or {}
     overall = learning.get('overall') or {}
     latest_outcomes = dashboard.get('latest_outcomes') or []
+    try:
+        from backend.analytics.market_memory_dashboard import filter_latest_outcomes_for_display
+
+        latest_outcomes = filter_latest_outcomes_for_display(latest_outcomes, limit=20)
+    except Exception:
+        latest_outcomes = [row for row in latest_outcomes if isinstance(row, dict)]
     from backend.analytics.unified_decision_engine import get_calibration_mode
     from backend.storage.outcome_resolver import get_canonical_outcome_stats
 

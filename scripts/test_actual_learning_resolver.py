@@ -407,6 +407,161 @@ def test_missing_price_is_pending_not_zero_neutral() -> int:
     return 0
 
 
+def test_scanner_close_price_resolves_watchlist_item() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    sources = {
+        'stock_today': {
+            'top_pick': {
+                'ticker': 'TTKPRESTIG',
+                'action': 'WATCH',
+                'price': 100.0,
+                'timestamp': '2026-06-30T09:20:00+05:30',
+            }
+        },
+        'missed': [],
+        'tradecards': [],
+    }
+    scanner_hits = {
+        'TTKPRESTIG': [
+            {
+                'ticker': 'TTKPRESTIG',
+                'price': 102.0,
+                'timestamp': '2026-06-30T15:31:00+05:30',
+                'source': 'scanner_data',
+            }
+        ]
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.analytics.actual_learning_resolver._scanner_price_hits', return_value=scanner_hits), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            sources=sources,
+            market_data={'last_updated': '2026-06-30T15:31:00+05:30', 'prices': {}},
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if int(summary.get('sample_updated') or 0) != 1:
+        return _fail(f'valid scanner close price should resolve one watchlist item: {summary!r}')
+    if summary.get('watchlist') != {'win': 1, 'loss': 0, 'neutral': 0}:
+        return _fail(f'scanner close price should resolve as WIN: {summary!r}')
+    evidence = ((summary.get('latest_outcomes') or [{}])[0].get('price_evidence') or {})
+    if evidence.get('close_source') != 'scanner_data':
+        return _fail(f'expected scanner_data close evidence: {summary!r}')
+    return 0
+
+
+def test_wrong_date_price_stays_pending() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    emitted_rows = [
+        {
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'alert_type': 'intraday',
+            'category': 'INTRADAY_EVENT',
+            'tickers': ['WELCORP'],
+            'direction': 'BULLISH',
+            'score': 0.82,
+            'price_at_alert': 100.0,
+            'reason_preview': 'live scanner watch',
+        }
+    ]
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
+         patch('backend.orchestration.alert_quality_engine._load_json', return_value={'date': '2026-06-30'}), \
+         patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
+         patch('backend.analytics.actual_learning_resolver.load_latest_market_data', return_value={}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            market_data={
+                'last_updated': '2026-06-29T15:31:00+05:30',
+                'prices': {'WELCORP': {'price': 102.0, 'timestamp': '2026-06-29T15:31:00+05:30'}},
+            },
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if int(summary.get('pending_data') or 0) != 1:
+        return _fail(f'wrong-date price should stay pending_data: {summary!r}')
+    if (summary.get('pending_reasons') or {}).get('wrong_date') != 1:
+        return _fail(f'wrong-date pending reason missing: {summary!r}')
+    if summary.get('latest_outcomes'):
+        return _fail(f'wrong-date price must not create outcome: {summary!r}')
+    return 0
+
+
+def test_bad_zero_neutral_outcomes_are_quarantined() -> int:
+    from backend.analytics.market_memory_dashboard import _fetch_latest_outcomes, bad_outcome_quarantine_reason
+    from backend.storage import market_memory_db as mmdb
+
+    tmp, db_path, _state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path):
+        mmdb.init_market_memory_db()
+        fake_pred = {
+            'ticker': 'MARUTI',
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'source': 'actual_learning:top_watch',
+            'direction': 'BULLISH',
+            'raw_payload': {'prediction_date': '2026-06-30'},
+        }
+        fake_pid = mmdb.upsert_prediction(fake_pred)
+        mmdb.upsert_outcome({
+            'prediction_id': fake_pid,
+            'actual_move': 0.0,
+            'expiry_result': 'NEUTRAL',
+            'resolved_as': 'NEUTRAL',
+            'holding_period': 'actual_learning',
+            'raw_payload': {'source': 'actual_learning_resolver', 'session_date': '2026-06-30'},
+        })
+        valid_pred = {
+            'ticker': 'KEC',
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'source': 'actual_learning:top_watch',
+            'direction': 'BULLISH',
+            'raw_payload': {'prediction_date': '2026-06-30'},
+        }
+        valid_pid = mmdb.upsert_prediction(valid_pred)
+        mmdb.upsert_outcome({
+            'prediction_id': valid_pid,
+            'actual_move': 0.0,
+            'expiry_result': 'NEUTRAL',
+            'resolved_as': 'NEUTRAL',
+            'holding_period': 'actual_learning',
+            'raw_payload': {
+                'source': 'actual_learning_resolver',
+                'session_date': '2026-06-30',
+                'eod_price_evidence': {
+                    'status': 'valid',
+                    'ref_source': 'alert_event_log',
+                    'close_source': 'scanner_data',
+                    'ref_price': 100.0,
+                    'close_price': 100.0,
+                },
+            },
+        })
+        bad_row = {
+            'ticker': 'MARUTI',
+            'resolved_as': 'NEUTRAL',
+            'actual_move': 0.0,
+            'holding_period': 'actual_learning',
+            'outcome_raw_payload': {'source': 'actual_learning_resolver', 'session_date': '2026-06-30'},
+        }
+        if not bad_outcome_quarantine_reason(bad_row):
+            return _fail('MARUTI-like fake neutral zero outcome should be quarantined')
+        latest = _fetch_latest_outcomes(5)
+    tickers = {row.get('ticker') for row in latest}
+    if 'MARUTI' in tickers:
+        return _fail(f'fake MARUTI neutral zero leaked into latest outcomes: {latest!r}')
+    if 'KEC' not in tickers:
+        return _fail(f'valid zero-move outcome with evidence should remain visible: {latest!r}')
+    return 0
+
+
 def test_live_scanner_saved_candidate_included() -> int:
     from backend.analytics import actual_learning_resolver as resolver
 
@@ -475,6 +630,8 @@ def test_close_displays_actual_learning_summary() -> int:
         'watchlist': {'win': 1, 'loss': 0, 'neutral': 1},
         'avoid': {'success': 1, 'fail': 0, 'neutral': 0},
         'tradecard': {'resolved': 0, 'no_fill': 1},
+        'pending_data': 0,
+        'pending_reasons': {},
         'explanation': {
             'best_signal_today': 'WATCHWIN WIN +1.00%',
             'worst_signal_today': 'WATCHNEUTRAL NEUTRAL +0.20%',
@@ -504,6 +661,7 @@ def test_close_displays_actual_learning_summary() -> int:
         'Watchlist resolved: 1/0/1',
         'Avoid resolved: success 1 / fail 0',
         'Pending data: 0',
+        'Pending data reasons: none',
         'Tradecard resolved/no-fill: 0/1',
         'Best signal today: WATCHWIN WIN +1.00%',
     ):
@@ -520,6 +678,9 @@ def main() -> int:
         test_dry_run_does_not_write_db,
         test_source_binding_uses_emitted_symbols_only,
         test_missing_price_is_pending_not_zero_neutral,
+        test_scanner_close_price_resolves_watchlist_item,
+        test_wrong_date_price_stays_pending,
+        test_bad_zero_neutral_outcomes_are_quarantined,
         test_live_scanner_saved_candidate_included,
         test_daily_review_learning_runs_before_formatting,
         test_daily_review_learning_helper_order,

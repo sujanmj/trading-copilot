@@ -38,6 +38,25 @@ MISSED_OPPORTUNITY = 'MISSED_OPPORTUNITY'
 
 NON_WL_OUTCOMES = frozenset({NO_FILL, MISSED_OPPORTUNITY})
 
+PRICE_FIELDS = (
+    'close',
+    'last_price',
+    'ltp',
+    'price',
+    'current_price',
+    'reference_price',
+    'entry_price',
+    'price_at_signal',
+)
+
+REFERENCE_PRICE_FIELDS = (
+    'signal_price',
+    'price_at_signal',
+    'reference_price',
+    'entry_price',
+    'entry',
+)
+
 
 def _now_ist() -> datetime:
     return datetime.now(IST)
@@ -83,16 +102,7 @@ def _timestamp(row: dict[str, Any], session_date: str) -> str:
 
 
 def _signal_price(row: dict[str, Any]) -> float | None:
-    for key in (
-        'signal_price',
-        'price_at_signal',
-        'entry_price',
-        'current_price',
-        'price',
-        'ltp',
-        'last_price',
-        'close',
-    ):
+    for key in ('signal_price', 'price_at_signal', 'entry_price', 'reference_price', 'current_price', 'price'):
         val = _safe_float(row.get(key))
         if val is not None and val > 0:
             return val
@@ -126,6 +136,26 @@ def _dt_session_date(value: datetime | None) -> str:
     if value is None:
         return ''
     return value.astimezone(IST).date().isoformat()
+
+
+def _iso_dt(value: datetime | None) -> str:
+    return value.isoformat() if value is not None else ''
+
+
+def _price_from_row(row: dict[str, Any]) -> float | None:
+    for key in PRICE_FIELDS:
+        val = _safe_float(row.get(key))
+        if val is not None and val > 0:
+            return val
+    return None
+
+
+def _reference_price_from_row(row: dict[str, Any]) -> float | None:
+    for key in REFERENCE_PRICE_FIELDS:
+        val = _safe_float(row.get(key))
+        if val is not None and val > 0:
+            return val
+    return None
 
 
 def _category_from_row(row: dict[str, Any], default: str) -> str:
@@ -460,6 +490,19 @@ def _dedupe_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]
     return list(picked.values())
 
 
+def _iter_nested_rows(node: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if isinstance(node, dict):
+        if _ticker(node):
+            rows.append(node)
+        for val in node.values():
+            rows.extend(_iter_nested_rows(val))
+    elif isinstance(node, list):
+        for item in node:
+            rows.extend(_iter_nested_rows(item))
+    return rows
+
+
 def _latest_price_entry(market_data: dict[str, Any], ticker: str) -> dict[str, Any]:
     prices = market_data.get('prices') if isinstance(market_data, dict) else {}
     if not isinstance(prices, dict):
@@ -472,6 +515,272 @@ def _latest_price_entry(market_data: dict[str, Any], ticker: str) -> dict[str, A
         if isinstance(val, (int, float)) and not isinstance(val, bool):
             return {'price': float(val)}
     return {}
+
+
+def _row_timestamp(row: dict[str, Any], fallback: datetime | None = None) -> datetime | None:
+    for key in ('validated_at', 'timestamp', 'as_of', 'last_updated', 'generated_at', 'scan_time_local', 'time'):
+        ts = _parse_dt(row.get(key))
+        if ts is not None:
+            return ts
+    return fallback
+
+
+def _market_data_price_hits(
+    data: dict[str, Any] | None,
+    *,
+    source: str,
+) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(data, dict):
+        return {}
+    file_ts = None
+    for key in ('last_updated', 'generated_at', 'timestamp', 'as_of'):
+        file_ts = _parse_dt(data.get(key))
+        if file_ts is not None:
+            break
+    prices = data.get('prices')
+    if not isinstance(prices, dict):
+        return {}
+    out: dict[str, list[dict[str, Any]]] = {}
+    for key, val in prices.items():
+        ticker = str(key).strip().upper()
+        if not ticker:
+            continue
+        if isinstance(val, dict):
+            price = _price_from_row(val)
+            ts = _row_timestamp(val, file_ts)
+            high = _safe_float(val.get('high'))
+            low = _safe_float(val.get('low'))
+        else:
+            price = _safe_float(val)
+            ts = file_ts
+            high = None
+            low = None
+        if price is None or price <= 0:
+            continue
+        out.setdefault(ticker, []).append({
+            'ticker': ticker,
+            'price': price,
+            'timestamp': _iso_dt(ts),
+            'source': source,
+            'high': high,
+            'low': low,
+            'raw': val if isinstance(val, dict) else {'price': price},
+        })
+    return out
+
+
+def _scanner_price_hits() -> dict[str, list[dict[str, Any]]]:
+    scanner = _load_json(get_data_path('scanner_data.json'))
+    if not scanner:
+        return {}
+    fallback = None
+    for key in ('last_updated', 'scan_time_local', 'generated_at', 'timestamp'):
+        fallback = _parse_dt(scanner.get(key))
+        if fallback is not None:
+            break
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in _rows_from_payload(scanner, 'top_signals', 'all_signals', 'signals'):
+        ticker = _ticker(row)
+        price = _price_from_row(row)
+        if not ticker or price is None or price <= 0:
+            continue
+        ts = _row_timestamp(row, fallback)
+        out.setdefault(ticker, []).append({
+            'ticker': ticker,
+            'price': price,
+            'timestamp': _iso_dt(ts),
+            'source': 'scanner_data',
+            'high': _safe_float(row.get('high')),
+            'low': _safe_float(row.get('low')),
+            'raw': dict(row),
+        })
+    return out
+
+
+def _active_prediction_price_hits() -> dict[str, list[dict[str, Any]]]:
+    data = _load_json(get_data_path('active_predictions.json'))
+    if not data:
+        return {}
+    fallback = None
+    for key in ('generated_at', 'last_updated', 'timestamp', 'as_of'):
+        fallback = _parse_dt(data.get(key))
+        if fallback is not None:
+            break
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in _iter_nested_rows(data):
+        ticker = _ticker(row)
+        price = _price_from_row(row)
+        if not ticker or price is None or price <= 0:
+            continue
+        ts = _row_timestamp(row, fallback)
+        out.setdefault(ticker, []).append({
+            'ticker': ticker,
+            'price': price,
+            'timestamp': _iso_dt(ts),
+            'source': 'active_predictions',
+            'high': _safe_float(row.get('high')),
+            'low': _safe_float(row.get('low')),
+            'raw': dict(row),
+        })
+    return out
+
+
+def _merge_hits(*groups: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    merged: dict[str, list[dict[str, Any]]] = {}
+    for group in groups:
+        for ticker, rows in group.items():
+            merged.setdefault(ticker, []).extend(rows)
+    return merged
+
+
+def capture_eod_price_evidence(
+    symbols: list[str],
+    *,
+    session_date: str,
+    market_data: dict[str, Any] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Collect real same-day price evidence from local runtime sources."""
+    symbol_set = {str(sym or '').strip().upper() for sym in symbols if str(sym or '').strip()}
+    evidence = _merge_hits(
+        _market_data_price_hits(market_data, source='runtime_market_data') if market_data is not None else {},
+        _market_data_price_hits(load_latest_market_data(get_data_path('latest_market_data_memory_enriched.json')), source='latest_market_data_memory_enriched'),
+        _market_data_price_hits(load_latest_market_data(get_data_path('latest_market_data.json')), source='latest_market_data'),
+        _scanner_price_hits(),
+        _active_prediction_price_hits(),
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for ticker in symbol_set:
+        out[ticker] = list(evidence.get(ticker) or [])
+    return out
+
+
+def _active_prediction_reference_evidence(ticker: str, *, session_date: str) -> dict[str, Any] | None:
+    symbol = str(ticker or '').upper()
+    if not symbol:
+        return None
+    data = _load_json(get_data_path('active_predictions.json'))
+    if not data:
+        return None
+    fallback = None
+    for key in ('generated_at', 'last_updated', 'timestamp', 'as_of'):
+        fallback = _parse_dt(data.get(key))
+        if fallback is not None:
+            break
+    candidates: list[dict[str, Any]] = []
+    for row in _iter_nested_rows(data):
+        if _ticker(row) != symbol:
+            continue
+        price = _reference_price_from_row(row)
+        if price is None:
+            continue
+        ts = _row_timestamp(row, fallback)
+        if _dt_session_date(ts) != session_date:
+            continue
+        candidates.append({
+            'ticker': symbol,
+            'price': price,
+            'timestamp': _iso_dt(ts),
+            'source': 'active_predictions',
+        })
+    if not candidates:
+        return None
+    candidates.sort(key=lambda row: _parse_dt(row.get('timestamp')) or datetime.min.replace(tzinfo=timezone.utc))
+    return candidates[0]
+
+
+def _reference_price_evidence(
+    item: dict[str, Any],
+    *,
+    session_date: str,
+) -> tuple[dict[str, Any] | None, str]:
+    signal = _safe_float(item.get('signal_price'))
+    ticker = str(item.get('ticker') or '').upper()
+    signal_ts = _parse_dt(item.get('timestamp'))
+    if signal is not None and signal > 0:
+        if signal_ts is None:
+            return None, 'no_reference_price'
+        if _dt_session_date(signal_ts) != session_date:
+            return None, 'wrong_date'
+        return {
+            'ticker': ticker,
+            'price': signal,
+            'timestamp': _iso_dt(signal_ts),
+            'source': str(item.get('source') or 'signal'),
+        }, 'valid'
+    fallback = _active_prediction_reference_evidence(ticker, session_date=session_date)
+    if fallback is not None:
+        return fallback, 'valid'
+    return None, 'no_reference_price'
+
+
+def _close_price_evidence(
+    item: dict[str, Any],
+    *,
+    session_date: str,
+    evidence_by_symbol: dict[str, list[dict[str, Any]]],
+) -> tuple[dict[str, Any] | None, str]:
+    ticker = str(item.get('ticker') or '').upper()
+    rows = evidence_by_symbol.get(ticker) or []
+    if not rows:
+        return None, 'missing_eod_price'
+    signal_ts = _parse_dt(item.get('timestamp'))
+    wrong_date_seen = False
+    stale_seen = False
+    valid: list[dict[str, Any]] = []
+    for row in rows:
+        ts = _parse_dt(row.get('timestamp'))
+        if ts is None:
+            stale_seen = True
+            continue
+        if _dt_session_date(ts) != session_date:
+            wrong_date_seen = True
+            continue
+        if signal_ts is not None and ts.astimezone(timezone.utc) <= signal_ts.astimezone(timezone.utc):
+            stale_seen = True
+            continue
+        valid.append(row)
+    if not valid:
+        if wrong_date_seen:
+            return None, 'wrong_date'
+        if stale_seen:
+            return None, 'stale_price'
+        return None, 'missing_eod_price'
+    valid.sort(key=lambda row: _parse_dt(row.get('timestamp')) or datetime.min.replace(tzinfo=timezone.utc))
+    return valid[-1], 'valid'
+
+
+def _build_price_evidence(
+    item: dict[str, Any],
+    *,
+    session_date: str,
+    evidence_by_symbol: dict[str, list[dict[str, Any]]],
+) -> tuple[dict[str, Any] | None, str]:
+    ref, ref_reason = _reference_price_evidence(item, session_date=session_date)
+    if ref is None:
+        return None, ref_reason
+    close, close_reason = _close_price_evidence(
+        item,
+        session_date=session_date,
+        evidence_by_symbol=evidence_by_symbol,
+    )
+    if close is None:
+        return None, close_reason
+    move = _actual_move(_safe_float(ref.get('price')), _safe_float(close.get('price')))
+    if move is None:
+        return None, 'missing_eod_price'
+    return {
+        'status': 'valid',
+        'ticker': item.get('ticker'),
+        'ref_price': _safe_float(ref.get('price')),
+        'ref_source': ref.get('source'),
+        'ref_timestamp': ref.get('timestamp'),
+        'close_price': _safe_float(close.get('price')),
+        'close_source': close.get('source'),
+        'close_timestamp': close.get('timestamp'),
+        'move_pct': move,
+        'high': close.get('high'),
+        'low': close.get('low'),
+    }, 'valid'
 
 
 def _latest_price_evidence(
@@ -528,7 +837,13 @@ def _tradecard_outcome(item: dict[str, Any]) -> tuple[str | None, str | None, fl
     return None, 'pending_data', None
 
 
-def _classify_item(item: dict[str, Any], market_data: dict[str, Any] | None, *, session_date: str) -> dict[str, Any]:
+def _classify_item(
+    item: dict[str, Any],
+    market_data: dict[str, Any] | None,
+    *,
+    session_date: str,
+    evidence_by_symbol: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
     category = str(item.get('category') or '')
     if category == 'tradecard':
         resolved_as, expiry_result, move = _tradecard_outcome(item)
@@ -536,39 +851,34 @@ def _classify_item(item: dict[str, Any], market_data: dict[str, Any] | None, *, 
             return {'status': 'pending_data', 'reason': expiry_result or 'tradecard pending'}
         return {'status': 'resolved', 'resolved_as': resolved_as, 'expiry_result': expiry_result, 'actual_move': move}
 
-    if not market_data:
-        return {'status': 'pending_data', 'reason': 'missing_market_data'}
-
-    ticker = str(item.get('ticker') or '')
-    latest, price_reason = _latest_price_evidence(
-        market_data,
-        ticker,
-        session_date=session_date,
-        signal_timestamp=str(item.get('timestamp') or ''),
-    )
     signal = _safe_float(item.get('signal_price'))
     if signal is None or signal <= 0:
-        return {'status': 'pending_data', 'reason': 'missing_signal_price'}
-    if latest is None or latest <= 0:
+        return {'status': 'pending_data', 'reason': 'no_reference_price'}
+    if not evidence_by_symbol:
+        return {'status': 'pending_data', 'reason': 'missing_eod_price'}
+    evidence, price_reason = _build_price_evidence(
+        item,
+        session_date=session_date,
+        evidence_by_symbol=evidence_by_symbol or {},
+    )
+    if evidence is None:
         return {'status': 'pending_data', 'reason': price_reason}
-    move = _actual_move(signal, latest)
-    if move is None:
-        return {'status': 'pending_data', 'reason': 'missing_price_move'}
+    move = _safe_float(evidence.get('move_pct'))
 
     if category == 'avoid':
         if move <= BEARISH_HIT_PCT:
-            return {'status': 'resolved', 'resolved_as': AVOID_SUCCESS, 'expiry_result': AVOID_SUCCESS, 'actual_move': move}
+            return {'status': 'resolved', 'resolved_as': AVOID_SUCCESS, 'expiry_result': AVOID_SUCCESS, 'actual_move': move, 'price_evidence': evidence}
         if move >= BEARISH_MISS_PCT:
-            return {'status': 'resolved', 'resolved_as': AVOID_FAIL, 'expiry_result': AVOID_FAIL, 'actual_move': move}
-        return {'status': 'resolved', 'resolved_as': NEUTRAL, 'expiry_result': NEUTRAL, 'actual_move': move}
+            return {'status': 'resolved', 'resolved_as': AVOID_FAIL, 'expiry_result': AVOID_FAIL, 'actual_move': move, 'price_evidence': evidence}
+        return {'status': 'resolved', 'resolved_as': NEUTRAL, 'expiry_result': NEUTRAL, 'actual_move': move, 'price_evidence': evidence}
     if category == 'missed':
-        return {'status': 'resolved', 'resolved_as': MISSED_OPPORTUNITY, 'expiry_result': MISSED_OPPORTUNITY, 'actual_move': move}
+        return {'status': 'resolved', 'resolved_as': MISSED_OPPORTUNITY, 'expiry_result': MISSED_OPPORTUNITY, 'actual_move': move, 'price_evidence': evidence}
 
     if move >= BULLISH_HIT_PCT:
-        return {'status': 'resolved', 'resolved_as': WIN, 'expiry_result': WIN, 'actual_move': move}
+        return {'status': 'resolved', 'resolved_as': WIN, 'expiry_result': WIN, 'actual_move': move, 'price_evidence': evidence}
     if move <= BULLISH_MISS_PCT:
-        return {'status': 'resolved', 'resolved_as': LOSS, 'expiry_result': LOSS, 'actual_move': move}
-    return {'status': 'resolved', 'resolved_as': NEUTRAL, 'expiry_result': NEUTRAL, 'actual_move': move}
+        return {'status': 'resolved', 'resolved_as': LOSS, 'expiry_result': LOSS, 'actual_move': move, 'price_evidence': evidence}
+    return {'status': 'resolved', 'resolved_as': NEUTRAL, 'expiry_result': NEUTRAL, 'actual_move': move, 'price_evidence': evidence}
 
 
 def _prediction_payload(item: dict[str, Any], session_date: str) -> dict[str, Any]:
@@ -642,6 +952,8 @@ def _empty_summary(session_date: str) -> dict[str, Any]:
         'written': 0,
         'already_resolved': 0,
         'pending_data': 0,
+        'pending_reasons': {},
+        'price_evidence': {},
         'errors': 0,
         'watchlist': {'win': 0, 'loss': 0, 'neutral': 0},
         'avoid': {'success': 0, 'fail': 0, 'neutral': 0},
@@ -696,6 +1008,13 @@ def _record_bucket(summary: dict[str, Any], item: dict[str, Any], result: dict[s
             summary['tradecard']['resolved'] += 1
     elif category == 'missed':
         summary['missed_opportunities'] += 1
+
+
+def _record_pending_reason(summary: dict[str, Any], reason: str) -> None:
+    token = str(reason or 'pending_data')
+    reasons = summary.setdefault('pending_reasons', {})
+    if isinstance(reasons, dict):
+        reasons[token] = int(reasons.get(token) or 0) + 1
 
 
 def _counts_as_learning_sample(resolved_as: str) -> bool:
@@ -785,6 +1104,16 @@ def run_actual_learning_resolver(
     summary['candidates'] = len(candidates)
     sent_symbols = sorted({str(item.get('ticker') or '').upper() for item in candidates if item.get('ticker')})
     summary['source_binding']['sent_symbols'] = sent_symbols
+    evidence_by_symbol = capture_eod_price_evidence(
+        sent_symbols,
+        session_date=day,
+        market_data=data if isinstance(data, dict) else None,
+    )
+    summary['price_evidence'] = {
+        ticker: rows[:3]
+        for ticker, rows in evidence_by_symbol.items()
+        if rows
+    }
     if not dry_run:
         mmdb.init_market_memory_db()
 
@@ -793,15 +1122,27 @@ def run_actual_learning_resolver(
             prediction = _prediction_payload(item, day)
             prediction_id = mmdb.make_canonical_prediction_id(prediction, source_hint=prediction.get('source'))
             prediction['prediction_id'] = prediction_id
-            result = _classify_item(item, data, session_date=day)
+            result = _classify_item(
+                item,
+                data,
+                session_date=day,
+                evidence_by_symbol=evidence_by_symbol,
+            )
             if result.get('status') == 'pending_data':
                 summary['pending_data'] += 1
                 summary['source_binding']['pending_data'] = int(summary['source_binding'].get('pending_data') or 0) + 1
+                _record_pending_reason(summary, str(result.get('reason') or 'pending_data'))
                 summary['pending_items'].append({
                     'ticker': item.get('ticker'),
                     'category': item.get('category'),
                     'reason': result.get('reason'),
                 })
+                safe_print(
+                    f"[EOD_PRICE_EVIDENCE] symbol={item.get('ticker')} source=- "
+                    f"ref={item.get('signal_price')} close=- move=- "
+                    f"status=pending reason={result.get('reason')}",
+                    flush=True,
+                )
                 safe_print(
                     f"[LEARNING_PRICE_VALIDATION] symbol={item.get('ticker')} "
                     f"status=pending_data reason={result.get('reason')}",
@@ -822,8 +1163,18 @@ def run_actual_learning_resolver(
                     'category': item.get('category'),
                     'resolved_as': resolved_as,
                     'actual_move': result.get('actual_move'),
+                    'price_evidence': result.get('price_evidence'),
                 })
                 summary['source_binding']['resolved'] = int(summary['source_binding'].get('resolved') or 0) + 1
+                ev = result.get('price_evidence') if isinstance(result.get('price_evidence'), dict) else {}
+                safe_print(
+                    f"[EOD_PRICE_EVIDENCE] symbol={item.get('ticker')} "
+                    f"source={ev.get('close_source') or 'tradecard'} "
+                    f"ref={ev.get('ref_price', item.get('signal_price'))} "
+                    f"close={ev.get('close_price', '-')} move={result.get('actual_move')} "
+                    "status=valid",
+                    flush=True,
+                )
                 safe_print(
                     f"[LEARNING_PRICE_VALIDATION] symbol={item.get('ticker')} "
                     f"status=resolved reason={result.get('expiry_result')}",
@@ -833,8 +1184,8 @@ def run_actual_learning_resolver(
             outcome = {
                 'prediction_id': prediction_id,
                 'actual_move': result.get('actual_move'),
-                'high': _latest_price_entry(data or {}, str(item.get('ticker') or '')).get('high') if data else None,
-                'low': _latest_price_entry(data or {}, str(item.get('ticker') or '')).get('low') if data else None,
+                'high': (result.get('price_evidence') or {}).get('high') if isinstance(result.get('price_evidence'), dict) else None,
+                'low': (result.get('price_evidence') or {}).get('low') if isinstance(result.get('price_evidence'), dict) else None,
                 'expiry_result': result.get('expiry_result'),
                 'resolved_as': result.get('resolved_as'),
                 'holding_period': HOLDING_PERIOD,
@@ -846,6 +1197,7 @@ def run_actual_learning_resolver(
                     'session_date': day,
                     'signal_price': item.get('signal_price'),
                     'result': result,
+                    'eod_price_evidence': result.get('price_evidence'),
                 },
             }
             if not dry_run:
@@ -866,8 +1218,18 @@ def run_actual_learning_resolver(
                 'category': item.get('category'),
                 'resolved_as': resolved_as,
                 'actual_move': result.get('actual_move'),
+                'price_evidence': result.get('price_evidence'),
             })
             summary['source_binding']['resolved'] = int(summary['source_binding'].get('resolved') or 0) + 1
+            ev = result.get('price_evidence') if isinstance(result.get('price_evidence'), dict) else {}
+            safe_print(
+                f"[EOD_PRICE_EVIDENCE] symbol={item.get('ticker')} "
+                f"source={ev.get('close_source') or 'tradecard'} "
+                f"ref={ev.get('ref_price', item.get('signal_price'))} "
+                f"close={ev.get('close_price', '-')} move={result.get('actual_move')} "
+                "status=valid",
+                flush=True,
+            )
             safe_print(
                 f"[LEARNING_PRICE_VALIDATION] symbol={item.get('ticker')} "
                 f"status=resolved reason={result.get('expiry_result')}",
@@ -896,6 +1258,13 @@ def run_actual_learning_resolver(
         f"pending_data={summary['pending_data']}",
         flush=True,
     )
+    reason_summary = ','.join(
+        f'{key}:{val}' for key, val in sorted((summary.get('pending_reasons') or {}).items())
+    ) or '-'
+    safe_print(
+        f"[LEARNING_PENDING_DATA] count={summary['pending_data']} reasons={reason_summary}",
+        flush=True,
+    )
     return summary
 
 
@@ -907,6 +1276,8 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
     avoid = data.get('avoid') or {}
     tradecard = data.get('tradecard') or {}
     explanation = data.get('explanation') or {}
+    pending_reasons = data.get('pending_reasons') if isinstance(data.get('pending_reasons'), dict) else {}
+    reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
     return [
         f"Actual learning sample updated: {int(data.get('sample_updated') or 0)}",
         (
@@ -918,6 +1289,7 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
             f"success {int(avoid.get('success') or 0)} / fail {int(avoid.get('fail') or 0)}"
         ),
         f"Pending data: {int(data.get('pending_data') or 0)}",
+        f"Pending data reasons: {reason_text}",
         (
             'Tradecard resolved/no-fill: '
             f"{int(tradecard.get('resolved') or 0)}/{int(tradecard.get('no_fill') or 0)}"
