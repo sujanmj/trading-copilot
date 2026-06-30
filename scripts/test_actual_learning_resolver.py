@@ -202,6 +202,7 @@ def test_resolver_classifies_and_is_idempotent() -> int:
 
 def test_canonical_summary_and_quality_lines() -> int:
     from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.analytics.actual_learning_resolver import format_actual_learning_close_lines
     from backend.orchestration.alert_quality_engine import format_daily_review_quality_lines
     from backend.storage import market_memory_db as mmdb
     from backend.storage.outcome_resolver import get_canonical_outcome_stats
@@ -242,8 +243,19 @@ def test_canonical_summary_and_quality_lines() -> int:
             return _fail(f'/close quality lines missing watchlist W/L/N: {lines}')
         if 'Avoid resolved: success 1 / fail 1' not in lines:
             return _fail(f'/close quality lines missing avoid counts: {lines}')
+        if 'Pending data: 1' not in lines:
+            return _fail(f'/close quality lines missing pending_data: {lines}')
         if 'Tradecard resolved/no-fill: 0/1' not in lines:
             return _fail(f'/close quality lines missing tradecard no-fill: {lines}')
+        close_lines = '\n'.join(format_actual_learning_close_lines(summary))
+        for needle in (
+            'Actual learning sample updated: 6',
+            'Watchlist resolved: 2/1/1',
+            'Avoid resolved: success 1 / fail 1',
+            'Pending data: 1',
+        ):
+            if needle not in close_lines or needle not in lines:
+                return _fail(f'daily review and /close learning counts diverged for {needle!r}')
     return 0
 
 
@@ -293,6 +305,168 @@ def test_dry_run_does_not_write_db() -> int:
     return 0
 
 
+def test_source_binding_uses_emitted_symbols_only() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    emitted_rows = [
+        {
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'alert_type': 'intraday',
+            'category': 'INTRADAY_EVENT',
+            'tickers': ['KEC'],
+            'direction': 'BULLISH',
+            'score': 0.86,
+            'price_at_alert': 100.0,
+            'reason_preview': 'live scanner watch',
+        }
+    ]
+    quality_state = {
+        'date': '2026-06-30',
+        'premarket_last_signature': {
+            'date': '2026-06-30',
+            'rows': [
+                {
+                    'ticker': 'AJANTPHARM',
+                    'action': 'WATCH',
+                    'score': 84,
+                    'price': 100.0,
+                    'reason': 'premarket watch list',
+                }
+            ],
+        },
+    }
+    market_data = {
+        'last_updated': '2026-06-30T11:00:00+05:30',
+        'prices': {
+            'KEC': {'price': 102.0, 'timestamp': '2026-06-30T11:00:00+05:30'},
+            'AJANTPHARM': {'price': 101.0, 'timestamp': '2026-06-30T11:00:00+05:30'},
+            'MARUTI': {'price': 12000.0, 'timestamp': '2026-06-30T11:00:00+05:30'},
+            'INFY': {'price': 1600.0, 'timestamp': '2026-06-30T11:00:00+05:30'},
+        },
+    }
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
+         patch('backend.orchestration.alert_quality_engine._load_json', return_value=quality_state), \
+         patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
+         patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'rows': [], 'counts': {}}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            market_data=market_data,
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    sent = set((summary.get('source_binding') or {}).get('sent_symbols') or [])
+    if not {'KEC', 'AJANTPHARM'}.issubset(sent):
+        return _fail(f'emitted KEC/AJANTPHARM candidates missing: {summary!r}')
+    if {'MARUTI', 'INFY'} & sent:
+        return _fail(f'stale/default symbols leaked into source binding: {summary!r}')
+    if int(summary.get('sample_updated') or 0) != 2:
+        return _fail(f'emitted candidates should resolve from fixture prices: {summary!r}')
+    latest = {row.get('ticker') for row in summary.get('latest_outcomes') or []}
+    if 'KEC' not in latest:
+        return _fail(f'KEC-like intraday alert was not resolved: {summary!r}')
+    return 0
+
+
+def test_missing_price_is_pending_not_zero_neutral() -> int:
+    from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+    from backend.storage import market_memory_db as mmdb
+
+    emitted_rows = [
+        {
+            'timestamp': '2026-06-30T10:00:00+05:30',
+            'alert_type': 'intraday',
+            'category': 'INTRADAY_EVENT',
+            'tickers': ['HONASA'],
+            'direction': 'BULLISH',
+            'score': 0.82,
+            'price_at_alert': 100.0,
+            'reason_preview': 'live scanner watch',
+        }
+    ]
+    tmp, db_path, state_path = _with_temp_db()
+    with tmp, patch.object(mmdb, 'get_market_memory_path', return_value=db_path), \
+         patch('backend.orchestration.alert_event_log.read_alert_events_for_date', return_value=emitted_rows), \
+         patch('backend.orchestration.alert_quality_engine._load_json', return_value={'date': '2026-06-30'}), \
+         patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'rows': [], 'count': 0}), \
+         patch('backend.analytics.actual_learning_resolver._scanner_saved_candidates', return_value=[]), \
+         patch('backend.trading.tradecard_journal.summarize_today_outcomes', return_value={'rows': [], 'counts': {}}):
+        summary = run_actual_learning_resolver(
+            session_date='2026-06-30',
+            market_data={'last_updated': '2026-06-30T11:00:00+05:30', 'prices': {}},
+            refresh_cache=False,
+            state_path=state_path,
+        )
+    if int(summary.get('pending_data') or 0) != 1:
+        return _fail(f'missing price should be pending_data: {summary!r}')
+    if summary.get('latest_outcomes'):
+        return _fail(f'missing price must not create NEUTRAL +0.00 outcome: {summary!r}')
+    return 0
+
+
+def test_live_scanner_saved_candidate_included() -> int:
+    from backend.analytics import actual_learning_resolver as resolver
+
+    scanner = {
+        'last_updated': '2026-06-30T10:05:00+05:30',
+        'top_signals': [
+            {'ticker': 'KEC', 'price': 100.0, 'score': 88, 'volume_ratio': 2.2},
+        ],
+    }
+    with patch('backend.analytics.actual_learning_resolver._load_json', return_value=scanner):
+        rows = resolver._scanner_saved_candidates('2026-06-30')
+    if not rows or rows[0].get('ticker') != 'KEC':
+        return _fail(f'current-day live scanner watch was not included: {rows!r}')
+    if rows[0].get('source') != 'scanner_data_today':
+        return _fail(f'current-day scanner candidate source mismatch: {rows!r}')
+    return 0
+
+
+def test_daily_review_learning_runs_before_formatting() -> int:
+    from backend.orchestration import telegram_review
+    from backend.runtime.market_snapshot import MarketSnapshot
+
+    order: list[str] = []
+
+    def _render(_snap):
+        if order != ['learning']:
+            raise AssertionError(f'review formatted before learning prep: {order!r}')
+        return [('daily', 'Daily Review')]
+
+    with patch('backend.orchestration.telegram_review.load_review_snapshot', return_value=MarketSnapshot(snapshot_id='test')), \
+         patch('backend.orchestration.telegram_review.normalize_review_snapshot', side_effect=lambda snap: snap), \
+         patch('backend.orchestration.telegram_review._prepare_daily_review_learning', side_effect=lambda: order.append('learning') or {'sample_updated': 1}), \
+         patch('backend.telegram.formatting.review_formatter.render_review_messages', side_effect=_render), \
+         patch('backend.orchestration.telegram_review._send_review_text', return_value=True):
+        ok = telegram_review.push_review(command='review', cycle_id='test')
+    if not ok:
+        return _fail('push_review should succeed in learning-order fixture')
+    if order != ['learning']:
+        return _fail(f'learning prep did not run exactly once before formatting: {order!r}')
+    return 0
+
+
+def test_daily_review_learning_helper_order() -> int:
+    from backend.orchestration import telegram_review
+
+    order: list[str] = []
+
+    with patch('backend.telegram.india_mode_lock.is_live_market_hours_phase', return_value=False), \
+         patch('backend.telegram.india_mode_lock.is_premarket_phase', return_value=False), \
+         patch('backend.trading.tradecard_journal.resolve_close_pending_tradecards', side_effect=lambda refresh=True: order.append('tradecard') or {'updated': 1}), \
+         patch('backend.analytics.actual_learning_resolver.run_actual_learning_resolver', side_effect=lambda refresh_cache=True: order.append('learning') or {'sample_updated': 2, 'pending_data': 1}), \
+         patch('backend.storage.outcome_resolver.refresh_memory_dashboard_cache', side_effect=lambda: order.append('memory') or True):
+        summary = telegram_review._prepare_daily_review_learning()
+    if order != ['tradecard', 'learning', 'memory']:
+        return _fail(f'daily review learning helper order mismatch: {order!r}')
+    if summary.get('sample_updated') != 2 or summary.get('pending_data') != 1:
+        return _fail(f'daily review learning helper returned wrong summary: {summary!r}')
+    return 0
+
+
 def test_close_displays_actual_learning_summary() -> int:
     from backend.telegram.telegram_brief_scheduler import build_close_brief_text
 
@@ -329,6 +503,7 @@ def test_close_displays_actual_learning_summary() -> int:
         'Actual learning sample updated: 2',
         'Watchlist resolved: 1/0/1',
         'Avoid resolved: success 1 / fail 0',
+        'Pending data: 0',
         'Tradecard resolved/no-fill: 0/1',
         'Best signal today: WATCHWIN WIN +1.00%',
     ):
@@ -343,6 +518,11 @@ def main() -> int:
         test_canonical_summary_and_quality_lines,
         test_no_ai_dependency,
         test_dry_run_does_not_write_db,
+        test_source_binding_uses_emitted_symbols_only,
+        test_missing_price_is_pending_not_zero_neutral,
+        test_live_scanner_saved_candidate_included,
+        test_daily_review_learning_runs_before_formatting,
+        test_daily_review_learning_helper_order,
         test_close_displays_actual_learning_summary,
     ):
         code = test()

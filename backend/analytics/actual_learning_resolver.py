@@ -6,7 +6,7 @@ Uses stored EOD/latest prices only. Does not call external AI providers.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -75,7 +75,7 @@ def _ticker(row: dict[str, Any]) -> str:
 
 
 def _timestamp(row: dict[str, Any], session_date: str) -> str:
-    for key in ('timestamp', 'generated_at', 'created_at', 'sampled_at', 'date'):
+    for key in ('timestamp', 'time', 'generated_at', 'created_at', 'sampled_at', 'date'):
         value = row.get(key)
         if value:
             return str(value)
@@ -105,6 +105,27 @@ def _score(row: dict[str, Any]) -> float | None:
         if val is not None:
             return val
     return None
+
+
+def _parse_dt(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        text = str(value).strip()
+        if len(text) == 10:
+            text = f'{text}T00:00:00+05:30'
+        parsed = datetime.fromisoformat(text.replace('Z', '+00:00'))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=IST)
+        return parsed
+    except Exception:
+        return None
+
+
+def _dt_session_date(value: datetime | None) -> str:
+    if value is None:
+        return ''
+    return value.astimezone(IST).date().isoformat()
 
 
 def _category_from_row(row: dict[str, Any], default: str) -> str:
@@ -153,6 +174,146 @@ def _candidate(
         'score': _score(row),
         'raw': dict(row),
     }
+
+
+def _alert_event_candidates(session_date: str) -> list[dict[str, Any]]:
+    try:
+        from backend.orchestration.alert_event_log import read_alert_events_for_date
+
+        rows = read_alert_events_for_date(session_date)
+    except Exception:
+        rows = []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        alert_type = str(row.get('alert_type') or '').lower()
+        direction = str(row.get('direction') or '').upper()
+        category = 'scanner_watch' if alert_type in ('open', 'intraday') else 'top_watch'
+        if direction == 'BEARISH' or 'avoid' in str(row.get('reason_preview') or '').lower():
+            category = 'avoid'
+        for ticker in row.get('tickers') or []:
+            item = _candidate(
+                {
+                    'ticker': ticker,
+                    'timestamp': row.get('timestamp'),
+                    'direction': direction or 'BULLISH',
+                    'score': row.get('score') or row.get('confidence'),
+                    'price': row.get('price_at_alert'),
+                    'volume_ratio': row.get('volume_at_alert'),
+                    'reason': row.get('reason_preview'),
+                    'alert_type': alert_type,
+                },
+                category=category,
+                session_date=session_date,
+                source='alert_event_log',
+            )
+            if item:
+                out.append(item)
+    return out
+
+
+def _quality_state_signature_candidates(session_date: str) -> list[dict[str, Any]]:
+    try:
+        from backend.orchestration import alert_quality_engine as aq
+
+        state = aq._load_json(aq.STATE_FILE, {})  # type: ignore[attr-defined]
+    except Exception:
+        state = {}
+    if not isinstance(state, dict) or state.get('date') != session_date:
+        return []
+    sig = state.get('premarket_last_signature') if isinstance(state.get('premarket_last_signature'), dict) else {}
+    if sig.get('date') and sig.get('date') != session_date:
+        return []
+    out: list[dict[str, Any]] = []
+    for row in sig.get('rows') or []:
+        if not isinstance(row, dict):
+            continue
+        category = _category_from_row(row, 'top_watch')
+        item = _candidate(
+            {
+                **row,
+                'timestamp': f'{session_date}T09:15:00+05:30',
+                'reason': row.get('reason') or row.get('action'),
+            },
+            category=category,
+            session_date=session_date,
+            source='alert_quality_signature',
+        )
+        if item:
+            out.append(item)
+    return out
+
+
+def _suppression_sent_candidates(session_date: str) -> list[dict[str, Any]]:
+    try:
+        from backend.orchestration import alert_suppression_log as asl
+
+        rows = [
+            row for row in asl._iter_entries(800)  # type: ignore[attr-defined]
+            if row.get('date') == session_date and row.get('type') == 'sent'
+        ]
+    except Exception:
+        rows = []
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        ticker = str(row.get('ticker') or '').strip().upper()
+        if not ticker:
+            continue
+        category = 'scanner_watch' if 'INTRADAY' in str(row.get('category') or '').upper() else 'top_watch'
+        item = _candidate(
+            {
+                'ticker': ticker,
+                'timestamp': row.get('time'),
+                'score': row.get('confidence'),
+                'reason': row.get('detail'),
+            },
+            category=category,
+            session_date=session_date,
+            source='alert_suppression_sent',
+        )
+        if item:
+            out.append(item)
+    return out
+
+
+def _scanner_saved_candidates(session_date: str) -> list[dict[str, Any]]:
+    scanner = _load_json(get_data_path('scanner_data.json'))
+    if not scanner:
+        return []
+    scan_ts = None
+    for key in ('last_updated', 'scan_time_local', 'generated_at', 'timestamp'):
+        scan_ts = _parse_dt(scanner.get(key))
+        if scan_ts is not None:
+            break
+    if scan_ts is None or _dt_session_date(scan_ts) != session_date:
+        return []
+    out: list[dict[str, Any]] = []
+    for row in _rows_from_payload(scanner, 'top_signals', 'signals'):
+        category = _category_from_row(row, 'scanner_watch')
+        item = _candidate(
+            {
+                **row,
+                'timestamp': row.get('timestamp') or scan_ts.isoformat(),
+            },
+            category=category,
+            session_date=session_date,
+            source='scanner_data_today',
+        )
+        if item:
+            out.append(item)
+    return out
+
+
+def _emitted_source_candidates(session_date: str) -> list[dict[str, Any]]:
+    return _dedupe_candidates(
+        _alert_event_candidates(session_date)
+        + _quality_state_signature_candidates(session_date)
+        + _suppression_sent_candidates(session_date)
+        + _scanner_saved_candidates(session_date)
+    )
 
 
 def _tradecard_candidates(session_date: str) -> list[dict[str, Any]]:
@@ -212,13 +373,10 @@ def _rows_from_payload(payload: dict[str, Any], *keys: str) -> list[dict[str, An
 
 def _source_candidates(session_date: str, sources: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if sources is None:
-        sources = {
-            'stock_today': _load_json(get_data_path('stock_decision_today.json')),
-            'daily_pack': _load_json(get_data_path('daily_report_pack_latest.json')),
-            'final_confidence': _load_json(get_data_path('final_confidence_report.json')),
-            'tomorrow_watchlist': _load_json(get_data_path('tomorrow_watchlist_report.json')),
-            'scanner': _load_json(get_data_path('scanner_data.json')),
-        }
+        candidates = _tradecard_candidates(session_date)
+        candidates.extend(_emitted_source_candidates(session_date))
+        candidates.extend(_missed_candidates(session_date))
+        return _dedupe_candidates(candidates)
 
     candidates: list[dict[str, Any]] = []
     for row in sources.get('tradecards') or []:
@@ -307,9 +465,47 @@ def _latest_price_entry(market_data: dict[str, Any], ticker: str) -> dict[str, A
     if not isinstance(prices, dict):
         return {}
     for key, val in prices.items():
-        if str(key).strip().upper() == ticker and isinstance(val, dict):
+        if str(key).strip().upper() != ticker:
+            continue
+        if isinstance(val, dict):
             return val
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            return {'price': float(val)}
     return {}
+
+
+def _latest_price_evidence(
+    market_data: dict[str, Any],
+    ticker: str,
+    *,
+    session_date: str,
+    signal_timestamp: str,
+) -> tuple[float | None, str]:
+    entry = _latest_price_entry(market_data, ticker)
+    if not entry:
+        return None, 'missing_latest_price'
+    latest = lookup_latest_price(market_data, ticker)
+    if latest is None or latest <= 0:
+        return None, 'missing_latest_price'
+
+    ts = None
+    for key in ('validated_at', 'timestamp', 'as_of', 'last_updated', 'generated_at'):
+        ts = _parse_dt(entry.get(key))
+        if ts is not None:
+            break
+    if ts is None:
+        for key in ('last_updated', 'generated_at', 'timestamp', 'as_of'):
+            ts = _parse_dt(market_data.get(key))
+            if ts is not None:
+                break
+    if ts is None:
+        return None, 'missing_latest_price_timestamp'
+    if _dt_session_date(ts) != session_date:
+        return None, 'latest_price_not_current_session'
+    signal_ts = _parse_dt(signal_timestamp)
+    if signal_ts is not None and ts.astimezone(timezone.utc) <= signal_ts.astimezone(timezone.utc):
+        return None, 'latest_price_not_after_signal'
+    return latest, 'real_price_after_signal'
 
 
 def _actual_move(signal_price: float | None, latest_price: float | None) -> float | None:
@@ -332,7 +528,7 @@ def _tradecard_outcome(item: dict[str, Any]) -> tuple[str | None, str | None, fl
     return None, 'pending_data', None
 
 
-def _classify_item(item: dict[str, Any], market_data: dict[str, Any] | None) -> dict[str, Any]:
+def _classify_item(item: dict[str, Any], market_data: dict[str, Any] | None, *, session_date: str) -> dict[str, Any]:
     category = str(item.get('category') or '')
     if category == 'tradecard':
         resolved_as, expiry_result, move = _tradecard_outcome(item)
@@ -344,12 +540,17 @@ def _classify_item(item: dict[str, Any], market_data: dict[str, Any] | None) -> 
         return {'status': 'pending_data', 'reason': 'missing_market_data'}
 
     ticker = str(item.get('ticker') or '')
-    latest = lookup_latest_price(market_data, ticker)
+    latest, price_reason = _latest_price_evidence(
+        market_data,
+        ticker,
+        session_date=session_date,
+        signal_timestamp=str(item.get('timestamp') or ''),
+    )
     signal = _safe_float(item.get('signal_price'))
     if signal is None or signal <= 0:
         return {'status': 'pending_data', 'reason': 'missing_signal_price'}
     if latest is None or latest <= 0:
-        return {'status': 'pending_data', 'reason': 'missing_latest_price'}
+        return {'status': 'pending_data', 'reason': price_reason}
     move = _actual_move(signal, latest)
     if move is None:
         return {'status': 'pending_data', 'reason': 'missing_price_move'}
@@ -448,6 +649,11 @@ def _empty_summary(session_date: str) -> dict[str, Any]:
         'missed_opportunities': 0,
         'latest_outcomes': [],
         'pending_items': [],
+        'source_binding': {
+            'sent_symbols': [],
+            'resolved': 0,
+            'pending_data': 0,
+        },
         'market_memory': {
             'predictions_tracked': 0,
             'resolved_outcomes': 0,
@@ -577,6 +783,8 @@ def run_actual_learning_resolver(
     data = market_data if market_data is not None else load_latest_market_data()
     candidates = _source_candidates(day, sources=sources)
     summary['candidates'] = len(candidates)
+    sent_symbols = sorted({str(item.get('ticker') or '').upper() for item in candidates if item.get('ticker')})
+    summary['source_binding']['sent_symbols'] = sent_symbols
     if not dry_run:
         mmdb.init_market_memory_db()
 
@@ -585,14 +793,20 @@ def run_actual_learning_resolver(
             prediction = _prediction_payload(item, day)
             prediction_id = mmdb.make_canonical_prediction_id(prediction, source_hint=prediction.get('source'))
             prediction['prediction_id'] = prediction_id
-            result = _classify_item(item, data)
+            result = _classify_item(item, data, session_date=day)
             if result.get('status') == 'pending_data':
                 summary['pending_data'] += 1
+                summary['source_binding']['pending_data'] = int(summary['source_binding'].get('pending_data') or 0) + 1
                 summary['pending_items'].append({
                     'ticker': item.get('ticker'),
                     'category': item.get('category'),
                     'reason': result.get('reason'),
                 })
+                safe_print(
+                    f"[LEARNING_PRICE_VALIDATION] symbol={item.get('ticker')} "
+                    f"status=pending_data reason={result.get('reason')}",
+                    flush=True,
+                )
                 if not dry_run:
                     mmdb.upsert_prediction(prediction)
                     summary['predictions_tracked'] += 1
@@ -609,6 +823,12 @@ def run_actual_learning_resolver(
                     'resolved_as': resolved_as,
                     'actual_move': result.get('actual_move'),
                 })
+                summary['source_binding']['resolved'] = int(summary['source_binding'].get('resolved') or 0) + 1
+                safe_print(
+                    f"[LEARNING_PRICE_VALIDATION] symbol={item.get('ticker')} "
+                    f"status=resolved reason={result.get('expiry_result')}",
+                    flush=True,
+                )
                 continue
             outcome = {
                 'prediction_id': prediction_id,
@@ -647,6 +867,12 @@ def run_actual_learning_resolver(
                 'resolved_as': resolved_as,
                 'actual_move': result.get('actual_move'),
             })
+            summary['source_binding']['resolved'] = int(summary['source_binding'].get('resolved') or 0) + 1
+            safe_print(
+                f"[LEARNING_PRICE_VALIDATION] symbol={item.get('ticker')} "
+                f"status=resolved reason={result.get('expiry_result')}",
+                flush=True,
+            )
         except Exception:
             summary['errors'] += 1
 
@@ -661,6 +887,13 @@ def run_actual_learning_resolver(
         f"[ACTUAL_LEARNING_RESOLVER] date={day} sample_updated={summary['sample_updated']} "
         f"watchlist={summary['watchlist']} avoid={summary['avoid']} "
         f"pending_data={summary['pending_data']} errors={summary['errors']}",
+        flush=True,
+    )
+    safe_print(
+        f"[LEARNING_SOURCE_BINDING] candidates={summary['candidates']} "
+        f"sent_symbols={','.join(sent_symbols) if sent_symbols else '-'} "
+        f"resolved={summary['source_binding'].get('resolved', 0)} "
+        f"pending_data={summary['pending_data']}",
         flush=True,
     )
     return summary
@@ -684,6 +917,7 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
             'Avoid resolved: '
             f"success {int(avoid.get('success') or 0)} / fail {int(avoid.get('fail') or 0)}"
         ),
+        f"Pending data: {int(data.get('pending_data') or 0)}",
         (
             'Tradecard resolved/no-fill: '
             f"{int(tradecard.get('resolved') or 0)}/{int(tradecard.get('no_fill') or 0)}"

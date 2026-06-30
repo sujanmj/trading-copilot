@@ -225,6 +225,43 @@ def normalize_review_snapshot(snap: MarketSnapshot | None) -> MarketSnapshot | N
         return overlay_current_runtime_health(snap)
 
 
+def _prepare_daily_review_learning() -> dict:
+    """Run cheap post-close learning before daily review formatting."""
+    try:
+        from backend.telegram.india_mode_lock import is_live_market_hours_phase, is_premarket_phase
+
+        if is_live_market_hours_phase() or is_premarket_phase():
+            return {'skipped': True, 'reason': 'market_not_closed'}
+    except Exception:
+        pass
+
+    summary: dict = {}
+    try:
+        from backend.trading.tradecard_journal import resolve_close_pending_tradecards
+
+        resolve_close_pending_tradecards(refresh=True)
+    except Exception as exc:
+        summary['tradecard_error'] = str(exc)[:120]
+    try:
+        from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
+
+        summary = run_actual_learning_resolver(refresh_cache=True)
+    except Exception as exc:
+        summary = {'sample_updated': 0, 'pending_data': 0, 'errors': 1, 'error': str(exc)[:120]}
+    try:
+        from backend.storage.outcome_resolver import refresh_memory_dashboard_cache
+
+        refresh_memory_dashboard_cache()
+    except Exception:
+        pass
+    safe_print(
+        '[DAILY_REVIEW_LEARNING] '
+        f"ran_before_send=true sample_updated={summary.get('sample_updated', 0)} "
+        f"pending_data={summary.get('pending_data', 0)}"
+    )
+    return summary
+
+
 def _chunk_review_text(text: str, max_len: int = 3900) -> list[str]:
     if len(text) <= max_len:
         return [text]
@@ -273,6 +310,7 @@ def push_review(*, command: str = 'review', cycle_id: str = '') -> bool:
 
     snap = normalize_review_snapshot(snap)
     safe_print('[REVIEW] aggregation started')
+    _prepare_daily_review_learning()
 
     try:
         from backend.telegram.formatting.review_formatter import render_review_messages

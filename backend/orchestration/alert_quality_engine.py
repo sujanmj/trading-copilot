@@ -571,6 +571,7 @@ def daily_review_quality_buckets(
     avoid = actual.get('avoid') if isinstance(actual.get('avoid'), dict) else {}
     tradecard_actual = actual.get('tradecard') if isinstance(actual.get('tradecard'), dict) else {}
     learning_sample_updated = int(actual.get('sample_updated') or resolved)
+    pending_data = int(actual.get('pending_data') or 0)
     return {
         'research_watchlist_sent': research_watchlist,
         'live_confirmed_setups': int(tradecard_counts.get('valid_entry') or 0),
@@ -591,6 +592,7 @@ def daily_review_quality_buckets(
         'avoid_fail': int(avoid.get('fail') or 0),
         'tradecard_actual_resolved': int(tradecard_actual.get('resolved') or resolved),
         'tradecard_actual_no_fill': int(tradecard_actual.get('no_fill') or tradecard_counts.get('no_fill') or 0),
+        'pending_data': pending_data,
     }
 
 
@@ -623,6 +625,7 @@ def format_daily_review_quality_lines(
             'Avoid resolved: '
             f"success {b['avoid_success']} / fail {b['avoid_fail']}"
         ),
+        f"Pending data: {b['pending_data']}",
         (
             'Tradecard resolved/no-fill: '
             f"{b['tradecard_actual_resolved']}/{b['tradecard_actual_no_fill']}"
