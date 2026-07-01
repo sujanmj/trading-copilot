@@ -34,9 +34,11 @@ def main() -> int:
             return _fail(f'telegram bot missing {needle}')
 
     sched_src = (root / 'backend/telegram/premarket_scheduler.py').read_text(encoding='utf-8')
-    for t in ('07:45', '08:00', '08:15', '08:30', '08:45', '09:10', '09:20', '09:30'):
+    for t in ('07:45', '08:00', '08:15', '08:30', '08:45', '09:00', '09:20', '09:25', '09:31'):
         if t not in sched_src:
             return _fail(f'scheduler missing time {t}')
+    if '09:10' in sched_src and 'preopen_watch' in sched_src:
+        return _fail('scheduler must not include 09:10 preopen_watch')
 
     proc = os.system(f'{sys.executable} scripts/test_premarket_alerts.py')
     if proc != 0:

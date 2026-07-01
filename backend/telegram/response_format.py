@@ -2855,6 +2855,127 @@ def format_opening_radar_telegram(
     return strip_stage_markers('\n'.join(lines))
 
 
+def format_radar_armed_scheduled_telegram(
+    *,
+    board: dict[str, Any] | None = None,
+    candidates: list[dict[str, Any]] | None = None,
+) -> str:
+    """Scheduled 09:00 — news/theme watchlist only."""
+    from backend.trading.opening_rally_radar import (
+        build_opening_rally_board,
+        format_opening_radar_action,
+    )
+
+    data = board or build_opening_rally_board()
+    armed = candidates or [
+        r for r in (data.get('ranked_candidates') or [])
+        if r.get('state') == 'RADAR_ARMED'
+    ]
+    time_ist = str(data.get('time_ist') or '09:00')
+    lines = [
+        f'<b>RADAR ARMED — {time_ist} IST</b>',
+        '<i>News + theme watchlist · paper/research only</i>',
+        '',
+    ]
+    for idx, row in enumerate(armed[:8], start=1):
+        sym = str(row.get('ticker') or '?')
+        score = int(row.get('score') or 0)
+        why = ' + '.join(row.get('why') or []) or 'news/theme context'
+        action = format_opening_radar_action('RADAR_ARMED')
+        lines.extend([
+            f'{idx}. <b>{sym}</b> — RADAR ARMED',
+            f'   Score: {score}',
+            f'   Why: {why}',
+            f'   Action: {action}',
+            '',
+        ])
+    lines.append('Prepare only — wait for 09:20 live reaction.')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_early_tradecards_scheduled_telegram(
+    *,
+    board: dict[str, Any] | None = None,
+) -> str:
+    """Scheduled 09:25 — provisional tradecard board."""
+    from backend.trading.opening_rally_radar import (
+        _opening_state_display,
+        build_opening_rally_board,
+        pick_best_opening_tradecard,
+    )
+
+    data = board or build_opening_rally_board()
+    time_ist = str(data.get('time_ist') or '09:25')
+    lines = [
+        f'<b>EARLY TRADECARDS — {time_ist} IST</b>',
+        '<i>Provisional ranks · paper/research only</i>',
+        '',
+    ]
+    candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
+    for idx, row in enumerate(candidates[:10], start=1):
+        sym = str(row.get('ticker') or '?')
+        state = _opening_state_display(str(row.get('state') or ''))
+        score = int(row.get('score') or 0)
+        why = ' + '.join(row.get('why') or []) or '—'
+        lines.append(f'{idx}. <b>{sym}</b> — {state} — Score {score}')
+        lines.append(f'   {why}')
+    best_sym, best_score, _ = pick_best_opening_tradecard(data)
+    if best_sym:
+        best_row = next(
+            (r for r in candidates if str(r.get('ticker') or '').upper() == best_sym),
+            {},
+        )
+        why = ' + '.join(best_row.get('why') or []) or 'opening board leader'
+        lines.extend([
+            '',
+            f'<b>Best provisional pick:</b> {best_sym}',
+            f'Why: {why}',
+        ])
+    lines.extend([
+        '',
+        'Action: prepare chart; confirm with bars/VWAP/volume before /tradecard.',
+    ])
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_final_opening_confirmation_telegram(
+    *,
+    board: dict[str, Any] | None = None,
+    best_sym: str = '',
+    best_score: int = 0,
+    confirm_state: str = '',
+    best_row: dict[str, Any] | None = None,
+) -> str:
+    """Scheduled 09:31 — final opening confirmation."""
+    from backend.trading.opening_rally_radar import build_opening_rally_board
+
+    data = board or build_opening_rally_board()
+    time_ist = str(data.get('time_ist') or '09:31')
+    sym = str(best_sym or '').strip().upper()
+    state = str(confirm_state or 'NO_CLEAN_ENTRY').upper().replace(' ', '_')
+    row = best_row or {}
+    why = ' + '.join(row.get('why') or []) or 'opening board review'
+    lines = [
+        f'<b>FINAL OPENING CONFIRMATION — {time_ist} IST</b>',
+        '<i>Paper/research only — no blind entry</i>',
+        '',
+        f'<b>Best pick:</b> {sym or "—"}',
+        f'<b>State:</b> {state.replace("_", " ")}',
+        f'Score: {int(best_score or row.get("score") or 0)}',
+        f'Why: {why}',
+        '',
+    ]
+    if state == 'CONFIRMED':
+        lines.append('Action: review /tradecard for levels; confirm volume/VWAP on chart.')
+    elif state == 'WAIT_FOR_PULLBACK':
+        lines.append('Action: wait for pullback/retest — no chase at open extension.')
+    elif state == 'CHASE_RISK':
+        lines.append('Action: chase risk — VWAP/retest only; no fresh entry.')
+    else:
+        lines.append('Action: no clean entry — watch /radar or /tradecards for next setup.')
+    return strip_stage_markers('\n'.join(lines))
+
+
 def format_tradecards_telegram(
     *,
     board: dict[str, Any] | None = None,

@@ -17,9 +17,10 @@ os.chdir(PROJECT_ROOT)
 WEEKEND_ALERT_SLOTS = (
     'premarket_top3',
     'premarket_action',
-    'preopen_watch',
-    'live_validation',
-    'open_confirmation',
+    'radar_armed_0900',
+    'opening_radar_0920',
+    'early_tradecards_0925',
+    'final_confirmation_0931',
 )
 
 
@@ -41,8 +42,12 @@ def main() -> int:
         ) as send_mock:
             buf = StringIO()
             with patch('sys.stdout', buf):
-                for slot in WEEKEND_ALERT_SLOTS:
+                for slot in ('premarket_top3', 'premarket_action'):
                     ok = sched.run_premarket_slot(slot)
+                    if ok:
+                        return _fail(f'{slot} should not send on weekend')
+                for slot in ('radar_armed_0900', 'opening_radar_0920', 'early_tradecards_0925', 'final_confirmation_0931'):
+                    ok = sched.run_opening_morning_slot(slot)
                     if ok:
                         return _fail(f'{slot} should not send on weekend')
             out = buf.getvalue()
@@ -50,13 +55,19 @@ def main() -> int:
                 return _fail('send_scheduled_premarket must not run on weekend scheduled slots')
             if '[PREMARKET_SCHED] sent slot=' in out:
                 return _fail('sent log must not appear during weekend scheduled run')
-            for slot in WEEKEND_ALERT_SLOTS:
+            for slot in ('premarket_top3', 'premarket_action'):
                 marker = (
                     f'WEEKEND_SCHEDULE_SUPPRESSED premarket_alert reason=weekend_research_mode '
                     f'slot={slot}'
                 )
                 if marker not in out:
                     return _fail(f'missing suppression log for {slot}')
+            for slot in ('radar_armed_0900', 'opening_radar_0920', 'early_tradecards_0925', 'final_confirmation_0931'):
+                marker = (
+                    f'WEEKEND_SCHEDULE_SUPPRESSED opening_morning reason=weekend_research_mode slot={slot}'
+                )
+                if marker not in out:
+                    return _fail(f'missing opening morning suppression log for {slot}')
 
     with patch.object(sched, '_is_weekend_research_mode', return_value=False):
         with patch(

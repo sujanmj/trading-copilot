@@ -438,6 +438,148 @@ def test_scheduled_opening_radar_no_candidate_silent() -> int:
     return 0
 
 
+def test_no_0910_scheduled_alert() -> int:
+    from backend.telegram.premarket_scheduler import OPENING_MORNING_SLOTS, PREMARKET_SLOTS
+
+    all_times = set(PREMARKET_SLOTS.values()) | set(OPENING_MORNING_SLOTS.values())
+    if (9, 10) in all_times:
+        return _fail('09:10 scheduled alert must not exist')
+    sched_src = (PROJECT_ROOT / 'backend/telegram/premarket_scheduler.py').read_text(encoding='utf-8')
+    if 'preopen_watch' in sched_src and "(9, 10)" in sched_src:
+        return _fail('premarket_scheduler must not register 09:10 preopen_watch')
+    return 0
+
+
+def test_schedule_shows_four_morning_alerts() -> int:
+    from backend.telegram.premarket_scheduler import format_schedule_text
+
+    text = format_schedule_text()
+    for label in (
+        '09:00',
+        'Radar Armed',
+        '09:20',
+        'Opening Rally Radar',
+        '09:25',
+        'Early Tradecards',
+        '09:31',
+        'Final Opening Confirmation',
+    ):
+        if label not in text:
+            return _fail(f'/schedule missing {label!r}')
+    return 0
+
+
+def test_scheduled_radar_armed_0900() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.trading.opening_rally_radar import run_scheduled_radar_armed_0900
+
+    fake_board = {
+        'ranked_candidates': [
+            {'ticker': 'RAILTEL', 'state': 'RADAR_ARMED', 'score': 68, 'why': ['fresh order win']},
+        ],
+        'time_ist': '09:00',
+    }
+    sent: list[str] = []
+
+    def _send(text: str) -> bool:
+        sent.append(text)
+        return True
+
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+         patch('backend.orchestration.alert_quality_engine.evaluate_text_alert', return_value={'send': True}), \
+         patch('backend.orchestration.alert_quality_engine.record_text_alert_sent'):
+        buf = StringIO()
+        with redirect_stdout(buf):
+            ok = run_scheduled_radar_armed_0900(now=_dt(9, 0), send_fn=_send)
+    if not ok or not sent:
+        return _fail('09:00 radar armed must send when armed candidates exist')
+    if 'RADAR ARMED' not in sent[0]:
+        return _fail('09:00 alert must use RADAR ARMED header')
+    if '[OPENING_RADAR_ARMED_SCHEDULED]' not in buf.getvalue():
+        return _fail('09:00 must log OPENING_RADAR_ARMED_SCHEDULED')
+    return 0
+
+
+def test_scheduled_early_tradecards_0925() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.trading.opening_rally_radar import run_scheduled_early_tradecards_0925
+
+    fake_board = {
+        'ranked_candidates': [
+            {'ticker': 'RAILTEL', 'state': 'TRADECARD_CANDIDATE', 'score': 88, 'why': ['volume']},
+            {'ticker': 'RVNL', 'state': 'VOLUME_IGNITION', 'score': 75, 'why': ['theme']},
+        ],
+        'time_ist': '09:25',
+    }
+    sent: list[str] = []
+
+    def _send(text: str) -> bool:
+        sent.append(text)
+        return True
+
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+         patch('backend.trading.opening_rally_radar.pick_best_opening_tradecard', return_value=('RAILTEL', 88, ['RVNL'])), \
+         patch('backend.orchestration.alert_quality_engine.evaluate_text_alert', return_value={'send': True}), \
+         patch('backend.orchestration.alert_quality_engine.record_text_alert_sent'):
+        buf = StringIO()
+        with redirect_stdout(buf):
+            ok = run_scheduled_early_tradecards_0925(now=_dt(9, 25), send_fn=_send)
+    if not ok or 'EARLY TRADECARDS' not in sent[0]:
+        return _fail('09:25 early tradecards must send ranked board')
+    if 'Best provisional pick' not in sent[0] or 'RAILTEL' not in sent[0]:
+        return _fail('09:25 must show provisional best pick')
+    if '[EARLY_TRADECARDS_SCHEDULED]' not in buf.getvalue():
+        return _fail('09:25 must log EARLY_TRADECARDS_SCHEDULED')
+    return 0
+
+
+def test_scheduled_final_confirmation_0931() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.trading.opening_rally_radar import run_scheduled_final_confirmation_0931
+
+    fake_board = {
+        'ranked_candidates': [
+            {'ticker': 'RAILTEL', 'state': 'TRADECARD_CANDIDATE', 'score': 90, 'why': ['catalyst'], 'has_catalyst': True},
+        ],
+        'time_ist': '09:31',
+    }
+    sent: list[str] = []
+
+    def _send(text: str) -> bool:
+        sent.append(text)
+        return True
+
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+         patch('backend.trading.opening_rally_radar.pick_best_opening_tradecard', return_value=('RAILTEL', 90, [])), \
+         patch('backend.orchestration.alert_quality_engine.evaluate_text_alert', return_value={'send': True}), \
+         patch('backend.orchestration.alert_quality_engine.record_text_alert_sent'):
+        buf = StringIO()
+        with redirect_stdout(buf):
+            ok = run_scheduled_final_confirmation_0931(now=_dt(9, 31), send_fn=_send)
+    if not ok or 'FINAL OPENING CONFIRMATION' not in sent[0]:
+        return _fail('09:31 final confirmation must send')
+    if 'Best pick' not in sent[0] or 'RAILTEL' not in sent[0]:
+        return _fail('09:31 must show best pick')
+    if '[FINAL_OPENING_CONFIRMATION]' not in buf.getvalue():
+        return _fail('09:31 must log FINAL_OPENING_CONFIRMATION')
+    return 0
+
+
+def test_opening_morning_scheduler_slots() -> int:
+    from backend.telegram.premarket_scheduler import due_opening_morning_slots, run_opening_morning_slot
+
+    due = due_opening_morning_slots(_dt(9, 20))
+    if due != ['opening_radar_0920']:
+        return _fail(f'expected opening_radar_0920 due at 09:20 got {due}')
+    with patch('backend.trading.opening_rally_radar.run_opening_morning_scheduled_slot', return_value=True) as mock_run:
+        run_opening_morning_slot('opening_radar_0920', now=_dt(9, 20))
+        mock_run.assert_called_once()
+    return 0
+
+
 def test_existing_tradecard_tests() -> int:
     import subprocess
 
@@ -463,8 +605,14 @@ def main() -> int:
         test_tradecard_returns_best_one,
         test_tradecard_selector_sync_with_tradecards,
         test_chase_risk_after_0940_no_active_entry,
+        test_no_0910_scheduled_alert,
+        test_schedule_shows_four_morning_alerts,
+        test_scheduled_radar_armed_0900,
         test_scheduled_opening_radar_candidates,
         test_scheduled_opening_radar_no_candidate_silent,
+        test_scheduled_early_tradecards_0925,
+        test_scheduled_final_confirmation_0931,
+        test_opening_morning_scheduler_slots,
         test_news_scoring_confirm,
         test_existing_tradecard_tests,
     ]

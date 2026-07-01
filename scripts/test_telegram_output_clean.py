@@ -80,12 +80,12 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.telegram_analysis_bot import handle_analysis_command
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51C':
-        return _fail(f'expected AstraEdge 51C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != f'AstraEdge {get_astraedge_build_stage()}':
+        return _fail(f'expected {ASTRAEDGE_TELEGRAM_BUILD!r} got build mismatch')
     if len(FULL_SNAPSHOT_SEQUENCE) != 34:
         return _fail(f'/full must remain 34 read-only steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
     if '/aihub reddit' in FULL_SNAPSHOT_SEQUENCE:

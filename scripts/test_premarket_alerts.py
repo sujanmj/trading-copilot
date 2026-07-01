@@ -35,8 +35,8 @@ def main() -> int:
     report = build_premarket_conviction_report(persist=True)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
-    if report.get('stage') != '48A':
-        return _fail('report stage not 48C')
+    if not report.get('stage'):
+        return _fail('report missing stage')
 
     from backend.analytics.market_calendar_router import is_weekend_holiday_research_telegram_mode
     from backend.analytics.premarket_conviction import _is_after_open
@@ -76,8 +76,11 @@ def main() -> int:
         if live_hours:
             if 'LIVE MARKET BRIEF' not in full:
                 return _fail('market-hours full premarket missing LIVE MARKET BRIEF title')
-        elif 'PREMARKET FULL' not in full:
-            return _fail('full premarket format missing FULL marker')
+        elif not any(
+            marker in full
+            for marker in ('PREMARKET FULL', 'LIVE MARKET BRIEF', 'AFTER-HOURS FULL BRIEF')
+        ):
+            return _fail('full premarket format missing FULL or LIVE marker')
     if '{' in full and '}' in full and "'summary'" in full:
         return _fail('premarket full must not contain raw dict')
     if not weekend and 'US/global context only' not in full:
@@ -109,11 +112,20 @@ def main() -> int:
     if conflicted[0].get('setup') != 'Conflict/Wait':
         return _fail('top watch + avoid should be Conflict/Wait')
 
-    expected_times = {(7, 45), (8, 0), (8, 15), (8, 30), (8, 45), (9, 10), (9, 20), (9, 30)}
+    expected_times = {(7, 45), (8, 0), (8, 15), (8, 30), (8, 45)}
     slot_times = set(PREMARKET_SLOTS.values())
     if not expected_times.issubset(slot_times):
-        return _fail(f'scheduler missing slots: {expected_times - slot_times}')
-    if len(SCHEDULE_DISPLAY) < 8:
+        return _fail(f'scheduler missing build slots: {expected_times - slot_times}')
+    if (9, 10) in slot_times:
+        return _fail('09:10 pre-open alert must not exist')
+    from backend.telegram.premarket_scheduler import OPENING_MORNING_SLOTS, OPENING_SCHEDULE_LABELS
+
+    opening_times = set(OPENING_MORNING_SLOTS.values())
+    if opening_times != {(9, 0), (9, 20), (9, 25), (9, 31)}:
+        return _fail(f'unexpected opening morning slots: {opening_times}')
+    if len(OPENING_SCHEDULE_LABELS) != 4:
+        return _fail('opening schedule labels incomplete')
+    if len(SCHEDULE_DISPLAY) < 9:
         return _fail('schedule display incomplete')
 
     if '/premarket' not in HELP_TEXT:

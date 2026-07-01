@@ -1,7 +1,8 @@
 """
-Premarket IST scheduler (Stage 46H).
+Premarket IST scheduler (Stage 46H + 4B.2 opening morning workflow).
 
-Slots: 07:45, 08:00, 08:15, 08:30, 08:45, 09:10, 09:20, 09:30
+Build slots: 07:45–08:45
+Opening rally alerts: 09:00, 09:20, 09:25, 09:31 (no 09:10 pre-open alert).
 """
 
 from __future__ import annotations
@@ -24,9 +25,13 @@ PREMARKET_SLOTS: dict[str, tuple[int, int]] = {
     'scanner_build': (8, 15),
     'premarket_top3': (8, 30),
     'premarket_action': (8, 45),
-    'preopen_watch': (9, 10),
-    'live_validation': (9, 20),
-    'open_confirmation': (9, 30),
+}
+
+OPENING_MORNING_SLOTS: dict[str, tuple[int, int]] = {
+    'radar_armed_0900': (9, 0),
+    'opening_radar_0920': (9, 20),
+    'early_tradecards_0925': (9, 25),
+    'final_confirmation_0931': (9, 31),
 }
 
 SCHEDULE_DISPLAY = [
@@ -35,9 +40,17 @@ SCHEDULE_DISPLAY = [
     '08:15 — premarket scanner/watchlist build',
     '08:30 — Telegram premarket top 3 setups',
     '08:45 — final premarket action plan',
-    '09:10 — pre-open watch',
-    '09:20 — first live validation + opening rally radar',
-    '09:30 — confirmation/rejection alert',
+    '09:00 — Radar Armed (news/theme watchlist)',
+    '09:20 — Opening Rally Radar (live reaction)',
+    '09:25 — Early Tradecards (provisional ranks)',
+    '09:31 — Final Opening Confirmation',
+]
+
+OPENING_SCHEDULE_LABELS = [
+    '09:00 Radar Armed',
+    '09:20 Opening Rally Radar',
+    '09:25 Early Tradecards',
+    '09:31 Final Opening Confirmation',
 ]
 
 
@@ -80,13 +93,20 @@ def due_premarket_slots(now: Optional[datetime] = None) -> list[str]:
     return due
 
 
+def due_opening_morning_slots(now: Optional[datetime] = None) -> list[str]:
+    now = now or datetime.now(IST)
+    due: list[str] = []
+    for slot, (hour, minute) in OPENING_MORNING_SLOTS.items():
+        if now.hour == hour and now.minute == minute and not _already_sent(slot, now):
+            due.append(slot)
+    return due
+
+
 # Scheduled Telegram alert slots — all suppressed on weekend/holiday/research.
 WEEKEND_SUPPRESS_SEND_SLOTS = frozenset({
     'premarket_top3',
     'premarket_action',
-    'preopen_watch',
-    'live_validation',
-    'open_confirmation',
+    *OPENING_MORNING_SLOTS.keys(),
 })
 
 
@@ -105,7 +125,7 @@ def run_premarket_slot(slot: str, *, send_fn: Optional[Callable[[str], bool]] = 
     from backend.analytics.premarket_conviction import build_premarket_conviction_report, send_scheduled_premarket
 
     build_slots = {'overnight_global', 'india_digest', 'scanner_build'}
-    send_slots = {'premarket_top3', 'premarket_action', 'preopen_watch', 'live_validation', 'open_confirmation'}
+    send_slots = {'premarket_top3', 'premarket_action'}
 
     if slot in build_slots:
         build_premarket_conviction_report(persist=True)
@@ -127,34 +147,48 @@ def run_premarket_slot(slot: str, *, send_fn: Optional[Callable[[str], bool]] = 
     return False
 
 
-def format_schedule_text() -> str:
-    lines = ['<b>📅 Premarket schedule (IST)</b>', '']
-    lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY)
-    lines.extend(['', '<b>Commands:</b> /premarket · /premarket full'])
-    return '\n'.join(lines)
-
-
-def _maybe_run_opening_radar(now: datetime, *, send_fn: Optional[Callable[[str], bool]] = None) -> None:
-    """09:18–09:22 IST window — opening rally radar alert (once per day)."""
-    mins = now.hour * 60 + now.minute
-    if not (9 * 60 + 18 <= mins <= 9 * 60 + 22):
-        return
-    if _already_sent('opening_radar', now):
-        return
+def run_opening_morning_slot(
+    slot: str,
+    *,
+    now: Optional[datetime] = None,
+    send_fn: Optional[Callable[[str], bool]] = None,
+) -> bool:
+    if slot not in OPENING_MORNING_SLOTS:
+        return False
     if _is_weekend_research_mode(now):
         print(
-            'WEEKEND_SCHEDULE_SUPPRESSED opening_radar reason=weekend_research_mode',
+            f'WEEKEND_SCHEDULE_SUPPRESSED opening_morning reason=weekend_research_mode slot={slot}',
             flush=True,
         )
-        _mark_sent('opening_radar', now)
-        return
+        return False
     try:
-        from backend.trading.opening_rally_radar import run_scheduled_opening_radar_alert
+        from backend.trading.opening_rally_radar import run_opening_morning_scheduled_slot
 
-        run_scheduled_opening_radar_alert(send_fn=send_fn, now=now)
-        _mark_sent('opening_radar', now)
+        return run_opening_morning_scheduled_slot(slot, now=now, send_fn=send_fn)
     except Exception as exc:
-        print(f'[PREMARKET_SCHED] opening_radar failed: {exc}', flush=True)
+        print(f'[PREMARKET_SCHED] opening_morning slot={slot} failed: {exc}', flush=True)
+        return False
+
+
+def format_schedule_text() -> str:
+    lines = [
+        '<b>📅 Premarket schedule (IST)</b>',
+        '',
+        '<b>Morning builds & premarket</b>',
+    ]
+    lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY[:5])
+    lines.extend([
+        '',
+        '<b>Opening rally workflow</b>',
+    ])
+    lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY[5:])
+    lines.extend([
+        '',
+        '<b>Manual anytime:</b> /radar · /opening · /tradecards · /tradecard',
+        '',
+        '<b>Commands:</b> /premarket · /premarket full',
+    ])
+    return '\n'.join(lines)
 
 
 def run_premarket_scheduler_loop(
@@ -171,7 +205,12 @@ def run_premarket_scheduler_loop(
                 _mark_sent(slot, now)
             except Exception as exc:
                 print(f'[PREMARKET_SCHED] slot={slot} failed: {exc}', flush=True)
-        _maybe_run_opening_radar(now, send_fn=send_fn)
+        for slot in due_opening_morning_slots(now):
+            try:
+                run_opening_morning_slot(slot, now=now, send_fn=send_fn)
+                _mark_sent(slot, now)
+            except Exception as exc:
+                print(f'[PREMARKET_SCHED] opening slot={slot} failed: {exc}', flush=True)
         stop.wait(30)
 
 

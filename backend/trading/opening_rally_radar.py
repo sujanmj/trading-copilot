@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.1'
+STAGE = '4B.2'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
@@ -586,6 +586,120 @@ def select_synced_tradecard(
     }
 
 
+def _opening_state_display(state: str) -> str:
+    token = str(state or '').upper()
+    if token == 'MOMENTUM_ONLY_WATCH':
+        return 'PURE_VOLUME_SPIKE'
+    return token.replace('_', ' ')
+
+
+def resolve_final_confirmation_state(
+    row: dict[str, Any] | None,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Map opening-board row to final confirmation state at ~09:31."""
+    if not row:
+        return 'NO_CLEAN_ENTRY'
+    state = str(row.get('state') or '').upper()
+    score = int(row.get('score') or 0)
+    change_pct = _safe_float(row.get('change_percent'))
+    has_catalyst = bool(row.get('has_catalyst'))
+    if state == 'REJECTED':
+        return 'NO_CLEAN_ENTRY'
+    if state == 'CHASE_RISK' or change_pct >= EXTENDED_MOVE_PCT:
+        return 'CHASE_RISK'
+    if state == 'MOMENTUM_ONLY_WATCH':
+        return 'WAIT_FOR_PULLBACK'
+    if state in ('TRADECARD_CANDIDATE', 'VOLUME_IGNITION') and score >= 60:
+        if has_catalyst or (state == 'VOLUME_IGNITION' and score >= 70):
+            return 'CONFIRMED'
+        return 'WAIT_FOR_PULLBACK'
+    if state == 'RADAR_ARMED':
+        return 'WAIT_FOR_PULLBACK'
+    mins = _minutes_since_midnight(_now_ist(now))
+    if mins >= 9 * 60 + 31 and score < 55:
+        return 'NO_CLEAN_ENTRY'
+    return 'WAIT_FOR_PULLBACK'
+
+
+def _send_scheduled_opening_text(
+    *,
+    alert_key: str,
+    text: str,
+    log_tag: str,
+    log_fields: str,
+    send_fn: Callable[[str], bool] | None,
+    command: str,
+) -> bool:
+    sent = False
+    if send_fn is not None:
+        sent = bool(send_fn(text))
+    else:
+        try:
+            from backend.telegram.telegram_analysis_bot import send_analysis_message
+
+            sent = bool(send_analysis_message(text, command=command).get('sent'))
+        except Exception:
+            sent = False
+    print(f'[{log_tag}] {log_fields} sent={"yes" if sent else "no"}', flush=True)
+    return sent
+
+
+def _gate_scheduled_alert(alert_key: str, text: str) -> bool:
+    try:
+        from backend.orchestration.alert_quality_engine import evaluate_text_alert, record_text_alert_sent
+
+        gate = evaluate_text_alert(alert_key, text)
+        if not gate.get('send'):
+            return False
+        record_text_alert_sent(alert_key, gate)
+    except Exception:
+        pass
+    return True
+
+
+def run_scheduled_radar_armed_0900(
+    *,
+    now: datetime | None = None,
+    send_fn: Callable[[str], bool] | None = None,
+) -> bool:
+    """09:00 IST — news/theme watchlist only (no entry)."""
+    ist_now = _now_ist(now)
+    board = build_opening_rally_board(now=ist_now)
+    candidates = [
+        r for r in (board.get('ranked_candidates') or [])
+        if r.get('state') == 'RADAR_ARMED'
+    ]
+    ts = ist_now.replace(microsecond=0).isoformat()
+    if not candidates:
+        print('[OPENING_RADAR_NO_CANDIDATES] reason=no_radar_armed_at_0900', flush=True)
+        print(
+            f'[OPENING_RADAR_ARMED_SCHEDULED] time={ts} candidates=0 sent=no',
+            flush=True,
+        )
+        return False
+
+    from backend.telegram.response_format import format_radar_armed_scheduled_telegram
+
+    text = format_radar_armed_scheduled_telegram(board=board, candidates=candidates)
+    if not _gate_scheduled_alert('radar_armed_0900', text):
+        print(
+            f'[OPENING_RADAR_ARMED_SCHEDULED] time={ts} candidates={len(candidates)} sent=no',
+            flush=True,
+        )
+        return False
+    sent = _send_scheduled_opening_text(
+        alert_key='radar_armed_0900',
+        text=text,
+        log_tag='OPENING_RADAR_ARMED_SCHEDULED',
+        log_fields=f'time={ts} candidates={len(candidates)}',
+        send_fn=send_fn,
+        command='radar_armed_0900',
+    )
+    return sent
+
+
 def run_scheduled_opening_radar_alert(
     *,
     now: datetime | None = None,
@@ -607,33 +721,142 @@ def run_scheduled_opening_radar_alert(
     from backend.telegram.response_format import format_opening_radar_telegram
 
     text = format_opening_radar_telegram(board=board)
-    try:
-        from backend.orchestration.alert_quality_engine import evaluate_text_alert, record_text_alert_sent
+    if not _gate_scheduled_alert('opening_radar_scheduled', text):
+        print(f'[OPENING_RADAR_SCHEDULED] time={ts} candidates={len(candidates)} sent=no', flush=True)
+        return False
 
-        gate = evaluate_text_alert('opening_radar_scheduled', text)
-        if not gate.get('send'):
-            print(f'[OPENING_RADAR_SCHEDULED] time={ts} candidates={len(candidates)} sent=no', flush=True)
-            return False
-        record_text_alert_sent('opening_radar_scheduled', gate)
-    except Exception:
-        pass
-
-    sent = False
-    if send_fn is not None:
-        sent = bool(send_fn(text))
-    else:
-        try:
-            from backend.telegram.telegram_analysis_bot import send_analysis_message
-
-            sent = bool(send_analysis_message(text, command='opening_radar_scheduled').get('sent'))
-        except Exception:
-            sent = False
-    print(
-        f'[OPENING_RADAR_SCHEDULED] time={ts} candidates={len(candidates)} '
-        f'sent={"yes" if sent else "no"}',
-        flush=True,
+    sent = _send_scheduled_opening_text(
+        alert_key='opening_radar_scheduled',
+        text=text,
+        log_tag='OPENING_RADAR_SCHEDULED',
+        log_fields=f'time={ts} candidates={len(candidates)}',
+        send_fn=send_fn,
+        command='opening_radar_scheduled',
     )
     return sent
+
+
+def run_scheduled_early_tradecards_0925(
+    *,
+    now: datetime | None = None,
+    send_fn: Callable[[str], bool] | None = None,
+) -> bool:
+    """09:25 IST — provisional top tradecard candidates before 09:30."""
+    ist_now = _now_ist(now)
+    board = build_opening_rally_board(now=ist_now)
+    candidates = [
+        r for r in (board.get('ranked_candidates') or [])
+        if r.get('state') != 'REJECTED'
+    ]
+    ts = ist_now.replace(microsecond=0).isoformat()
+    best_sym, _, _ = pick_best_opening_tradecard(board)
+    if not candidates:
+        print('[OPENING_RADAR_NO_CANDIDATES] reason=no_early_tradecard_candidates', flush=True)
+        print(
+            f'[EARLY_TRADECARDS_SCHEDULED] time={ts} candidates=0 '
+            f'provisional_best=- sent=no',
+            flush=True,
+        )
+        return False
+
+    from backend.telegram.response_format import format_early_tradecards_scheduled_telegram
+
+    text = format_early_tradecards_scheduled_telegram(board=board)
+    if not _gate_scheduled_alert('early_tradecards_0925', text):
+        print(
+            f'[EARLY_TRADECARDS_SCHEDULED] time={ts} candidates={len(candidates)} '
+            f'provisional_best={best_sym or "-"} sent=no',
+            flush=True,
+        )
+        return False
+    sent = _send_scheduled_opening_text(
+        alert_key='early_tradecards_0925',
+        text=text,
+        log_tag='EARLY_TRADECARDS_SCHEDULED',
+        log_fields=(
+            f'time={ts} candidates={len(candidates)} '
+            f'provisional_best={best_sym or "-"}'
+        ),
+        send_fn=send_fn,
+        command='early_tradecards_0925',
+    )
+    return sent
+
+
+def run_scheduled_final_confirmation_0931(
+    *,
+    now: datetime | None = None,
+    send_fn: Callable[[str], bool] | None = None,
+) -> bool:
+    """09:31 IST — final opening confirmation or chase/no-entry state."""
+    ist_now = _now_ist(now)
+    board = build_opening_rally_board(now=ist_now)
+    best_sym, best_score, _ = pick_best_opening_tradecard(board)
+    best_row = next(
+        (
+            r for r in (board.get('ranked_candidates') or [])
+            if _normalize_ticker(r.get('ticker')) == _normalize_ticker(best_sym)
+        ),
+        None,
+    )
+    confirm_state = resolve_final_confirmation_state(best_row, now=ist_now)
+    ts = ist_now.replace(microsecond=0).isoformat()
+    if not best_sym:
+        print('[OPENING_RADAR_NO_CANDIDATES] reason=no_final_confirmation_pick', flush=True)
+        print(
+            f'[FINAL_OPENING_CONFIRMATION] time={ts} best=- '
+            f'state=no_clean_entry sent=no',
+            flush=True,
+        )
+        return False
+
+    from backend.telegram.response_format import format_final_opening_confirmation_telegram
+
+    text = format_final_opening_confirmation_telegram(
+        board=board,
+        best_sym=best_sym,
+        best_score=best_score,
+        confirm_state=confirm_state,
+        best_row=best_row,
+    )
+    if not _gate_scheduled_alert('final_opening_confirmation_0931', text):
+        print(
+            f'[FINAL_OPENING_CONFIRMATION] time={ts} best={best_sym} '
+            f'state={confirm_state.lower()} sent=no',
+            flush=True,
+        )
+        return False
+    sent = _send_scheduled_opening_text(
+        alert_key='final_opening_confirmation_0931',
+        text=text,
+        log_tag='FINAL_OPENING_CONFIRMATION',
+        log_fields=(
+            f'time={ts} best={best_sym} state={confirm_state.lower()}'
+        ),
+        send_fn=send_fn,
+        command='final_opening_confirmation_0931',
+    )
+    return sent
+
+
+OPENING_MORNING_SLOT_RUNNERS: dict[str, Callable[..., bool]] = {
+    'radar_armed_0900': run_scheduled_radar_armed_0900,
+    'opening_radar_0920': run_scheduled_opening_radar_alert,
+    'early_tradecards_0925': run_scheduled_early_tradecards_0925,
+    'final_confirmation_0931': run_scheduled_final_confirmation_0931,
+}
+
+
+def run_opening_morning_scheduled_slot(
+    slot: str,
+    *,
+    now: datetime | None = None,
+    send_fn: Callable[[str], bool] | None = None,
+) -> bool:
+    runner = OPENING_MORNING_SLOT_RUNNERS.get(slot)
+    if runner is None:
+        return False
+    return runner(now=now, send_fn=send_fn)
 
 
 def format_opening_radar_action(state: str) -> str:

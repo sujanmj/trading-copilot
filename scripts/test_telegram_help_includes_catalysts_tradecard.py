@@ -51,11 +51,11 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, handle_analysis_command
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51C':
-        return _fail(f'expected AstraEdge 51C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != f'AstraEdge {get_astraedge_build_stage()}':
+        return _fail(f'build label mismatch: {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     for marker in HELP_CATALYST_MARKERS:
         if marker not in HELP_TEXT:
