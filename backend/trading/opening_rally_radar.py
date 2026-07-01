@@ -10,13 +10,13 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
 
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.0'
+STAGE = '4B.1'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
@@ -519,6 +519,121 @@ def pick_best_opening_tradecard(
     if sym:
         print(f'[BEST_TRADECARD_SELECTED] symbol={sym} score={score} beat={",".join(others)}', flush=True)
     return sym or None, score, others
+
+
+def select_synced_tradecard(
+    *,
+    now: datetime | None = None,
+    board: dict[str, Any] | None = None,
+    legacy_ticker: str = '',
+) -> dict[str, Any]:
+    """Align /tradecard selection with /tradecards opening-board best pick."""
+    data = board or build_opening_rally_board(now=now)
+    best_sym, best_score, _ = pick_best_opening_tradecard(data)
+    tradecards_best = _normalize_ticker(best_sym)
+    legacy = _normalize_ticker(legacy_ticker)
+
+    best_row = next(
+        (
+            r for r in (data.get('ranked_candidates') or [])
+            if _normalize_ticker(r.get('ticker')) == tradecards_best
+        ),
+        None,
+    )
+    state = str((best_row or {}).get('state') or '').upper()
+    ist_now = _now_ist(now)
+    mins = _minutes_since_midnight(ist_now)
+
+    selected = tradecards_best
+    source = 'radar'
+    reason = 'aligned with /tradecards best pick'
+    status_override = ''
+
+    if not tradecards_best:
+        selected = legacy
+        source = 'legacy'
+        reason = 'no opening-board candidates'
+    elif state == 'REJECTED':
+        selected = legacy or tradecards_best
+        source = 'legacy' if legacy and legacy != tradecards_best else 'radar'
+        reason = 'radar best rejected on opening board'
+    elif state == 'CHASE_RISK' and mins >= 9 * 60 + 40:
+        status_override = 'NO_ACTIVE_ENTRY'
+        reason = 'CHASE_RISK after 09:40 — pullback only, no fresh entry'
+    elif legacy and legacy != tradecards_best:
+        reason = f'radar board best {tradecards_best} overrides legacy {legacy}'
+
+    if not selected:
+        selected = legacy
+        if legacy:
+            source = 'legacy'
+            reason = reason or 'fallback to legacy trade card engine'
+
+    print(
+        f'[TRADECARD_SELECTOR_SYNC] tradecards_best={tradecards_best or "-"} '
+        f'tradecard_selected={selected or "-"} source={source} reason={reason}',
+        flush=True,
+    )
+    return {
+        'tradecards_best': tradecards_best,
+        'selected': selected,
+        'source': source,
+        'reason': reason,
+        'state': state,
+        'status_override': status_override,
+        'score': int(best_score or 0),
+        'board': data,
+    }
+
+
+def run_scheduled_opening_radar_alert(
+    *,
+    now: datetime | None = None,
+    send_fn: Callable[[str], bool] | None = None,
+) -> bool:
+    """Send scheduled 09:20 opening rally radar when candidates exist (paper only)."""
+    ist_now = _now_ist(now)
+    board = build_opening_rally_board(now=ist_now)
+    candidates = [
+        r for r in (board.get('ranked_candidates') or [])
+        if r.get('state') != 'REJECTED'
+    ]
+    ts = ist_now.replace(microsecond=0).isoformat()
+    if not candidates:
+        print('[OPENING_RADAR_NO_CANDIDATES] reason=no_non_rejected_candidates', flush=True)
+        print(f'[OPENING_RADAR_SCHEDULED] time={ts} candidates=0 sent=no', flush=True)
+        return False
+
+    from backend.telegram.response_format import format_opening_radar_telegram
+
+    text = format_opening_radar_telegram(board=board)
+    try:
+        from backend.orchestration.alert_quality_engine import evaluate_text_alert, record_text_alert_sent
+
+        gate = evaluate_text_alert('opening_radar_scheduled', text)
+        if not gate.get('send'):
+            print(f'[OPENING_RADAR_SCHEDULED] time={ts} candidates={len(candidates)} sent=no', flush=True)
+            return False
+        record_text_alert_sent('opening_radar_scheduled', gate)
+    except Exception:
+        pass
+
+    sent = False
+    if send_fn is not None:
+        sent = bool(send_fn(text))
+    else:
+        try:
+            from backend.telegram.telegram_analysis_bot import send_analysis_message
+
+            sent = bool(send_analysis_message(text, command='opening_radar_scheduled').get('sent'))
+        except Exception:
+            sent = False
+    print(
+        f'[OPENING_RADAR_SCHEDULED] time={ts} candidates={len(candidates)} '
+        f'sent={"yes" if sent else "no"}',
+        flush=True,
+    )
+    return sent
 
 
 def format_opening_radar_action(state: str) -> str:

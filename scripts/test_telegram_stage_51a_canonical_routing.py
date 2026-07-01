@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 51A/51B — production analysis bot canonical command routing (filename kept for compatibility)."""
+"""Stage 51A/51C — production analysis bot canonical command routing (filename kept for compatibility)."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def main() -> int:
     if STAGE_MARKER != 'TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS':
         return _fail(f'unexpected STAGE_MARKER: {STAGE_MARKER!r}')
     build_stage = get_astraedge_build_stage()
-    if build_stage not in ('51A', '51B'):
+    if build_stage not in ('51A', '51B', '51C'):
         return _fail(f'unexpected build stage: {build_stage!r}')
     if not ASTRAEDGE_TELEGRAM_BUILD.startswith('AstraEdge '):
         return _fail(f'unexpected build label: {ASTRAEDGE_TELEGRAM_BUILD!r}')
@@ -191,6 +191,29 @@ def main() -> int:
         mock_opening_radar.assert_called_once()
     if 'OPENING RALLY RADAR' not in str(opening_results[0].get('text', '')):
         return _fail('/opening radar must route to opening rally radar formatter')
+
+    with patch(
+        'backend.telegram.lazy_command_runner.run_radar_only',
+        return_value={'text': radar_text},
+    ) as mock_opening_alias:
+        opening_alias_results = handle_analysis_command('/opening', 'test', dry_run=True)
+        mock_opening_alias.assert_called_once()
+    if 'OPENING RALLY RADAR' not in str(opening_alias_results[0].get('text', '')):
+        return _fail('/opening must route to opening rally radar formatter')
+
+    from backend.telegram.telegram_analysis_bot import HELP_TEXT, TELEGRAM_BOT_COMMANDS, register_telegram_bot_commands
+
+    for token in ('/radar', '/opening', '/tradecards', '/tradecard'):
+        if token not in HELP_TEXT:
+            return _fail(f'help text missing {token}')
+    cmd_names = {row.get('command') for row in TELEGRAM_BOT_COMMANDS}
+    for name in ('radar', 'opening', 'tradecards', 'tradecard'):
+        if name not in cmd_names:
+            return _fail(f'TELEGRAM_BOT_COMMANDS missing /{name}')
+    with patch('backend.telegram.telegram_analysis_bot.requests.post') as mock_post:
+        mock_post.return_value.status_code = 200
+        if not register_telegram_bot_commands():
+            return _fail('register_telegram_bot_commands must succeed with mocked API')
 
     with patch(
         'backend.telegram.lazy_command_runner.run_tradecards_only',

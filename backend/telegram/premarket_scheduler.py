@@ -36,7 +36,7 @@ SCHEDULE_DISPLAY = [
     '08:30 — Telegram premarket top 3 setups',
     '08:45 — final premarket action plan',
     '09:10 — pre-open watch',
-    '09:20 — first live validation',
+    '09:20 — first live validation + opening rally radar',
     '09:30 — confirmation/rejection alert',
 ]
 
@@ -134,6 +134,29 @@ def format_schedule_text() -> str:
     return '\n'.join(lines)
 
 
+def _maybe_run_opening_radar(now: datetime, *, send_fn: Optional[Callable[[str], bool]] = None) -> None:
+    """09:18–09:22 IST window — opening rally radar alert (once per day)."""
+    mins = now.hour * 60 + now.minute
+    if not (9 * 60 + 18 <= mins <= 9 * 60 + 22):
+        return
+    if _already_sent('opening_radar', now):
+        return
+    if _is_weekend_research_mode(now):
+        print(
+            'WEEKEND_SCHEDULE_SUPPRESSED opening_radar reason=weekend_research_mode',
+            flush=True,
+        )
+        _mark_sent('opening_radar', now)
+        return
+    try:
+        from backend.trading.opening_rally_radar import run_scheduled_opening_radar_alert
+
+        run_scheduled_opening_radar_alert(send_fn=send_fn, now=now)
+        _mark_sent('opening_radar', now)
+    except Exception as exc:
+        print(f'[PREMARKET_SCHED] opening_radar failed: {exc}', flush=True)
+
+
 def run_premarket_scheduler_loop(
     *,
     send_fn: Optional[Callable[[str], bool]] = None,
@@ -148,6 +171,7 @@ def run_premarket_scheduler_loop(
                 _mark_sent(slot, now)
             except Exception as exc:
                 print(f'[PREMARKET_SCHED] slot={slot} failed: {exc}', flush=True)
+        _maybe_run_opening_radar(now, send_fn=send_fn)
         stop.wait(30)
 
 

@@ -518,6 +518,17 @@ def build_trade_card(
     pick_reason = 'top_scanner'
     if not ticker:
         try:
+            from backend.trading.opening_rally_radar import select_synced_tradecard
+
+            sync = select_synced_tradecard()
+            radar_top = _normalize_ticker(sync.get('selected'))
+            if radar_top and sync.get('source') == 'radar':
+                ticker = radar_top
+                pick_reason = 'opening_radar_board'
+        except Exception:
+            pass
+    if not ticker:
+        try:
             from backend.trading.unified_live_priority_engine import pick_tradecard_candidate
 
             unified_ticker, unified_reason = pick_tradecard_candidate(registry=registry, scanner=scanner)
@@ -765,8 +776,21 @@ def is_trade_card_stale(card: dict[str, Any]) -> bool:
         return False
 
 
-def get_trade_card(*, rebuild: bool = False) -> dict[str, Any]:
-    unified_top = _unified_today_top_ticker()
+def _radar_sync_top_ticker() -> str:
+    try:
+        from backend.trading.opening_rally_radar import select_synced_tradecard
+
+        sync = select_synced_tradecard(legacy_ticker=_unified_today_top_ticker())
+        if sync.get('source') == 'radar':
+            return _normalize_ticker(sync.get('selected'))
+    except Exception:
+        pass
+    return ''
+
+
+def get_trade_card(*, rebuild: bool = False, ticker: str | None = None) -> dict[str, Any]:
+    sync_top = _normalize_ticker(ticker) or _radar_sync_top_ticker()
+    unified_top = sync_top or _unified_today_top_ticker()
     if rebuild or not TRADE_CARD_CACHE.is_file():
         return apply_tradecard_safety_gates(
             build_trade_card(ticker=unified_top or None, force_refresh=True)

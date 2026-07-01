@@ -2417,6 +2417,7 @@ def format_tradecard_telegram(
     from backend.trading.trade_card_engine import get_trade_card, is_trade_card_stale, resolve_tradecard_source_label
     from backend.trading.tradecard_latest import is_tradecard_audit_status, save_latest_tradecard
     from backend.trading.tradecard_refresh import format_freshness_line, is_tradecard_data_stale
+    from backend.trading.opening_rally_radar import select_synced_tradecard
 
     def _safe_float(value: object) -> float | None:
         try:
@@ -2465,6 +2466,14 @@ def format_tradecard_telegram(
                 pass
 
     card = get_trade_card(rebuild=False)
+    sync = select_synced_tradecard(legacy_ticker=_normalize_tradecard_ticker(card.get('ticker')))
+    sync_ticker = _normalize_tradecard_ticker(sync.get('selected'))
+    sync_reason = str(sync.get('reason') or '')
+    sync_status_override = str(sync.get('status_override') or '').strip().upper()
+    if sync_ticker and sync_ticker != _normalize_tradecard_ticker(card.get('ticker')):
+        from backend.trading.trade_card_engine import build_trade_card
+
+        card = build_trade_card(ticker=sync_ticker, force_refresh=True, persist=True)
     stale = is_trade_card_stale(card)
     data_stale = is_tradecard_data_stale(freshness_meta or {})
     postmarket_line = _tradecard_postmarket_line()
@@ -2476,7 +2485,9 @@ def format_tradecard_telegram(
 
     today_top, today_entry_status = _tradecard_unified_today_top()
     ticker = _normalize_tradecard_ticker(card.get('ticker'))
-    if today_top and (not ticker or ticker != today_top):
+    if sync_ticker:
+        ticker = sync_ticker
+    elif today_top and (not ticker or ticker != today_top):
         ticker = today_top
 
     fallback_ticker, fallback_status = ('', '')
@@ -2488,7 +2499,11 @@ def format_tradecard_telegram(
     effective_ticker = ticker or fallback_ticker
     reason = clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)
     status = str(card.get('status') or 'NO_TRADE').strip().upper()
-    if today_top and effective_ticker == today_top and today_entry_status:
+    if sync_status_override:
+        status = sync_status_override
+        if sync_reason:
+            reason = sync_reason
+    elif today_top and effective_ticker == today_top and today_entry_status:
         if today_entry_status != 'VALID_ENTRY' and today_entry_status in (
             'ENTRY_MISSED', 'WAIT_FOR_VOLUME', 'WAIT_FOR_PULLBACK', 'NO_ACTIVE_ENTRY', 'NO_TRADE',
         ):

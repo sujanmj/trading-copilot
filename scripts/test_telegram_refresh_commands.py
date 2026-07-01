@@ -62,13 +62,15 @@ def main() -> int:
     if '07:45' not in str(sched[0].get('text', '')):
         return _fail('/schedule missing 07:45')
 
+    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+
     health = handle_analysis_command('/health', 'test', dry_run=True)
-    if 'AstraEdge 51A' not in str(health[0].get('text', '')):
-        return _fail('/health missing AstraEdge 51A')
+    if ASTRAEDGE_TELEGRAM_BUILD not in str(health[0].get('text', '')):
+        return _fail(f'/health missing {ASTRAEDGE_TELEGRAM_BUILD}')
 
     status = handle_analysis_command('/status', 'test', dry_run=True)
-    if 'AstraEdge 51A' not in str(status[0].get('text', '')):
-        return _fail('/status missing AstraEdge 51A build line')
+    if ASTRAEDGE_TELEGRAM_BUILD not in str(status[0].get('text', '')):
+        return _fail(f'/status missing {ASTRAEDGE_TELEGRAM_BUILD} build line')
 
     print('TELEGRAM_REFRESH_COMMANDS_TEST_OK')
     return 0

@@ -78,6 +78,21 @@ API_URL = f'https://api.telegram.org/bot{BOT_TOKEN}' if BOT_TOKEN else ''
 
 STATE_FILE = DATA_DIR / '_telegram_analysis_bot_state.json'
 
+TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
+    {'command': 'status', 'description': 'System status'},
+    {'command': 'health', 'description': 'Runtime health'},
+    {'command': 'schedule', 'description': 'Premarket + brief schedule'},
+    {'command': 'radar', 'description': 'Opening rally candidates'},
+    {'command': 'opening', 'description': 'Same as /radar'},
+    {'command': 'tradecards', 'description': 'Top tradecard candidates'},
+    {'command': 'tradecard', 'description': 'Single paper trade card'},
+    {'command': 'catalysts', 'description': 'Stock catalyst radar'},
+    {'command': 'today', 'description': 'Today confluence pick'},
+    {'command': 'premarket', 'description': 'Premarket top setups'},
+    {'command': 'refresh', 'description': 'Scoped cache refresh'},
+    {'command': 'help', 'description': 'Command list'},
+]
+
 HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 
 <b>Core:</b>
@@ -123,6 +138,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 
 <b>Opening Rally:</b>
 /radar — opening rally candidates (early layer)
+/opening — same as /radar
 /opening radar — same as /radar
 /tradecards — top 5-10 tradecard candidates with reasons
 
@@ -160,6 +176,30 @@ def safe_print(text: str) -> None:
             print(text.encode('ascii', errors='replace').decode('ascii'))
         except Exception:
             pass
+
+
+def register_telegram_bot_commands() -> bool:
+    """Register slash commands with Telegram setMyCommands API."""
+    _refresh_telegram_credentials()
+    if not BOT_TOKEN:
+        return False
+    try:
+        response = requests.post(
+            f'{API_URL}/setMyCommands',
+            json={'commands': TELEGRAM_BOT_COMMANDS},
+            timeout=10,
+        )
+        ok = response.status_code == 200
+        print(
+            f'[TELEGRAM_COMMANDS_UPDATED] commands={len(TELEGRAM_BOT_COMMANDS)}',
+            flush=True,
+        )
+        if not ok:
+            safe_print(f'[TG_ANALYSIS] setMyCommands failed status={response.status_code}')
+        return ok
+    except Exception as exc:
+        safe_print(f'[TG_ANALYSIS] setMyCommands error: {exc}')
+        return False
 
 
 def send_analysis_message(
@@ -235,6 +275,8 @@ def parse_command(text: str) -> tuple[str, str]:
     if lower == 'outcomes':
         return 'outcomes', ''
     if lower in ('radar', 'opening radar'):
+        return 'radar', ''
+    if lower == 'opening':
         return 'radar', ''
     if lower == 'tradecards':
         return 'tradecards', ''
@@ -977,6 +1019,10 @@ def ensure_astraedge_telegram_started() -> bool:
             start_premarket_scheduler()
         except Exception as exc:
             safe_print(f'[TG_ANALYSIS] premarket scheduler failed: {exc}')
+        try:
+            register_telegram_bot_commands()
+        except Exception as exc:
+            safe_print(f'[TG_ANALYSIS] command registration failed: {exc}')
         print('ASTRAEDGE_TELEGRAM_ANALYSIS_BOT_STARTED', flush=True)
         _astraedge_telegram_started = True
         return True

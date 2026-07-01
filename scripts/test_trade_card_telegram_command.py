@@ -70,9 +70,20 @@ def main() -> int:
         'reason': 'Strong move, but do not chase.',
         'paper_only': True,
     }
+    sync_stub = {
+        'tradecards_best': 'IXIGO',
+        'selected': 'IXIGO',
+        'source': 'radar',
+        'reason': 'test',
+        'status_override': '',
+        'state': 'TRADECARD_CANDIDATE',
+        'score': 80,
+        'board': {},
+    }
     with patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake_card), \
          patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
          patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('', '')), \
+         patch('backend.trading.opening_rally_radar.select_synced_tradecard', return_value=sync_stub), \
          patch('scripts.refresh_local_intelligence.run_refresh_scoped', return_value={'ok': True}):
         text = format_tradecard_telegram(explain=False)
         explain = format_tradecard_telegram(explain=True)
@@ -101,7 +112,17 @@ def main() -> int:
 
     with patch('backend.trading.trade_card_engine.get_trade_card', return_value=missed_card), \
          patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
-         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('DEVYANI', 'ENTRY_MISSED')):
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('DEVYANI', 'ENTRY_MISSED')), \
+         patch('backend.trading.opening_rally_radar.select_synced_tradecard', return_value={
+             'tradecards_best': 'DEVYANI',
+             'selected': 'DEVYANI',
+             'source': 'radar',
+             'reason': 'test',
+             'status_override': '',
+             'state': 'CHASE_RISK',
+             'score': 50,
+             'board': {},
+         }):
         missed_explain = format_tradecard_telegram(explain=True)
     if not _has_explain_section(missed_explain):
         return _fail('ENTRY_MISSED explain missing Explain section')

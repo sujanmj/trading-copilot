@@ -169,21 +169,31 @@ def _run_lightweight_refresh() -> tuple[bool, bool, list[str]]:
 
 
 def _rebuild_unified_and_card() -> None:
-    unified_top = ''
+    radar_top = ''
     try:
-        from backend.trading.unified_live_priority_engine import build_unified_priority
+        from backend.trading.opening_rally_radar import select_synced_tradecard
 
-        unified = build_unified_priority(mode='today')
-        top = unified.get('top_pick')
-        if isinstance(top, dict):
-            unified_top = str(top.get('ticker') or '').strip().upper()
+        sync = select_synced_tradecard()
+        radar_top = str(sync.get('selected') or '').strip().upper()
     except Exception:
         pass
+
+    unified_top = ''
+    if not radar_top:
+        try:
+            from backend.trading.unified_live_priority_engine import build_unified_priority
+
+            unified = build_unified_priority(mode='today')
+            top = unified.get('top_pick')
+            if isinstance(top, dict):
+                unified_top = str(top.get('ticker') or '').strip().upper()
+        except Exception:
+            pass
 
     try:
         from backend.trading.trade_card_engine import build_trade_card
 
-        build_trade_card(ticker=unified_top or None, force_refresh=True, persist=True)
+        build_trade_card(ticker=radar_top or unified_top or None, force_refresh=True, persist=True)
     except Exception:
         pass
 

@@ -222,6 +222,13 @@ def test_tradecard_returns_best_one() -> int:
     from backend.telegram.lazy_command_runner import run_tradecard_only
     from backend.telegram.response_format import format_tradecard_telegram
 
+    fake_board = {
+        'ranked_candidates': [
+            {'ticker': 'RAILTEL', 'state': 'TRADECARD_CANDIDATE', 'score': 78, 'why': ['fresh order news']},
+        ],
+        'phase': 'CONFIRMATION',
+        'time_ist': '09:25',
+    }
     fake_card = {
         'ok': True,
         'ticker': 'RAILTEL',
@@ -238,7 +245,9 @@ def test_tradecard_returns_best_one() -> int:
         'confidence': 'MEDIUM',
         'paper_only': True,
     }
-    with patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake_card), \
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+         patch('backend.trading.opening_rally_radar.pick_best_opening_tradecard', return_value=('RAILTEL', 78, [])), \
+         patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake_card), \
          patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
          patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('', '')), \
          patch('backend.trading.tradecard_refresh.refresh_tradecard_market_data', return_value={}):
@@ -283,6 +292,152 @@ def test_news_scoring_confirm() -> int:
     return 0
 
 
+def test_tradecard_selector_sync_with_tradecards() -> int:
+    from backend.telegram.response_format import format_tradecard_telegram
+    from backend.trading.opening_rally_radar import select_synced_tradecard
+
+    fake_board = {
+        'ranked_candidates': [
+            {'ticker': 'INFY', 'state': 'TRADECARD_CANDIDATE', 'score': 85, 'why': ['fresh news']},
+            {'ticker': 'MAPMYINDIA', 'state': 'VOLUME_IGNITION', 'score': 70, 'why': ['volume']},
+        ],
+        'phase': 'CONFIRMATION',
+        'time_ist': '09:25',
+    }
+    legacy_card = {
+        'ok': True,
+        'ticker': 'MAPMYINDIA',
+        'status': 'VALID_ENTRY',
+        'current_price': 150,
+        'entry_zone': '149–151',
+        'stop_loss': 147,
+        'target_1': 153,
+        'target_2': 156,
+        'risk_reward': 2.0,
+        'capital_plan': 'Paper only',
+        'reason': 'legacy pick',
+        'invalid_if': 'Below 147',
+        'confidence': 'MEDIUM',
+        'paper_only': True,
+    }
+    infy_card = {**legacy_card, 'ticker': 'INFY', 'reason': 'Opening rally candidate'}
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+         patch('backend.trading.opening_rally_radar.pick_best_opening_tradecard', return_value=('INFY', 85, ['MAPMYINDIA'])), \
+         patch('backend.trading.trade_card_engine.get_trade_card', return_value=legacy_card), \
+         patch('backend.trading.trade_card_engine.build_trade_card', return_value=infy_card), \
+         patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('', '')), \
+         patch('backend.trading.tradecard_refresh.refresh_tradecard_market_data', return_value={}):
+        sync = select_synced_tradecard(legacy_ticker='MAPMYINDIA')
+        if sync.get('tradecards_best') != 'INFY' or sync.get('selected') != 'INFY':
+            return _fail(f'selector sync expected INFY got {sync}')
+        text = format_tradecard_telegram(explain=False)
+    if 'INFY' not in text:
+        return _fail('/tradecard must select same top as /tradecards (INFY)')
+    return 0
+
+
+def test_chase_risk_after_0940_no_active_entry() -> int:
+    from datetime import datetime
+    from backend.telegram.response_format import format_tradecard_telegram
+    from backend.trading.opening_rally_radar import select_synced_tradecard
+
+    fake_board = {
+        'ranked_candidates': [
+            {'ticker': 'RVNL', 'state': 'CHASE_RISK', 'score': 60, 'why': ['extended']},
+        ],
+        'phase': 'CHASE',
+        'time_ist': '09:42',
+    }
+    card = {
+        'ok': True,
+        'ticker': 'RVNL',
+        'status': 'VALID_ENTRY',
+        'current_price': 200,
+        'entry_zone': '198–202',
+        'stop_loss': 195,
+        'target_1': 205,
+        'target_2': 210,
+        'risk_reward': 1.8,
+        'capital_plan': 'Paper only',
+        'reason': 'extended move',
+        'invalid_if': 'Below 195',
+        'confidence': 'LOW',
+        'paper_only': True,
+    }
+    now = datetime(2026, 7, 1, 9, 42, tzinfo=IST)
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+         patch('backend.trading.opening_rally_radar.pick_best_opening_tradecard', return_value=('RVNL', 60, [])), \
+         patch('backend.trading.trade_card_engine.get_trade_card', return_value=card), \
+         patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('', '')), \
+         patch('backend.trading.tradecard_refresh.refresh_tradecard_market_data', return_value={}):
+        sync = select_synced_tradecard(legacy_ticker='RVNL', now=now)
+        if sync.get('status_override') != 'NO_ACTIVE_ENTRY':
+            return _fail(f'CHASE_RISK after 09:40 must override status got {sync}')
+        text = format_tradecard_telegram(explain=False)
+    if 'NO ACTIVE ENTRY' not in text.upper():
+        return _fail('/tradecard must show NO ACTIVE ENTRY for CHASE_RISK after 09:40')
+    return 0
+
+
+def test_scheduled_opening_radar_candidates() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.trading.opening_rally_radar import run_scheduled_opening_radar_alert
+
+    fake_board = {
+        'ranked_candidates': [
+            {'ticker': 'RAILTEL', 'state': 'VOLUME_IGNITION', 'score': 78, 'why': ['volume']},
+        ],
+        'phase': 'IGNITION',
+        'time_ist': '09:20',
+    }
+    sent_messages: list[str] = []
+
+    def _send(text: str) -> bool:
+        sent_messages.append(text)
+        return True
+
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+         patch('backend.orchestration.alert_quality_engine.evaluate_text_alert', return_value={'send': True}), \
+         patch('backend.orchestration.alert_quality_engine.record_text_alert_sent'):
+        buf = StringIO()
+        with redirect_stdout(buf):
+            ok = run_scheduled_opening_radar_alert(now=_dt(9, 20), send_fn=_send)
+    if not ok or not sent_messages:
+        return _fail('scheduled opening radar must send when candidates exist')
+    if 'OPENING RALLY RADAR' not in sent_messages[0]:
+        return _fail('scheduled alert must use opening radar format')
+    if '[OPENING_RADAR_SCHEDULED]' not in buf.getvalue() or 'sent=yes' not in buf.getvalue():
+        return _fail('scheduled run must log OPENING_RADAR_SCHEDULED sent=yes')
+    return 0
+
+
+def test_scheduled_opening_radar_no_candidate_silent() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.trading.opening_rally_radar import run_scheduled_opening_radar_alert
+
+    fake_board = {'ranked_candidates': [], 'phase': 'IGNITION', 'time_ist': '09:20'}
+    sent_messages: list[str] = []
+
+    def _send(text: str) -> bool:
+        sent_messages.append(text)
+        return True
+
+    with patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board):
+        buf = StringIO()
+        with redirect_stdout(buf):
+            ok = run_scheduled_opening_radar_alert(now=_dt(9, 20), send_fn=_send)
+    if ok or sent_messages:
+        return _fail('no-candidate scheduled run must not send Telegram spam')
+    logs = buf.getvalue()
+    if '[OPENING_RADAR_NO_CANDIDATES]' not in logs or 'sent=no' not in logs:
+        return _fail('no-candidate run must log OPENING_RADAR_NO_CANDIDATES and sent=no')
+    return 0
+
+
 def test_existing_tradecard_tests() -> int:
     import subprocess
 
@@ -306,6 +461,10 @@ def main() -> int:
         test_extended_chase_risk,
         test_tradecards_command_multiple,
         test_tradecard_returns_best_one,
+        test_tradecard_selector_sync_with_tradecards,
+        test_chase_risk_after_0940_no_active_entry,
+        test_scheduled_opening_radar_candidates,
+        test_scheduled_opening_radar_no_candidate_silent,
         test_news_scoring_confirm,
         test_existing_tradecard_tests,
     ]
