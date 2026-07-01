@@ -591,7 +591,7 @@ def _sanitize_full_snapshot_error(reason: str) -> str:
 
 
 def _full_snapshot_step_prefix(step: int, total: int, command: str) -> str:
-    return f'📦 AstraEdge Full\nStep {step:02d}/{total:02d} — {command}'
+    return f'📦 AstraEdge Full — opening workflow view\nStep {step:02d}/{total:02d} — {command}'
 
 
 def _handle_full_snapshot(*, dry_run: bool = False) -> list[dict[str, Any]]:

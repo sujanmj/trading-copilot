@@ -86,8 +86,8 @@ def main() -> int:
 
     if ASTRAEDGE_TELEGRAM_BUILD != f'AstraEdge {get_astraedge_build_stage()}':
         return _fail(f'expected {ASTRAEDGE_TELEGRAM_BUILD!r} got build mismatch')
-    if len(FULL_SNAPSHOT_SEQUENCE) != 34:
-        return _fail(f'/full must remain 34 read-only steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    if len(FULL_SNAPSHOT_SEQUENCE) != 12:
+        return _fail(f'/full must be 12 opening-workflow steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
     if '/aihub reddit' in FULL_SNAPSHOT_SEQUENCE:
         return _fail('/full must not include removed Reddit step')
 

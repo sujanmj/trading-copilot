@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate weekend premarket scheduler suppression (Stage 47C)."""
+"""Validate weekend premarket scheduler suppression (Stage 47C/4B.3)."""
 
 from __future__ import annotations
 
@@ -26,8 +26,15 @@ def main() -> int:
     from backend.telegram import premarket_scheduler as sched
 
     suppress = sched.WEEKEND_SUPPRESS_SEND_SLOTS
-    expected = {'premarket_top3', 'preopen_watch', 'live_validation', 'open_confirmation'}
-    if suppress != expected:
+    expected = {
+        'premarket_top3',
+        'premarket_action',
+        'radar_armed_0900',
+        'opening_radar_0920',
+        'early_tradecards_0925',
+        'final_confirmation_0931',
+    }
+    if suppress != frozenset(expected):
         return _fail(f'unexpected suppress slots: {suppress}')
 
     weekend = datetime(2026, 6, 6, 8, 30, tzinfo=ZoneInfo('Asia/Kolkata'))
@@ -35,24 +42,22 @@ def main() -> int:
     with patch.object(sched, '_is_weekend_research_mode', return_value=True):
         buf = StringIO()
         with patch('sys.stdout', buf):
-            ok = sched.run_premarket_slot('premarket_top3')
+            ok = sched.run_premarket_slot('premarket_top3', now=weekend)
         out = buf.getvalue()
         if ok:
             return _fail('premarket_top3 should not send on weekend')
         if 'WEEKEND_SCHEDULE_SUPPRESSED premarket_alert reason=weekend_research_mode' not in out:
             return _fail('missing WEEKEND_SCHEDULE_SUPPRESSED log line')
 
-    with patch.object(sched, '_is_weekend_research_mode', return_value=True):
-        with patch('backend.analytics.premarket_conviction.send_scheduled_premarket', return_value=True) as send_mock:
-            sched.run_premarket_slot('premarket_action')
-            if not send_mock.called:
-                return _fail('premarket_action (08:45) should still send on weekend')
-
     with patch.object(sched, '_is_weekend_research_mode', return_value=False):
         with patch('backend.analytics.premarket_conviction.send_scheduled_premarket', return_value=True) as send_mock:
-            sched.run_premarket_slot('premarket_top3')
-            if not send_mock.called:
-                return _fail('weekday premarket_top3 should send')
+            buf = StringIO()
+            with patch('sys.stdout', buf):
+                sched.run_premarket_slot('premarket_action', now=weekend.replace(hour=8, minute=45))
+            if send_mock.called:
+                return _fail('weekday 08:45 must skip legacy alert when opening workflow enabled')
+            if '[OLD_PREMARKET_ALERT_SKIPPED]' not in buf.getvalue():
+                return _fail('missing OLD_PREMARKET_ALERT_SKIPPED for 08:45')
 
     from backend.analytics.premarket_conviction import format_premarket_telegram
 

@@ -455,6 +455,9 @@ def test_schedule_shows_four_morning_alerts() -> int:
 
     text = format_schedule_text()
     for label in (
+        'Background prep',
+        'Runs silently before market open',
+        'Opening rally workflow',
         '09:00',
         'Radar Armed',
         '09:20',
@@ -466,6 +469,81 @@ def test_schedule_shows_four_morning_alerts() -> int:
     ):
         if label not in text:
             return _fail(f'/schedule missing {label!r}')
+    for hidden in (
+        'Morning builds & premarket',
+        '07:45 — overnight global',
+        '08:00 — India news',
+        '08:15 — premarket scanner',
+        '08:30 — Telegram premarket top 3',
+        '08:45 — final premarket action',
+    ):
+        if hidden in text:
+            return _fail(f'/schedule must hide legacy detail: {hidden!r}')
+    return 0
+
+
+def test_old_premarket_alerts_skipped() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.telegram.premarket_scheduler import run_premarket_slot
+
+    with patch('backend.analytics.premarket_conviction.send_scheduled_premarket', return_value=True) as send_mock:
+        buf = StringIO()
+        with redirect_stdout(buf):
+            ok = run_premarket_slot('premarket_top3', now=_dt(8, 30))
+        if ok:
+            return _fail('08:30 alert slot must not send when opening workflow enabled')
+        if send_mock.called:
+            return _fail('send_scheduled_premarket must not run for 08:30')
+        if '[OLD_PREMARKET_ALERT_SKIPPED]' not in buf.getvalue() or 'alert=0830' not in buf.getvalue():
+            return _fail('08:30 skip must log OLD_PREMARKET_ALERT_SKIPPED')
+        buf2 = StringIO()
+        with redirect_stdout(buf2):
+            run_premarket_slot('premarket_action', now=_dt(8, 45))
+        if send_mock.called:
+            return _fail('send_scheduled_premarket must not run for 08:45')
+        if 'alert=0845' not in buf2.getvalue():
+            return _fail('08:45 skip must log OLD_PREMARKET_ALERT_SKIPPED')
+    return 0
+
+
+def test_silent_premarket_build_runs() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.telegram.premarket_scheduler import run_premarket_slot
+
+    with patch('backend.analytics.premarket_conviction.build_premarket_conviction_report', return_value={}) as build_mock:
+        buf = StringIO()
+        with redirect_stdout(buf):
+            ok = run_premarket_slot('overnight_global', now=_dt(7, 45))
+        if not ok or not build_mock.called:
+            return _fail('07:45 silent build must run build_premarket_conviction_report')
+        logs = buf.getvalue()
+        if '[SILENT_PREMARKET_BUILD]' not in logs or 'stage=global' not in logs:
+            return _fail('07:45 must log SILENT_PREMARKET_BUILD stage=global')
+        for slot, stage, hour, minute in (
+            ('india_digest', 'news', 8, 0),
+            ('scanner_build', 'scanner', 8, 15),
+        ):
+            buf = StringIO()
+            with redirect_stdout(buf):
+                run_premarket_slot(slot, now=_dt(hour, minute))
+            if f'stage={stage}' not in buf.getvalue():
+                return _fail(f'{slot} must log SILENT_PREMARKET_BUILD stage={stage}')
+    return 0
+
+
+def test_manual_premarket_still_works() -> int:
+    from backend.telegram.telegram_analysis_bot import handle_analysis_command
+
+    results = handle_analysis_command('/premarket', 'test', dry_run=True)
+    text = str(results[0].get('text', '')).upper() if results else ''
+    if not results or not any(token in text for token in ('PREMARKET', 'WEEKEND RESEARCH', 'LIVE MARKET', 'AFTER-HOURS')):
+        return _fail('manual /premarket must still work')
+    results_full = handle_analysis_command('/premarket full', 'test', dry_run=True)
+    full_text = str(results_full[0].get('text', '')).upper() if results_full else ''
+    if not results_full or 'BRIEF' not in full_text:
+        return _fail('manual /premarket full must still work')
     return 0
 
 
@@ -607,6 +685,9 @@ def main() -> int:
         test_chase_risk_after_0940_no_active_entry,
         test_no_0910_scheduled_alert,
         test_schedule_shows_four_morning_alerts,
+        test_old_premarket_alerts_skipped,
+        test_silent_premarket_build_runs,
+        test_manual_premarket_still_works,
         test_scheduled_radar_armed_0900,
         test_scheduled_opening_radar_candidates,
         test_scheduled_opening_radar_no_candidate_silent,
