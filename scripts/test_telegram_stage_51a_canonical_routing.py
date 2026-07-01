@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 51A — production analysis bot canonical command routing."""
+"""Stage 51A/51B — production analysis bot canonical command routing (filename kept for compatibility)."""
 
 from __future__ import annotations
 
@@ -24,15 +24,22 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     from backend.analytics.budget_impact import CACHE_FILE as BUDGET_CACHE_FILE, refresh_budget_intel
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
     from backend.intelligence.stock_catalyst_radar import CACHE_FILE as CATALYST_CACHE_FILE, build_catalyst_radar
     from backend.telegram.lazy_command_runner import STAGE_MARKER, run_budget_only, run_catalysts_only
     from backend.telegram.telegram_analysis_bot import handle_analysis_command
 
     if STAGE_MARKER != 'TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS':
         return _fail(f'unexpected STAGE_MARKER: {STAGE_MARKER!r}')
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51A':
-        return _fail(f'unexpected build: {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    build_stage = get_astraedge_build_stage()
+    if build_stage not in ('51A', '51B'):
+        return _fail(f'unexpected build stage: {build_stage!r}')
+    if not ASTRAEDGE_TELEGRAM_BUILD.startswith('AstraEdge '):
+        return _fail(f'unexpected build label: {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != f'AstraEdge {build_stage}':
+        return _fail(
+            f'build label {ASTRAEDGE_TELEGRAM_BUILD!r} != stage {build_stage!r}'
+        )
 
     bot_src = (PROJECT_ROOT / 'backend/telegram/telegram_analysis_bot.py').read_text(encoding='utf-8')
     if 'run_canonical_full_refresh' not in bot_src:
@@ -116,7 +123,7 @@ def main() -> int:
     canonical_status = (
         '<b>📡 System Status</b>\n'
         'State: <code>OPEN</code>\n'
-        'Telegram build: <code>AstraEdge 51A</code>'
+        f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>'
     )
     with patch(
         'backend.telegram.telegram_analysis_bot.format_canonical_status_text',
@@ -130,8 +137,8 @@ def main() -> int:
     status_text = str(status_results[0].get('text', ''))
     if '📡 System Status' not in status_text:
         return _fail('/status must use canonical runtime status formatter')
-    if 'AstraEdge 51A' not in status_text:
-        return _fail('/status missing AstraEdge 51A build line')
+    if ASTRAEDGE_TELEGRAM_BUILD not in status_text:
+        return _fail(f'/status missing {ASTRAEDGE_TELEGRAM_BUILD} build line')
 
     health = handle_analysis_command('/health', 'test', dry_run=True)
     health_text = str(health[0].get('text', ''))
@@ -139,8 +146,8 @@ def main() -> int:
         return _fail('/health missing active bot label')
     if 'Command router: <code>canonical</code>' not in health_text:
         return _fail('/health missing canonical router label')
-    if 'AstraEdge 51A' not in health_text:
-        return _fail('/health missing AstraEdge 51A')
+    if ASTRAEDGE_TELEGRAM_BUILD not in health_text:
+        return _fail(f'/health missing {ASTRAEDGE_TELEGRAM_BUILD}')
 
     budget_runner_src = inspect.getsource(run_budget_only)
     if 'handle_budget_command' not in budget_runner_src:
@@ -155,6 +162,56 @@ def main() -> int:
         return _fail('budget command must route through lazy_command_runner.run_budget_only')
     if CATALYST_CACHE_FILE.name != 'stock_catalyst_radar_latest.json':
         return _fail('catalyst cache file name mismatch')
+
+    radar_text = (
+        '<b>OPENING RALLY RADAR</b>\n'
+        '1. RAILTEL — VOLUME IGNITION\n'
+        '   Score: 78'
+    )
+    tradecards_text = (
+        '<b>TRADECARDS — TOP CANDIDATES</b>\n'
+        '1. RAILTEL — MOMENTUM-ONLY WATCH — Score 78\n'
+        '2. RVNL — WAIT FOR VOLUME — Score 68'
+    )
+    tradecard_text = '<b>Trade Card</b>\nRAILTEL — selected best single candidate'
+    with patch(
+        'backend.telegram.lazy_command_runner.run_radar_only',
+        return_value={'text': radar_text},
+    ) as mock_radar:
+        radar_results = handle_analysis_command('/radar', 'test', dry_run=True)
+        mock_radar.assert_called_once()
+    if 'OPENING RALLY RADAR' not in str(radar_results[0].get('text', '')):
+        return _fail('/radar must route to opening rally radar formatter')
+
+    with patch(
+        'backend.telegram.lazy_command_runner.run_radar_only',
+        return_value={'text': radar_text},
+    ) as mock_opening_radar:
+        opening_results = handle_analysis_command('/opening radar', 'test', dry_run=True)
+        mock_opening_radar.assert_called_once()
+    if 'OPENING RALLY RADAR' not in str(opening_results[0].get('text', '')):
+        return _fail('/opening radar must route to opening rally radar formatter')
+
+    with patch(
+        'backend.telegram.lazy_command_runner.run_tradecards_only',
+        return_value={'text': tradecards_text},
+    ) as mock_tradecards:
+        tradecards_results = handle_analysis_command('/tradecards', 'test', dry_run=True)
+        mock_tradecards.assert_called_once()
+    tradecards_out = str(tradecards_results[0].get('text', ''))
+    if 'TRADECARDS' not in tradecards_out:
+        return _fail('/tradecards must show tradecards board header')
+    if tradecards_out.count('Score') < 2:
+        return _fail('/tradecards must show multiple candidates')
+
+    with patch(
+        'backend.telegram.lazy_command_runner.run_tradecard_only',
+        return_value={'text': tradecard_text},
+    ) as mock_tradecard:
+        tradecard_results = handle_analysis_command('/tradecard', 'test', dry_run=True)
+        mock_tradecard.assert_called_once()
+    if 'Trade Card' not in str(tradecard_results[0].get('text', '')):
+        return _fail('/tradecard must still route to single best tradecard runner')
 
     print('TELEGRAM_STAGE_51A_TEST_OK')
     return 0

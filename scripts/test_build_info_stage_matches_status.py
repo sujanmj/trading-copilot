@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 51A — build-info stage matches canonical /status Telegram build."""
+"""Stage 51B — build-info stage matches canonical /status Telegram build."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import format_canonical_status_text
 
     stage = get_astraedge_build_stage()
-    if stage != '51A' or ASTRAEDGE_BUILD_STAGE != '51A':
-        return _fail(f'expected build stage 51A got {stage!r}')
+    if stage != '51B' or ASTRAEDGE_BUILD_STAGE != '51B':
+        return _fail(f'expected build stage 51B got {stage!r}')
 
     status = format_canonical_status_text()
     if ASTRAEDGE_TELEGRAM_BUILD not in status:

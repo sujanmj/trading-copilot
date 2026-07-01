@@ -35,11 +35,17 @@ MODULE_ORDER: tuple[str, ...] = (
 
 DIRECT_CATALYST_MODULES = frozenset({'news', 'my_feed', 'broker'})
 POSITIVE_TERMS = (
-    'order win', 'wins order', 'bagged order', 'contract', 'approval', 'approved',
+    'order win', 'wins order', 'bagged order', 'work order', 'received order',
+    'awarded contract', 'contract award', 'crore order', 'contract', 'approval', 'approved',
     'stake', 'investment', 'upgrade', 'target raised', 'target upgrade',
     'outperform', 'overweight', 'accumulate', 'result beat', 'profit rises',
     'capex', 'project', 'launch', 'bullish',
 )
+
+BULLISH_CATALYST_TYPES = frozenset({
+    'ORDER_WIN', 'PROJECT_ANNOUNCEMENT', 'ACQUISITION', 'STAKE_BUY', 'AI_INVESTMENT',
+    'REGULATORY_APPROVAL', 'BROKER_UPGRADE', 'TARGET_UPGRADE', 'DIVIDEND_BONUS_SPLIT',
+})
 NEGATIVE_TERMS = (
     'downgrade', 'target cut', 'target downgrade', 'underperform', 'underweight',
     'sell rating', 'probe', 'penalty', 'fine', 'falls', 'plunges', 'slumps',
@@ -285,6 +291,7 @@ def _direct_text_evidence(
     text = _row_text(best)
     lower = text.lower()
     side = str(best.get('side') or best.get('catalyst_side') or '').upper()
+    ctype = str(best.get('catalyst_type') or '').upper()
     verdict = 'neutral'
     weight = 0.0
     scope = 'direct'
@@ -292,7 +299,11 @@ def _direct_text_evidence(
         verdict = 'reject' if module in ('news', 'broker') else 'warn'
         weight = negative_weight
         scope = 'risk'
-    elif side == 'BULLISH' or any(term in lower for term in POSITIVE_TERMS):
+    elif (
+        side == 'BULLISH'
+        or ctype in BULLISH_CATALYST_TYPES
+        or any(term in lower for term in POSITIVE_TERMS)
+    ):
         verdict = 'confirm'
         weight = positive_weight
     reason = (

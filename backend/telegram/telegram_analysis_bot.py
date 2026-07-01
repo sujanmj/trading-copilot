@@ -121,6 +121,11 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /catalysts today — today's catalyst priority list
 /catalysts explain &lt;ticker&gt; — catalyst reason for ticker
 
+<b>Opening Rally:</b>
+/radar — opening rally candidates (early layer)
+/opening radar — same as /radar
+/tradecards — top 5-10 tradecard candidates with reasons
+
 <b>Trade Card:</b>
 /tradecard — one-stock paper trade card
 /tradecard today — today's trade card
@@ -229,6 +234,10 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'resolve', 'outcomes'
     if lower == 'outcomes':
         return 'outcomes', ''
+    if lower in ('radar', 'opening radar'):
+        return 'radar', ''
+    if lower == 'tradecards':
+        return 'tradecards', ''
     if lower == 'feed':
         return 'feed', ''
     if lower in ('feed news', 'myfeed add', 'myfeed news'):
@@ -772,6 +781,16 @@ def handle_analysis_command(
             command='tradecard',
         )
         response_text = result.get('text') or 'Trade card unavailable.'
+    elif cmd == 'radar':
+        from backend.telegram.lazy_command_runner import run_radar_only
+
+        result = run_without_ai(run_radar_only, command='radar')
+        response_text = result.get('text') or 'Opening rally radar unavailable.'
+    elif cmd == 'tradecards':
+        from backend.telegram.lazy_command_runner import run_tradecards_only
+
+        result = run_without_ai(run_tradecards_only, command='tradecards')
+        response_text = result.get('text') or 'Tradecards board unavailable.'
     elif cmd == 'catalysts':
         from backend.telegram.lazy_command_runner import run_catalysts_only
 

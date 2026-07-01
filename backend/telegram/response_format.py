@@ -2309,6 +2309,9 @@ def _tradecard_explain_lines(
             f"Risk logic: invalid if {clean_avoid_reason_text(str(payload.get('invalid_if') or ''), max_len=120) or '—'}",
             f"Next action: {payload.get('exit_rule') or 'monitor paper plan manually'}",
         ])
+        beat_line = format_tradecard_beat_others_line(str(payload.get('ticker') or ''))
+        if beat_line:
+            lines.append(beat_line)
     return lines
 
 
@@ -2783,3 +2786,111 @@ def format_tradecard_telegram(
         journal_card['entry_zone'] = 'NO ACTIVE ENTRY'
         _save_latest(journal_card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
     return strip_stage_markers('\n'.join(lines))
+
+
+def _opening_state_label(state: str) -> str:
+    token = str(state or '').upper().replace('_', ' ')
+    if token == 'MOMENTUM ONLY WATCH':
+        return 'MOMENTUM-ONLY WATCH'
+    return token
+
+
+def format_opening_radar_telegram(
+    *,
+    board: dict[str, Any] | None = None,
+) -> str:
+    """Format /radar or /opening radar — early rally candidates."""
+    from backend.trading.opening_rally_radar import (
+        build_opening_rally_board,
+        format_opening_radar_action,
+        opening_radar_time_phase,
+    )
+
+    data = board or build_opening_rally_board()
+    time_ist = str(data.get('time_ist') or '—')
+    phase = str(data.get('phase') or opening_radar_time_phase())
+    lines = [
+        f'<b>OPENING RALLY RADAR — {time_ist} IST</b>',
+        f'<i>Phase: {phase.replace("_", " ").lower()} · paper/research only</i>',
+        '',
+    ]
+    candidates = [
+        r for r in (data.get('ranked_candidates') or [])
+        if r.get('state') != 'REJECTED'
+    ]
+    if not candidates:
+        lines.append('No opening rally candidates armed yet.')
+        lines.append('Watch /catalysts and /premarket for fresh setups.')
+        return strip_stage_markers('\n'.join(lines))
+
+    for idx, row in enumerate(candidates[:8], start=1):
+        sym = str(row.get('ticker') or '?')
+        state = _opening_state_label(str(row.get('state') or ''))
+        score = int(row.get('score') or 0)
+        why = ' + '.join(row.get('why') or []) or 'opening watch'
+        action = format_opening_radar_action(str(row.get('state') or ''))
+        lines.extend([
+            f'{idx}. <b>{sym}</b> — {state}',
+            f'   Score: {score}',
+            f'   Why: {why}',
+            f'   Action: {action}',
+            '',
+        ])
+    lines.append('Paper only — no blind chase before /tradecard.')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_tradecards_telegram(
+    *,
+    board: dict[str, Any] | None = None,
+) -> str:
+    """Format /tradecards — top multi-candidate tradecard board."""
+    from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
+
+    data = board or build_opening_rally_board()
+    lines = [
+        '<b>TRADECARDS — TOP CANDIDATES</b>',
+        '<i>paper only — research, not execution</i>',
+        '',
+    ]
+    candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
+    if not candidates:
+        lines.append('No tradecard candidates on the opening board yet.')
+        return strip_stage_markers('\n'.join(lines))
+
+    for idx, row in enumerate(candidates[:10], start=1):
+        sym = str(row.get('ticker') or '?')
+        state = _opening_state_label(str(row.get('state') or ''))
+        score = int(row.get('score') or 0)
+        why = ' + '.join(row.get('why') or []) or '—'
+        lines.append(f'{idx}. <b>{sym}</b> — {state} — Score {score}')
+        lines.append(f'   {why}')
+
+    best_sym, best_score, beaten = pick_best_opening_tradecard(data)
+    if best_sym:
+        lines.extend([
+            '',
+            f'<b>Best pick:</b> {best_sym} (score {best_score})',
+        ])
+        if beaten:
+            lines.append(f'Beats: {", ".join(beaten)}')
+    lines.append('')
+    lines.append('Use /tradecard for the single best paper card.')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_tradecard_beat_others_line(ticker: str) -> str:
+    """Optional explain helper — why this ticker beat opening-board peers."""
+    from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
+
+    sym = str(ticker or '').strip().upper()
+    if not sym:
+        return ''
+    board = build_opening_rally_board()
+    best_sym, best_score, beaten = pick_best_opening_tradecard(board)
+    if not best_sym or best_sym != sym:
+        return ''
+    if not beaten:
+        return ''
+    return f'Opening board: beat {", ".join(beaten)} (score {best_score}).'
+

@@ -716,6 +716,20 @@ def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[st
     return _runner_result('tradecard', text=text, payload={'freshness': freshness})
 
 
+def run_radar_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import format_opening_radar_telegram
+
+    text = format_opening_radar_telegram()
+    return _runner_result('radar', text=text)
+
+
+def run_tradecards_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import format_tradecards_telegram
+
+    text = format_tradecards_telegram()
+    return _runner_result('tradecards', text=text)
+
+
 def run_catalysts_only(args: str = '') -> dict[str, Any]:
     from backend.intelligence.stock_catalyst_radar import format_catalyst_radar_telegram
 

@@ -118,7 +118,11 @@ CATALYST_TYPE_RANK: dict[str, int] = {
 CATALYST_RULES: tuple[tuple[re.Pattern[str], str, str], ...] = (
     (re.compile(r'\b(ai investment|investment in ai|artificial intelligence stake|sarvam ai)\b', re.I), 'AI_INVESTMENT', 'BULLISH'),
     (re.compile(r'\b(project|smart city|township|housing project|real estate project)\b', re.I), 'PROJECT_ANNOUNCEMENT', 'BULLISH'),
-    (re.compile(r'\b(order win|wins order|bagged order|contract win|wins contract)\b', re.I), 'ORDER_WIN', 'BULLISH'),
+    (re.compile(
+        r'\b(order win|wins order|bagged order|contract win|wins contract|'
+        r'work order|received order|awarded contract|crore order)\b',
+        re.I,
+    ), 'ORDER_WIN', 'BULLISH'),
     (re.compile(r'\b(acquisition|acquires|to acquire|merger|takeover)\b', re.I), 'ACQUISITION', 'BULLISH'),
     (re.compile(r'\b(stake buy|buys stake|buying stake|bought stake|picks up stake|invests in|investment in)\b', re.I), 'STAKE_BUY', 'BULLISH'),
     (re.compile(r'\b(promoter sells|ofs|offer for sale|stake dilution|stake sale|sells stake|offloads stake|divest)\b', re.I), 'OFS', 'BEARISH'),
