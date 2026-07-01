@@ -1,15 +1,15 @@
 """
-Premarket IST scheduler (Stage 46H + 4B.2 opening morning workflow).
+Premarket IST scheduler (Stage 46H + 4B.3 opening workflow).
 
-Build slots: 07:45–08:45
-Opening rally alerts: 09:00, 09:20, 09:25, 09:31 (no 09:10 pre-open alert).
+Silent background builds: 07:45, 08:00, 08:15 (data for 09:00 radar).
+Opening rally Telegram alerts: 09:00, 09:20, 09:25, 09:31.
+Legacy 08:30/08:45 auto-alerts skipped when opening workflow is enabled.
 """
 
 from __future__ import annotations
 
 import json
 import threading
-import time
 from datetime import datetime
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
@@ -19,12 +19,26 @@ from backend.storage.data_paths import get_data_path
 IST = ZoneInfo('Asia/Kolkata')
 STATE_FILE = get_data_path('premarket_scheduler_state.json')
 
+# Opening workflow replaces legacy 08:30/08:45 scheduled Telegram alerts.
+OPENING_WORKFLOW_ENABLED = True
+
 PREMARKET_SLOTS: dict[str, tuple[int, int]] = {
     'overnight_global': (7, 45),
     'india_digest': (8, 0),
     'scanner_build': (8, 15),
     'premarket_top3': (8, 30),
     'premarket_action': (8, 45),
+}
+
+SILENT_BUILD_SLOTS: dict[str, str] = {
+    'overnight_global': 'global',
+    'india_digest': 'news',
+    'scanner_build': 'scanner',
+}
+
+OLD_PREMARKET_ALERT_SLOTS: dict[str, str] = {
+    'premarket_top3': '0830',
+    'premarket_action': '0845',
 }
 
 OPENING_MORNING_SLOTS: dict[str, tuple[int, int]] = {
@@ -34,12 +48,7 @@ OPENING_MORNING_SLOTS: dict[str, tuple[int, int]] = {
     'final_confirmation_0931': (9, 31),
 }
 
-SCHEDULE_DISPLAY = [
-    '07:45 — overnight global + US close + commodities',
-    '08:00 — India news + govt + broker digest',
-    '08:15 — premarket scanner/watchlist build',
-    '08:30 — Telegram premarket top 3 setups',
-    '08:45 — final premarket action plan',
+SCHEDULE_DISPLAY_OPENING = [
     '09:00 — Radar Armed (news/theme watchlist)',
     '09:20 — Opening Rally Radar (live reaction)',
     '09:25 — Early Tradecards (provisional ranks)',
@@ -52,6 +61,17 @@ OPENING_SCHEDULE_LABELS = [
     '09:25 Early Tradecards',
     '09:31 Final Opening Confirmation',
 ]
+
+# Legacy detailed list retained for internal reference/tests (not shown in /schedule).
+SCHEDULE_DISPLAY_LEGACY_BUILDS = [
+    '07:45 — overnight global + US close + commodities',
+    '08:00 — India news + govt + broker digest',
+    '08:15 — premarket scanner/watchlist build',
+    '08:30 — Telegram premarket top 3 setups',
+    '08:45 — final premarket action plan',
+]
+
+SCHEDULE_DISPLAY = SCHEDULE_DISPLAY_LEGACY_BUILDS + SCHEDULE_DISPLAY_OPENING
 
 
 def _load_state() -> dict:
@@ -121,22 +141,44 @@ def _is_weekend_research_mode(now: Optional[datetime] = None) -> bool:
     return is_weekend_holiday_research_telegram_mode(mode)
 
 
-def run_premarket_slot(slot: str, *, send_fn: Optional[Callable[[str], bool]] = None) -> bool:
+def is_opening_workflow_enabled() -> bool:
+    return OPENING_WORKFLOW_ENABLED
+
+
+def run_premarket_slot(
+    slot: str,
+    *,
+    send_fn: Optional[Callable[[str], bool]] = None,
+    now: Optional[datetime] = None,
+) -> bool:
     from backend.analytics.premarket_conviction import build_premarket_conviction_report, send_scheduled_premarket
 
-    build_slots = {'overnight_global', 'india_digest', 'scanner_build'}
-    send_slots = {'premarket_top3', 'premarket_action'}
+    ist_now = now or datetime.now(IST)
+    ts = ist_now.replace(microsecond=0).isoformat()
 
-    if slot in build_slots:
-        build_premarket_conviction_report(persist=True)
-        print(f'[PREMARKET_SCHED] built report slot={slot}', flush=True)
-        return True
+    if slot in SILENT_BUILD_SLOTS:
+        stage = SILENT_BUILD_SLOTS[slot]
+        try:
+            build_premarket_conviction_report(persist=True)
+            print(f'[SILENT_PREMARKET_BUILD] time={ts} stage={stage} status=ok', flush=True)
+            return True
+        except Exception:
+            print(f'[SILENT_PREMARKET_BUILD] time={ts} stage={stage} status=fail', flush=True)
+            raise
 
-    if slot in send_slots:
-        if _is_weekend_research_mode():
+    if slot in OLD_PREMARKET_ALERT_SLOTS:
+        if _is_weekend_research_mode(ist_now):
             print(
                 'WEEKEND_SCHEDULE_SUPPRESSED premarket_alert reason=weekend_research_mode '
                 f'slot={slot}',
+                flush=True,
+            )
+            return False
+        if is_opening_workflow_enabled():
+            alert = OLD_PREMARKET_ALERT_SLOTS[slot]
+            print(
+                f'[OLD_PREMARKET_ALERT_SKIPPED] time={ts} alert={alert} '
+                'reason=opening_workflow_enabled',
                 flush=True,
             )
             return False
@@ -172,21 +214,19 @@ def run_opening_morning_slot(
 
 def format_schedule_text() -> str:
     lines = [
-        '<b>📅 Premarket schedule (IST)</b>',
+        '<b>📅 Schedule (IST)</b>',
         '',
-        '<b>Morning builds & premarket</b>',
-    ]
-    lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY[:5])
-    lines.extend([
+        '<b>Background prep:</b>',
+        '• Runs silently before market open',
         '',
         '<b>Opening rally workflow</b>',
-    ])
-    lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY[5:])
+    ]
+    lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY_OPENING)
     lines.extend([
         '',
         '<b>Manual anytime:</b> /radar · /opening · /tradecards · /tradecard',
         '',
-        '<b>Commands:</b> /premarket · /premarket full',
+        '<b>Commands:</b> /premarket · /premarket full · /action plan',
     ])
     return '\n'.join(lines)
 
@@ -201,7 +241,7 @@ def run_premarket_scheduler_loop(
         now = datetime.now(IST)
         for slot in due_premarket_slots(now):
             try:
-                run_premarket_slot(slot, send_fn=send_fn)
+                run_premarket_slot(slot, send_fn=send_fn, now=now)
                 _mark_sent(slot, now)
             except Exception as exc:
                 print(f'[PREMARKET_SCHED] slot={slot} failed: {exc}', flush=True)

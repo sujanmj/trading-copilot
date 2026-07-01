@@ -109,7 +109,7 @@ def main() -> int:
         [{'ticker': 'XYZ', 'score': 70, 'setup': 'WATCH'}],
         [{'ticker': 'XYZ', 'reason': 'weak'}],
     )
-    if conflicted[0].get('setup') != 'Conflict/Wait':
+    if conflicted and conflicted[0].get('setup') != 'Conflict/Wait':
         return _fail('top watch + avoid should be Conflict/Wait')
 
     expected_times = {(7, 45), (8, 0), (8, 15), (8, 30), (8, 45)}

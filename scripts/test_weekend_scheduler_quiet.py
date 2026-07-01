@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for weekend premarket scheduler suppression (Stage 47C/47D)."""
+"""Unit tests for weekend premarket scheduler suppression (Stage 47C/4B.3)."""
 
 from __future__ import annotations
 
@@ -74,10 +74,13 @@ def main() -> int:
             'backend.analytics.premarket_conviction.send_scheduled_premarket',
             return_value=True,
         ) as send_mock:
-            with patch('sys.stdout', StringIO()):
+            buf = StringIO()
+            with patch('sys.stdout', buf):
                 sched.run_premarket_slot('premarket_top3')
-            if not send_mock.called:
-                return _fail('weekday premarket_top3 should send')
+            if send_mock.called:
+                return _fail('weekday 08:30 must skip legacy alert when opening workflow enabled')
+            if '[OLD_PREMARKET_ALERT_SKIPPED]' not in buf.getvalue():
+                return _fail('weekday 08:30 must log OLD_PREMARKET_ALERT_SKIPPED')
 
     from backend.analytics.premarket_conviction import format_premarket_telegram
 
