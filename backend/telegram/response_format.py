@@ -2812,11 +2812,20 @@ def _opening_state_label(state: str) -> str:
     return token
 
 
+from backend.telegram.premarket_scheduler import SCHEDULED_ALERT_NAMES
+
+
+def _scheduled_alert_title(slot: str, time_ist: str) -> str:
+    name = SCHEDULED_ALERT_NAMES.get(slot, 'Opening Rally Radar')
+    return f'<b>{name} — {time_ist} IST</b>'
+
+
 def format_opening_radar_telegram(
     *,
     board: dict[str, Any] | None = None,
+    scheduled_slot: str | None = None,
 ) -> str:
-    """Format /radar or /opening radar — early rally candidates."""
+    """Format manual /radar or scheduled Opening Rally Radar alert."""
     from backend.trading.opening_rally_radar import (
         build_opening_rally_board,
         format_opening_radar_action,
@@ -2826,8 +2835,11 @@ def format_opening_radar_telegram(
     data = board or build_opening_rally_board()
     time_ist = str(data.get('time_ist') or '—')
     phase = str(data.get('phase') or opening_radar_time_phase())
+    title = _scheduled_alert_title(scheduled_slot or '0920', time_ist) if scheduled_slot else (
+        f'<b>Opening Rally Radar — {time_ist} IST</b>'
+    )
     lines = [
-        f'<b>OPENING RALLY RADAR — {time_ist} IST</b>',
+        title,
         f'<i>Phase: {phase.replace("_", " ").lower()} · paper/research only</i>',
         '',
     ]
@@ -2875,7 +2887,7 @@ def format_radar_armed_scheduled_telegram(
     ]
     time_ist = str(data.get('time_ist') or '09:00')
     lines = [
-        f'<b>RADAR ARMED — {time_ist} IST</b>',
+        _scheduled_alert_title('0900', time_ist),
         '<i>News + theme watchlist · paper/research only</i>',
         '',
     ]
@@ -2909,7 +2921,7 @@ def format_early_tradecards_scheduled_telegram(
     data = board or build_opening_rally_board()
     time_ist = str(data.get('time_ist') or '09:25')
     lines = [
-        f'<b>EARLY TRADECARDS — {time_ist} IST</b>',
+        _scheduled_alert_title('0925', time_ist),
         '<i>Provisional ranks · paper/research only</i>',
         '',
     ]
@@ -2962,7 +2974,7 @@ def format_final_opening_confirmation_telegram(
     row = best_row or {}
     why = ' + '.join(row.get('why') or []) or 'opening board review'
     lines = [
-        f'<b>FINAL OPENING CONFIRMATION — {time_ist} IST</b>',
+        _scheduled_alert_title('0931', time_ist),
         '<i>Paper/research only — no blind entry</i>',
         '',
         f'<b>Best pick:</b> {sym or "—"}',

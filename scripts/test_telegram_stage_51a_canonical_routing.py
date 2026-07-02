@@ -180,36 +180,28 @@ def main() -> int:
     ) as mock_radar:
         radar_results = handle_analysis_command('/radar', 'test', dry_run=True)
         mock_radar.assert_called_once()
-    if 'OPENING RALLY RADAR' not in str(radar_results[0].get('text', '')):
+    if 'Opening Rally Radar' not in str(radar_results[0].get('text', '')) and 'OPENING RALLY RADAR' not in str(radar_results[0].get('text', '')):
         return _fail('/radar must route to opening rally radar formatter')
 
-    with patch(
-        'backend.telegram.lazy_command_runner.run_radar_only',
-        return_value={'text': radar_text},
-    ) as mock_opening_radar:
-        opening_results = handle_analysis_command('/opening radar', 'test', dry_run=True)
-        mock_opening_radar.assert_called_once()
-    if 'OPENING RALLY RADAR' not in str(opening_results[0].get('text', '')):
-        return _fail('/opening radar must route to opening rally radar formatter')
-
-    with patch(
-        'backend.telegram.lazy_command_runner.run_radar_only',
-        return_value={'text': radar_text},
-    ) as mock_opening_alias:
-        opening_alias_results = handle_analysis_command('/opening', 'test', dry_run=True)
-        mock_opening_alias.assert_called_once()
-    if 'OPENING RALLY RADAR' not in str(opening_alias_results[0].get('text', '')):
-        return _fail('/opening must route to opening rally radar formatter')
+    opening_results = handle_analysis_command('/opening radar', 'test', dry_run=True)
+    if opening_results and 'unknown' not in str(opening_results[0].get('text', '')).lower():
+        opening_text = str(opening_results[0].get('text', ''))
+        if 'OPENING RALLY RADAR' in opening_text or 'Opening Rally Radar' in opening_text:
+            return _fail('/opening radar alias must not route to radar (use /radar only)')
 
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, TELEGRAM_BOT_COMMANDS, register_telegram_bot_commands
 
-    for token in ('/radar', '/opening', '/tradecards', '/tradecard'):
+    for token in ('/radar', '/tradecards', '/tradecard'):
         if token not in HELP_TEXT:
             return _fail(f'help text missing {token}')
+    if '/opening' in HELP_TEXT.lower() and 'same as /radar' in HELP_TEXT.lower():
+        return _fail('help must not advertise /opening alias')
     cmd_names = {row.get('command') for row in TELEGRAM_BOT_COMMANDS}
-    for name in ('radar', 'opening', 'tradecards', 'tradecard'):
+    for name in ('radar', 'tradecards', 'tradecard'):
         if name not in cmd_names:
             return _fail(f'TELEGRAM_BOT_COMMANDS missing /{name}')
+    if 'opening' in cmd_names:
+        return _fail('TELEGRAM_BOT_COMMANDS must not register /opening (use /radar only)')
     with patch('backend.telegram.telegram_analysis_bot.requests.post') as mock_post:
         mock_post.return_value.status_code = 200
         if not register_telegram_bot_commands():

@@ -82,8 +82,7 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'status', 'description': 'System status'},
     {'command': 'health', 'description': 'Runtime health'},
     {'command': 'schedule', 'description': 'Premarket + brief schedule'},
-    {'command': 'radar', 'description': 'Opening rally candidates'},
-    {'command': 'opening', 'description': 'Same as /radar'},
+    {'command': 'radar', 'description': 'Opening rally radar'},
     {'command': 'tradecards', 'description': 'Top tradecard candidates'},
     {'command': 'tradecard', 'description': 'Single paper trade card'},
     {'command': 'catalysts', 'description': 'Stock catalyst radar'},
@@ -137,9 +136,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /catalysts explain &lt;ticker&gt; — catalyst reason for ticker
 
 <b>Opening Rally:</b>
-/radar — opening rally candidates (early layer)
-/opening — same as /radar
-/opening radar — same as /radar
+/radar — opening rally radar (manual)
 /tradecards — top 5-10 tradecard candidates with reasons
 
 <b>Trade Card:</b>
@@ -274,9 +271,7 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'resolve', 'outcomes'
     if lower == 'outcomes':
         return 'outcomes', ''
-    if lower in ('radar', 'opening radar'):
-        return 'radar', ''
-    if lower == 'opening':
+    if lower == 'radar':
         return 'radar', ''
     if lower == 'tradecards':
         return 'tradecards', ''

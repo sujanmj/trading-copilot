@@ -984,7 +984,7 @@ def run_scheduled_opening_radar_alert(
 
     from backend.telegram.response_format import format_opening_radar_telegram
 
-    text = format_opening_radar_telegram(board=board)
+    text = format_opening_radar_telegram(board=board, scheduled_slot='0920')
     if not _gate_scheduled_alert('opening_radar_scheduled', text):
         print(f'[OPENING_RADAR_SCHEDULED] time={ts} candidates={len(candidates)} sent=no', flush=True)
         return False

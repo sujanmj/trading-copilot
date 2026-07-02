@@ -48,19 +48,21 @@ OPENING_MORNING_SLOTS: dict[str, tuple[int, int]] = {
     'final_confirmation_0931': (9, 31),
 }
 
+SCHEDULED_ALERT_NAMES: dict[str, str] = {
+    '0900': 'Radar Armed',
+    '0920': 'Opening Rally Radar',
+    '0925': 'Early Tradecards',
+    '0931': 'Final Opening Confirmation',
+}
+
 SCHEDULE_DISPLAY_OPENING = [
-    '09:00 — Radar Armed (news/theme watchlist)',
-    '09:20 — Opening Rally Radar (live reaction)',
-    '09:25 — Early Tradecards (provisional ranks)',
+    '09:00 — Radar Armed',
+    '09:20 — Opening Rally Radar',
+    '09:25 — Early Tradecards',
     '09:31 — Final Opening Confirmation',
 ]
 
-OPENING_SCHEDULE_LABELS = [
-    '09:00 Radar Armed',
-    '09:20 Opening Rally Radar',
-    '09:25 Early Tradecards',
-    '09:31 Final Opening Confirmation',
-]
+OPENING_SCHEDULE_LABELS = list(SCHEDULED_ALERT_NAMES.values())
 
 # Legacy detailed list retained for internal reference/tests (not shown in /schedule).
 SCHEDULE_DISPLAY_LEGACY_BUILDS = [
@@ -224,7 +226,7 @@ def format_schedule_text() -> str:
     lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY_OPENING)
     lines.extend([
         '',
-        '<b>Manual anytime:</b> /radar · /opening · /tradecards · /tradecard',
+        '<b>Manual anytime:</b> /radar · /tradecards · /tradecard',
         '',
         '<b>Commands:</b> /premarket · /premarket full · /action plan',
     ])

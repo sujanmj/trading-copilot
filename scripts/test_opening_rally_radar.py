@@ -408,8 +408,8 @@ def test_scheduled_opening_radar_candidates() -> int:
             ok = run_scheduled_opening_radar_alert(now=_dt(9, 20), send_fn=_send)
     if not ok or not sent_messages:
         return _fail('scheduled opening radar must send when candidates exist')
-    if 'OPENING RALLY RADAR' not in sent_messages[0]:
-        return _fail('scheduled alert must use opening radar format')
+    if 'Opening Rally Radar' not in sent_messages[0]:
+        return _fail('scheduled alert must use Opening Rally Radar title')
     if '[OPENING_RADAR_SCHEDULED]' not in buf.getvalue() or 'sent=yes' not in buf.getvalue():
         return _fail('scheduled run must log OPENING_RADAR_SCHEDULED sent=yes')
     return 0
@@ -573,8 +573,8 @@ def test_scheduled_radar_armed_0900() -> int:
             ok = run_scheduled_radar_armed_0900(now=_dt(9, 0), send_fn=_send)
     if not ok or not sent:
         return _fail('09:00 radar armed must send when armed candidates exist')
-    if 'RADAR ARMED' not in sent[0]:
-        return _fail('09:00 alert must use RADAR ARMED header')
+    if 'RADAR ARMED' not in sent[0] and 'Radar Armed' not in sent[0]:
+        return _fail('09:00 alert must use Radar Armed header')
     if '[OPENING_RADAR_ARMED_SCHEDULED]' not in buf.getvalue():
         return _fail('09:00 must log OPENING_RADAR_ARMED_SCHEDULED')
     return 0
@@ -605,7 +605,7 @@ def test_scheduled_early_tradecards_0925() -> int:
         buf = StringIO()
         with redirect_stdout(buf):
             ok = run_scheduled_early_tradecards_0925(now=_dt(9, 25), send_fn=_send)
-    if not ok or 'EARLY TRADECARDS' not in sent[0]:
+    if not ok or 'Early Tradecards' not in sent[0]:
         return _fail('09:25 early tradecards must send ranked board')
     if 'Best provisional pick' not in sent[0] or 'RAILTEL' not in sent[0]:
         return _fail('09:25 must show provisional best pick')
@@ -638,7 +638,7 @@ def test_scheduled_final_confirmation_0931() -> int:
         buf = StringIO()
         with redirect_stdout(buf):
             ok = run_scheduled_final_confirmation_0931(now=_dt(9, 31), send_fn=_send)
-    if not ok or 'FINAL OPENING CONFIRMATION' not in sent[0]:
+    if not ok or 'Final Opening Confirmation' not in sent[0]:
         return _fail('09:31 final confirmation must send')
     if 'Best pick' not in sent[0] or 'RAILTEL' not in sent[0]:
         return _fail('09:31 must show best pick')
