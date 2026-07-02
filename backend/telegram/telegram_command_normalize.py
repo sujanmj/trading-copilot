@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import re
 
+REMOVED_OPENING_ALIAS_MESSAGE = 'Use /radar for opening rally candidates.'
+
 THEME_RESERVED_WORDS = frozenset({
     'overview', 'list', 'search', 'category', 'news', 'scan', 'budget', 'refresh',
 })
@@ -64,6 +66,8 @@ def normalize_parsed_command(cmd: str, args: str) -> tuple[str, str]:
     """Normalize cmd/args after parse_command — safe slashless + action alias."""
     cmd_norm = str(cmd or '').strip().lower()
     args_norm = str(args or '').strip()
+    if cmd_norm == 'opening' or (cmd_norm == 'opening' and args_norm.lower() == 'radar'):
+        return 'removed_opening_alias', ''
     if cmd_norm == 'action' and (not args_norm or args_norm.lower() == 'plan'):
         return 'action', 'plan'
     return cmd_norm, args_norm

@@ -32,7 +32,7 @@ def main() -> int:
     if STAGE_MARKER != 'TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS':
         return _fail(f'unexpected STAGE_MARKER: {STAGE_MARKER!r}')
     build_stage = get_astraedge_build_stage()
-    if build_stage not in ('51A', '51B', '51C', '51D', '51E', '51F'):
+    if build_stage not in ('51A', '51B', '51C', '51D', '51E', '51G'):
         return _fail(f'unexpected build stage: {build_stage!r}')
     if not ASTRAEDGE_TELEGRAM_BUILD.startswith('AstraEdge '):
         return _fail(f'unexpected build label: {ASTRAEDGE_TELEGRAM_BUILD!r}')
@@ -183,11 +183,17 @@ def main() -> int:
     if 'Opening Rally Radar' not in str(radar_results[0].get('text', '')) and 'OPENING RALLY RADAR' not in str(radar_results[0].get('text', '')):
         return _fail('/radar must route to opening rally radar formatter')
 
-    opening_results = handle_analysis_command('/opening radar', 'test', dry_run=True)
-    if opening_results and 'unknown' not in str(opening_results[0].get('text', '')).lower():
-        opening_text = str(opening_results[0].get('text', ''))
-        if 'OPENING RALLY RADAR' in opening_text or 'Opening Rally Radar' in opening_text:
-            return _fail('/opening radar alias must not route to radar (use /radar only)')
+    with patch('backend.telegram.lazy_command_runner.run_radar_only') as mock_opening_only:
+        opening_only = handle_analysis_command('/opening', 'test', dry_run=True)
+        mock_opening_only.assert_not_called()
+    if 'Use /radar for opening rally candidates.' not in str(opening_only[0].get('text', '')):
+        return _fail('/opening must return redirect to /radar')
+
+    with patch('backend.telegram.lazy_command_runner.run_radar_only') as mock_opening_radar:
+        opening_radar_results = handle_analysis_command('/opening radar', 'test', dry_run=True)
+        mock_opening_radar.assert_not_called()
+    if 'Use /radar for opening rally candidates.' not in str(opening_radar_results[0].get('text', '')):
+        return _fail('/opening radar must return redirect to /radar')
 
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, TELEGRAM_BOT_COMMANDS, register_telegram_bot_commands
 

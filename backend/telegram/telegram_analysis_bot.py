@@ -273,6 +273,8 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'outcomes', ''
     if lower == 'radar':
         return 'radar', ''
+    if lower in ('opening', 'opening radar') or lower.startswith('opening '):
+        return 'removed_opening_alias', ''
     if lower == 'tradecards':
         return 'tradecards', ''
     if lower == 'feed':
@@ -675,6 +677,12 @@ def handle_analysis_command(
 
         response_text = FEED_TEXT_ONLY_USAGE
         return [send_analysis_message(response_text, command='feed', dry_run=dry_run)]
+
+    if cmd == 'removed_opening_alias':
+        from backend.telegram.telegram_command_normalize import REMOVED_OPENING_ALIAS_MESSAGE
+
+        response_text = REMOVED_OPENING_ALIAS_MESSAGE
+        return [send_analysis_message(response_text, command='opening', dry_run=dry_run)]
 
     if cmd == 'full' and not in_full_snapshot:
         return _handle_full_snapshot(dry_run=dry_run)
