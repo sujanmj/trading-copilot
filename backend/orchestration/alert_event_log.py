@@ -32,6 +32,10 @@ CATEGORY_TO_ALERT_TYPE = {
     'PRE_MARKET': 'premarket',
     'INTRADAY_OPPORTUNITY': 'open',
     'INTRADAY_EVENT': 'intraday',
+    'OPENING_RADAR_ARMED': 'open',
+    'OPENING_RALLY_RADAR': 'open',
+    'EARLY_TRADECARD_PROVISIONAL': 'open',
+    'FINAL_OPENING_CONFIRMATION': 'open',
     'EMERGENCY_MACRO_ALERT': 'emergency_macro',
     'MARKET_CLOSE_SUMMARY': 'close',
     'MIDDAY_UPDATE': 'intraday',
@@ -64,6 +68,7 @@ def log_alert_event(
     volume_at_alert: Optional[float] = None,
     reason: str = '',
     timestamp: Optional[str] = None,
+    metadata: Optional[dict[str, Any]] = None,
 ) -> dict:
     """Append one alert event line. Returns the logged entry."""
     if isinstance(tickers, str):
@@ -85,6 +90,8 @@ def log_alert_event(
         'reason_hash': reason_hash(reason or category),
         'reason_preview': str(reason or '')[:120],
     }
+    if metadata:
+        entry['metadata'] = dict(metadata)
     try:
         ALERT_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
         with ALERT_LOG_FILE.open('a', encoding='utf-8') as fh:
@@ -112,6 +119,42 @@ def log_alert_event(
     except Exception:
         pass
     return entry
+
+
+def summarize_opening_workflow_for_date(review_date: str) -> dict:
+    """Return compact counts for the scheduled opening workflow."""
+    rows = [
+        row for row in read_alert_events_for_date(review_date)
+        if isinstance(row.get('metadata'), dict)
+        and row.get('metadata', {}).get('opening_workflow')
+    ]
+    stage_symbols: dict[str, set[str]] = {
+        '0900': set(),
+        '0920': set(),
+        '0925': set(),
+        '0931': set(),
+    }
+    best_by_stage: dict[str, str] = {}
+    for row in rows:
+        meta = row.get('metadata') or {}
+        stage = str(meta.get('opening_stage') or '').strip()
+        if stage not in stage_symbols:
+            continue
+        for ticker in row.get('tickers') or []:
+            sym = str(ticker or '').strip().upper()
+            if sym:
+                stage_symbols[stage].add(sym)
+                if meta.get('opening_best'):
+                    best_by_stage[stage] = sym
+    captured = sorted(set().union(*stage_symbols.values())) if stage_symbols else []
+    return {
+        'radar_armed': len(stage_symbols['0900']),
+        'opening_radar': len(stage_symbols['0920']),
+        'early_tradecard_best': best_by_stage.get('0925', ''),
+        'final_confirmation_best': best_by_stage.get('0931', ''),
+        'learning_candidates': captured,
+        'rows': rows,
+    }
 
 
 def read_alert_events_for_date(review_date: str) -> list[dict]:

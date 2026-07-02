@@ -23,8 +23,11 @@ PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
 
 RADAR_STATES = frozenset({
     'RADAR_ARMED',
+    'PRICE_IGNITION',
+    'SECTOR_BREADTH_CONFIRM',
     'VOLUME_IGNITION',
     'TRADECARD_CANDIDATE',
+    'PULLBACK_ONLY_PLAN',
     'MOMENTUM_ONLY_WATCH',
     'CHASE_RISK',
     'REJECTED',
@@ -44,6 +47,20 @@ DIRECT_CATALYST_TYPES = frozenset({
 
 VOLUME_IGNITION_MIN = 2.0
 EXTENDED_MOVE_PCT = 4.5
+STRONG_OPENING_MOVE_PCT = 2.0
+
+SECTOR_PEERS: dict[str, set[str]] = {
+    'IT': {'INFY', 'HCLTECH', 'TCS', 'WIPRO', 'TECHM', 'LTIM', 'MPHASIS', 'COFORGE', 'PERSISTENT'},
+    'RAILWAYS': {'RAILTEL', 'RVNL', 'IRCON', 'RITES', 'TITAGARH', 'JWL'},
+    'DEFENCE': {'BEML', 'HAL', 'BEL', 'BDL', 'MAZDOCK', 'COCHINSHIP'},
+}
+
+OPENING_STAGE_CATEGORY = {
+    '0900': 'OPENING_RADAR_ARMED',
+    '0920': 'OPENING_RALLY_RADAR',
+    '0925': 'EARLY_TRADECARD_PROVISIONAL',
+    '0931': 'FINAL_OPENING_CONFIRMATION',
+}
 
 
 def _now_ist(now: datetime | None = None) -> datetime:
@@ -80,6 +97,17 @@ def _load_json(path: Path) -> dict[str, Any]:
 def _minutes_since_midnight(now: datetime) -> int:
     local = _now_ist(now)
     return local.hour * 60 + local.minute
+
+
+def _minutes_from_time_text(value: object) -> int | None:
+    text = str(value or '').strip()
+    if ':' not in text:
+        return None
+    try:
+        hour, minute = text.split(':', 1)
+        return int(hour) * 60 + int(minute[:2])
+    except (TypeError, ValueError):
+        return None
 
 
 def opening_radar_time_phase(now: datetime | None = None) -> str:
@@ -208,6 +236,46 @@ def _price_strength(scanner_row: dict[str, Any] | None) -> tuple[bool, bool]:
     return above_open, above_vwap
 
 
+def _sector_for_symbol(sym: str) -> str:
+    ticker = _normalize_ticker(sym)
+    for sector, peers in SECTOR_PEERS.items():
+        if ticker in peers:
+            return sector
+    return ''
+
+
+def _strong_opening_move(row: dict[str, Any] | None) -> bool:
+    if not row:
+        return False
+    change_pct = abs(_safe_float(row.get('change_percent')))
+    volume_ratio = _safe_float(row.get('volume_ratio'))
+    above_open, above_vwap = _price_strength(row)
+    return change_pct >= 1.5 or volume_ratio >= VOLUME_IGNITION_MIN or (above_open and above_vwap)
+
+
+def _sector_breadth_map(scanner_index: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    by_sector: dict[str, list[str]] = {}
+    for sym, row in scanner_index.items():
+        sector = _sector_for_symbol(sym)
+        if not sector or not _strong_opening_move(row):
+            continue
+        by_sector.setdefault(sector, []).append(sym)
+
+    out: dict[str, dict[str, Any]] = {}
+    for sector, symbols in by_sector.items():
+        unique = sorted({_normalize_ticker(sym) for sym in symbols if sym})
+        if len(unique) < 2:
+            continue
+        boost = 12 if len(unique) >= 3 else 8
+        print(
+            f'[OPENING_SECTOR_BREADTH] sector={sector} symbols={",".join(unique)} boost={boost}',
+            flush=True,
+        )
+        for sym in unique:
+            out[sym] = {'sector': sector, 'symbols': unique, 'boost': boost}
+    return out
+
+
 def _build_why_lines(
     *,
     catalyst: dict[str, Any] | None,
@@ -216,6 +284,7 @@ def _build_why_lines(
     volume_ratio: float,
     above_open: bool,
     above_vwap: bool,
+    sector_breadth: dict[str, Any] | None = None,
 ) -> list[str]:
     parts: list[str] = []
     if catalyst and _has_direct_catalyst(catalyst):
@@ -235,6 +304,10 @@ def _build_why_lines(
         parts.append('above open')
     if above_vwap:
         parts.append('above VWAP')
+    if sector_breadth:
+        sector = str(sector_breadth.get('sector') or 'sector')
+        symbols = '/'.join(sector_breadth.get('symbols') or [])
+        parts.append(f'{sector} sector breadth confirmation: {symbols}')
     return parts or ['opening watch']
 
 
@@ -248,6 +321,7 @@ def score_opening_candidate(
     registry: dict[str, str],
     macro_penalty: float = 0.0,
     phase: str = '',
+    sector_breadth: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Score one symbol for opening rally board."""
     if sym in registry:
@@ -266,6 +340,8 @@ def score_opening_candidate(
     volume_ratio = _safe_float((scanner_row or {}).get('volume_ratio'), 0.0)
     change_pct = _safe_float((scanner_row or {}).get('change_percent'))
     above_open, above_vwap = _price_strength(scanner_row)
+    breadth_boost = int((sector_breadth or {}).get('boost') or 0)
+    strong_price_reaction = change_pct >= STRONG_OPENING_MOVE_PCT or (change_pct >= 1.5 and above_open)
 
     if has_catalyst:
         cat_score = _safe_float((catalyst or {}).get('score'), 50.0)
@@ -274,6 +350,8 @@ def score_opening_candidate(
         score += 12.0
     if previous_mover:
         score += 8.0
+    if breadth_boost:
+        score += breadth_boost
     if volume_ratio >= 1.2:
         score += min(28.0, volume_ratio * 5.5)
     if above_open:
@@ -301,6 +379,7 @@ def score_opening_candidate(
         volume_ratio=volume_ratio,
         above_open=above_open,
         above_vwap=above_vwap,
+        sector_breadth=sector_breadth,
     )
 
     state = _resolve_state(
@@ -315,6 +394,8 @@ def score_opening_candidate(
         extended=extended,
         phase=phase,
         catalyst_side=str((catalyst or {}).get('side') or '').upper(),
+        sector_breadth_boost=breadth_boost,
+        strong_price_reaction=strong_price_reaction,
     )
 
     return {
@@ -328,6 +409,9 @@ def score_opening_candidate(
         'themes': themes,
         'previous_mover': previous_mover,
         'momentum_only': momentum_only,
+        'extended': extended,
+        'pullback_only': bool(extended and state in ('TRADECARD_CANDIDATE', 'CHASE_RISK')),
+        'sector_breadth': sector_breadth or {},
         'catalyst': catalyst,
         'scanner_row': scanner_row,
     }
@@ -346,12 +430,17 @@ def _resolve_state(
     extended: bool,
     phase: str,
     catalyst_side: str,
+    sector_breadth_boost: int = 0,
+    strong_price_reaction: bool = False,
 ) -> str:
     if catalyst_side in ('BEARISH', 'RISK'):
         return 'REJECTED'
 
     armed_signal = has_catalyst or has_theme or previous_mover
     volume_signal = volume_ratio >= VOLUME_IGNITION_MIN
+    breadth_signal = sector_breadth_boost > 0
+    price_ignition_signal = strong_price_reaction and (armed_signal or breadth_signal)
+    sector_confirm_signal = breadth_signal and strong_price_reaction
     strong_signal = score >= 82 and volume_ratio >= 3.0 and (has_catalyst or has_theme)
 
     if phase == 'PRE_ARMED':
@@ -379,8 +468,12 @@ def _resolve_state(
         return 'MOMENTUM_ONLY_WATCH'
 
     if phase == 'IGNITION':
+        if sector_confirm_signal:
+            return 'SECTOR_BREADTH_CONFIRM'
         if volume_signal and (armed_signal or above_open):
             return 'VOLUME_IGNITION'
+        if price_ignition_signal and (has_catalyst or has_theme):
+            return 'PRICE_IGNITION'
         if armed_signal and not volume_signal:
             return 'RADAR_ARMED'
         if momentum_only:
@@ -388,8 +481,14 @@ def _resolve_state(
         return 'RADAR_ARMED' if armed_signal else 'REJECTED'
 
     if phase in ('CONFIRMATION', 'POST_CONFIRM'):
+        if extended and sector_confirm_signal and score >= 60:
+            return 'TRADECARD_CANDIDATE'
         if extended:
             return 'CHASE_RISK'
+        if sector_confirm_signal and score >= 60:
+            return 'TRADECARD_CANDIDATE'
+        if price_ignition_signal and score >= 60:
+            return 'TRADECARD_CANDIDATE'
         if score >= 60 and (has_catalyst or (volume_signal and above_open)):
             return 'TRADECARD_CANDIDATE'
         if momentum_only:
@@ -420,6 +519,7 @@ def build_opening_rally_board(
     phase = opening_radar_time_phase(ist_now)
     catalyst_map = _catalyst_map(catalyst_payload)
     scanner_index = _scanner_index(scanner_payload)
+    sector_breadth = _sector_breadth_map(scanner_index)
     reg = registry if registry is not None else _live_registry()
     prev_movers = _previous_session_movers(premarket_payload)
     macro_penalty = _macro_risk_penalty()
@@ -440,6 +540,7 @@ def build_opening_rally_board(
             registry=reg,
             macro_penalty=macro_penalty,
             phase=phase,
+            sector_breadth=sector_breadth.get(sym),
         )
         if row.get('state') == 'REJECTED' and row.get('score', 0) <= 0:
             continue
@@ -475,10 +576,10 @@ def _log_opening_radar_events(board: dict[str, Any]) -> None:
         why = ' + '.join(row.get('why') or [])
         if state == 'RADAR_ARMED':
             print(f'[OPENING_RADAR_ARMED] symbol={sym} reason={why}', flush=True)
-        elif state == 'VOLUME_IGNITION':
+        elif state in ('VOLUME_IGNITION', 'PRICE_IGNITION', 'SECTOR_BREADTH_CONFIRM'):
             catalyst = 'yes' if row.get('has_catalyst') else 'no'
             print(
-                f'[OPENING_VOLUME_IGNITION] symbol={sym} move={row.get("change_percent")} '
+                f'[OPENING_VOLUME_IGNITION] symbol={sym} state={state} move={row.get("change_percent")} '
                 f'volume={row.get("volume_ratio")} catalyst={catalyst}',
                 flush=True,
             )
@@ -500,7 +601,15 @@ def pick_best_opening_tradecard(
     data = board or build_opening_rally_board()
     candidates = [
         r for r in (data.get('ranked_candidates') or [])
-        if r.get('state') in ('TRADECARD_CANDIDATE', 'VOLUME_IGNITION', 'MOMENTUM_ONLY_WATCH')
+        if r.get('state') in (
+            'TRADECARD_CANDIDATE',
+            'VOLUME_IGNITION',
+            'PRICE_IGNITION',
+            'SECTOR_BREADTH_CONFIRM',
+            'PULLBACK_ONLY_PLAN',
+            'MOMENTUM_ONLY_WATCH',
+            'CHASE_RISK',
+        )
         and int(r.get('score') or 0) > 0
     ]
     if not candidates:
@@ -543,6 +652,8 @@ def select_synced_tradecard(
     state = str((best_row or {}).get('state') or '').upper()
     ist_now = _now_ist(now)
     mins = _minutes_since_midnight(ist_now)
+    if now is None:
+        mins = _minutes_from_time_text(data.get('time_ist')) or mins
 
     selected = tradecards_best
     source = 'radar'
@@ -590,6 +701,8 @@ def _opening_state_display(state: str) -> str:
     token = str(state or '').upper()
     if token == 'MOMENTUM_ONLY_WATCH':
         return 'PURE_VOLUME_SPIKE'
+    if token == 'PULLBACK_ONLY_PLAN':
+        return 'PULLBACK ONLY PLAN'
     return token.replace('_', ' ')
 
 
@@ -607,7 +720,13 @@ def resolve_final_confirmation_state(
     has_catalyst = bool(row.get('has_catalyst'))
     if state == 'REJECTED':
         return 'NO_CLEAN_ENTRY'
-    if state == 'CHASE_RISK' or change_pct >= EXTENDED_MOVE_PCT:
+    if state == 'CHASE_RISK' or change_pct >= EXTENDED_MOVE_PCT or row.get('pullback_only'):
+        if score >= 55:
+            print(
+                f'[OPENING_PULLBACK_ONLY_PLAN] symbol={row.get("ticker")} reason=extended_but_strongest',
+                flush=True,
+            )
+            return 'PULLBACK_ONLY_PLAN'
         return 'CHASE_RISK'
     if state == 'MOMENTUM_ONLY_WATCH':
         return 'WAIT_FOR_PULLBACK'
@@ -621,6 +740,144 @@ def resolve_final_confirmation_state(
     if mins >= 9 * 60 + 31 and score < 55:
         return 'NO_CLEAN_ENTRY'
     return 'WAIT_FOR_PULLBACK'
+
+
+def _opening_row_price(row: dict[str, Any] | None) -> float | None:
+    scanner = (row or {}).get('scanner_row') if isinstance((row or {}).get('scanner_row'), dict) else {}
+    for source in (scanner, row or {}):
+        for key in ('price', 'last_price', 'current_price', 'ltp'):
+            val = _safe_float(source.get(key), 0.0)
+            if val > 0:
+                return val
+    return None
+
+
+def _opening_row_volume(row: dict[str, Any] | None) -> float | None:
+    val = _safe_float((row or {}).get('volume_ratio'), 0.0)
+    return val if val > 0 else None
+
+
+def _opening_pullback_card(row: dict[str, Any], *, now: datetime, state: str) -> dict[str, Any] | None:
+    sym = _normalize_ticker(row.get('ticker'))
+    price = _opening_row_price(row)
+    if not sym or price is None:
+        return None
+    scanner = row.get('scanner_row') if isinstance(row.get('scanner_row'), dict) else {}
+    vwap = _safe_float(scanner.get('vwap'), 0.0) or price * 0.985
+    open_price = _safe_float(scanner.get('open_price') or scanner.get('open'), 0.0) or price * 0.98
+    zone_low = round(min(vwap, open_price) * 0.998, 2)
+    zone_high = round(max(vwap, open_price) * 1.002, 2)
+    if zone_high >= price:
+        zone_high = round(price * 0.992, 2)
+        zone_low = round(zone_high * 0.985, 2)
+    stop = round(zone_low * 0.985, 2)
+    return {
+        'ok': True,
+        'ticker': sym,
+        'status': 'VALID_ENTRY',
+        'session_date': now.astimezone(IST).date().isoformat(),
+        'generated_at': now.replace(microsecond=0).isoformat(),
+        'current_price': round(price, 2),
+        'entry_zone': f'{zone_low}-{zone_high}',
+        'stop_loss': stop,
+        'target_1': round(price * 1.015, 2),
+        'target_2': round(price * 1.03, 2),
+        'risk_reward': 1.5,
+        'confidence': 'MEDIUM' if int(row.get('score') or 0) >= 70 else 'LOW',
+        'capital_plan': 'Pullback/retest paper plan only; no market chase.',
+        'reason': 'Strongest candidate but extended. Paper entry only on VWAP/retest/opening-range hold. No market chase.',
+        'invalid_if': f'Opening range/VWAP hold fails or price trades below {stop}.',
+        'paper_only': True,
+        'source_label': 'opening_pullback_only',
+        'opening_state': state,
+    }
+
+
+def _persist_opening_best_tradecard(
+    *,
+    row: dict[str, Any] | None,
+    now: datetime,
+    state: str,
+) -> dict[str, Any] | None:
+    if not row:
+        return None
+    card = _opening_pullback_card(row, now=now, state=state)
+    if not card:
+        return None
+    try:
+        from backend.trading.tradecard_journal import persist_tradecard_generation
+
+        record = persist_tradecard_generation(card, source_label='opening_pullback_only')
+        print(
+            f'[TRADECARD_GENERATED_FROM_OPENING_BEST] symbol={card.get("ticker")} '
+            f'state={state} generated={"yes" if record else "blocked_or_duplicate"}',
+            flush=True,
+        )
+        return record
+    except Exception as exc:
+        print(
+            f'[TRADECARD_GENERATED_FROM_OPENING_BEST] symbol={card.get("ticker")} '
+            f'state={state} generated=no error={exc}',
+            flush=True,
+        )
+        return None
+
+
+def _capture_opening_workflow(
+    *,
+    stage: str,
+    board: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    best_sym: str = '',
+    timestamp: str = '',
+) -> None:
+    category = OPENING_STAGE_CATEGORY.get(stage, 'OPENING_RALLY_RADAR')
+    best = _normalize_ticker(best_sym)
+    ts = timestamp or str(board.get('generated_at') or _now_ist().replace(microsecond=0).isoformat())
+    print(
+        f'[OPENING_WORKFLOW_CAPTURE] stage={stage} candidates={len(candidates)} best={best or "-"}',
+        flush=True,
+    )
+    try:
+        from backend.orchestration.alert_event_log import log_alert_event
+    except Exception:
+        return
+    for row in candidates:
+        sym = _normalize_ticker(row.get('ticker'))
+        if not sym:
+            continue
+        why = ' + '.join(row.get('why') or []) or 'opening workflow'
+        state = str(row.get('state') or '')
+        is_best = bool(best and sym == best)
+        try:
+            log_alert_event(
+                category=category,
+                tickers=sym,
+                direction='BULLISH',
+                score=float(row.get('score') or 0),
+                price_at_alert=_opening_row_price(row),
+                volume_at_alert=_opening_row_volume(row),
+                reason=f'{stage} {state}: {why}',
+                timestamp=ts,
+                metadata={
+                    'opening_workflow': True,
+                    'opening_stage': stage,
+                    'opening_state': state,
+                    'opening_best': is_best,
+                    'pullback_only': bool(row.get('pullback_only') or state == 'CHASE_RISK'),
+                    'sector_breadth': row.get('sector_breadth') or {},
+                },
+            )
+            print(
+                f'[OPENING_LEARNING_CAPTURE] symbol={sym} stage={stage} '
+                f'status={"pending" if is_best and stage in ("0925", "0931") else "captured"}',
+                flush=True,
+            )
+        except Exception:
+            print(
+                f'[OPENING_LEARNING_CAPTURE] symbol={sym} stage={stage} status=failed',
+                flush=True,
+            )
 
 
 def _send_scheduled_opening_text(
@@ -697,6 +954,13 @@ def run_scheduled_radar_armed_0900(
         send_fn=send_fn,
         command='radar_armed_0900',
     )
+    if sent:
+        _capture_opening_workflow(
+            stage='0900',
+            board=board,
+            candidates=candidates,
+            timestamp=ts,
+        )
     return sent
 
 
@@ -733,6 +997,13 @@ def run_scheduled_opening_radar_alert(
         send_fn=send_fn,
         command='opening_radar_scheduled',
     )
+    if sent:
+        _capture_opening_workflow(
+            stage='0920',
+            board=board,
+            candidates=candidates,
+            timestamp=ts,
+        )
     return sent
 
 
@@ -780,6 +1051,26 @@ def run_scheduled_early_tradecards_0925(
         send_fn=send_fn,
         command='early_tradecards_0925',
     )
+    if sent:
+        best_row = next(
+            (
+                r for r in candidates
+                if _normalize_ticker(r.get('ticker')) == _normalize_ticker(best_sym)
+            ),
+            None,
+        )
+        _capture_opening_workflow(
+            stage='0925',
+            board=board,
+            candidates=candidates,
+            best_sym=best_sym or '',
+            timestamp=ts,
+        )
+        _persist_opening_best_tradecard(
+            row=best_row,
+            now=ist_now,
+            state=str((best_row or {}).get('state') or 'TRADECARD_CANDIDATE'),
+        )
     return sent
 
 
@@ -836,6 +1127,19 @@ def run_scheduled_final_confirmation_0931(
         send_fn=send_fn,
         command='final_opening_confirmation_0931',
     )
+    if sent:
+        _capture_opening_workflow(
+            stage='0931',
+            board=board,
+            candidates=[best_row] if best_row else [],
+            best_sym=best_sym or '',
+            timestamp=ts,
+        )
+        _persist_opening_best_tradecard(
+            row=best_row,
+            now=ist_now,
+            state=confirm_state,
+        )
     return sent
 
 
@@ -863,12 +1167,18 @@ def format_opening_radar_action(state: str) -> str:
     token = str(state or '').upper()
     if token == 'VOLUME_IGNITION':
         return 'prepare tradecard; no blind chase'
+    if token == 'PRICE_IGNITION':
+        return 'price ignition; confirm breadth/VWAP before paper plan'
+    if token == 'SECTOR_BREADTH_CONFIRM':
+        return 'sector breadth confirm; prepare pullback/retest plan'
     if token == 'RADAR_ARMED':
-        return 'watch only — no entry yet'
+        return 'watch only - no entry yet'
     if token == 'TRADECARD_CANDIDATE':
         return 'review /tradecards then /tradecard'
+    if token == 'PULLBACK_ONLY_PLAN':
+        return 'paper plan only on VWAP/retest; no market chase'
     if token == 'CHASE_RISK':
-        return 'no fresh entry — chase risk'
+        return 'strong but extended; pullback/retest only'
     if token == 'MOMENTUM_ONLY_WATCH':
-        return 'momentum watch — confirm catalyst'
+        return 'momentum watch - confirm catalyst'
     return 'research only'

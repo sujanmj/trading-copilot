@@ -549,6 +549,13 @@ def daily_review_quality_buckets(
     sent_rows = alert_summary.get('recent_sent') or []
     research_watchlist = sum(1 for row in sent_rows if row.get('category') == 'PRE_MARKET')
     missed = missed_opportunities_summary(limit=200).get('count', 0)
+    try:
+        from backend.orchestration.alert_event_log import summarize_opening_workflow_for_date
+
+        today = datetime.now(IST).date().isoformat()
+        opening_workflow = summarize_opening_workflow_for_date(today)
+    except Exception:
+        opening_workflow = {}
     if tradecard_counts is None:
         try:
             from backend.trading.tradecard_journal import summarize_today_outcomes
@@ -595,6 +602,7 @@ def daily_review_quality_buckets(
         'tradecard_actual_no_fill': int(tradecard_actual.get('no_fill') or tradecard_counts.get('no_fill') or 0),
         'pending_data': pending_data,
         'pending_reasons': pending_reasons,
+        'opening_workflow': opening_workflow,
     }
 
 
@@ -609,6 +617,9 @@ def format_daily_review_quality_lines(
         tradecard_counts=tradecard_counts,
         actual_learning_summary=actual_learning_summary,
     )
+    opening = b.get('opening_workflow') if isinstance(b.get('opening_workflow'), dict) else {}
+    learning_candidates = opening.get('learning_candidates') if isinstance(opening.get('learning_candidates'), list) else []
+    learning_candidate_text = ', '.join(learning_candidates[:6]) if learning_candidates else '-'
     pending_reasons = b.get('pending_reasons') if isinstance(b.get('pending_reasons'), dict) else {}
     reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
     lines = [
@@ -616,6 +627,12 @@ def format_daily_review_quality_lines(
         f"Live confirmed setups: {b['live_confirmed_setups']}",
         f"Rejected setups: {b['rejected_setups']}",
         f"Missed opportunities: {b['missed_opportunities']}",
+        "Opening workflow:",
+        f"Radar armed: {int(opening.get('radar_armed') or 0)}",
+        f"Opening radar: {int(opening.get('opening_radar') or 0)}",
+        f"Early tradecard best: {opening.get('early_tradecard_best') or '-'}",
+        f"Final confirmation best: {opening.get('final_confirmation_best') or '-'}",
+        f"Learning candidate captured: {learning_candidate_text}",
         (
             "Tradecards generated/filled/resolved W/L/N/P: "
             f"{b['tradecards_generated']}/{b['tradecards_filled']}/{b['tradecards_resolved']} "

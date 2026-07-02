@@ -2807,6 +2807,8 @@ def _opening_state_label(state: str) -> str:
     token = str(state or '').upper().replace('_', ' ')
     if token == 'MOMENTUM ONLY WATCH':
         return 'MOMENTUM-ONLY WATCH'
+    if token == 'PULLBACK ONLY PLAN':
+        return 'PULLBACK-ONLY PLAN'
     return token
 
 
@@ -2919,6 +2921,8 @@ def format_early_tradecards_scheduled_telegram(
         why = ' + '.join(row.get('why') or []) or '—'
         lines.append(f'{idx}. <b>{sym}</b> — {state} — Score {score}')
         lines.append(f'   {why}')
+        if row.get('pullback_only') or str(row.get('state') or '').upper() == 'CHASE_RISK':
+            lines.append('   Risk: extended; confirm VWAP/retest/opening-range hold.')
     best_sym, best_score, _ = pick_best_opening_tradecard(data)
     if best_sym:
         best_row = next(
@@ -2931,6 +2935,8 @@ def format_early_tradecards_scheduled_telegram(
             f'<b>Best provisional pick:</b> {best_sym}',
             f'Why: {why}',
         ])
+        if best_row.get('pullback_only') or str(best_row.get('state') or '').upper() == 'CHASE_RISK':
+            lines.append('Risk: extended; confirm VWAP/retest/opening-range hold.')
     lines.extend([
         '',
         'Action: prepare chart; confirm with bars/VWAP/volume before /tradecard.',
@@ -2967,6 +2973,9 @@ def format_final_opening_confirmation_telegram(
     ]
     if state == 'CONFIRMED':
         lines.append('Action: review /tradecard for levels; confirm volume/VWAP on chart.')
+    elif state == 'PULLBACK_ONLY_PLAN':
+        lines.append('Action: no chase; paper entry only on VWAP/retest/opening-range hold.')
+        lines.append('Plan: strongest candidate but extended; no market chase.')
     elif state == 'WAIT_FOR_PULLBACK':
         lines.append('Action: wait for pullback/retest — no chase at open extension.')
     elif state == 'CHASE_RISK':

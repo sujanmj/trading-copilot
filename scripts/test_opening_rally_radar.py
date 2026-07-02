@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -646,6 +647,193 @@ def test_scheduled_final_confirmation_0931() -> int:
     return 0
 
 
+def test_opening_sector_breadth_boosts_it_cluster() -> int:
+    from backend.trading.opening_rally_radar import build_opening_rally_board
+
+    catalyst = {
+        'priority_list': [{
+            'ticker': 'INFY',
+            'headline': 'Infosys result alert beats estimates',
+            'catalyst_type': 'RESULT_ALERT',
+            'side': 'BULLISH',
+            'score': 86,
+        }],
+    }
+    scanner = _scanner(
+        _row('INFY', 0.0, chg=4.1, price=154.0, open_price=148.0, vwap=150.0),
+        _row('HCLTECH', 0.0, chg=3.2, price=102.0, open_price=99.0, vwap=100.0),
+        _row('TCS', 0.0, chg=2.2, price=3900.0, open_price=3820.0, vwap=3850.0),
+    )
+    with patch('backend.trading.opening_rally_radar._live_registry', return_value={}), \
+         patch('backend.trading.opening_rally_radar._previous_session_movers', return_value=set()), \
+         patch('backend.trading.opening_rally_radar._theme_matches_for_ticker', return_value=[]):
+        board = build_opening_rally_board(
+            now=_dt(9, 20),
+            catalyst_payload=catalyst,
+            scanner_payload=scanner,
+        )
+    infy = next((r for r in board.get('ranked_candidates') or [] if r.get('ticker') == 'INFY'), None)
+    hcl = next((r for r in board.get('ranked_candidates') or [] if r.get('ticker') == 'HCLTECH'), None)
+    if not infy or (infy.get('sector_breadth') or {}).get('boost') != 12:
+        return _fail(f'INFY should get IT breadth boost: {infy!r}')
+    why = ' + '.join(infy.get('why') or [])
+    if 'IT sector breadth confirmation' not in why:
+        return _fail(f'INFY why should mention IT breadth: {why!r}')
+    if infy.get('state') not in ('SECTOR_BREADTH_CONFIRM', 'PRICE_IGNITION', 'VOLUME_IGNITION'):
+        return _fail(f'INFY strong price+breadth should not stay radar-only: {infy!r}')
+    if not hcl or hcl.get('state') == 'REJECTED':
+        return _fail(f'HCLTECH should be lifted by sector breadth: {hcl!r}')
+    return 0
+
+
+def test_chase_risk_best_becomes_pullback_only_plan() -> int:
+    from backend.telegram.response_format import format_final_opening_confirmation_telegram
+    from backend.trading.opening_rally_radar import resolve_final_confirmation_state
+
+    row = {
+        'ticker': 'INFY',
+        'state': 'CHASE_RISK',
+        'score': 88,
+        'change_percent': 5.1,
+        'has_catalyst': True,
+        'why': ['result alert', 'IT sector breadth confirmation: INFY/HCLTECH/TCS'],
+    }
+    state = resolve_final_confirmation_state(row, now=_dt(9, 31))
+    if state != 'PULLBACK_ONLY_PLAN':
+        return _fail(f'CHASE_RISK strongest should become PULLBACK_ONLY_PLAN got {state}')
+    text = format_final_opening_confirmation_telegram(
+        board={'ranked_candidates': [row], 'time_ist': '09:31'},
+        best_sym='INFY',
+        best_score=88,
+        confirm_state=state,
+        best_row=row,
+    )
+    if 'PULLBACK ONLY PLAN' not in text or 'no chase' not in text.lower():
+        return _fail(f'final confirmation missing pullback-only wording: {text}')
+    return 0
+
+
+def test_scheduled_best_pick_capture_and_no_fill() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.orchestration import alert_event_log
+    from backend.trading import tradecard_journal as tcj
+    from backend.trading.opening_rally_radar import run_scheduled_early_tradecards_0925
+
+    fake_board = {
+        'ranked_candidates': [
+            {
+                'ticker': 'INFY',
+                'state': 'TRADECARD_CANDIDATE',
+                'score': 91,
+                'why': ['result alert', 'IT sector breadth confirmation: INFY/HCLTECH/TCS'],
+                'change_percent': 4.8,
+                'pullback_only': True,
+                'scanner_row': {'price': 154.0, 'open_price': 148.0, 'vwap': 150.0, 'volume_ratio': 0.0},
+            },
+        ],
+        'time_ist': '09:25',
+    }
+    sent: list[str] = []
+
+    def _send(text: str) -> bool:
+        sent.append(text)
+        return True
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        alert_path = root / 'alert_event_log.jsonl'
+        journal_path = root / 'tradecard_journal.jsonl'
+        sample_path = root / 'tradecard_path_samples.jsonl'
+        with patch.object(alert_event_log, 'ALERT_LOG_FILE', alert_path), \
+             patch.object(tcj, 'JOURNAL_FILE', journal_path), \
+             patch.object(tcj, 'PATH_SAMPLES_FILE', sample_path), \
+             patch('backend.analytics.actual_learning_resolver.record_learning_candidate'), \
+             patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+             patch('backend.trading.opening_rally_radar.pick_best_opening_tradecard', return_value=('INFY', 91, [])), \
+             patch('backend.orchestration.alert_quality_engine.evaluate_text_alert', return_value={'send': True}), \
+             patch('backend.orchestration.alert_quality_engine.record_text_alert_sent'):
+            buf = StringIO()
+            with redirect_stdout(buf):
+                ok = run_scheduled_early_tradecards_0925(now=_dt(9, 25), send_fn=_send)
+            if not ok:
+                return _fail('09:25 should send fixture')
+            summary = alert_event_log.summarize_opening_workflow_for_date('2026-07-01')
+            if summary.get('early_tradecard_best') != 'INFY':
+                return _fail(f'09:25 best pick not captured: {summary!r}')
+            counts = tcj.summarize_today_outcomes(session_date='2026-07-01').get('counts') or {}
+            if counts.get('generated') != 1 or counts.get('pending') != 1:
+                return _fail(f'opening best should create pending paper context: {counts!r}')
+            resolved = tcj.resolve_close_pending_tradecards(session_date='2026-07-01', refresh=False)
+            if resolved.get('no_fill') != 1 or resolved.get('pending') != 0:
+                return _fail(f'opening paper context should resolve no-fill at close: {resolved!r}')
+            logs = buf.getvalue()
+            for token in ('[OPENING_WORKFLOW_CAPTURE]', '[OPENING_LEARNING_CAPTURE]', '[TRADECARD_GENERATED_FROM_OPENING_BEST]'):
+                if token not in logs:
+                    return _fail(f'missing opening capture log {token}: {logs}')
+    return 0
+
+
+def test_final_best_capture_and_daily_review_lines() -> int:
+    from io import StringIO
+    from contextlib import redirect_stdout
+    from backend.orchestration import alert_event_log
+    from backend.orchestration.alert_quality_engine import format_daily_review_quality_lines
+    from backend.trading import tradecard_journal as tcj
+    from backend.trading.opening_rally_radar import run_scheduled_final_confirmation_0931
+
+    row = {
+        'ticker': 'INFY',
+        'state': 'CHASE_RISK',
+        'score': 92,
+        'why': ['result alert', 'IT sector breadth confirmation: INFY/HCLTECH/TCS'],
+        'change_percent': 5.2,
+        'has_catalyst': True,
+        'pullback_only': True,
+        'scanner_row': {'price': 155.0, 'open_price': 148.0, 'vwap': 150.0, 'volume_ratio': 0.0},
+    }
+    fake_board = {'ranked_candidates': [row], 'time_ist': '09:31'}
+    sent: list[str] = []
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        alert_path = root / 'alert_event_log.jsonl'
+        journal_path = root / 'tradecard_journal.jsonl'
+        sample_path = root / 'tradecard_path_samples.jsonl'
+        with patch.object(alert_event_log, 'ALERT_LOG_FILE', alert_path), \
+             patch.object(tcj, 'JOURNAL_FILE', journal_path), \
+             patch.object(tcj, 'PATH_SAMPLES_FILE', sample_path), \
+             patch('backend.analytics.actual_learning_resolver.record_learning_candidate'), \
+             patch('backend.trading.opening_rally_radar.build_opening_rally_board', return_value=fake_board), \
+             patch('backend.trading.opening_rally_radar.pick_best_opening_tradecard', return_value=('INFY', 92, [])), \
+             patch('backend.orchestration.alert_quality_engine.evaluate_text_alert', return_value={'send': True}), \
+             patch('backend.orchestration.alert_quality_engine.record_text_alert_sent'):
+            buf = StringIO()
+            with redirect_stdout(buf):
+                ok = run_scheduled_final_confirmation_0931(now=_dt(9, 31), send_fn=lambda text: sent.append(text) or True)
+            if not ok or not sent:
+                return _fail('09:31 should send fixture')
+            summary = alert_event_log.summarize_opening_workflow_for_date('2026-07-01')
+            if summary.get('final_confirmation_best') != 'INFY':
+                return _fail(f'09:31 final best not captured: {summary!r}')
+            with patch('backend.orchestration.alert_event_log.summarize_opening_workflow_for_date', return_value=summary), \
+                 patch('backend.orchestration.alert_filters.get_telegram_alert_obs_summary', return_value={'recent_sent': []}), \
+                 patch('backend.orchestration.alert_quality_engine.missed_opportunities_summary', return_value={'count': 0, 'rows': []}):
+                lines = format_daily_review_quality_lines(
+                    tradecard_counts={'generated': 1, 'filled': 0, 'pending': 1, 'no_fill': 0, 'valid_entry': 1},
+                    actual_learning_summary={'sample_updated': 0, 'watchlist': {}, 'avoid': {}, 'pending_data': 0},
+                )
+            text = '\n'.join(lines)
+            for needle in ('Opening workflow:', 'Final confirmation best: INFY', 'Learning candidate captured: INFY'):
+                if needle not in text:
+                    return _fail(f'daily review missing {needle!r}: {text}')
+            if 'PULLBACK ONLY PLAN' not in sent[0] or 'no chase' not in sent[0].lower():
+                return _fail(f'final confirmation should be pullback-only: {sent[0]}')
+            if '[OPENING_PULLBACK_ONLY_PLAN]' not in buf.getvalue():
+                return _fail(f'missing pullback-only log: {buf.getvalue()}')
+    return 0
+
+
 def test_opening_morning_scheduler_slots() -> int:
     from backend.telegram.premarket_scheduler import due_opening_morning_slots, run_opening_morning_slot
 
@@ -693,6 +881,10 @@ def main() -> int:
         test_scheduled_opening_radar_no_candidate_silent,
         test_scheduled_early_tradecards_0925,
         test_scheduled_final_confirmation_0931,
+        test_opening_sector_breadth_boosts_it_cluster,
+        test_chase_risk_best_becomes_pullback_only_plan,
+        test_scheduled_best_pick_capture_and_no_fill,
+        test_final_best_capture_and_daily_review_lines,
         test_opening_morning_scheduler_slots,
         test_news_scoring_confirm,
         test_existing_tradecard_tests,
