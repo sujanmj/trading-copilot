@@ -569,6 +569,147 @@ def _freshness_multiplier(freshness: object) -> float:
     return 1.0
 
 
+def _opening_tradecard_final_reason(ticker: str, opening: dict[str, Any], mode: str) -> str:
+    """Explain why /tradecards or /radar selected this symbol."""
+    parts: list[str] = []
+    if opening.get('gainer_promoted') or opening.get('promoted_from_gainers'):
+        parts.append('all-cap gainer strength')
+    sb = opening.get('sector_breadth') or {}
+    if int(sb.get('boost') or 0) >= 8:
+        sector = str(sb.get('sector') or 'sector')
+        parts.append(f'{sector} sector breadth')
+    if not parts:
+        return ''
+    joined = ' + '.join(parts)
+    if opening.get('tradecards_best'):
+        prefix = f'{ticker} is the top ranked watch candidate from /tradecards due to '
+    elif opening.get('tradecards_rank'):
+        prefix = f'{ticker} is ranked on /tradecards due to '
+    else:
+        prefix = f'{ticker} watch context from /radar due to '
+    if _is_closed_mode(mode):
+        return (
+            f'{prefix}{joined}, but market is closed so only next-session confirmation '
+            'after 09:20 is allowed.'
+        )
+    return f'{prefix}{joined}.'
+
+
+def _opening_radar_evidence_items(ticker: str, context: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build direct/indirect evidence rows from opening radar / gainers / tradecards context."""
+    opening = context.get('opening_radar')
+    if not isinstance(opening, dict):
+        return []
+
+    row = opening.get('board_row') if isinstance(opening.get('board_row'), dict) else opening
+    why_lines = list(opening.get('why') or row.get('why') or [])
+    why_text = ' '.join(str(v) for v in why_lines).lower()
+    freshness = 'live' if opening.get('from_board') else 'session'
+    items: list[dict[str, Any]] = []
+
+    if opening.get('gainer_promoted') or opening.get('promoted_from_gainers'):
+        bucket = str(opening.get('gainer_bucket') or 'all-cap').replace('_', ' ')
+        rank = int(opening.get('gainer_rank') or 0)
+        if 0 < rank <= 3:
+            rank_label = f'top-{rank} '
+        elif rank <= 10:
+            rank_label = 'top-10 '
+        else:
+            rank_label = ''
+        promo = 'promoted from /gainers and merged into /radar'
+        reason = f'{rank_label}{bucket} gainer; {promo}'
+        items.append(_item('all_cap_gainer', 'direct', 'confirm', 14, freshness, reason, ticker=ticker))
+
+    vol_ratio = _safe_float(opening.get('volume_ratio') or row.get('volume_ratio'))
+    state = str(opening.get('state') or row.get('state') or '').upper()
+    if state == 'VOLUME_IGNITION' or vol_ratio >= 2.0:
+        items.append(
+            _item(
+                'volume_ignition',
+                'direct',
+                'confirm',
+                10,
+                freshness,
+                f'Volume ignition {vol_ratio:.1f}x on opening board',
+                ticker=ticker,
+            )
+        )
+
+    sb = opening.get('sector_breadth') if isinstance(opening.get('sector_breadth'), dict) else {}
+    boost = int(sb.get('boost') or 0)
+    if boost >= 8:
+        sector = str(sb.get('sector') or 'sector')
+        peers = '/'.join(sb.get('symbols') or [])
+        items.append(
+            _item(
+                'sector_breadth',
+                'direct',
+                'confirm',
+                min(12.0, float(boost)),
+                freshness,
+                f'{sector} sector breadth confirmation: {peers}',
+                ticker=ticker,
+                sectors_matched=[sector],
+            )
+        )
+
+    themes = list(opening.get('themes') or row.get('themes') or [])
+    if themes:
+        label = str(themes[0]).replace('_', ' ')
+        items.append(
+            _item(
+                'theme',
+                'indirect',
+                'confirm',
+                8,
+                freshness,
+                f'{label} theme on opening board',
+                ticker=ticker,
+            )
+        )
+
+    if opening.get('previous_mover') or 'previous-session mover' in why_text:
+        items.append(
+            _item(
+                'previous_session_mover',
+                'indirect',
+                'confirm',
+                6,
+                freshness,
+                'Previous-session mover continuation',
+                ticker=ticker,
+            )
+        )
+
+    if 'dip-buying rebound' in why_text:
+        items.append(
+            _item(
+                'dip_buying_rebound',
+                'indirect',
+                'confirm',
+                6,
+                freshness,
+                'Dip-buying rebound on opening board',
+                ticker=ticker,
+            )
+        )
+
+    if '52-week-high momentum' in why_text:
+        items.append(
+            _item(
+                'week52_momentum',
+                'indirect',
+                'confirm',
+                5,
+                freshness,
+                '52-week-high momentum on opening board',
+                ticker=ticker,
+            )
+        )
+
+    return items
+
+
 def _market_mode(context: dict[str, Any]) -> str:
     mode = str(context.get('market_mode') or context.get('mode') or '').strip().upper()
     if mode:
@@ -601,35 +742,76 @@ def _score_items(items: list[dict[str, Any]]) -> float:
 
 def _decision(
     *,
+    ticker: str,
     score: float,
     scanner_confirmed: bool,
     direct_catalyst: bool,
     hard_block: bool,
     mode: str,
     live_trigger: bool,
+    context: dict[str, Any] | None = None,
 ) -> tuple[str, str, float]:
     adjusted = score
+    opening = (context or {}).get('opening_radar') if isinstance(context, dict) else {}
+    opening = opening if isinstance(opening, dict) else {}
+    opening_direct = bool(
+        opening.get('gainer_promoted')
+        or opening.get('promoted_from_gainers')
+        or int((opening.get('sector_breadth') or {}).get('boost') or 0) >= 8
+    )
+    opening_reason = _opening_tradecard_final_reason(ticker, opening, mode) if opening_direct else ''
+
     if hard_block:
         return 'AVOID / BLOCKED', 'Hard risk/avoid filter blocks active entry.', min(score, 35.0)
-    if not scanner_confirmed:
+    if not scanner_confirmed and not opening_direct:
         adjusted = min(adjusted, 55.0)
         if direct_catalyst:
             return 'RESEARCH WATCH ONLY', 'Direct catalyst exists, but scanner has not confirmed price/volume.', adjusted
         return 'NO TRADE / REJECTED', 'Selection requires scanner confirmation or a direct catalyst; neither is present.', min(adjusted, 49.0)
     if _is_closed_mode(mode):
+        if opening_direct and adjusted >= 60:
+            return (
+                'NEXT-SESSION WATCH',
+                opening_reason or 'Market is closed; wait for fresh price and volume confirmation next session.',
+                min(adjusted, 79.0),
+            )
         if direct_catalyst and adjusted >= 65:
-            return 'NEXT-SESSION WATCH ONLY', 'Market is closed; wait for fresh price and volume confirmation next session.', min(adjusted, 79.0)
-        return 'MOMENTUM-ONLY WATCH', 'Scanner confirms momentum, but market is closed or catalyst support is limited.', min(adjusted, 72.0)
-    if score >= 75 and direct_catalyst:
+            return (
+                'NEXT-SESSION WATCH',
+                opening_reason or 'Market is closed; wait for fresh price and volume confirmation next session.',
+                min(adjusted, 79.0),
+            )
+        return (
+            'MOMENTUM-ONLY WATCH',
+            opening_reason or 'Scanner confirms momentum, but market is closed or catalyst support is limited.',
+            min(adjusted, 72.0),
+        )
+    if score >= 75 and (direct_catalyst or opening_direct):
         if _is_live_mode(mode) and live_trigger:
-            return 'VALID_ENTRY', 'Scanner, catalyst, and risk checks align; still paper-only/manual.', score
-        return 'HIGH CONVICTION WATCH', 'Scanner plus direct catalyst align; wait for live trigger confirmation.', score
-    if scanner_confirmed and not direct_catalyst and score >= 60:
-        return 'MOMENTUM-ONLY WATCH', 'Scanner confirms price/volume, but no fresh direct catalyst was found.', min(score, 72.0)
+            return 'VALID_ENTRY', opening_reason or 'Scanner, catalyst, and risk checks align; still paper-only/manual.', score
+        return (
+            'HIGH CONVICTION WATCH',
+            opening_reason or 'Scanner plus direct catalyst align; wait for live trigger confirmation.',
+            score,
+        )
+    if (scanner_confirmed or opening_direct) and not direct_catalyst and score >= 60:
+        return (
+            'MOMENTUM-ONLY WATCH',
+            opening_reason or 'Scanner confirms price/volume, but no fresh direct catalyst was found.',
+            min(score, 72.0),
+        )
     if score >= 65:
-        return 'WATCH FOR ENTRY', 'Evidence is supportive, but trigger confirmation is still required.', score
+        return (
+            'WATCH FOR ENTRY',
+            opening_reason or 'Evidence is supportive, but trigger confirmation is still required.',
+            score,
+        )
     if score >= 50:
-        return 'RESEARCH WATCH', 'Evidence is mixed or incomplete; research-only watch.', score
+        return (
+            'RESEARCH WATCH',
+            opening_reason or 'Evidence is mixed or incomplete; research-only watch.',
+            score,
+        )
     return 'NO TRADE / REJECTED', 'Evidence is too weak or contradictory for an active watch.', score
 
 
@@ -682,6 +864,16 @@ def build_tradecard_evidence_matrix(ticker: object, context: dict[str, Any] | No
             _tv_evidence(sym, ctx, aliases),
             _memory_evidence(sym, ctx, aliases),
         ]
+        theme_confirmed = any(
+            item.get('module') == 'theme' and item.get('verdict') == 'confirm'
+            for item in items
+        )
+        for opening_item in _opening_radar_evidence_items(sym, ctx):
+            if opening_item.get('module') == 'theme' and theme_confirmed:
+                continue
+            items.append(opening_item)
+            if opening_item.get('module') == 'theme' and opening_item.get('verdict') == 'confirm':
+                theme_confirmed = True
         items.append(_risk_evidence(sym, ctx, items))
 
     present = {str(item.get('module') or '').strip() for item in items}
@@ -690,18 +882,26 @@ def build_tradecard_evidence_matrix(ticker: object, context: dict[str, Any] | No
             items.append(_missing(module, f'{module} evidence not available'))
 
     scanner_confirmed = any(item.get('module') == 'scanner' and item.get('scope') == 'direct' and item.get('verdict') == 'confirm' for item in items)
+    opening_direct = any(
+        item.get('module') in ('all_cap_gainer', 'sector_breadth', 'volume_ignition')
+        and item.get('scope') == 'direct'
+        and item.get('verdict') == 'confirm'
+        for item in items
+    )
     direct_catalyst = any(item.get('module') in DIRECT_CATALYST_MODULES and item.get('scope') == 'direct' and item.get('verdict') == 'confirm' for item in items)
     hard_block = any(item.get('verdict') == 'block' for item in items)
     score = _score_items(items)
     mode = _market_mode(ctx)
     live_trigger = bool(ctx.get('live_trigger') or str((ctx.get('card') or {}).get('status') or '').upper() == 'VALID_ENTRY')
     decision, reason, score = _decision(
+        ticker=sym,
         score=score,
         scanner_confirmed=scanner_confirmed,
         direct_catalyst=direct_catalyst,
         hard_block=hard_block,
         mode=mode,
         live_trigger=live_trigger,
+        context=ctx,
     )
 
     direct_confirms = [i for i in items if i.get('scope') == 'direct' and i.get('verdict') == 'confirm']
@@ -721,8 +921,9 @@ def build_tradecard_evidence_matrix(ticker: object, context: dict[str, Any] | No
         'decision': decision,
         'final_reason': reason,
         'market_mode': mode,
-        'selection_basis_ok': scanner_confirmed or direct_catalyst,
+        'selection_basis_ok': scanner_confirmed or direct_catalyst or opening_direct,
         'scanner_confirmed': scanner_confirmed,
+        'opening_direct_confirmed': opening_direct,
         'direct_catalyst_confirmed': direct_catalyst,
     }
 
@@ -763,6 +964,20 @@ def _format_group(title: str, rows: list[dict[str, Any]], *, limit: int, empty: 
     return lines
 
 
+def _compact_evidence_module_label(item: dict[str, Any]) -> str:
+    module = str(item.get('module') or '').strip().lower()
+    reason = str(item.get('reason') or '')
+    labels = {
+        'all_cap_gainer': 'all-cap top gainer',
+        'volume_ignition': 'volume ignition',
+        'sector_breadth': 'IT sector breadth' if 'IT sector' in reason else 'sector breadth',
+        'dip_buying_rebound': 'dip-buying rebound',
+        'previous_session_mover': 'previous-session mover',
+        'week52_momentum': '52-week-high momentum',
+    }
+    return labels.get(module, module.replace('_', ' '))
+
+
 def format_tradecard_evidence_matrix_telegram(matrix: dict[str, Any], *, compact: bool = False) -> str:
     """Format a matrix for Telegram. Compact mode is safe for regular /tradecard."""
     ticker = _safe_html(matrix.get('ticker') or '')
@@ -777,8 +992,8 @@ def format_tradecard_evidence_matrix_telegram(matrix: dict[str, Any], *, compact
         indirect = matrix.get('indirect_confirms') or []
         risks = [r for r in (matrix.get('risk_filters') or []) if r.get('verdict') != 'neutral']
         missing = matrix.get('missing_modules') or []
-        direct_labels = ', '.join(str(r.get('module') or '') for r in direct[:3]) or 'none'
-        indirect_labels = ', '.join(str(r.get('module') or '') for r in indirect[:3]) or 'none'
+        direct_labels = ', '.join(_compact_evidence_module_label(r) for r in direct[:5]) or 'none'
+        indirect_labels = ', '.join(_compact_evidence_module_label(r) for r in indirect[:5]) or 'none'
         risk_label = '; '.join(str(r.get('reason') or '')[:70] for r in risks[:2]) or 'clear'
         missing_labels = ', '.join(str(r.get('module') or '') for r in missing[:4]) or 'none'
         lines = [

@@ -2104,8 +2104,21 @@ def _tradecard_evidence_context(
         context['card'] = card
         if str(card.get('status') or '').strip().upper() == 'VALID_ENTRY':
             context['live_trigger'] = True
+        opening = card.get('_opening_radar_context')
+        if isinstance(opening, dict):
+            context['opening_radar'] = opening
     if isinstance(freshness_meta, dict):
         context['tradecard_freshness'] = freshness_meta
+    sym = _normalize_tradecard_ticker((card or {}).get('ticker'))
+    if sym and 'opening_radar' not in context:
+        try:
+            from backend.trading.opening_rally_radar import opening_board_context_for_ticker
+
+            opening_ctx = opening_board_context_for_ticker(sym)
+            if opening_ctx:
+                context['opening_radar'] = opening_ctx
+        except Exception:
+            pass
     return context
 
 
@@ -2497,6 +2510,16 @@ def format_tradecard_telegram(
         fallback_status = today_entry_status
 
     effective_ticker = ticker or fallback_ticker
+    if effective_ticker:
+        from backend.trading.opening_rally_radar import opening_board_context_for_ticker
+
+        opening_ctx = opening_board_context_for_ticker(
+            effective_ticker,
+            board=sync.get('board'),
+        )
+        if opening_ctx:
+            card = dict(card)
+            card['_opening_radar_context'] = opening_ctx
     reason = clean_avoid_reason_text(str(card.get('reason') or ''), max_len=200)
     status = str(card.get('status') or 'NO_TRADE').strip().upper()
     if sync_status_override:

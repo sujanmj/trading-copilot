@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.7'
+STAGE = '4B.8'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
@@ -755,6 +755,55 @@ def pick_best_opening_tradecard(
     return sym or None, score, others
 
 
+def opening_board_context_for_ticker(
+    ticker: str,
+    *,
+    board: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Per-symbol opening radar / tradecards / gainers context for evidence matrix."""
+    sym = _normalize_ticker(ticker)
+    if not sym:
+        return None
+    data = board if board is not None else build_opening_rally_board()
+    ranked = list(data.get('ranked_candidates') or [])
+    row = next(
+        (r for r in ranked if _normalize_ticker(r.get('ticker')) == sym),
+        None,
+    )
+    gscan = data.get('gainer_scan') or {}
+    promoted = list(gscan.get('promoted') or [])
+    promoted_from_gainers = sym in promoted
+    if not row and not promoted_from_gainers:
+        return None
+
+    tradecards_rank = next(
+        (idx for idx, r in enumerate(ranked, start=1) if _normalize_ticker(r.get('ticker')) == sym),
+        0,
+    )
+    best_sym, _, _ = pick_best_opening_tradecard(data)
+    base = dict(row) if row else {}
+    why = list(base.get('why') or [])
+
+    return {
+        'ticker': sym,
+        'board_row': base,
+        'why': why,
+        'score': int(base.get('score') or 0),
+        'state': str(base.get('state') or ''),
+        'gainer_promoted': bool(base.get('gainer_promoted')) or promoted_from_gainers,
+        'gainer_bucket': str(base.get('gainer_bucket') or ''),
+        'gainer_rank': int(base.get('gainer_rank') or 0),
+        'sector_breadth': dict(base.get('sector_breadth') or {}),
+        'volume_ratio': _safe_float(base.get('volume_ratio')),
+        'previous_mover': bool(base.get('previous_mover')),
+        'themes': list(base.get('themes') or []),
+        'promoted_from_gainers': promoted_from_gainers,
+        'tradecards_rank': tradecards_rank,
+        'tradecards_best': _normalize_ticker(best_sym) == sym,
+        'from_board': True,
+    }
+
+
 def select_synced_tradecard(
     *,
     now: datetime | None = None,
@@ -819,6 +868,7 @@ def select_synced_tradecard(
         'status_override': status_override,
         'score': int(best_score or 0),
         'board': data,
+        'board_row': dict(best_row) if best_row else {},
     }
 
 

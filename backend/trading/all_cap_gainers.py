@@ -20,7 +20,7 @@ from backend.trading.opening_rally_radar import (
     theme_matches_for_symbol,
 )
 
-STAGE = '4B.7'
+STAGE = '4B.8'
 
 BUCKET_LARGE = 'large cap'
 BUCKET_MID = 'mid cap'
