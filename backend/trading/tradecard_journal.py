@@ -483,9 +483,8 @@ def get_active_valid_entry(ticker: str, *, session_date: str | None = None) -> d
     sym = str(ticker or '').strip().upper()
     if not sym:
         return None
-    day = session_date or _today()
     for row in reversed(_read_journal()):
-        if str(row.get('session_date') or '') != day:
+        if session_date is not None and str(row.get('session_date') or '') != session_date:
             continue
         if str(row.get('ticker') or '').upper() != sym:
             continue
@@ -502,10 +501,11 @@ def can_issue_new_valid_entry(ticker: str, *, card: dict[str, Any]) -> tuple[boo
     if active:
         return False, active
     sym = str(ticker or '').strip().upper()
-    day = _today()
+    day = str(card.get('session_date') or _today())
     cooldown = timedelta(minutes=RESOLVE_COOLDOWN_MINUTES)
     now = datetime.now(IST)
     entry_low, entry_high = parse_entry_bounds(card.get('entry_zone'))
+    scanner_ts = _parse_ts(card.get('generated_at') or card.get('scanner_event_ts') or card.get('scanner_timestamp'))
     for row in reversed(_read_journal()):
         if str(row.get('ticker') or '').upper() != sym:
             continue
@@ -518,6 +518,8 @@ def can_issue_new_valid_entry(ticker: str, *, card: dict[str, Any]) -> tuple[boo
             continue
         resolved_at = _parse_ts(row.get('outcome_time') or row.get('created_at'))
         if resolved_at and now - resolved_at < cooldown:
+            return False, row
+        if scanner_ts and resolved_at and scanner_ts <= resolved_at:
             return False, row
         old_low = _safe_float(row.get('entry_low'))
         old_high = _safe_float(row.get('entry_high'))

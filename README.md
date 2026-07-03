@@ -7,7 +7,7 @@ The system is designed for **research and paper-trading intelligence only**. It 
 - **Current build:** AstraEdge 50Z
 - **Primary interface:** Telegram bot
 - **Deployment:** Railway production FastAPI backend
-- **Persistence:** SQLite and JSON artifacts on the application data volume
+- **Persistence:** SQLite and JSON artifacts on a Railway **Persistent volume** mounted at `/app/data`
 - **Local operator UI:** Electron desktop interface for monitoring and review
 
 ---
@@ -141,6 +141,10 @@ flowchart LR
 | Outcome and calibration loop | Paper-card tracking, journal review, and confidence calibration context |
 
 Railway deploys the Python backend. The Electron GUI is intended for local operator review and talks to the backend API.
+
+### Data volume strategy
+
+Runtime SQLite databases, tradecard journals, scanner caches, and JSON snapshots are written under the application data directory. On Railway, mount a **Persistent volume** at `/app/data` and set `RAILWAY_DATA_DIR=/app/data` so deploys do not wipe live state. Local development writes to the repo `data/` folder (gitignored); production data files are never committed.
 
 ---
 

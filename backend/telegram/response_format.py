@@ -2727,7 +2727,8 @@ def format_tradecard_telegram(
             )
             active_evidence_decision = _evidence_decision(active_evidence_matrix, 'VALID_ENTRY')
             active_evidence_confidence = _evidence_confidence(active_evidence_matrix, active_card.get('confidence'))
-            if _evidence_keeps_active_tracking_header(active_evidence_matrix):
+            outcome = str(active.get('outcome_status') or 'PENDING').upper()
+            if outcome in ('PENDING', '') or _evidence_keeps_active_tracking_header(active_evidence_matrix):
                 lines = [format_active_card_exists(
                     active,
                     current_price=_safe_float(card.get('current_price')),
@@ -2735,7 +2736,6 @@ def format_tradecard_telegram(
                 lines.append(f'Confidence: {active_evidence_confidence}')
             else:
                 current = _safe_float(card.get('current_price'))
-                outcome = str(active.get('outcome_status') or 'PENDING').upper()
                 entry_zone = (
                     f"{active.get('entry_low')}–{active.get('entry_high')}"
                     if active.get('entry_low') is not None and active.get('entry_high') is not None
