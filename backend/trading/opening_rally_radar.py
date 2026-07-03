@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.8'
+STAGE = '4B.9'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
@@ -565,6 +565,7 @@ def build_opening_rally_board(
     """Build ranked opening rally candidate board."""
     ist_now = _now_ist(now)
     phase = opening_radar_time_phase(ist_now)
+    scanner_data = scanner_payload if scanner_payload is not None else _load_json(SCANNER_FILE)
     catalyst_map = _catalyst_map(catalyst_payload)
     scanner_index = _scanner_index(scanner_payload)
     sector_breadth = _sector_breadth_map(scanner_index)
@@ -575,11 +576,12 @@ def build_opening_rally_board(
     from backend.trading.all_cap_gainers import scan_all_cap_gainers, apply_gainer_context_to_candidate
 
     gainer_scan = scan_all_cap_gainers(
-        scanner_payload=scanner_payload if scanner_payload is not None else _load_json(SCANNER_FILE),
+        scanner_payload=scanner_data,
         catalyst_map=catalyst_map,
         previous_movers=prev_movers,
         sector_breadth_symbols=set(sector_breadth.keys()),
         sector_breadth_map=sector_breadth,
+        now=ist_now,
     )
     gainer_by_symbol = gainer_scan.get('by_symbol') or {}
 
@@ -642,7 +644,17 @@ def build_opening_rally_board(
             'total': gainer_scan.get('total_scanned') or 0,
         },
     }
-    _log_opening_radar_events(payload)
+    from backend.trading.opening_session_freshness import apply_session_guard_to_board
+
+    payload = apply_session_guard_to_board(
+        payload,
+        scanner_payload=scanner_data,
+        catalyst_payload=catalyst_payload if catalyst_payload is not None else _load_json(CATALYST_FILE),
+        premarket_payload=premarket_payload if premarket_payload is not None else _load_json(PREMARKET_FILE),
+        now=ist_now,
+    )
+    if not payload.get('session_stale'):
+        _log_opening_radar_events(payload)
     return payload
 
 
@@ -733,6 +745,8 @@ def pick_best_opening_tradecard(
 ) -> tuple[Optional[str], int, list[str]]:
     """Pick top tradecard candidate from opening board; log beat list."""
     data = board or build_opening_rally_board()
+    if data.get('session_stale'):
+        return None, 0, []
     candidates = [
         r for r in (data.get('ranked_candidates') or [])
         if _opening_tradecard_eligible(r)
@@ -765,6 +779,8 @@ def opening_board_context_for_ticker(
     if not sym:
         return None
     data = board if board is not None else build_opening_rally_board()
+    if data.get('session_stale'):
+        return None
     ranked = list(data.get('ranked_candidates') or [])
     row = next(
         (r for r in ranked if _normalize_ticker(r.get('ticker')) == sym),
@@ -812,6 +828,25 @@ def select_synced_tradecard(
 ) -> dict[str, Any]:
     """Align /tradecard selection with /tradecards opening-board best pick."""
     data = board or build_opening_rally_board(now=now)
+    if data.get('session_stale'):
+        print(
+            f'[TRADECARD_SELECTOR_SYNC] tradecards_best=- tradecard_selected=- '
+            f'source=stale_board reason=session_stale',
+            flush=True,
+        )
+        return {
+            'tradecards_best': '',
+            'selected': '',
+            'source': 'stale_board',
+            'reason': str(data.get('stale_message') or 'No current-session tradecard available.'),
+            'state': '',
+            'status_override': 'NO_ACTIVE_ENTRY',
+            'score': 0,
+            'board': data,
+            'board_row': {},
+            'session_stale': True,
+            'reference_candidates': list(data.get('reference_candidates') or []),
+        }
     best_sym, best_score, _ = pick_best_opening_tradecard(data)
     tradecards_best = _normalize_ticker(best_sym)
     legacy = _normalize_ticker(legacy_ticker)
@@ -1007,6 +1042,12 @@ def _capture_opening_workflow(
     timestamp: str = '',
 ) -> None:
     category = OPENING_STAGE_CATEGORY.get(stage, 'OPENING_RALLY_RADAR')
+    if board.get('session_stale'):
+        print(
+            f'[OPENING_LEARNING_CAPTURE_SKIPPED] stage={stage} reason=session_stale',
+            flush=True,
+        )
+        return
     best = _normalize_ticker(best_sym)
     ts = timestamp or str(board.get('generated_at') or _now_ist().replace(microsecond=0).isoformat())
     print(

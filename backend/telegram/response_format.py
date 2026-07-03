@@ -2483,6 +2483,11 @@ def format_tradecard_telegram(
     sync_ticker = _normalize_tradecard_ticker(sync.get('selected'))
     sync_reason = str(sync.get('reason') or '')
     sync_status_override = str(sync.get('status_override') or '').strip().upper()
+    if sync.get('session_stale'):
+        from backend.trading.opening_session_freshness import format_stale_tradecard_notice
+
+        stale_text = format_stale_tradecard_notice(sync.get('board') or {})
+        return strip_stage_markers(stale_text)
     if sync_ticker and sync_ticker != _normalize_tradecard_ticker(card.get('ticker')):
         from backend.trading.trade_card_engine import build_trade_card
 
@@ -2862,6 +2867,10 @@ def format_opening_radar_telegram(
     )
 
     data = board or build_opening_rally_board()
+    if data.get('session_stale'):
+        from backend.trading.opening_session_freshness import format_stale_radar_telegram
+
+        return strip_stage_markers(format_stale_radar_telegram(data, scheduled_slot=scheduled_slot))
     time_ist = str(data.get('time_ist') or '—')
     phase = str(data.get('phase') or opening_radar_time_phase())
     title = _scheduled_alert_title(scheduled_slot or '0920', time_ist) if scheduled_slot else (
@@ -2919,6 +2928,10 @@ def format_all_cap_gainers_telegram(
     )
 
     scan = gainer_scan or scan_all_cap_gainers()
+    if scan.get('session_stale'):
+        from backend.trading.opening_session_freshness import format_stale_gainers_telegram
+
+        return strip_stage_markers(format_stale_gainers_telegram(scan))
     buckets = scan.get('buckets') or {}
     lines = [
         '<b>ALL-CAP GAINERS — live discovery</b>',
@@ -3101,6 +3114,10 @@ def format_tradecards_telegram(
     from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
 
     data = board or build_opening_rally_board()
+    if data.get('session_stale'):
+        from backend.trading.opening_session_freshness import format_stale_tradecards_telegram
+
+        return strip_stage_markers(format_stale_tradecards_telegram(data))
     lines = [
         '<b>TRADECARDS — TOP CANDIDATES</b>',
         '<i>paper only — research, not execution</i>',

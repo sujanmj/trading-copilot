@@ -7,7 +7,9 @@ Paper/research only — no LLM calls.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from backend.trading.opening_rally_radar import (
     SCANNER_FILE,
@@ -20,7 +22,9 @@ from backend.trading.opening_rally_radar import (
     theme_matches_for_symbol,
 )
 
-STAGE = '4B.8'
+STAGE = '4B.9'
+
+IST = ZoneInfo('Asia/Kolkata')
 
 BUCKET_LARGE = 'large cap'
 BUCKET_MID = 'mid cap'
@@ -208,9 +212,42 @@ def scan_all_cap_gainers(
     previous_movers: set[str] | None = None,
     sector_breadth_symbols: set[str] | None = None,
     sector_breadth_map: dict[str, dict[str, Any]] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Scan all-cap top gainers and build promotion map for radar merge."""
-    scanner_index = _scanner_index(scanner_payload)
+    from backend.trading.opening_session_freshness import (
+        apply_session_guard_to_gainer_scan,
+        current_ist_session_date,
+        evaluate_session_stale,
+        extract_payload_session_date,
+    )
+
+    scanner_data = scanner_payload if scanner_payload is not None else _load_json(SCANNER_FILE)
+    source_date = extract_payload_session_date(scanner_data)
+    current_date = current_ist_session_date(now)
+    if evaluate_session_stale(
+        source_session_date=source_date,
+        current_ist_date=current_date,
+        now=now,
+    ):
+        empty = {
+            'ok': True,
+            'stage': STAGE,
+            'buckets': {
+                BUCKET_LARGE: [],
+                BUCKET_MID: [],
+                BUCKET_SMALL: [],
+                BUCKET_BROAD: [],
+                BUCKET_NEW: [],
+            },
+            'by_symbol': {},
+            'promoted_symbols': [],
+            'missed_symbols': [],
+            'total_scanned': 0,
+        }
+        return apply_session_guard_to_gainer_scan(empty, scanner_payload=scanner_data, now=now)
+
+    scanner_index = _scanner_index(scanner_data)
     catalyst_map = catalyst_map or {}
     previous_movers = previous_movers or set()
     sector_breadth_symbols = sector_breadth_symbols or set()
@@ -292,7 +329,7 @@ def scan_all_cap_gainers(
         if meta.get('demerger'):
             print(f'[DEMERGER_MOMENTUM] symbol={sym}', flush=True)
 
-    return {
+    result = {
         'ok': True,
         'stage': STAGE,
         'buckets': buckets,
@@ -301,6 +338,7 @@ def scan_all_cap_gainers(
         'missed_symbols': missed,
         'total_scanned': total,
     }
+    return apply_session_guard_to_gainer_scan(result, scanner_payload=scanner_data, now=now)
 
 
 def apply_gainer_context_to_candidate(
