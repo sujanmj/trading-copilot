@@ -38,8 +38,8 @@ def main() -> int:
         normalize_parsed_command,
     )
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51G':
-        return _fail(f'expected AstraEdge 51G got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51H':
+        return _fail(f'expected AstraEdge 51H got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     if REMOVED_OPENING_ALIAS_MESSAGE != REDIRECT:
         return _fail('redirect message mismatch')
 
@@ -81,6 +81,8 @@ def main() -> int:
         return _fail('/help must return HELP_TEXT')
     if '/opening' in help_text.lower() and 'same as /radar' in help_text.lower():
         return _fail('/help must not list /opening alias')
+    if '/gainers' not in help_text:
+        return _fail('/help must list /gainers')
     if '/radar' not in help_text:
         return _fail('/help must list /radar')
 
@@ -92,16 +94,22 @@ def main() -> int:
         return _fail('/schedule must not mention /opening')
     if '/radar' not in schedule_text:
         return _fail('/schedule must mention /radar')
+    if '/gainers' not in schedule_text:
+        return _fail('/schedule must mention /gainers')
 
     health_text = format_canonical_health_text()
-    if 'AstraEdge 51G' not in health_text:
-        return _fail('/health must show AstraEdge 51G')
+    if 'AstraEdge 51H' not in health_text:
+        return _fail('/health must show AstraEdge 51H')
 
     cmd_names = {row.get('command') for row in TELEGRAM_BOT_COMMANDS}
     if 'opening' in cmd_names:
         return _fail('TELEGRAM_BOT_COMMANDS must not register opening')
     if 'radar' not in cmd_names:
         return _fail('TELEGRAM_BOT_COMMANDS must register radar')
+    if 'gainers' not in cmd_names:
+        return _fail('TELEGRAM_BOT_COMMANDS must register gainers')
+    if len(TELEGRAM_BOT_COMMANDS) > 12:
+        return _fail('TELEGRAM_BOT_COMMANDS must have <=12 entries')
 
     print('TELEGRAM_OPENING_RADAR_ROUTING_4B6_TEST_OK')
     return 0

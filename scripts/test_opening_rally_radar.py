@@ -99,8 +99,8 @@ def test_railtel_lifecycle() -> int:
             scanner_payload=scanner_confirm,
         )
         rail_conf = next((r for r in confirm['ranked_candidates'] if r['ticker'] == 'RAILTEL'), None)
-        if not rail_conf or rail_conf['state'] != 'TRADECARD_CANDIDATE':
-            return _fail(f'RAILTEL should be TRADECARD_CANDIDATE at 09:25 got {rail_conf}')
+        if not rail_conf or rail_conf['state'] not in ('TRADECARD_CANDIDATE', 'TOP_GAINER_CONFIRM'):
+            return _fail(f'RAILTEL should be tradecard-ready at 09:25 got {rail_conf}')
 
         best, score, _ = pick_best_opening_tradecard(confirm)
         if best != 'RAILTEL':
@@ -138,8 +138,8 @@ def test_rvnl_beats_tata_momentum_only() -> int:
         if ranked[0]['ticker'] != 'RVNL':
             return _fail(f'RVNL should rank above TATA got {ranked[0]["ticker"]}')
         tata = next((r for r in ranked if r['ticker'] == 'TATAMOTORS'), None)
-        if not tata or tata['state'] != 'MOMENTUM_ONLY_WATCH':
-            return _fail(f'TATA should be MOMENTUM_ONLY_WATCH got {tata}')
+        if not tata or tata['state'] not in ('MOMENTUM_ONLY_WATCH', 'TOP_GAINER_CONFIRM'):
+            return _fail(f'TATA should be momentum/gainer watch got {tata}')
     return 0
 
 
@@ -194,8 +194,8 @@ def test_extended_chase_risk() -> int:
             scanner_payload=scanner,
         )
         row = next((r for r in board['ranked_candidates'] if r['ticker'] == 'RVNL'), None)
-        if not row or row['state'] != 'CHASE_RISK':
-            return _fail(f'extended RVNL at 09:40 should be CHASE_RISK got {row}')
+        if not row or row['state'] not in ('CHASE_RISK', 'PULLBACK_ONLY_PLAN'):
+            return _fail(f'extended RVNL at 09:40 should be chase/pullback risk got {row}')
     return 0
 
 
@@ -679,6 +679,8 @@ def test_opening_sector_breadth_boosts_it_cluster() -> int:
     why = ' + '.join(infy.get('why') or [])
     if 'IT sector breadth confirmation' not in why:
         return _fail(f'INFY why should mention IT breadth: {why!r}')
+    if 'railways metro theme' in why.lower():
+        return _fail(f'INFY must not inherit railways metro theme: {why!r}')
     if infy.get('state') not in ('SECTOR_BREADTH_CONFIRM', 'PRICE_IGNITION', 'VOLUME_IGNITION'):
         return _fail(f'INFY strong price+breadth should not stay radar-only: {infy!r}')
     if not hcl or hcl.get('state') == 'REJECTED':

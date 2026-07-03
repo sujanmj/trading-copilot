@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.2'
+STAGE = '4B.7'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
@@ -25,6 +25,9 @@ RADAR_STATES = frozenset({
     'RADAR_ARMED',
     'PRICE_IGNITION',
     'SECTOR_BREADTH_CONFIRM',
+    'TOP_GAINER_CONFIRM',
+    'NEW_LISTING_MOMENTUM',
+    'DEMERGER_MOMENTUM',
     'VOLUME_IGNITION',
     'TRADECARD_CANDIDATE',
     'PULLBACK_ONLY_PLAN',
@@ -53,6 +56,12 @@ SECTOR_PEERS: dict[str, set[str]] = {
     'IT': {'INFY', 'HCLTECH', 'TCS', 'WIPRO', 'TECHM', 'LTIM', 'MPHASIS', 'COFORGE', 'PERSISTENT'},
     'RAILWAYS': {'RAILTEL', 'RVNL', 'IRCON', 'RITES', 'TITAGARH', 'JWL'},
     'DEFENCE': {'BEML', 'HAL', 'BEL', 'BDL', 'MAZDOCK', 'COCHINSHIP'},
+}
+
+SECTOR_THEME_HINTS: dict[str, tuple[str, ...]] = {
+    'IT': ('it_digital_india', 'it', 'digital', 'software'),
+    'RAILWAYS': ('railways_metro', 'railway', 'rail', 'metro'),
+    'DEFENCE': ('defence_aerospace', 'defence', 'defense', 'aerospace'),
 }
 
 OPENING_STAGE_CATEGORY = {
@@ -164,7 +173,7 @@ def _live_registry() -> dict[str, str]:
 
 
 def _theme_matches_for_ticker(sym: str) -> list[str]:
-    """Return active theme basket ids that list this ticker."""
+    """Return active theme basket ids that list this ticker (fresh list per call)."""
     matches: list[str] = []
     try:
         from backend.analytics.theme_baskets import load_theme_baskets
@@ -181,7 +190,41 @@ def _theme_matches_for_ticker(sym: str) -> list[str]:
                     matches.append(tid)
     except Exception:
         pass
-    return matches
+    return list(matches)
+
+
+def theme_matches_for_symbol(sym: str) -> list[str]:
+    """Public per-symbol theme lookup — always returns an independent list."""
+    return _theme_matches_for_ticker(_normalize_ticker(sym))
+
+
+def _pick_primary_theme(
+    sym: str,
+    themes: list[str] | None,
+    sector_breadth: dict[str, Any] | None = None,
+) -> str:
+    """Pick one theme label for a symbol; reject cross-sector contamination."""
+    clean = [str(t).strip() for t in (themes or []) if str(t).strip()]
+    if not clean:
+        return ''
+    sector = str((sector_breadth or {}).get('sector') or _sector_for_symbol(sym) or '').upper()
+    hints = SECTOR_THEME_HINTS.get(sector, ())
+    if hints:
+        for hint in hints:
+            for tid in clean:
+                if hint in tid.lower():
+                    return tid
+        return ''
+    return clean[0]
+
+
+def pick_primary_theme_for_symbol(
+    sym: str,
+    themes: list[str] | None,
+    sector_breadth: dict[str, Any] | None = None,
+) -> str:
+    """Public wrapper for per-symbol primary theme selection."""
+    return _pick_primary_theme(_normalize_ticker(sym), list(themes or []), sector_breadth)
 
 
 def _previous_session_movers(payload: dict[str, Any] | None = None) -> set[str]:
@@ -278,6 +321,7 @@ def _sector_breadth_map(scanner_index: dict[str, dict[str, Any]]) -> dict[str, d
 
 def _build_why_lines(
     *,
+    sym: str,
     catalyst: dict[str, Any] | None,
     themes: list[str],
     previous_mover: bool,
@@ -293,9 +337,9 @@ def _build_why_lines(
             parts.append(f'fresh {str(catalyst.get("catalyst_type") or "news").replace("_", " ").lower()}')
         else:
             parts.append('fresh company news')
-    if themes:
-        label = themes[0].replace('_', ' ')
-        parts.append(f'{label} theme')
+    primary_theme = _pick_primary_theme(sym, themes, sector_breadth)
+    if primary_theme:
+        parts.append(f'{primary_theme.replace("_", " ")} theme')
     if previous_mover:
         parts.append('previous-session mover')
     if volume_ratio >= 1.5:
@@ -324,6 +368,9 @@ def score_opening_candidate(
     sector_breadth: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Score one symbol for opening rally board."""
+    sym = _normalize_ticker(sym)
+    themes = list(themes or [])
+    primary_theme = _pick_primary_theme(sym, themes, sector_breadth)
     if sym in registry:
         return {
             'ticker': sym,
@@ -346,7 +393,7 @@ def score_opening_candidate(
     if has_catalyst:
         cat_score = _safe_float((catalyst or {}).get('score'), 50.0)
         score += min(32.0, cat_score * 0.35 + 18.0)
-    if themes:
+    if primary_theme:
         score += 12.0
     if previous_mover:
         score += 8.0
@@ -362,7 +409,7 @@ def score_opening_candidate(
         score -= macro_penalty
 
     # momentum-only: volume without catalyst gets lower ceiling
-    momentum_only = volume_ratio >= VOLUME_IGNITION_MIN and not has_catalyst and not themes
+    momentum_only = volume_ratio >= VOLUME_IGNITION_MIN and not has_catalyst and not primary_theme
     if momentum_only:
         score = min(score, 62.0)
 
@@ -373,6 +420,7 @@ def score_opening_candidate(
         score -= 18.0
 
     why = _build_why_lines(
+        sym=sym,
         catalyst=catalyst,
         themes=themes,
         previous_mover=previous_mover,
@@ -385,7 +433,7 @@ def score_opening_candidate(
     state = _resolve_state(
         score=int(round(max(0, score))),
         has_catalyst=has_catalyst,
-        has_theme=bool(themes),
+        has_theme=bool(primary_theme),
         previous_mover=previous_mover,
         volume_ratio=volume_ratio,
         change_pct=change_pct,
@@ -402,11 +450,11 @@ def score_opening_candidate(
         'ticker': sym,
         'score': int(round(max(0, score))),
         'state': state,
-        'why': why,
+        'why': list(why),
         'has_catalyst': has_catalyst,
         'volume_ratio': round(volume_ratio, 2),
         'change_percent': round(change_pct, 2),
-        'themes': themes,
+        'themes': [primary_theme] if primary_theme else [],
         'previous_mover': previous_mover,
         'momentum_only': momentum_only,
         'extended': extended,
@@ -524,13 +572,29 @@ def build_opening_rally_board(
     prev_movers = _previous_session_movers(premarket_payload)
     macro_penalty = _macro_risk_penalty()
 
-    universe: set[str] = set(catalyst_map.keys()) | set(scanner_index.keys()) | prev_movers
+    from backend.trading.all_cap_gainers import scan_all_cap_gainers, apply_gainer_context_to_candidate
+
+    gainer_scan = scan_all_cap_gainers(
+        scanner_payload=scanner_payload if scanner_payload is not None else _load_json(SCANNER_FILE),
+        catalyst_map=catalyst_map,
+        previous_movers=prev_movers,
+        sector_breadth_symbols=set(sector_breadth.keys()),
+        sector_breadth_map=sector_breadth,
+    )
+    gainer_by_symbol = gainer_scan.get('by_symbol') or {}
+
+    universe: set[str] = (
+        set(catalyst_map.keys())
+        | set(scanner_index.keys())
+        | prev_movers
+        | set(gainer_scan.get('promoted_symbols') or [])
+    )
 
     ranked: list[dict[str, Any]] = []
     for sym in universe:
         if not sym:
             continue
-        themes = _theme_matches_for_ticker(sym)
+        themes = theme_matches_for_symbol(sym)
         row = score_opening_candidate(
             sym,
             catalyst=catalyst_map.get(sym),
@@ -542,6 +606,16 @@ def build_opening_rally_board(
             phase=phase,
             sector_breadth=sector_breadth.get(sym),
         )
+        gmeta = gainer_by_symbol.get(sym)
+        if gmeta:
+            row = apply_gainer_context_to_candidate(
+                row,
+                gmeta,
+                scanner_row=scanner_index.get(sym),
+                has_catalyst=bool(row.get('has_catalyst')),
+                sector_breadth=sym in sector_breadth,
+                previous_mover=sym in prev_movers,
+            )
         if row.get('state') == 'REJECTED' and row.get('score', 0) <= 0:
             continue
         ranked.append(row)
@@ -561,14 +635,64 @@ def build_opening_rally_board(
         'generated_at': ist_now.replace(microsecond=0).isoformat(),
         'phase': phase,
         'time_ist': ist_now.strftime('%H:%M'),
-        'ranked_candidates': ranked[:10],
+        'ranked_candidates': ranked[:12],
         'macro_penalty': macro_penalty,
+        'gainer_scan': {
+            'promoted': gainer_scan.get('promoted_symbols') or [],
+            'total': gainer_scan.get('total_scanned') or 0,
+        },
     }
     _log_opening_radar_events(payload)
     return payload
 
 
+def _is_circuit_low_liquidity(row: dict[str, Any]) -> bool:
+    from backend.trading.all_cap_gainers import CIRCUIT_LOW_LIQ_VOL, CIRCUIT_MOVE_PCT
+
+    change = _safe_float(row.get('change_percent'))
+    vol_ratio = _safe_float(row.get('volume_ratio'))
+    return change >= CIRCUIT_MOVE_PCT and vol_ratio < CIRCUIT_LOW_LIQ_VOL
+
+
+def _opening_tradecard_eligible(row: dict[str, Any]) -> bool:
+    """Exclude gainer-only unconfirmed picks and pure circuit/low-liquidity rows."""
+    state = str(row.get('state') or '').upper()
+    tradecard_states = frozenset({
+        'TRADECARD_CANDIDATE',
+        'VOLUME_IGNITION',
+        'PRICE_IGNITION',
+        'SECTOR_BREADTH_CONFIRM',
+        'TOP_GAINER_CONFIRM',
+        'NEW_LISTING_MOMENTUM',
+        'DEMERGER_MOMENTUM',
+        'PULLBACK_ONLY_PLAN',
+        'MOMENTUM_ONLY_WATCH',
+        'CHASE_RISK',
+    })
+    gainer_confirmed_states = frozenset({
+        'TOP_GAINER_CONFIRM',
+        'NEW_LISTING_MOMENTUM',
+        'DEMERGER_MOMENTUM',
+        'TRADECARD_CANDIDATE',
+        'VOLUME_IGNITION',
+        'SECTOR_BREADTH_CONFIRM',
+    })
+    if state not in tradecard_states or int(row.get('score') or 0) <= 0:
+        return False
+    if row.get('gainer_promoted') and state == 'CHASE_RISK':
+        return False
+    if _is_circuit_low_liquidity(row):
+        return False
+    if row.get('gainer_promoted') and not row.get('has_catalyst') and not (row.get('themes') or []):
+        if state not in gainer_confirmed_states:
+            return False
+    return True
+
+
 def _log_opening_radar_events(board: dict[str, Any]) -> None:
+    gscan = board.get('gainer_scan') or {}
+    for sym in gscan.get('promoted') or []:
+        print(f'[GAINER_PROMOTED_TO_RADAR] symbol={sym} source=opening_board', flush=True)
     for idx, row in enumerate(board.get('ranked_candidates') or [], start=1):
         sym = row.get('ticker')
         state = str(row.get('state') or '')
@@ -587,6 +711,16 @@ def _log_opening_radar_events(board: dict[str, Any]) -> None:
             print(f'[OPENING_TRADECARD_CANDIDATE] symbol={sym} score={score} state={state}', flush=True)
         elif state == 'CHASE_RISK':
             print(f'[OPENING_CHASE_RISK] symbol={sym} reason=extended/late/no_pullback', flush=True)
+        elif state == 'TOP_GAINER_CONFIRM':
+            print(
+                f'[TOP_GAINER_CONFIRM] symbol={sym} move={row.get("change_percent")} '
+                f'volume={row.get("volume_ratio")}',
+                flush=True,
+            )
+        elif state == 'NEW_LISTING_MOMENTUM':
+            print(f'[NEW_LISTING_MOMENTUM] symbol={sym} score={score}', flush=True)
+        elif state == 'DEMERGER_MOMENTUM':
+            print(f'[DEMERGER_MOMENTUM] symbol={sym} score={score}', flush=True)
         if sym:
             print(
                 f'[MULTI_TRADECARD_RANK] symbol={sym} rank={idx} score={score} reason={why}',
@@ -601,16 +735,7 @@ def pick_best_opening_tradecard(
     data = board or build_opening_rally_board()
     candidates = [
         r for r in (data.get('ranked_candidates') or [])
-        if r.get('state') in (
-            'TRADECARD_CANDIDATE',
-            'VOLUME_IGNITION',
-            'PRICE_IGNITION',
-            'SECTOR_BREADTH_CONFIRM',
-            'PULLBACK_ONLY_PLAN',
-            'MOMENTUM_ONLY_WATCH',
-            'CHASE_RISK',
-        )
-        and int(r.get('score') or 0) > 0
+        if _opening_tradecard_eligible(r)
     ]
     if not candidates:
         candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
@@ -1171,6 +1296,12 @@ def format_opening_radar_action(state: str) -> str:
         return 'price ignition; confirm breadth/VWAP before paper plan'
     if token == 'SECTOR_BREADTH_CONFIRM':
         return 'sector breadth confirm; prepare pullback/retest plan'
+    if token == 'TOP_GAINER_CONFIRM':
+        return 'top gainer with volume confirm; review /tradecards'
+    if token == 'NEW_LISTING_MOMENTUM':
+        return 'new listing momentum; confirm volume before paper plan'
+    if token == 'DEMERGER_MOMENTUM':
+        return 'demerger momentum; confirm breadth/volume before paper plan'
     if token == 'RADAR_ARMED':
         return 'watch only - no entry yet'
     if token == 'TRADECARD_CANDIDATE':

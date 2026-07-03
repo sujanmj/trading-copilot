@@ -83,6 +83,7 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'health', 'description': 'Runtime health'},
     {'command': 'schedule', 'description': 'Premarket + brief schedule'},
     {'command': 'radar', 'description': 'Opening rally radar'},
+    {'command': 'gainers', 'description': 'All-cap top gainers'},
     {'command': 'tradecards', 'description': 'Top tradecard candidates'},
     {'command': 'tradecard', 'description': 'Single paper trade card'},
     {'command': 'catalysts', 'description': 'Stock catalyst radar'},
@@ -137,6 +138,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 
 <b>Opening Rally:</b>
 /radar — opening rally radar (manual)
+/gainers — all-cap top gainers discovery
 /tradecards — top 5-10 tradecard candidates with reasons
 
 <b>Trade Card:</b>
@@ -273,6 +275,8 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'outcomes', ''
     if lower == 'radar':
         return 'radar', ''
+    if lower == 'gainers':
+        return 'gainers', ''
     if lower in ('opening', 'opening radar') or lower.startswith('opening '):
         return 'removed_opening_alias', ''
     if lower == 'tradecards':
@@ -831,6 +835,11 @@ def handle_analysis_command(
 
         result = run_without_ai(run_radar_only, command='radar')
         response_text = result.get('text') or 'Opening rally radar unavailable.'
+    elif cmd == 'gainers':
+        from backend.telegram.lazy_command_runner import run_gainers_only
+
+        result = run_without_ai(run_gainers_only, command='gainers')
+        response_text = result.get('text') or 'All-cap gainers unavailable.'
     elif cmd == 'tradecards':
         from backend.telegram.lazy_command_runner import run_tradecards_only
 

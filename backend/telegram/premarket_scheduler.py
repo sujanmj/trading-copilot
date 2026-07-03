@@ -226,7 +226,7 @@ def format_schedule_text() -> str:
     lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY_OPENING)
     lines.extend([
         '',
-        '<b>Manual anytime:</b> /radar · /tradecards · /tradecard',
+        '<b>Manual anytime:</b> /radar · /gainers · /tradecards · /tradecard',
         '',
         '<b>Commands:</b> /premarket · /premarket full · /action plan',
     ])

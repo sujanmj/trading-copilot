@@ -701,6 +701,13 @@ def run_radar_only(args: str = '') -> dict[str, Any]:
     return _runner_result('radar', text=text)
 
 
+def run_gainers_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import format_all_cap_gainers_telegram
+
+    text = format_all_cap_gainers_telegram()
+    return _runner_result('gainers', text=text)
+
+
 def run_tradecards_only(args: str = '') -> dict[str, Any]:
     from backend.telegram.response_format import format_tradecards_telegram
 

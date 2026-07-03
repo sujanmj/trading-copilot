@@ -2807,6 +2807,12 @@ def _opening_state_label(state: str) -> str:
     token = str(state or '').upper().replace('_', ' ')
     if token == 'MOMENTUM ONLY WATCH':
         return 'MOMENTUM-ONLY WATCH'
+    if token == 'TOP GAINER CONFIRM':
+        return 'TOP GAINER CONFIRM'
+    if token == 'NEW LISTING MOMENTUM':
+        return 'NEW LISTING MOMENTUM'
+    if token == 'DEMERGER MOMENTUM':
+        return 'DEMERGER MOMENTUM'
     if token == 'PULLBACK ONLY PLAN':
         return 'PULLBACK-ONLY PLAN'
     return token
@@ -2866,7 +2872,74 @@ def format_opening_radar_telegram(
             '',
         ])
     lines.append('Paper only — no blind chase before /tradecard.')
+    gscan = data.get('gainer_scan') or {}
+    promoted = gscan.get('promoted') or []
+    if promoted:
+        lines.extend([
+            '',
+            f'<b>Promoted to /radar:</b> {", ".join(promoted[:10])}',
+        ])
     return strip_stage_markers('\n'.join(lines))
+
+
+def format_all_cap_gainers_telegram(
+    *,
+    gainer_scan: dict[str, Any] | None = None,
+) -> str:
+    """Format /gainers — all-cap top gainers discovery."""
+    from backend.trading.all_cap_gainers import (
+        BUCKET_LARGE,
+        BUCKET_MID,
+        BUCKET_NEW,
+        BUCKET_SMALL,
+        scan_all_cap_gainers,
+    )
+
+    scan = gainer_scan or scan_all_cap_gainers()
+    buckets = scan.get('buckets') or {}
+    lines = [
+        '<b>ALL-CAP GAINERS — live discovery</b>',
+        '<i>Paper/research only</i>',
+        '',
+    ]
+    display_order = (
+        (BUCKET_LARGE, 'Large cap'),
+        (BUCKET_MID, 'Mid cap'),
+        (BUCKET_SMALL, 'Small cap'),
+        (BUCKET_NEW, 'New listings / demerged'),
+    )
+    any_row = False
+    for bucket_key, label in display_order:
+        rows = buckets.get(bucket_key) or []
+        if not rows:
+            continue
+        any_row = True
+        lines.append(f'<b>{label}:</b>')
+        for idx, row in enumerate(rows[:5], start=1):
+            sym = str(row.get('ticker') or '?')
+            chg = _safe_float(row.get('change_percent'))
+            why = ' + '.join(row.get('why') or []) or f'+{chg:.1f}%'
+            lines.append(f'{idx}. <b>{sym}</b> — +{chg:.1f}%')
+            lines.append(f'   Why: {why}')
+            if row.get('risk_blocked'):
+                lines.append(f'   Risk: {row.get("risk_reason") or "circuit/chase risk"}')
+        lines.append('')
+    if not any_row:
+        lines.append('No all-cap gainers above threshold in current scanner feed.')
+        lines.append('Try again after market open or run /refresh quick.')
+    promoted = scan.get('promoted_symbols') or []
+    if promoted:
+        lines.append(f'<b>Promoted to /radar:</b> {", ".join(promoted[:12])}')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def _safe_float(value: object, default: float = 0.0) -> float:
+    try:
+        if value in (None, ''):
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def format_radar_armed_scheduled_telegram(
@@ -3022,6 +3095,15 @@ def format_tradecards_telegram(
         why = ' + '.join(row.get('why') or []) or '—'
         lines.append(f'{idx}. <b>{sym}</b> — {state} — Score {score}')
         lines.append(f'   {why}')
+        state_upper = str(row.get('state') or '').upper()
+        if state_upper == 'NEW_LISTING_MOMENTUM':
+            lines.append('   Risk: new listing — volume confirm required; chase risk on extension.')
+        elif state_upper == 'DEMERGER_MOMENTUM':
+            lines.append('   Risk: demerger entity — confirm breadth/volume before paper plan.')
+        elif state_upper == 'CHASE_RISK' or row.get('pullback_only'):
+            lines.append('   Risk: extended/chase — VWAP/retest only; no market chase.')
+        elif row.get('gainer_promoted') and state_upper == 'TOP_GAINER_CONFIRM':
+            lines.append('   Risk: top gainer — confirm VWAP/volume before paper plan.')
 
     best_sym, best_score, beaten = pick_best_opening_tradecard(data)
     if best_sym:
