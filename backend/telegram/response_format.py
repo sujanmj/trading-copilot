@@ -2122,6 +2122,48 @@ def _tradecard_evidence_context(
     return context
 
 
+def _inject_tradecard_cap_bucket_line(
+    lines: list[str],
+    card: dict[str, Any] | None = None,
+    *,
+    row: dict[str, Any] | None = None,
+    gainer_bucket: str = '',
+) -> None:
+    """Insert cap bucket near top of tradecard output (after ticker header)."""
+    from backend.trading.all_cap_gainers import format_cap_bucket_header
+
+    cap_line = format_cap_bucket_header(row, gainer_bucket=gainer_bucket)
+    if not card and not row and not gainer_bucket:
+        cap_line = format_cap_bucket_header()
+    elif card and not gainer_bucket and not row:
+        opening = card.get('_opening_radar_context')
+        if isinstance(opening, dict):
+            cap_line = format_cap_bucket_header(
+                opening.get('board_row') if isinstance(opening.get('board_row'), dict) else opening,
+                gainer_bucket=str(opening.get('gainer_bucket') or ''),
+            )
+    for idx, line in enumerate(lines):
+        if idx > 0 and '<b>' in line and ('·' in line or 'NO CURRENT ENTRY' in line.upper()):
+            if cap_line not in lines:
+                lines.insert(idx + 1, cap_line)
+            return
+    if len(lines) >= 2 and cap_line not in lines:
+        lines.insert(2, cap_line)
+
+
+def _finalize_tradecard_lines(
+    lines: list[str],
+    card: dict[str, Any] | None = None,
+    *,
+    row: dict[str, Any] | None = None,
+    gainer_bucket: str = '',
+    include_cap_bucket: bool = True,
+) -> str:
+    if include_cap_bucket:
+        _inject_tradecard_cap_bucket_line(lines, card, row=row, gainer_bucket=gainer_bucket)
+    return strip_stage_markers('\n'.join(lines))
+
+
 def _build_tradecard_evidence_matrix(
     ticker: object,
     *,
@@ -2256,7 +2298,7 @@ def _format_tradecard_premarket_watch(
             reason='market not open for confirmed entry yet',
         ))
     _append_tradecard_evidence(lines, ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
-    return strip_stage_markers('\n'.join(lines))
+    return _finalize_tradecard_lines(lines, card)
 
 
 def _tradecard_status_label(status: str) -> str:
@@ -2383,7 +2425,7 @@ def _format_pinned_tradecard_from_latest(
             lines.append(freshness)
         _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta, matrix=evidence_matrix)
         lines.append('Paper only.')
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, display)
 
     lines = [
         '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
@@ -2409,7 +2451,7 @@ def _format_pinned_tradecard_from_latest(
         lines.append(freshness)
     _append_tradecard_evidence(lines, ticker, compact=not explain, card=display, freshness_meta=freshness_meta, matrix=evidence_matrix)
     lines.append('Paper only — you decide and place trades manually.')
-    return strip_stage_markers('\n'.join(lines))
+    return _finalize_tradecard_lines(lines, display)
 
 
 def format_tradecard_telegram(
@@ -2494,7 +2536,7 @@ def format_tradecard_telegram(
 
         ref_text = format_reference_tradecard_notice(
             board,
-            ticker=sync_ticker or _normalize_tradecard_ticker(card.get('ticker')),
+            ticker=str(sync.get('reference_best') or sync.get('tradecards_best') or '').strip().upper(),
         )
         return strip_stage_markers(ref_text)
     if sync_ticker and sync_ticker != _normalize_tradecard_ticker(card.get('ticker')):
@@ -2588,7 +2630,7 @@ def format_tradecard_telegram(
         stale_card['reason'] = stale_reason
         _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=stale_card, freshness_meta=freshness_meta)
         _save_latest(stale_card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, stale_card)
 
     if not effective_ticker:
         lines = [
@@ -2622,7 +2664,7 @@ def format_tradecard_telegram(
             lines.extend(_tradecard_explain_lines(variant='stale'))
         if is_tradecard_audit_status(status):
             _save_latest(card, ticker=effective_ticker, status=status, audit_only=True)
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, card)
 
     if card.get('ok') is False and not ticker and fallback_ticker:
         lines = [
@@ -2640,7 +2682,7 @@ def format_tradecard_telegram(
         _append_tradecard_evidence(lines, effective_ticker, compact=not explain, card=card, freshness_meta=freshness_meta)
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, card)
 
     if _is_tradecard_premarket_phase() and effective_ticker and status != 'VALID_ENTRY':
         _save_latest(card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
@@ -2668,7 +2710,7 @@ def format_tradecard_telegram(
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason or 'market closed/after-hours'))
         _save_latest(card, ticker=effective_ticker, status='NEXT_SESSION_WATCH', audit_only=True)
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, card)
 
     if status == 'NO_ACTIVE_ENTRY' and 'stop too wide' in reason.lower():
         lines = [
@@ -2687,7 +2729,7 @@ def format_tradecard_telegram(
         if explain:
             lines.extend(_tradecard_explain_lines(variant='entry_missed', reason=reason))
         _save_latest(card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, card)
 
     if status == 'ENTRY_MISSED' or status == 'NO_ACTIVE_ENTRY' or str(card.get('entry_zone') or '').strip().upper() == 'NO ACTIVE ENTRY':
         lines = [
@@ -2708,7 +2750,7 @@ def format_tradecard_telegram(
             lines.extend(_tradecard_explain_lines(variant=explain_variant, reason=reason))
         audit_status = status if is_tradecard_audit_status(status) else 'NO_ACTIVE_ENTRY'
         _save_latest(card, ticker=effective_ticker, status=audit_status, audit_only=True)
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, card)
 
     if status in ('NO_TRADE', 'AVOID') or card.get('ok') is False:
         lines = [
@@ -2727,7 +2769,7 @@ def format_tradecard_telegram(
         if explain:
             lines.extend(_tradecard_explain_lines(variant='no_trade', reason=reason))
         _persist_tradecard_journal(card)
-        return strip_stage_markers('\n'.join(lines))
+        return _finalize_tradecard_lines(lines, card)
 
     if status == 'VALID_ENTRY' and effective_ticker:
         from backend.trading.tradecard_journal import format_active_card_exists, get_active_valid_entry
@@ -2757,6 +2799,8 @@ def format_tradecard_telegram(
                 'reason': active.get('reason') or 'active card tracking',
                 'confidence': active.get('confidence') or '—',
             }
+            if card.get('_opening_radar_context'):
+                active_card['_opening_radar_context'] = card.get('_opening_radar_context')
             active_evidence_matrix = _build_tradecard_evidence_matrix(
                 effective_ticker,
                 card=active_card,
@@ -2765,10 +2809,10 @@ def format_tradecard_telegram(
             active_evidence_decision = _evidence_decision(active_evidence_matrix, 'VALID_ENTRY')
             active_evidence_confidence = _evidence_confidence(active_evidence_matrix, active_card.get('confidence'))
             if _evidence_keeps_active_tracking_header(active_evidence_matrix):
-                lines = [format_active_card_exists(
+                lines = format_active_card_exists(
                     active,
                     current_price=_safe_float(card.get('current_price')),
-                )]
+                ).splitlines()
                 lines.append(f'Confidence: {active_evidence_confidence}')
             else:
                 current = _safe_float(card.get('current_price'))
@@ -2799,7 +2843,7 @@ def format_tradecard_telegram(
                 matrix=active_evidence_matrix,
             )
             _save_latest(active_card, ticker=effective_ticker, status='VALID_ENTRY')
-            return strip_stage_markers('\n'.join(lines))
+            return _finalize_tradecard_lines(lines, active_card)
 
     lines = [
         '<b>📋 TRADE CARD</b> <i>(paper only — research, not execution)</i>',
@@ -2837,7 +2881,7 @@ def format_tradecard_telegram(
         journal_card['status'] = 'NO_ACTIVE_ENTRY'
         journal_card['entry_zone'] = 'NO ACTIVE ENTRY'
         _save_latest(journal_card, ticker=effective_ticker, status='NO_ACTIVE_ENTRY', audit_only=True)
-    return strip_stage_markers('\n'.join(lines))
+    return _finalize_tradecard_lines(lines, card)
 
 
 def _opening_state_label(state: str) -> str:
@@ -2910,12 +2954,15 @@ def format_opening_radar_telegram(
 
     for idx, row in enumerate(candidates[:8], start=1):
         sym = str(row.get('ticker') or '?')
+        from backend.trading.all_cap_gainers import format_cap_bucket_inline
+
+        cap = format_cap_bucket_inline(row)
         state = _opening_state_label(str(row.get('state') or ''))
         score = int(row.get('score') or 0)
         why = ' + '.join(row.get('why') or []) or 'opening watch'
         action = format_opening_radar_action(str(row.get('state') or ''))
         lines.extend([
-            f'{idx}. <b>{sym}</b> — {state}',
+            f'{idx}. <b>{sym}</b> — {cap} — {state}',
             f'   Score: {score}',
             f'   Why: {why}',
             f'   Action: {action}',
@@ -3175,10 +3222,13 @@ def format_tradecards_telegram(
 
     for idx, row in enumerate(candidates[:10], start=1):
         sym = str(row.get('ticker') or '?')
+        from backend.trading.all_cap_gainers import format_cap_bucket_inline
+
+        cap = format_cap_bucket_inline(row)
         state = _opening_state_label(str(row.get('state') or ''))
         score = int(row.get('score') or 0)
         why = ' + '.join(row.get('why') or []) or '—'
-        lines.append(f'{idx}. <b>{sym}</b> — {state} — Score {score}')
+        lines.append(f'{idx}. <b>{sym}</b> — {cap} — {state} — Score {score}')
         lines.append(f'   {why}')
         state_upper = str(row.get('state') or '').upper()
         if state_upper == 'NEW_LISTING_MOMENTUM':

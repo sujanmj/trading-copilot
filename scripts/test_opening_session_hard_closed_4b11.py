@@ -192,8 +192,8 @@ def test_clock_uses_runtime_not_board_generated_at() -> int:
 def test_build_label_51l() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51L':
-        return _fail(f'expected AstraEdge 51L got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51M':
+        return _fail(f'expected AstraEdge 51M got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

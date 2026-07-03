@@ -909,6 +909,16 @@ def build_tradecard_evidence_matrix(ticker: object, context: dict[str, Any] | No
     risk_filters = [i for i in items if i.get('scope') == 'risk' or i.get('verdict') in ('warn', 'reject', 'block')]
     missing_modules = [i for i in items if i.get('scope') == 'no_data' or i.get('verdict') == 'neutral' and i.get('weight') == 0]
 
+    opening = ctx.get('opening_radar') if isinstance(ctx, dict) else {}
+    opening = opening if isinstance(opening, dict) else {}
+    board_row = opening.get('board_row') if isinstance(opening.get('board_row'), dict) else {}
+    from backend.trading.all_cap_gainers import format_cap_bucket_metadata
+
+    cap_bucket_meta = format_cap_bucket_metadata(
+        board_row,
+        gainer_bucket=str(opening.get('gainer_bucket') or board_row.get('gainer_bucket') or ''),
+    )
+
     return {
         'ticker': sym,
         'evidence_items': items,
@@ -925,6 +935,7 @@ def build_tradecard_evidence_matrix(ticker: object, context: dict[str, Any] | No
         'scanner_confirmed': scanner_confirmed,
         'opening_direct_confirmed': opening_direct,
         'direct_catalyst_confirmed': direct_catalyst,
+        'cap_bucket': cap_bucket_meta,
     }
 
 
@@ -1000,13 +1011,18 @@ def format_tradecard_evidence_matrix_telegram(matrix: dict[str, Any], *, compact
             '',
             '<b>Evidence Matrix</b>',
             f'Consensus: <b>{score}</b> | Confidence: <b>{confidence}</b> | Decision: <code>{decision}</code>',
+        ]
+        cap_meta = str(matrix.get('cap_bucket') or '').strip()
+        if cap_meta:
+            lines.append(f'Metadata: {_safe_html(cap_meta)}')
+        lines.extend([
             f'Direct confirms: {_safe_html(direct_labels)}',
             f'Indirect confirms: {_safe_html(indirect_labels)}',
             f'Risk filters: {_safe_html(risk_label)}',
             f'Missing/no-data: {_safe_html(missing_labels)}',
             f'Final reason: {reason}',
             f'Use /tradecard explain {ticker} for full evidence.',
-        ]
+        ])
         return '\n'.join(lines)
 
     lines = [

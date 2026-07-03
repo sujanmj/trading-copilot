@@ -22,7 +22,7 @@ from backend.trading.opening_rally_radar import (
     theme_matches_for_symbol,
 )
 
-STAGE = '4B.11'
+STAGE = '4B.12'
 
 IST = ZoneInfo('Asia/Kolkata')
 
@@ -56,6 +56,46 @@ MIN_GAINER_PCT = 2.0
 MIN_VOLUME_RATIO_TRADECARD = 0.35
 CIRCUIT_LOW_LIQ_VOL = 0.25
 CIRCUIT_MOVE_PCT = 9.5
+
+
+def _normalize_cap_bucket_label(raw: object) -> str:
+    """Normalize gainer_bucket to lowercase spaced label, e.g. 'large cap'."""
+    return str(raw or '').strip().lower().replace('_', ' ')
+
+
+def format_cap_bucket_inline(
+    row: dict[str, Any] | None = None,
+    *,
+    gainer_bucket: str = '',
+) -> str:
+    """Inline tradecards/radar label — 'Large cap' or 'Unknown cap'."""
+    raw = _normalize_cap_bucket_label(gainer_bucket or (row or {}).get('gainer_bucket'))
+    if not raw:
+        return 'Unknown cap'
+    parts = raw.split()
+    return f'{parts[0].capitalize()} {" ".join(parts[1:])}'
+
+
+def format_cap_bucket_header(
+    row: dict[str, Any] | None = None,
+    *,
+    gainer_bucket: str = '',
+) -> str:
+    """Tradecard header line — 'Cap bucket: Large cap' or 'Cap bucket: Unknown'."""
+    raw = _normalize_cap_bucket_label(gainer_bucket or (row or {}).get('gainer_bucket'))
+    if not raw:
+        return 'Cap bucket: Unknown'
+    return f'Cap bucket: {format_cap_bucket_inline(gainer_bucket=raw)}'
+
+
+def format_cap_bucket_metadata(
+    row: dict[str, Any] | None = None,
+    *,
+    gainer_bucket: str = '',
+) -> str:
+    """Evidence matrix metadata token — 'cap_bucket=large cap' or empty."""
+    raw = _normalize_cap_bucket_label(gainer_bucket or (row or {}).get('gainer_bucket'))
+    return f'cap_bucket={raw}' if raw else ''
 
 
 def _classify_bucket(sym: str, row: dict[str, Any]) -> str:
@@ -301,6 +341,13 @@ def scan_all_cap_gainers(
             print(f'[NEW_LISTING_MOMENTUM] symbol={sym}', flush=True)
         if meta.get('demerger'):
             print(f'[DEMERGER_MOMENTUM] symbol={sym}', flush=True)
+
+    promoted.sort(
+        key=lambda sym: (
+            int((by_symbol.get(sym) or {}).get('rank_in_bucket') or 99),
+            sym,
+        ),
+    )
 
     result = {
         'ok': True,

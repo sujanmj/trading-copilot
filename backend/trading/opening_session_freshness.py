@@ -12,7 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.11'
+STAGE = '4B.12'
 
 _SESSION_DATE_KEYS = ('session_date', 'trading_date', 'market_date')
 _TIMESTAMP_KEYS = (
@@ -448,6 +448,7 @@ def _apply_hard_closed_market_override(
         out['no_current_entry'] = True
         if not out.get('reference_candidates') and out.get('ranked_candidates'):
             _demote_to_reference(out)
+        _ensure_reference_best_pick(out)
         if out.get('buckets') and any((out.get('buckets') or {}).values()):
             _demote_gainer_scan_to_reference(out)
         return
@@ -464,6 +465,7 @@ def _apply_hard_closed_market_override(
     out['current_ist_display'] = runtime_ist_display(ist_now)
     if out.get('ranked_candidates'):
         _demote_to_reference(out)
+    _ensure_reference_best_pick(out)
     if out.get('buckets') and any((out.get('buckets') or {}).values()):
         _demote_gainer_scan_to_reference(out)
     out['stale_message'] = reference_guard_message(
@@ -473,16 +475,107 @@ def _apply_hard_closed_market_override(
     )
 
 
+def _normalize_ref_ticker(value: Any) -> str:
+    return str(value or '').strip().upper()
+
+
+def _reference_promoted_order(gscan: dict[str, Any] | None, board: dict[str, Any] | None = None) -> list[str]:
+    g = dict(gscan or {})
+    b = dict(board or {})
+    promoted = list(
+        g.get('promoted')
+        or g.get('promoted_symbols')
+        or g.get('reference_promoted_symbols')
+        or b.get('reference_promoted_symbols')
+        or []
+    )
+    return [_normalize_ref_ticker(s) for s in promoted if _normalize_ref_ticker(s)]
+
+
+def _reference_row_sort_key(row: dict[str, Any], promoted_index: dict[str, int]) -> tuple[Any, ...]:
+    sym = _normalize_ref_ticker(row.get('ticker'))
+    return (
+        0 if str(row.get('state') or '').upper() == 'REJECTED' else 1,
+        int(row.get('score') or 0),
+        float(row.get('volume_ratio') or 0),
+        -promoted_index.get(sym, 9999),
+    )
+
+
+def order_reference_candidates(
+    ranked: list[dict[str, Any]],
+    *,
+    promoted: list[str] | None = None,
+    gscan: dict[str, Any] | None = None,
+    board: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Deterministic previous-session list order — preserve /tradecards rank on score ties."""
+    promo = list(promoted or _reference_promoted_order(gscan, board))
+    promoted_index = {sym: idx for idx, sym in enumerate(promo)}
+    return sorted(
+        list(ranked or []),
+        key=lambda row: _reference_row_sort_key(row, promoted_index),
+        reverse=True,
+    )
+
+
+def canonical_reference_best(
+    ranked: list[dict[str, Any]],
+    *,
+    promoted: list[str] | None = None,
+    gscan: dict[str, Any] | None = None,
+    board: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Canonical /tradecards reference best — first row in reference list order."""
+    rows = list(ranked or [])
+    if not rows:
+        return '', {}
+    ordered = order_reference_candidates(rows, promoted=promoted, gscan=gscan, board=board)
+    best = ordered[0]
+    return _normalize_ref_ticker(best.get('ticker')), dict(best)
+
+
+def _ensure_reference_best_pick(out: dict[str, Any]) -> None:
+    """Backfill stored reference best when board has reference rows but no canonical pick."""
+    if str(out.get('reference_best_pick') or out.get('tradecards_best_pick') or '').strip():
+        return
+    refs = list(out.get('reference_candidates') or [])
+    if not refs:
+        return
+    gscan = dict(out.get('reference_gainer_scan') or out.get('gainer_scan') or {})
+    best_sym, _ = canonical_reference_best(refs, gscan=gscan, board=out)
+    if best_sym:
+        out['reference_best_pick'] = best_sym
+        out['tradecards_best_pick'] = best_sym
+
+
 def _demote_to_reference(out: dict[str, Any]) -> None:
     ranked = list(out.get('ranked_candidates') or [])
+    if not ranked:
+        _ensure_reference_best_pick(out)
+        return
     gscan = dict(out.get('gainer_scan') or {})
-    out['reference_candidates'] = ranked
-    out['reference_gainer_scan'] = dict(gscan)
+    promoted = _reference_promoted_order(gscan, out)
+    ordered = order_reference_candidates(ranked, promoted=promoted, board=out)
+    best_sym, _ = canonical_reference_best(ordered, promoted=promoted, board=out)
+    out['reference_candidates'] = ordered
+    out['reference_gainer_scan'] = {
+        **gscan,
+        'promoted': promoted,
+        'reference_promoted_symbols': promoted,
+    }
+    if promoted:
+        out['reference_promoted_symbols'] = promoted
+    out['reference_best_pick'] = best_sym
+    out['tradecards_best_pick'] = best_sym
     out['ranked_candidates'] = []
     out['gainer_scan'] = {'promoted': [], 'total': 0}
 
 
 def _demote_gainer_scan_to_reference(out: dict[str, Any]) -> None:
+    promoted = list(out.get('promoted_symbols') or [])
+    if promoted:
+        out['reference_promoted_symbols'] = promoted
     out['reference_buckets'] = dict(out.get('buckets') or {})
     out['buckets'] = {key: [] for key in (out.get('buckets') or {})}
     out['promoted_symbols'] = []
@@ -549,6 +642,7 @@ def apply_session_guard_to_board(
 
     if data_status in ('stale', 'previous_session_reference'):
         _demote_to_reference(out)
+        _ensure_reference_best_pick(out)
         if data_status == 'stale':
             out['stale_message'] = stale_guard_message(
                 source_session_date=source_session_date,
@@ -806,16 +900,32 @@ def format_stale_gainers_telegram(scan: dict[str, Any]) -> str:
 
 
 def format_reference_tradecard_notice(board: dict[str, Any], *, ticker: str = '') -> str:
+    """Closed-market /tradecard — previous-session best only, never legacy fallback."""
+    from backend.trading.all_cap_gainers import format_cap_bucket_header
+
     sym = str(ticker or '').strip().upper()
     src = str(board.get('source_session_date') or 'unknown')
     lifecycle = str(board.get('market_lifecycle') or resolve_market_lifecycle())
+    refs = list(board.get('reference_candidates') or [])
+    if not sym:
+        sym = str(
+            board.get('reference_best_pick') or board.get('tradecards_best_pick') or ''
+        ).strip().upper()
+    if not sym and refs:
+        sym = str(refs[0].get('ticker') or '').strip().upper()
+    ref_row = next(
+        (r for r in refs if str(r.get('ticker') or '').strip().upper() == sym),
+        refs[0] if refs else {},
+    )
     lines = [
         '<b>TRADE CARD — PREVIOUS-SESSION REFERENCE</b>',
     ]
     if sym:
         lines.append(f'<b>{sym}</b> · NO CURRENT ENTRY')
+        lines.append(format_cap_bucket_header(ref_row if isinstance(ref_row, dict) else None))
     else:
         lines.append('NO CURRENT ENTRY')
+        lines.append(format_cap_bucket_header())
     lines.extend([
         f'Reason: market is closed/weekend ({lifecycle.replace("_", " ").lower()}); '
         f'board is previous-session reference ({src}).',
@@ -823,15 +933,16 @@ def format_reference_tradecard_notice(board: dict[str, Any], *, ticker: str = ''
         '',
         *format_session_metadata_block(board),
     ])
-    refs = board.get('reference_candidates') or []
-    if sym and not any(str(r.get('ticker') or '').upper() == sym for r in refs):
-        lines.extend(['', f'Prior board did not rank <b>{sym}</b> in top candidates.'])
-    elif refs:
-        ref_sym = sym or str(refs[0].get('ticker') or '?')
+    if sym and refs:
         lines.extend([
             '',
             '<b>Previous-session reference:</b>',
-            f'• {ref_sym} — not an active watch <i>(not current)</i>',
+            f'• {sym} — prior /tradecards best; not an active watch <i>(not current)</i>',
+        ])
+    elif not refs:
+        lines.extend([
+            '',
+            'No previous-session board available.',
         ])
     lines.append('')
     lines.append('Paper only.')

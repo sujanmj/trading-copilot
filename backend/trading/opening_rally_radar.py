@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.11'
+STAGE = '4B.12'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
@@ -631,6 +631,7 @@ def build_opening_rally_board(
         reverse=True,
     )
 
+    ref_promoted = list(gainer_scan.get('reference_promoted_symbols') or [])
     payload = {
         'ok': True,
         'stage': STAGE,
@@ -639,8 +640,10 @@ def build_opening_rally_board(
         'time_ist': ist_now.strftime('%H:%M'),
         'ranked_candidates': ranked[:12],
         'macro_penalty': macro_penalty,
+        'reference_promoted_symbols': ref_promoted,
         'gainer_scan': {
-            'promoted': gainer_scan.get('promoted_symbols') or [],
+            'promoted': list(gainer_scan.get('promoted_symbols') or ref_promoted or []),
+            'reference_promoted_symbols': ref_promoted,
             'total': gainer_scan.get('total_scanned') or 0,
         },
     }
@@ -740,6 +743,38 @@ def _log_opening_radar_events(board: dict[str, Any]) -> None:
             )
 
 
+def pick_best_reference_tradecard(
+    board: dict[str, Any] | None = None,
+) -> tuple[Optional[str], int, dict[str, Any]]:
+    """Best pick from previous-session reference board — matches /tradecards canonical best."""
+    from backend.trading.opening_session_freshness import (
+        _ensure_reference_best_pick,
+        canonical_reference_best,
+    )
+
+    data = dict(board or {})
+    _ensure_reference_best_pick(data)
+    refs = list(data.get('reference_candidates') or [])
+    stored = str(
+        data.get('reference_best_pick') or data.get('tradecards_best_pick') or ''
+    ).strip().upper()
+    if stored:
+        row = next(
+            (r for r in refs if _normalize_ticker(r.get('ticker')) == stored),
+            refs[0] if refs else {},
+        )
+        return stored, int(row.get('score') or 0), dict(row) if row else {}
+    if refs:
+        gscan = dict(data.get('reference_gainer_scan') or data.get('gainer_scan') or {})
+        sym, row = canonical_reference_best(refs, gscan=gscan, board=data)
+        if sym:
+            return sym, int(row.get('score') or 0), row
+        row = refs[0]
+        sym = _normalize_ticker(row.get('ticker'))
+        return sym or None, int(row.get('score') or 0), dict(row)
+    return None, 0, {}
+
+
 def pick_best_opening_tradecard(
     board: dict[str, Any] | None = None,
 ) -> tuple[Optional[str], int, list[str]]:
@@ -830,21 +865,23 @@ def select_synced_tradecard(
     data = board or build_opening_rally_board(now=now)
     if data.get('reference_only') or data.get('session_stale'):
         ref_reason = 'session_stale' if data.get('session_stale') else 'closed_market_reference'
+        ref_best_sym, ref_best_score, ref_best_row = pick_best_reference_tradecard(data)
         print(
-            f'[TRADECARD_SELECTOR_SYNC] tradecards_best=- tradecard_selected=- '
-            f'source=reference_board reason={ref_reason}',
+            f'[TRADECARD_SELECTOR_SYNC] tradecards_best={ref_best_sym or "-"} '
+            f'tradecard_selected=- source=reference_board reason={ref_reason}',
             flush=True,
         )
         return {
-            'tradecards_best': '',
+            'tradecards_best': ref_best_sym or '',
             'selected': '',
+            'reference_best': ref_best_sym or '',
             'source': 'reference_board' if not data.get('session_stale') else 'stale_board',
             'reason': str(data.get('stale_message') or 'No current-session tradecard available.'),
-            'state': '',
+            'state': str((ref_best_row or {}).get('state') or ''),
             'status_override': 'NO_ACTIVE_ENTRY',
-            'score': 0,
+            'score': int(ref_best_score or 0),
             'board': data,
-            'board_row': {},
+            'board_row': dict(ref_best_row) if ref_best_row else {},
             'session_stale': bool(data.get('session_stale')),
             'reference_only': bool(data.get('reference_only')),
             'data_status': str(data.get('data_status') or ''),
