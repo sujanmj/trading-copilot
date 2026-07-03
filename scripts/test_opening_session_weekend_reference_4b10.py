@@ -85,8 +85,8 @@ def test_weekend_tradecards_previous_session_reference() -> int:
         return _fail('weekend /tradecards must not show TOP CANDIDATES')
     if 'PREVIOUS-SESSION REFERENCE' not in text:
         return _fail('weekend /tradecards must show PREVIOUS-SESSION REFERENCE title')
-    if 'Market state: WEEKEND' not in text:
-        return _fail('weekend /tradecards must show Market state: WEEKEND')
+    if 'Market lifecycle: WEEKEND' not in text:
+        return _fail('weekend /tradecards must show Market lifecycle: WEEKEND')
     if 'Current IST:' not in text:
         return _fail('weekend /tradecards must show Current IST metadata')
     if 'PERSISTENT' in text and 'not current' not in text.lower():
@@ -150,8 +150,8 @@ def test_weekend_gainers_previous_session_reference() -> int:
         return _fail('weekend /gainers must show PREVIOUS-SESSION REFERENCE')
     if 'Not current live gainers' not in text:
         return _fail('weekend /gainers must state not current live gainers')
-    if 'Market state: WEEKEND' not in text:
-        return _fail('weekend /gainers must show market state WEEKEND')
+    if 'Market lifecycle: WEEKEND' not in text:
+        return _fail('weekend /gainers must show market lifecycle WEEKEND')
     return 0
 
 
@@ -190,11 +190,11 @@ def test_multi_day_stale_still_blocked() -> int:
     return 0
 
 
-def test_build_label_51k() -> int:
+def test_build_label_51l() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51K':
-        return _fail(f'expected AstraEdge 51K got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51L':
+        return _fail(f'expected AstraEdge 51L got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -206,7 +206,7 @@ def main() -> int:
         test_weekend_gainers_previous_session_reference,
         test_live_market_top_candidates,
         test_multi_day_stale_still_blocked,
-        test_build_label_51k,
+        test_build_label_51l,
     ]
     failed = 0
     for test in tests:

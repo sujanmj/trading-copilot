@@ -3141,12 +3141,12 @@ def format_tradecards_telegram(
     from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
 
     data = board or build_opening_rally_board()
-    if data.get('reference_only'):
-        from backend.trading.opening_session_freshness import (
-            format_reference_tradecards_telegram,
-            format_stale_tradecards_telegram,
-        )
+    from backend.trading.opening_session_freshness import (
+        format_reference_tradecards_telegram,
+        format_stale_tradecards_telegram,
+    )
 
+    if data.get('reference_only') or data.get('no_current_entry'):
         if data.get('session_stale'):
             return strip_stage_markers(format_stale_tradecards_telegram(data))
         return strip_stage_markers(format_reference_tradecards_telegram(data))

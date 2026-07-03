@@ -1,5 +1,5 @@
 """
-Opening workflow session freshness — Phase 4B.10.
+Opening workflow session freshness — Phase 4B.11.
 
 Guards previous-day / closed-market boards from presenting as current-session picks.
 Paper/research only — read-only date checks, no LLM calls.
@@ -12,7 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.10'
+STAGE = '4B.11'
 
 _SESSION_DATE_KEYS = ('session_date', 'trading_date', 'market_date')
 _TIMESTAMP_KEYS = (
@@ -27,10 +27,64 @@ _TIMESTAMP_KEYS = (
 
 _DATA_STATUS_LABELS = {
     'current': 'current',
-    'previous_session_reference': 'previous-session',
+    'previous_session_reference': 'previous-session reference',
     'stale': 'stale',
     'after_hours_same_day': 'after-hours (same session)',
 }
+
+
+def runtime_ist_display(now: datetime | None = None) -> str:
+    """Always from live runtime clock — never board generated_at."""
+    if now is None:
+        from backend.trading.ist_clock import runtime_ist_now
+
+        return runtime_ist_now().strftime('%Y-%m-%d %H:%M IST')
+    return _now_ist(now).strftime('%Y-%m-%d %H:%M IST')
+
+
+def is_hard_closed_market_lifecycle(now: datetime | None = None) -> bool:
+    """
+    Hard override: weekend/holiday/closed must never show current TOP CANDIDATES.
+
+    Same calendar date on board does not exempt closed-market lifecycles.
+    Trading-day overnight (telegram RESEARCH_MODE) is not hard-closed.
+    """
+    ist = _now_ist(now)
+    lifecycle = str(resolve_market_lifecycle(ist) or '').upper()
+    today = ist.date()
+
+    if lifecycle in ('WEEKEND', 'HOLIDAY', 'MARKET_CLOSED'):
+        return True
+    if lifecycle == 'RESEARCH_MODE' and (ist.weekday() >= 5 or not is_india_market_day(today)):
+        return True
+    market_state = str(resolve_market_state(ist) or '').upper()
+    if market_state == 'RESEARCH_MODE' and (ist.weekday() >= 5 or not is_india_market_day(today)):
+        return True
+    return False
+
+
+def is_closed_market_reference_mode(now: datetime | None = None) -> bool:
+    """True when board must not present as live current-session picks."""
+    if is_hard_closed_market_lifecycle(now):
+        return True
+    ist = _now_ist(now)
+    lifecycle = resolve_market_lifecycle(ist)
+    today = ist.date()
+
+    if lifecycle in ('WEEKEND', 'HOLIDAY'):
+        return True
+    market_state = resolve_market_state(ist)
+    if market_state == 'RESEARCH_MODE':
+        return True
+    if lifecycle in ('AFTER_HOURS', 'POST_MARKET', 'MARKET_ACTIVE'):
+        return False
+    if market_state == 'INDIA_MARKET_HOURS':
+        return False
+    if lifecycle == 'PRE_MARKET' and is_india_market_day(today):
+        return False
+    if market_state in ('INDIA_PREMARKET_MODE', 'INDIA_PREOPEN_MODE') and is_india_market_day(today):
+        return False
+    return lifecycle not in ('MARKET_ACTIVE', 'POST_MARKET', 'AFTER_HOURS', 'PRE_MARKET')
 
 
 def _now_ist(now: datetime | None = None) -> datetime:
@@ -170,28 +224,6 @@ def expected_board_session_date(now: datetime | None = None) -> str:
     return last_india_trading_day_on_or_before(today).isoformat()
 
 
-def is_closed_market_reference_mode(now: datetime | None = None) -> bool:
-    """True when no live session is active — weekend, holiday, or research/closed."""
-    ist = _now_ist(now)
-    lifecycle = resolve_market_lifecycle(ist)
-    today = ist.date()
-
-    if lifecycle in ('WEEKEND', 'HOLIDAY'):
-        return True
-    market_state = resolve_market_state(ist)
-    if market_state == 'RESEARCH_MODE':
-        return True
-    if lifecycle in ('AFTER_HOURS', 'POST_MARKET', 'MARKET_ACTIVE'):
-        return False
-    if market_state == 'INDIA_MARKET_HOURS':
-        return False
-    if lifecycle == 'PRE_MARKET' and is_india_market_day(today):
-        return False
-    if market_state in ('INDIA_PREMARKET_MODE', 'INDIA_PREOPEN_MODE') and is_india_market_day(today):
-        return False
-    return lifecycle not in ('MARKET_ACTIVE', 'POST_MARKET', 'AFTER_HOURS', 'PRE_MARKET')
-
-
 def evaluate_session_stale(
     *,
     source_session_date: str,
@@ -216,18 +248,30 @@ def evaluate_data_status(
     expected = expected_board_session_date(ist)
     lifecycle = resolve_market_lifecycle(ist)
     closed_ref = is_closed_market_reference_mode(ist)
+    hard_closed = is_hard_closed_market_lifecycle(ist)
     source = str(source_session_date or '').strip()[:10]
 
     if not source or source == 'unknown':
-        return 'previous_session_reference' if closed_ref else 'current'
+        if hard_closed or closed_ref:
+            return 'previous_session_reference'
+        return 'current'
 
     try:
         src_day = date.fromisoformat(source)
         exp_day = date.fromisoformat(expected)
     except ValueError:
-        if closed_ref:
+        if hard_closed or closed_ref:
             return 'previous_session_reference'
         return 'stale' if source < expected else 'current'
+
+    if src_day < exp_day:
+        latest_session = last_india_trading_day_on_or_before(exp_day)
+        if (hard_closed or closed_ref) and src_day == latest_session:
+            return 'previous_session_reference'
+        return 'stale'
+
+    if hard_closed:
+        return 'previous_session_reference'
 
     if src_day == exp_day:
         if lifecycle == 'MARKET_ACTIVE':
@@ -237,11 +281,6 @@ def evaluate_data_status(
         if closed_ref:
             return 'previous_session_reference'
         return 'current'
-
-    if src_day < exp_day:
-        if closed_ref and src_day == last_india_trading_day_on_or_before(exp_day):
-            return 'previous_session_reference'
-        return 'stale'
 
     return 'current'
 
@@ -263,16 +302,14 @@ def compute_board_age_display(generated_at: str, now: datetime | None = None) ->
 
 def format_session_metadata_block(payload: dict[str, Any]) -> list[str]:
     """Shared IST / lifecycle / board session metadata for Telegram outputs."""
-    ist_now = _now_ist()
-    current_display = str(payload.get('current_ist_display') or ist_now.strftime('%Y-%m-%d %H:%M IST'))
-    lifecycle = str(payload.get('market_lifecycle') or resolve_market_lifecycle(ist_now))
+    lifecycle = str(payload.get('market_lifecycle') or resolve_market_lifecycle())
     board_date = str(payload.get('board_session_date') or payload.get('source_session_date') or '—')
     age = str(payload.get('board_age_display') or '—')
     status = str(payload.get('data_status') or 'unknown')
     status_label = _DATA_STATUS_LABELS.get(status, status.replace('_', ' '))
     return [
-        f'Market state: {lifecycle}',
-        f'Current IST: {current_display}',
+        f'Market lifecycle: {lifecycle}',
+        f'Current IST: {runtime_ist_display()}',
         f'Board session date: {board_date}',
         f'Board age: {age}',
         f'Data status: {status_label}',
@@ -388,8 +425,52 @@ def _attach_session_metadata(
     out['source_freshness'] = source_freshness
     out['session_stale'] = data_status == 'stale'
     out['reference_only'] = data_status in ('stale', 'previous_session_reference')
+    out['no_current_entry'] = out['reference_only']
     out['generated_at_display'] = generated_display
     out['board_age_display'] = compute_board_age_display(generated_at, ist_now)
+    out['current_ist_display'] = runtime_ist_display(ist_now)
+
+
+def _apply_hard_closed_market_override(
+    out: dict[str, Any],
+    *,
+    ist_now: datetime,
+    source_session_date: str,
+    generated_display: str,
+) -> None:
+    """Force previous-session reference when lifecycle is weekend/holiday/closed/research."""
+    if not is_hard_closed_market_lifecycle(ist_now):
+        return
+    market_lifecycle = resolve_market_lifecycle(ist_now)
+    prior = str(out.get('data_status') or '')
+    if prior == 'stale':
+        out['reference_only'] = True
+        out['no_current_entry'] = True
+        if not out.get('reference_candidates') and out.get('ranked_candidates'):
+            _demote_to_reference(out)
+        if out.get('buckets') and any((out.get('buckets') or {}).values()):
+            _demote_gainer_scan_to_reference(out)
+        return
+    if prior != 'previous_session_reference':
+        print(
+            f'[OPENING_HARD_CLOSED_OVERRIDE] lifecycle={market_lifecycle} prior={prior}',
+            flush=True,
+        )
+    out['data_status'] = 'previous_session_reference'
+    out['lifecycle'] = 'previous_session_reference'
+    out['session_stale'] = False
+    out['reference_only'] = True
+    out['no_current_entry'] = True
+    out['current_ist_display'] = runtime_ist_display(ist_now)
+    if out.get('ranked_candidates'):
+        _demote_to_reference(out)
+    if out.get('buckets') and any((out.get('buckets') or {}).values()):
+        _demote_gainer_scan_to_reference(out)
+    out['stale_message'] = reference_guard_message(
+        source_session_date=source_session_date,
+        market_lifecycle=market_lifecycle,
+        generated_at=generated_display,
+    )
 
 
 def _demote_to_reference(out: dict[str, Any]) -> None:
@@ -485,6 +566,12 @@ def apply_session_guard_to_board(
         out['reference_gainer_scan'] = {}
         out['stale_message'] = ''
 
+    _apply_hard_closed_market_override(
+        out,
+        ist_now=ist_now,
+        source_session_date=source_session_date,
+        generated_display=generated_display,
+    )
     return out
 
 
@@ -551,6 +638,12 @@ def apply_session_guard_to_gainer_scan(
         out['reference_buckets'] = {}
         out['stale_message'] = ''
 
+    _apply_hard_closed_market_override(
+        out,
+        ist_now=ist_now,
+        source_session_date=source_session_date,
+        generated_display=generated_display,
+    )
     return out
 
 
@@ -574,7 +667,7 @@ def format_reference_tradecards_telegram(board: dict[str, Any]) -> str:
         '',
         f'Last board generated: {generated}',
         'No current-session tradecards available.',
-        'Next live workflow: 09:00 Radar Armed, 09:20 Opening Rally Radar.',
+        'Next live workflow: 09:00 Radar Armed / 09:20 Opening Rally Radar on next trading day.',
     ]
     _append_reference_candidates(lines, list(board.get('reference_candidates') or []))
     return '\n'.join(lines)
@@ -603,27 +696,16 @@ def format_stale_tradecards_telegram(board: dict[str, Any]) -> str:
 
 
 def format_reference_radar_telegram(board: dict[str, Any], *, scheduled_slot: str | None = None) -> str:
-    ist_now = _now_ist()
-    mins = _minutes_since_midnight(ist_now)
     generated = str(board.get('generated_at_display') or board.get('generated_at') or '—')
-
-    if mins < 9 * 60 and not scheduled_slot and is_closed_market_reference_mode(ist_now):
-        title = '<b>OPENING RALLY RADAR — PREVIOUS-SESSION REFERENCE</b>'
-        plan = 'No current-date radar yet. Scheduled Radar Armed runs at 09:00 IST on next trading day.'
-    else:
-        title = '<b>OPENING RALLY RADAR — PREVIOUS-SESSION REFERENCE</b>'
-        plan = 'Not current pre-armed board — prior session reference only.'
-
     lines = [
-        title,
+        '<b>OPENING RALLY RADAR — PREVIOUS-SESSION REFERENCE</b>',
         '<i>Paper/research only</i>',
         '',
         *format_session_metadata_block(board),
         '',
         f'Last board generated: {generated}',
-        plan,
-        '',
-        str(board.get('stale_message') or ''),
+        'No current live radar.',
+        'Next scheduled Radar Armed: 09:00 IST on next trading day.',
     ]
     refs = board.get('reference_candidates') or []
     if refs:

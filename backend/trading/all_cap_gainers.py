@@ -22,7 +22,7 @@ from backend.trading.opening_rally_radar import (
     theme_matches_for_symbol,
 )
 
-STAGE = '4B.10'
+STAGE = '4B.11'
 
 IST = ZoneInfo('Asia/Kolkata')
 

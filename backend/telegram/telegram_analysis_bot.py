@@ -80,7 +80,7 @@ STATE_FILE = DATA_DIR / '_telegram_analysis_bot_state.json'
 
 TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'status', 'description': 'System status'},
-    {'command': 'health', 'description': 'Runtime health'},
+    {'command': 'health', 'description': 'Runtime health + clock'},
     {'command': 'schedule', 'description': 'Premarket + brief schedule'},
     {'command': 'radar', 'description': 'Opening rally radar'},
     {'command': 'gainers', 'description': 'All-cap top gainers'},
@@ -98,6 +98,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 <b>Core:</b>
 /status — system status
 /health — runtime health
+/clock — runtime UTC / IST clock
 /schedule — premarket + brief schedule
 /memory — market memory
 /broker — broker intelligence
@@ -769,6 +770,13 @@ def handle_analysis_command(
         response_text = run_without_ai(lambda: {'text': _handle_refresh(args or 'quick')}, command='refresh').get('text') or _handle_refresh(args or 'quick')
     elif cmd == 'health':
         response_text = run_without_ai(lambda: {'text': _handle_health()}, command='health').get('text') or _handle_health()
+    elif cmd == 'clock':
+        from backend.trading.ist_clock import format_clock_telegram
+
+        response_text = run_without_ai(
+            lambda: {'text': format_clock_telegram()},
+            command='clock',
+        ).get('text') or format_clock_telegram()
     elif cmd == 'schedule':
         response_text = run_without_ai(lambda: {'text': _handle_schedule()}, command='schedule').get('text') or _handle_schedule()
     elif cmd == 'theme':

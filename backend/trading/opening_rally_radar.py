@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.10'
+STAGE = '4B.11'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
