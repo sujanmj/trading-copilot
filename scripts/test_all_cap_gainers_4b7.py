@@ -29,11 +29,14 @@ def _fail(msg: str) -> int:
 
 
 def _dt(hour: int, minute: int) -> datetime:
-    return datetime(2026, 7, 4, hour, minute, tzinfo=IST)
+    return datetime(2026, 7, 1, hour, minute, tzinfo=IST)
 
 
 def _scanner(*rows: dict) -> dict:
-    return {'top_signals': list(rows)}
+    return {
+        'session_date': '2026-07-01',
+        'top_signals': list(rows),
+    }
 
 
 def _row(ticker: str, chg: float, vol: float = 1.0, **extra) -> dict:
@@ -99,13 +102,15 @@ def test_bucket_render() -> int:
     from backend.telegram.response_format import format_all_cap_gainers_telegram
     from backend.trading.all_cap_gainers import scan_all_cap_gainers
 
+    live_now = datetime(2026, 5, 27, 10, 30, tzinfo=IST)
     scanner = _scanner(
         _row('COFORGE', 4.2, 1.2, price=5200),
         _row('SONACOMS', 5.5, 0.9, price=650),
         _row('SMALLCAPX', 6.0, 0.8, price=120),
         _row('VISL', 8.0, 0.5, price=80),
     )
-    scan = scan_all_cap_gainers(scanner_payload=scanner)
+    scanner['session_date'] = '2026-05-27'
+    scan = scan_all_cap_gainers(scanner_payload=scanner, now=live_now)
     text = format_all_cap_gainers_telegram(gainer_scan=scan)
     for label in ('Large cap', 'Mid cap', 'Small cap', 'New listings / demerged'):
         if label not in text:
@@ -216,6 +221,7 @@ def test_new_listing_demerger_risk_labels() -> int:
         )
     scan = __import__('backend.trading.all_cap_gainers', fromlist=['scan_all_cap_gainers']).scan_all_cap_gainers(
         scanner_payload=scanner,
+        now=_dt(9, 20),
     )
     visl_meta = (scan.get('by_symbol') or {}).get('VISL') or {}
     if not visl_meta.get('new_listing'):
@@ -429,10 +435,10 @@ def main() -> int:
     from backend.trading.all_cap_gainers import STAGE as GAINER_STAGE
     from backend.trading.opening_rally_radar import STAGE as RADAR_STAGE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51J':
-        return _fail(f'expected AstraEdge 51J got {ASTRAEDGE_TELEGRAM_BUILD!r}')
-    if GAINER_STAGE != '4B.9' or RADAR_STAGE != '4B.9':
-        return _fail(f'expected stage 4B.9 got gainer={GAINER_STAGE!r} radar={RADAR_STAGE!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51K':
+        return _fail(f'expected AstraEdge 51K got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if GAINER_STAGE != '4B.10' or RADAR_STAGE != '4B.10':
+        return _fail(f'expected stage 4B.10 got gainer={GAINER_STAGE!r} radar={RADAR_STAGE!r}')
 
     tests = (
         test_gainers_command,

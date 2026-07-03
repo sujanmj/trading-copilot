@@ -2483,11 +2483,20 @@ def format_tradecard_telegram(
     sync_ticker = _normalize_tradecard_ticker(sync.get('selected'))
     sync_reason = str(sync.get('reason') or '')
     sync_status_override = str(sync.get('status_override') or '').strip().upper()
-    if sync.get('session_stale'):
-        from backend.trading.opening_session_freshness import format_stale_tradecard_notice
+    if sync.get('reference_only') or sync.get('session_stale'):
+        board = sync.get('board') or {}
+        if sync.get('session_stale'):
+            from backend.trading.opening_session_freshness import format_stale_tradecard_notice
 
-        stale_text = format_stale_tradecard_notice(sync.get('board') or {})
-        return strip_stage_markers(stale_text)
+            stale_text = format_stale_tradecard_notice(board)
+            return strip_stage_markers(stale_text)
+        from backend.trading.opening_session_freshness import format_reference_tradecard_notice
+
+        ref_text = format_reference_tradecard_notice(
+            board,
+            ticker=sync_ticker or _normalize_tradecard_ticker(card.get('ticker')),
+        )
+        return strip_stage_markers(ref_text)
     if sync_ticker and sync_ticker != _normalize_tradecard_ticker(card.get('ticker')):
         from backend.trading.trade_card_engine import build_trade_card
 
@@ -2867,18 +2876,27 @@ def format_opening_radar_telegram(
     )
 
     data = board or build_opening_rally_board()
-    if data.get('session_stale'):
-        from backend.trading.opening_session_freshness import format_stale_radar_telegram
+    if data.get('reference_only'):
+        from backend.trading.opening_session_freshness import (
+            format_reference_radar_telegram,
+            format_stale_radar_telegram,
+        )
 
-        return strip_stage_markers(format_stale_radar_telegram(data, scheduled_slot=scheduled_slot))
+        if data.get('session_stale'):
+            return strip_stage_markers(format_stale_radar_telegram(data, scheduled_slot=scheduled_slot))
+        return strip_stage_markers(format_reference_radar_telegram(data, scheduled_slot=scheduled_slot))
     time_ist = str(data.get('time_ist') or '—')
     phase = str(data.get('phase') or opening_radar_time_phase())
     title = _scheduled_alert_title(scheduled_slot or '0920', time_ist) if scheduled_slot else (
         f'<b>Opening Rally Radar — {time_ist} IST</b>'
     )
+    from backend.trading.opening_session_freshness import format_session_metadata_block
+
     lines = [
         title,
         f'<i>Phase: {phase.replace("_", " ").lower()} · paper/research only</i>',
+        '',
+        *format_session_metadata_block(data),
         '',
     ]
     candidates = [
@@ -2928,14 +2946,23 @@ def format_all_cap_gainers_telegram(
     )
 
     scan = gainer_scan or scan_all_cap_gainers()
-    if scan.get('session_stale'):
-        from backend.trading.opening_session_freshness import format_stale_gainers_telegram
+    if scan.get('reference_only'):
+        from backend.trading.opening_session_freshness import (
+            format_reference_gainers_telegram,
+            format_stale_gainers_telegram,
+        )
 
-        return strip_stage_markers(format_stale_gainers_telegram(scan))
+        if scan.get('session_stale'):
+            return strip_stage_markers(format_stale_gainers_telegram(scan))
+        return strip_stage_markers(format_reference_gainers_telegram(scan))
+    from backend.trading.opening_session_freshness import format_session_metadata_block
+
     buckets = scan.get('buckets') or {}
     lines = [
         '<b>ALL-CAP GAINERS — live discovery</b>',
         '<i>Paper/research only</i>',
+        '',
+        *format_session_metadata_block(scan),
         '',
     ]
     display_order = (
@@ -3114,15 +3141,33 @@ def format_tradecards_telegram(
     from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
 
     data = board or build_opening_rally_board()
-    if data.get('session_stale'):
-        from backend.trading.opening_session_freshness import format_stale_tradecards_telegram
+    if data.get('reference_only'):
+        from backend.trading.opening_session_freshness import (
+            format_reference_tradecards_telegram,
+            format_stale_tradecards_telegram,
+        )
 
-        return strip_stage_markers(format_stale_tradecards_telegram(data))
+        if data.get('session_stale'):
+            return strip_stage_markers(format_stale_tradecards_telegram(data))
+        return strip_stage_markers(format_reference_tradecards_telegram(data))
+    from backend.trading.opening_session_freshness import format_session_metadata_block
+
+    title = (
+        '<b>TRADECARDS — NEXT-SESSION WATCH</b>'
+        if data.get('data_status') == 'after_hours_same_day'
+        else '<b>TRADECARDS — TOP CANDIDATES</b>'
+    )
     lines = [
-        '<b>TRADECARDS — TOP CANDIDATES</b>',
+        title,
         '<i>paper only — research, not execution</i>',
-        '',
     ]
+    if data.get('data_status') == 'after_hours_same_day':
+        lines.append('<i>After-hours — same-session next-day watch, not live entry</i>')
+    lines.extend([
+        '',
+        *format_session_metadata_block(data),
+        '',
+    ])
     candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
     if not candidates:
         lines.append('No tradecard candidates on the opening board yet.')

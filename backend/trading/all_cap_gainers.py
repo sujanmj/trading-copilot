@@ -22,7 +22,7 @@ from backend.trading.opening_rally_radar import (
     theme_matches_for_symbol,
 )
 
-STAGE = '4B.9'
+STAGE = '4B.10'
 
 IST = ZoneInfo('Asia/Kolkata')
 
@@ -217,36 +217,9 @@ def scan_all_cap_gainers(
     """Scan all-cap top gainers and build promotion map for radar merge."""
     from backend.trading.opening_session_freshness import (
         apply_session_guard_to_gainer_scan,
-        current_ist_session_date,
-        evaluate_session_stale,
-        extract_payload_session_date,
     )
 
     scanner_data = scanner_payload if scanner_payload is not None else _load_json(SCANNER_FILE)
-    source_date = extract_payload_session_date(scanner_data)
-    current_date = current_ist_session_date(now)
-    if evaluate_session_stale(
-        source_session_date=source_date,
-        current_ist_date=current_date,
-        now=now,
-    ):
-        empty = {
-            'ok': True,
-            'stage': STAGE,
-            'buckets': {
-                BUCKET_LARGE: [],
-                BUCKET_MID: [],
-                BUCKET_SMALL: [],
-                BUCKET_BROAD: [],
-                BUCKET_NEW: [],
-            },
-            'by_symbol': {},
-            'promoted_symbols': [],
-            'missed_symbols': [],
-            'total_scanned': 0,
-        }
-        return apply_session_guard_to_gainer_scan(empty, scanner_payload=scanner_data, now=now)
-
     scanner_index = _scanner_index(scanner_data)
     catalyst_map = catalyst_map or {}
     previous_movers = previous_movers or set()

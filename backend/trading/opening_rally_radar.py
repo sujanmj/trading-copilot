@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.9'
+STAGE = '4B.10'
 SCANNER_FILE = DATA_DIR / 'scanner_data.json'
 CATALYST_FILE = DATA_DIR / 'stock_catalyst_radar_latest.json'
 PREMARKET_FILE = DATA_DIR / 'premarket_conviction_latest.json'
@@ -653,7 +653,7 @@ def build_opening_rally_board(
         premarket_payload=premarket_payload if premarket_payload is not None else _load_json(PREMARKET_FILE),
         now=ist_now,
     )
-    if not payload.get('session_stale'):
+    if not payload.get('reference_only'):
         _log_opening_radar_events(payload)
     return payload
 
@@ -745,7 +745,7 @@ def pick_best_opening_tradecard(
 ) -> tuple[Optional[str], int, list[str]]:
     """Pick top tradecard candidate from opening board; log beat list."""
     data = board or build_opening_rally_board()
-    if data.get('session_stale'):
+    if data.get('reference_only') or data.get('session_stale'):
         return None, 0, []
     candidates = [
         r for r in (data.get('ranked_candidates') or [])
@@ -779,7 +779,7 @@ def opening_board_context_for_ticker(
     if not sym:
         return None
     data = board if board is not None else build_opening_rally_board()
-    if data.get('session_stale'):
+    if data.get('reference_only') or data.get('session_stale'):
         return None
     ranked = list(data.get('ranked_candidates') or [])
     row = next(
@@ -828,23 +828,26 @@ def select_synced_tradecard(
 ) -> dict[str, Any]:
     """Align /tradecard selection with /tradecards opening-board best pick."""
     data = board or build_opening_rally_board(now=now)
-    if data.get('session_stale'):
+    if data.get('reference_only') or data.get('session_stale'):
+        ref_reason = 'session_stale' if data.get('session_stale') else 'closed_market_reference'
         print(
             f'[TRADECARD_SELECTOR_SYNC] tradecards_best=- tradecard_selected=- '
-            f'source=stale_board reason=session_stale',
+            f'source=reference_board reason={ref_reason}',
             flush=True,
         )
         return {
             'tradecards_best': '',
             'selected': '',
-            'source': 'stale_board',
+            'source': 'reference_board' if not data.get('session_stale') else 'stale_board',
             'reason': str(data.get('stale_message') or 'No current-session tradecard available.'),
             'state': '',
             'status_override': 'NO_ACTIVE_ENTRY',
             'score': 0,
             'board': data,
             'board_row': {},
-            'session_stale': True,
+            'session_stale': bool(data.get('session_stale')),
+            'reference_only': bool(data.get('reference_only')),
+            'data_status': str(data.get('data_status') or ''),
             'reference_candidates': list(data.get('reference_candidates') or []),
         }
     best_sym, best_score, _ = pick_best_opening_tradecard(data)
@@ -1042,9 +1045,10 @@ def _capture_opening_workflow(
     timestamp: str = '',
 ) -> None:
     category = OPENING_STAGE_CATEGORY.get(stage, 'OPENING_RALLY_RADAR')
-    if board.get('session_stale'):
+    if board.get('reference_only') or board.get('session_stale'):
+        reason = 'session_stale' if board.get('session_stale') else 'reference_only'
         print(
-            f'[OPENING_LEARNING_CAPTURE_SKIPPED] stage={stage} reason=session_stale',
+            f'[OPENING_LEARNING_CAPTURE_SKIPPED] stage={stage} reason={reason}',
             flush=True,
         )
         return
