@@ -100,18 +100,22 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /health — runtime health
 /clock — runtime UTC / IST clock
 /schedule — premarket + brief schedule
-/memory — market memory
-/memory stock SYMBOL — tradecard + Screener memory for symbol
-/memory latest — latest tradecard memory records
-/memory stats — tradecard memory counts
-/screener status — latest Screener import status
-/screener latest — latest import summary + top long-term picks
-/screener import longterm — import CSV from data/imports
-/longterm — top long-term watchlist from Screener memory
-/longterm explain SYMBOL — long-term ratios + tradecard memory
 /broker — broker intelligence
 /qa — QA status
 /missed — missed-entry opportunities logged today
+
+<b>Trade Memory:</b>
+/memory — market memory dashboard
+/memory stock SYMBOL — tradecard + Screener memory for symbol
+/memory latest — latest tradecard memory records
+/memory stats — tradecard memory counts
+
+<b>Screener / Long-term:</b>
+/screener status — latest Screener import status
+/screener latest — latest import summary + top long-term picks
+/screener import longterm — upload CSV/XLSX or import from data/imports
+/longterm — top long-term watchlist from Screener memory
+/longterm explain SYMBOL — long-term ratios + tradecard memory
 
 <b>Action:</b>
 /action plan — final action plan
@@ -388,6 +392,15 @@ def handle_incoming_telegram_message(
             command='feed',
             dry_run=dry_run,
         )]
+
+    doc = message.get('document')
+    if doc:
+        from backend.telegram.screener_intake import try_handle_screener_document
+
+        caption = str(message.get('caption') or message.get('text') or '').strip()
+        screener_reply = try_handle_screener_document(message, caption=caption)
+        if screener_reply is not None:
+            return [send_analysis_message(screener_reply, command='screener', dry_run=dry_run)]
 
     msg_text = str(message.get('text') or '').strip()
     if not msg_text:

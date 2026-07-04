@@ -3514,38 +3514,65 @@ def format_screener_latest_telegram() -> str:
     return strip_stage_markers('\n'.join(lines))
 
 
-def format_screener_import_telegram(args: str) -> str:
-    from backend.trading.screener_memory import import_screener_csv, imports_dir_path, resolve_import_filepath
+def format_screener_import_success_telegram(result: dict[str, Any]) -> str:
+    imp = dict(result.get('import') or {})
+    stored = list(result.get('stored_stocks') or [])
+    stored.sort(key=lambda r: int(r.get('longterm_score') or 0), reverse=True)
+    lines = [
+        '<b>SCREENER IMPORTED</b>',
+        f'File: {imp.get("filename") or "—"}',
+        f'Rows imported: {imp.get("row_count") or 0}',
+        f'Stored stocks: {result.get("stored_count") or 0}',
+        '',
+        '<b>Top long-term watchlist:</b>',
+    ]
+    if not stored:
+        lines.append('No scored stocks stored.')
+    for idx, row in enumerate(stored[:3], start=1):
+        sym = str(row.get('symbol') or '?')
+        score = int(row.get('longterm_score') or 0)
+        verdict = str(row.get('verdict') or 'unknown').replace('_', ' ')
+        lines.append(f'{idx}. <b>{sym}</b> — score {score} — {verdict}')
+    lines.extend([
+        '',
+        'Next:',
+        '/screener latest',
+        '/longterm',
+        '/longterm explain SYMBOL',
+    ])
+    return strip_stage_markers('\n'.join(lines))
 
-    raw = str(args or '').strip()
-    lower = raw.lower()
-    if lower in ('longterm', 'import longterm', ''):
+
+def format_screener_import_telegram(args: str) -> str:
+    from backend.trading.screener_memory import (
+        import_screener_file,
+        imports_dir_path,
+        parse_screener_import_filename,
+        resolve_import_filepath,
+    )
+
+    filename = parse_screener_import_filename(str(args or '').strip())
+    if not filename:
         return strip_stage_markers(
             '<b>SCREENER IMPORT</b>\n'
-            'Upload support pending. Place CSV in data/imports and run:\n'
+            'Upload CSV or XLSX in Telegram with caption:\n'
+            '<code>/screener import longterm</code>\n'
+            'Or place file in data/imports and run:\n'
             '<code>/screener import longterm filename.csv</code>\n'
+            '<code>/screener import longterm filename.xlsx</code>\n'
             f'Import folder: {imports_dir_path()}'
         )
-    if lower.startswith('longterm '):
-        filename = raw.split(None, 1)[1].strip()
-    else:
-        filename = raw
     try:
         path = resolve_import_filepath(filename)
-        result = import_screener_csv(path, screen_name=Path(filename).stem, query_text=Path(filename).stem)
-        imp = result.get('import') or {}
-        return strip_stage_markers(
-            '<b>SCREENER IMPORT OK</b>\n'
-            f'File: {imp.get("filename") or filename}\n'
-            f'Screen: {imp.get("screen_name") or "—"}\n'
-            f'Rows: {imp.get("row_count") or 0} · Stored: {result.get("stored_count") or 0}\n'
-            'Use /longterm for ranked watchlist research.'
-        )
+        result = import_screener_file(path, screen_name=Path(filename).stem, query_text=Path(filename).stem)
+        return format_screener_import_success_telegram(result)
     except FileNotFoundError:
         return strip_stage_markers(
-            f'CSV not found: {filename}\n'
-            f'Place file in {imports_dir_path()} then retry.'
+            f'File not found: {filename}\n'
+            f'Place CSV/XLSX in {imports_dir_path()} or upload via Telegram attachment.'
         )
+    except ValueError as exc:
+        return strip_stage_markers(f'Screener import error: {str(exc)[:160]}')
     except Exception as exc:
         return strip_stage_markers(f'Screener import failed: {str(exc)[:160]}')
 
@@ -3557,7 +3584,7 @@ def format_longterm_telegram(limit: int = 10) -> str:
     if not imp:
         return strip_stage_markers(
             'No long-term Screener memory yet.\n'
-            'Import CSV via /screener import longterm filename.csv'
+            'Import CSV/XLSX via /screener import longterm filename.csv'
         )
     stocks = latest_import_stocks(limit=500)[:limit]
     lines = [

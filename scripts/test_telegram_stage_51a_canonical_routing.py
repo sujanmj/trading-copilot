@@ -32,7 +32,7 @@ def main() -> int:
     if STAGE_MARKER != 'TELEGRAM_STAGE_51A_CANONICAL_REFRESH_STATUS':
         return _fail(f'unexpected STAGE_MARKER: {STAGE_MARKER!r}')
     build_stage = get_astraedge_build_stage()
-    if build_stage not in ('51A', '51B', '51C', '51D', '51E', '51G', '51H', '51I', '51J', '51K', '51L', '51M', '51O', '51O'):
+    if build_stage not in ('51A', '51B', '51C', '51D', '51E', '51G', '51H', '51I', '51J', '51K', '51L', '51M', '51N', '51O', '51P'):
         return _fail(f'unexpected build stage: {build_stage!r}')
     if not ASTRAEDGE_TELEGRAM_BUILD.startswith('AstraEdge '):
         return _fail(f'unexpected build label: {ASTRAEDGE_TELEGRAM_BUILD!r}')

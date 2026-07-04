@@ -21,27 +21,39 @@ from backend.trading.longterm_scoring import score_longterm_stock
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.14'
+STAGE = '4B.14A'
 
 DEFAULT_IMPORTS_FILE = DATA_DIR / 'screener_imports.jsonl'
 DEFAULT_STOCK_MEMORY_FILE = DATA_DIR / 'screener_stock_memory.jsonl'
 DEFAULT_IMPORTS_DIR = DATA_DIR / 'imports'
 
+_SUPPORTED_IMPORT_SUFFIXES = ('.csv', '.xlsx')
+
 _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     'company_name': ('name', 'company', 'company name', 'stock name'),
     'symbol': ('symbol', 'nse code', 'nse symbol', 'ticker', 'bse code'),
-    'market_cap': ('market capitalization', 'market cap', 'mcap'),
+    'market_cap': (
+        'market capitalization', 'market cap', 'mcap',
+        'mar cap rs.cr.', 'mar cap rs. cr.', 'mar cap rs cr',
+    ),
     'pe': ('stock p/e', 'p/e', 'pe', 'pe ratio', 'price to earning'),
-    'debt_to_equity': ('debt to equity', 'debt / equity', 'debt/equity'),
-    'roce': ('return on capital employed', 'roce', 'return on capital employed %'),
-    'roe': ('return on equity', 'roe', 'return on equity %'),
-    'dividend_payout': ('dividend payout', 'dividend payout ratio', 'payout ratio'),
+    'debt_to_equity': (
+        'debt to equity', 'debt / equity', 'debt/equity', 'debt / eq', 'debt / eq %',
+    ),
+    'roce': ('return on capital employed', 'roce', 'return on capital employed %', 'roce %'),
+    'roe': ('return on equity', 'roe', 'return on equity %', 'roe %'),
+    'dividend_payout': (
+        'dividend payout', 'dividend payout ratio', 'payout ratio', 'payout ratio %',
+    ),
     'sales_growth': ('sales growth', 'sales growth %', 'revenue growth'),
     'profit_growth': ('profit growth', 'profit growth %', 'net profit growth'),
-    'free_cashflow': ('free cash flow', 'fcf', 'free cash flow crores'),
+    'free_cashflow': (
+        'free cash flow', 'fcf', 'free cash flow crores',
+        'fcf prev ann rs.cr.', 'fcf prev ann rs. cr.', 'fcf prev ann rs cr',
+    ),
     'promoter_holding': ('promoter holding', 'promoter holding %'),
     'pledged_percent': ('pledged percentage', 'pledged %', 'promoter shares pledged'),
-    'current_price': ('current price', 'price', 'cmp', 'close'),
+    'current_price': ('current price', 'price', 'cmp', 'close', 'cmp rs.', 'cmp rs'),
     'avg_volume': ('average volume', 'avg volume', 'volume', 'traded volume'),
 }
 
@@ -105,8 +117,102 @@ def _parse_csv_rows(path: Path) -> tuple[list[dict[str, Any]], list[str], dict[s
         reader = csv.DictReader(handle)
         fieldnames = list(reader.fieldnames or [])
         header_map = _map_headers(fieldnames)
-        rows = list(reader)
+        rows = [dict(r) for r in reader if _row_has_data(r)]
     return rows, fieldnames, header_map
+
+
+def _cell_text(value: object) -> str:
+    if value is None:
+        return ''
+    return str(value).strip()
+
+
+def _row_has_data(raw: dict[str, Any]) -> bool:
+    return any(_cell_text(v) for v in raw.values())
+
+
+def _is_repeated_header_row(cells: tuple[object, ...], header_norms: set[str]) -> bool:
+    if not header_norms:
+        return False
+    norms = {_normalize_header(_cell_text(c)) for c in cells if _cell_text(c)}
+    if len(norms) < 2:
+        return False
+    overlap = norms & header_norms
+    return len(overlap) >= max(2, len(norms) // 2)
+
+
+def _parse_xlsx_rows(path: Path) -> tuple[list[dict[str, Any]], list[str], dict[str, str]]:
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise ImportError('openpyxl is required for XLSX import') from exc
+
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        headers: list[str] = []
+        header_map: dict[str, str] = {}
+        header_norms: set[str] = set()
+        rows: list[dict[str, Any]] = []
+        for row in ws.iter_rows(values_only=True):
+            if not row or all(_cell_text(c) == '' for c in row):
+                continue
+            if not headers:
+                headers = [_cell_text(c) for c in row]
+                header_map = _map_headers(headers)
+                header_norms = {_normalize_header(h) for h in headers if h}
+                continue
+            if _is_repeated_header_row(row, header_norms):
+                continue
+            row_dict = {
+                headers[i]: row[i] if i < len(row) else None
+                for i in range(len(headers))
+            }
+            if _row_has_data(row_dict):
+                rows.append(row_dict)
+    finally:
+        wb.close()
+    return rows, headers, header_map
+
+
+def parse_screener_rows(path: Path) -> tuple[list[dict[str, Any]], list[str], dict[str, str], str]:
+    suffix = path.suffix.lower()
+    if suffix == '.csv':
+        rows, fieldnames, header_map = _parse_csv_rows(path)
+        return rows, fieldnames, header_map, 'screener_csv'
+    if suffix == '.xlsx':
+        rows, fieldnames, header_map = _parse_xlsx_rows(path)
+        return rows, fieldnames, header_map, 'screener_xlsx'
+    raise ValueError(f'Unsupported file type: {suffix or path.name}')
+
+
+def parse_screener_import_filename(args: str) -> str:
+    """
+    Extract filename from screener import args.
+
+    '/screener import longterm file.xlsx' -> args 'import longterm file.xlsx' -> 'file.xlsx'
+    """
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower in ('', 'import longterm', 'longterm'):
+        return ''
+    marker = 'import longterm '
+    if lower.startswith(marker):
+        return raw[len(marker):].strip()
+    if lower.startswith('longterm '):
+        return raw.split(None, 1)[1].strip()
+    return ''
+
+
+def sanitize_import_filename(name: str) -> str:
+    base = Path(str(name or '').strip()).name
+    base = re.sub(r'[^A-Za-z0-9._-]+', '_', base).strip('._')
+    if not base:
+        raise ValueError('invalid filename')
+    lower = base.lower()
+    if not lower.endswith(_SUPPORTED_IMPORT_SUFFIXES):
+        raise ValueError('filename must end with .csv or .xlsx')
+    return base
 
 
 def _normalize_stock_row(
@@ -251,7 +357,7 @@ def summarize_symbol_screener(symbol: str) -> dict[str, Any]:
     }
 
 
-def import_screener_csv(
+def import_screener_file(
     filepath: Path | str,
     *,
     screen_name: str = '',
@@ -259,15 +365,15 @@ def import_screener_csv(
     notes: str = '',
 ) -> dict[str, Any]:
     """
-    Import Screener CSV into memory stores.
+    Import Screener CSV or XLSX into memory stores.
 
     Does not create intraday tradecards.
     """
     path = Path(filepath)
     if not path.exists():
-        raise FileNotFoundError(f'Screener CSV not found: {path}')
+        raise FileNotFoundError(f'Screener file not found: {path}')
 
-    raw_rows, fieldnames, header_map = _parse_csv_rows(path)
+    raw_rows, _fieldnames, header_map, source = parse_screener_rows(path)
     ist_now = _now_ist()
     import_id = uuid.uuid4().hex
     imported_at = ist_now.replace(microsecond=0).isoformat()
@@ -280,7 +386,7 @@ def import_screener_csv(
         'current_ist': ist_now.strftime('%Y-%m-%d %H:%M IST'),
         'screen_name': screen,
         'query_text': query,
-        'source': 'screener_csv',
+        'source': source,
         'filename': path.name,
         'row_count': len(raw_rows),
         'normalized_columns': sorted(header_map.keys()),
@@ -305,15 +411,42 @@ def import_screener_csv(
         'ok': True,
         'import': import_record,
         'stored_count': len(stored),
+        'stored_stocks': stored,
         'skipped': max(0, len(raw_rows) - len(stored)),
     }
 
 
+def import_screener_csv(
+    filepath: Path | str,
+    *,
+    screen_name: str = '',
+    query_text: str = '',
+    notes: str = '',
+) -> dict[str, Any]:
+    """Backward-compatible alias for import_screener_file."""
+    return import_screener_file(
+        filepath,
+        screen_name=screen_name,
+        query_text=query_text,
+        notes=notes,
+    )
+
+
 def resolve_import_filepath(filename: str) -> Path:
-    """Resolve CSV path under imports dir."""
-    name = Path(str(filename or '').strip()).name
-    if not name:
+    """Resolve CSV/XLSX path under imports dir."""
+    raw = Path(str(filename or '').strip()).name
+    if not raw:
         raise ValueError('filename required')
-    if not name.lower().endswith('.csv'):
-        name = f'{name}.csv'
+    if not raw.lower().endswith(_SUPPORTED_IMPORT_SUFFIXES):
+        raw = f'{raw}.csv'
+    name = sanitize_import_filename(raw)
     return imports_dir_path() / name
+
+
+def save_import_bytes(data: bytes, filename: str) -> Path:
+    """Save uploaded bytes to imports dir with sanitized filename."""
+    safe_name = sanitize_import_filename(filename)
+    dest = imports_dir_path() / safe_name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    return dest
