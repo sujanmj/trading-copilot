@@ -29,6 +29,8 @@ data/*.json
 data/_temp_*.py
 data/_temp_*.txt
 data/_telegram_*.json
+data/imports/
+data/imports/**
 
 # ============================================================
 # PYTHON

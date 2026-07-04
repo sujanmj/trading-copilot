@@ -2214,21 +2214,29 @@ def _persist_tradecard_decision_memory(
 def format_tradecard_memory_stock_telegram(symbol: str) -> str:
     from backend.trading.tradecard_memory import summarize_symbol_memory
 
-    sym = _normalize_tradecard_ticker(symbol)
-    if not sym:
+    from backend.trading.screener_memory import resolve_screener_query, strip_screener_query, summarize_symbol_screener
+
+    raw_query = strip_screener_query(symbol)
+    if not raw_query:
         return strip_stage_markers('Supply a symbol: /memory stock SYMBOL')
 
-    tc_summary = summarize_symbol_memory(sym)
-    screener_lines: list[str] = []
-    try:
-        from backend.trading.screener_memory import summarize_symbol_screener
+    screener_match = resolve_screener_query(raw_query)
+    tradecard_sym = _normalize_tradecard_ticker(
+        screener_match.get('symbol_key') if screener_match else raw_query
+    )
+    if not tradecard_sym and screener_match:
+        tradecard_sym = _normalize_tradecard_ticker(screener_match.get('symbol'))
 
-        sc = summarize_symbol_screener(sym)
+    tc_summary = summarize_symbol_memory(tradecard_sym) if tradecard_sym else {'count': 0}
+    screener_lines: list[str] = []
+    sc: dict[str, Any] = {}
+    try:
+        sc = summarize_symbol_screener(raw_query)
         if int(sc.get('count') or 0):
-            latest = sc.get('latest') or {}
             screener_lines = [
                 '',
                 '<b>Screener memory:</b>',
+                f'Name: {sc.get("display_name") or sc.get("symbol_key") or "—"}',
                 f'Imports: {sc.get("count")} · Last import: {sc.get("imported_at") or "—"}',
                 f'Long-term score: {sc.get("longterm_score") or 0}',
                 f'Verdict: {str(sc.get("verdict") or "unknown").replace("_", " ")}',
@@ -2247,9 +2255,11 @@ def format_tradecard_memory_stock_telegram(symbol: str) -> str:
         pass
 
     if not int(tc_summary.get('count') or 0) and not screener_lines:
-        return strip_stage_markers(f'No memory for {sym} yet (tradecard or Screener).')
+        label = raw_query or tradecard_sym or 'symbol'
+        return strip_stage_markers(f'No memory for {label} yet (tradecard or Screener).')
 
-    lines = [f'<b>MEMORY — {sym}</b>']
+    header = str(sc.get('display_name') or tradecard_sym or raw_query)
+    lines = [f'<b>MEMORY — {header}</b>']
     if int(tc_summary.get('count') or 0):
         lines.extend([
             '<b>Tradecard memory:</b>',
@@ -3469,7 +3479,9 @@ def format_screener_status_telegram() -> str:
         return strip_stage_markers(
             '<b>SCREENER — STATUS</b>\n'
             'No Screener imports yet.\n'
-            'Place CSV in data/imports and run /screener import longterm &lt;filename&gt;'
+            'Upload CSV/XLSX in Telegram with caption '
+            '<code>/screener import longterm</code>, or place file in data/imports and run '
+            '<code>/screener import longterm &lt;filename&gt;</code>.'
         )
     lines = [
         '<b>SCREENER — STATUS</b>',
@@ -3507,10 +3519,10 @@ def format_screener_latest_telegram() -> str:
     if not top:
         lines.append('No scored stocks in latest import.')
     for idx, row in enumerate(top, start=1):
-        sym = str(row.get('symbol') or '?')
+        label = str(row.get('display_name') or row.get('company_name') or row.get('symbol') or '?')
         score = int(row.get('longterm_score') or 0)
         verdict = str(row.get('verdict') or 'unknown').replace('_', ' ')
-        lines.append(f'{idx}. <b>{sym}</b> — score {score} — {verdict}')
+        lines.append(f'{idx}. <b>{label}</b> — score {score} — {verdict}')
     return strip_stage_markers('\n'.join(lines))
 
 
@@ -3529,10 +3541,10 @@ def format_screener_import_success_telegram(result: dict[str, Any]) -> str:
     if not stored:
         lines.append('No scored stocks stored.')
     for idx, row in enumerate(stored[:3], start=1):
-        sym = str(row.get('symbol') or '?')
+        label = str(row.get('display_name') or row.get('company_name') or row.get('symbol') or '?')
         score = int(row.get('longterm_score') or 0)
         verdict = str(row.get('verdict') or 'unknown').replace('_', ' ')
-        lines.append(f'{idx}. <b>{sym}</b> — score {score} — {verdict}')
+        lines.append(f'{idx}. <b>{label}</b> — score {score} — {verdict}')
     lines.extend([
         '',
         'Next:',
@@ -3597,11 +3609,11 @@ def format_longterm_telegram(limit: int = 10) -> str:
         lines.append('No scored stocks in latest import.')
         return strip_stage_markers('\n'.join(lines))
     for idx, row in enumerate(stocks, start=1):
-        sym = str(row.get('symbol') or '?')
+        label = str(row.get('display_name') or row.get('company_name') or row.get('symbol') or '?')
         score = int(row.get('longterm_score') or 0)
         cap = _format_cap_label(str(row.get('cap_bucket') or 'unknown'))
         verdict = str(row.get('verdict') or 'unknown').replace('_', ' ')
-        lines.append(f'{idx}. <b>{sym}</b> — {score} — {cap} — {verdict}')
+        lines.append(f'{idx}. <b>{label}</b> — score {score} — {cap} — {verdict}')
         reasons = row.get('reasons') or []
         if reasons:
             lines.append(f'   Reasons: {" · ".join(reasons[:3])}')
@@ -3612,18 +3624,20 @@ def format_longterm_telegram(limit: int = 10) -> str:
 
 
 def format_longterm_explain_telegram(symbol: str) -> str:
-    from backend.trading.screener_memory import summarize_symbol_screener
+    from backend.trading.screener_memory import strip_screener_query, summarize_symbol_screener
     from backend.trading.tradecard_memory import summarize_symbol_memory
 
-    sym = _normalize_tradecard_ticker(symbol)
-    if not sym:
+    raw = strip_screener_query(symbol)
+    if not raw:
         return strip_stage_markers('Supply a symbol: /longterm explain SYMBOL')
-    sc = summarize_symbol_screener(sym)
+    sc = summarize_symbol_screener(raw)
     if not int(sc.get('count') or 0):
-        return strip_stage_markers(f'No Screener memory for {sym}.')
+        return strip_stage_markers(f'No Screener memory for {raw}.')
     latest = sc.get('latest') or {}
+    header = str(sc.get('display_name') or sc.get('symbol_key') or raw)
+    tradecard_sym = _normalize_tradecard_ticker(sc.get('symbol_key') or raw)
     lines = [
-        f'<b>LONG-TERM — {sym}</b>',
+        f'<b>LONG-TERM — {header}</b>',
         '<i>Research watchlist — not intraday tradecard</i>',
         f'Import date: {sc.get("imported_at") or "—"}',
         f'Screen: {sc.get("screen_name") or "—"}',
@@ -3632,11 +3646,13 @@ def format_longterm_explain_telegram(symbol: str) -> str:
         f'Verdict: {str(sc.get("verdict") or "unknown").replace("_", " ")}',
         '',
         '<b>Ratios:</b>',
-        f'PE: {latest.get("pe") or "Unknown"}',
-        f'Debt/Equity: {latest.get("debt_to_equity") or "Unknown"}',
-        f'ROCE: {latest.get("roce") or "Unknown"}',
-        f'ROE: {latest.get("roe") or "Unknown"}',
-        f'Market cap: {latest.get("market_cap") or "Unknown"}',
+        f'PE: {latest.get("pe") if latest.get("pe") not in (None, "") else "Unknown"}',
+        f'Debt/Equity: {latest.get("debt_to_equity") if latest.get("debt_to_equity") not in (None, "") else "Unknown"}',
+        f'ROCE: {latest.get("roce") if latest.get("roce") not in (None, "") else "Unknown"}',
+        f'ROE: {latest.get("roe") if latest.get("roe") not in (None, "") else "Unknown"}',
+        f'FCF: {latest.get("free_cashflow") if latest.get("free_cashflow") not in (None, "") else "Unknown"}',
+        f'Payout: {latest.get("dividend_payout") if latest.get("dividend_payout") not in (None, "") else "Unknown"}',
+        f'Market cap: {latest.get("market_cap") if latest.get("market_cap") not in (None, "") else "Unknown"}',
     ]
     reasons = sc.get('reasons') or []
     if reasons:
@@ -3648,7 +3664,7 @@ def format_longterm_explain_telegram(symbol: str) -> str:
         lines.extend(['', '<b>Risk flags:</b>'])
         for risk in risks[:6]:
             lines.append(f'- {risk}')
-    tc = summarize_symbol_memory(sym)
+    tc = summarize_symbol_memory(tradecard_sym)
     if int(tc.get('count') or 0):
         lines.extend([
             '',

@@ -145,8 +145,8 @@ def test_screener_latest() -> int:
         text = format_screener_latest_telegram()
         if 'Top long-term candidates' not in text:
             return _fail('latest must show top candidates header')
-        if 'PERSISTENT' not in text and 'COFORGE' not in text:
-            return _fail('latest must list imported symbols')
+        if 'Persistent Systems' not in text and 'PERSISTENT' not in text:
+            return _fail('latest must list imported stocks')
     return 0
 
 
@@ -166,8 +166,9 @@ def test_longterm_ranks_by_score() -> int:
         if 'LONG-TERM WATCHLIST' not in text:
             return _fail('longterm output missing title')
         first_line = [ln for ln in text.splitlines() if ln.startswith('1.')][0]
-        if stocks[0].get('symbol') not in first_line:
-            return _fail('longterm #1 must match highest score symbol')
+        top_label = str(stocks[0].get('display_name') or stocks[0].get('symbol') or '')
+        if top_label and top_label not in first_line:
+            return _fail('longterm #1 must match highest score stock label')
     return 0
 
 
@@ -179,8 +180,10 @@ def test_longterm_explain() -> int:
         csv_path = _write_sample_csv(imports_dir)
         import_screener_csv(csv_path, screen_name='quality_growth', query_text='test')
         text = format_longterm_explain_telegram('PERSISTENT')
-        if 'LONG-TERM — PERSISTENT' not in text:
+        if 'LONG-TERM —' not in text:
             return _fail('explain missing title')
+        if 'Persistent' not in text and 'PERSISTENT' not in text:
+            return _fail('explain missing stock label')
         if 'Long-term score' not in text:
             return _fail('explain missing score')
         if 'Reasons:' not in text:
@@ -248,11 +251,11 @@ def test_missing_columns_no_crash() -> int:
     return 0
 
 
-def test_build_label_51p() -> int:
+def test_build_label_51q() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51P' or ASTRAEDGE_BUILD_STAGE != '51P':
-        return _fail(f'expected AstraEdge 51P got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Q' or ASTRAEDGE_BUILD_STAGE != '51Q':
+        return _fail(f'expected AstraEdge 51Q got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -268,7 +271,7 @@ def main() -> int:
         test_memory_stock_combined,
         test_screener_does_not_create_tradecard,
         test_missing_columns_no_crash,
-        test_build_label_51p,
+        test_build_label_51q,
     ]
     failed = 0
     for test in tests:

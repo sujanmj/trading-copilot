@@ -290,8 +290,8 @@ def test_evidence_matrix_cap_metadata() -> int:
 def test_build_label_51m() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51P' or ASTRAEDGE_BUILD_STAGE != '51P':
-        return _fail(f'expected AstraEdge 51P got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Q' or ASTRAEDGE_BUILD_STAGE != '51Q':
+        return _fail(f'expected AstraEdge 51Q got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

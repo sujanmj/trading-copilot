@@ -21,7 +21,7 @@ from backend.trading.longterm_scoring import score_longterm_stock
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.14A'
+STAGE = '4B.14B'
 
 DEFAULT_IMPORTS_FILE = DATA_DIR / 'screener_imports.jsonl'
 DEFAULT_STOCK_MEMORY_FILE = DATA_DIR / 'screener_stock_memory.jsonl'
@@ -38,12 +38,14 @@ _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     'pe': ('stock p/e', 'p/e', 'pe', 'pe ratio', 'price to earning'),
     'debt_to_equity': (
-        'debt to equity', 'debt / equity', 'debt/equity', 'debt / eq', 'debt / eq %',
+        'debt to equity', 'debt to equity', 'debt / equity', 'debt/equity',
+        'debt / eq', 'debt / eq %',
     ),
     'roce': ('return on capital employed', 'roce', 'return on capital employed %', 'roce %'),
     'roe': ('return on equity', 'roe', 'return on equity %', 'roe %'),
     'dividend_payout': (
         'dividend payout', 'dividend payout ratio', 'payout ratio', 'payout ratio %',
+        'dividend payout %',
     ),
     'sales_growth': ('sales growth', 'sales growth %', 'revenue growth'),
     'profit_growth': ('profit growth', 'profit growth %', 'net profit growth'),
@@ -100,6 +102,68 @@ def _normalize_symbol(value: object) -> str:
     text = str(value or '').strip().upper()
     text = re.sub(r'[^A-Z0-9&-]', '', text)
     return text
+
+
+def strip_screener_query(text: str) -> str:
+    raw = str(text or '').strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
+        return raw[1:-1].strip()
+    return raw
+
+
+def _normalize_company_match(text: str) -> str:
+    return re.sub(r'\s+', ' ', str(text or '').strip().lower())
+
+
+def _looks_like_nse_symbol(value: object) -> bool:
+    text = str(value or '').strip()
+    if not text or ' ' in text:
+        return False
+    norm = _normalize_symbol(text)
+    return len(norm) >= 2 and norm == re.sub(r'[^A-Z0-9&-]', '', text.upper())
+
+
+def _derive_symbol_key(company_name: str) -> str:
+    words = re.split(r'\s+', str(company_name or '').strip())
+    if not words:
+        return ''
+    first = re.sub(r'[^A-Za-z0-9&]', '', words[0])
+    return _normalize_symbol(first)
+
+
+def _stock_display_name(company_name: str, symbol_key: str, *, has_real_symbol: bool) -> str:
+    name = str(company_name or '').strip()
+    if name:
+        return name
+    return symbol_key
+
+
+def resolve_screener_query(query: str) -> dict[str, Any] | None:
+    """Resolve Screener memory row by symbol_key, symbol, or company name."""
+    raw = strip_screener_query(query)
+    if not raw:
+        return None
+    rows = _load_jsonl(stock_memory_file_path(), limit=10000)
+    rows.sort(key=lambda r: str(r.get('imported_at') or ''), reverse=True)
+
+    key_norm = _normalize_symbol(raw)
+    name_norm = _normalize_company_match(raw)
+
+    for row in rows:
+        row_key = _normalize_symbol(row.get('symbol_key') or row.get('symbol'))
+        if row_key and row_key == key_norm:
+            return row
+    for row in rows:
+        if _normalize_company_match(row.get('company_name')) == name_norm:
+            return row
+    for row in rows:
+        cn = _normalize_company_match(row.get('company_name'))
+        dn = _normalize_company_match(row.get('display_name'))
+        if cn and (cn.startswith(name_norm) or name_norm in cn):
+            return row
+        if dn and (dn.startswith(name_norm) or name_norm in dn):
+            return row
+    return None
 
 
 def _row_value(raw: dict[str, Any], header_map: dict[str, str], field: str) -> Any:
@@ -223,19 +287,29 @@ def _normalize_stock_row(
     imported_at: str,
     screen_name: str,
 ) -> dict[str, Any] | None:
-    sym = _normalize_symbol(_row_value(raw, header_map, 'symbol'))
-    if not sym:
-        name_val = _row_value(raw, header_map, 'company_name')
-        if name_val:
-            sym = _normalize_symbol(str(name_val).split()[0])
-    if not sym:
+    company_name = str(_row_value(raw, header_map, 'company_name') or '').strip()
+    symbol_raw = _row_value(raw, header_map, 'symbol')
+    has_real_symbol = bool(symbol_raw) and _looks_like_nse_symbol(symbol_raw)
+
+    if has_real_symbol:
+        symbol_key = _normalize_symbol(symbol_raw)
+    elif company_name:
+        symbol_key = _derive_symbol_key(company_name)
+    else:
         return None
+
+    if not symbol_key:
+        return None
+
+    display_name = _stock_display_name(company_name, symbol_key, has_real_symbol=has_real_symbol)
 
     base = {
         'import_id': import_id,
         'imported_at': imported_at,
-        'symbol': sym,
-        'company_name': str(_row_value(raw, header_map, 'company_name') or sym),
+        'symbol': symbol_key,
+        'symbol_key': symbol_key,
+        'company_name': display_name,
+        'display_name': display_name,
         'market_cap': _row_value(raw, header_map, 'market_cap'),
         'pe': _row_value(raw, header_map, 'pe'),
         'debt_to_equity': _row_value(raw, header_map, 'debt_to_equity'),
@@ -302,11 +376,22 @@ def load_screener_imports(limit: int = 50) -> list[dict[str, Any]]:
 
 
 def load_stock_memory(symbol: str | None = None, limit: int = 500) -> list[dict[str, Any]]:
-    sym = _normalize_symbol(symbol) if symbol else ''
     rows = _load_jsonl(stock_memory_file_path(), limit=10000)
     rows.sort(key=lambda r: str(r.get('imported_at') or ''), reverse=True)
-    if sym:
-        rows = [r for r in rows if _normalize_symbol(r.get('symbol')) == sym]
+    if symbol:
+        match = resolve_screener_query(symbol)
+        if match:
+            key = _normalize_symbol(match.get('symbol_key') or match.get('symbol'))
+            rows = [
+                r for r in rows
+                if _normalize_symbol(r.get('symbol_key') or r.get('symbol')) == key
+            ]
+        else:
+            sym = _normalize_symbol(strip_screener_query(symbol))
+            rows = [
+                r for r in rows
+                if _normalize_symbol(r.get('symbol_key') or r.get('symbol')) == sym
+            ]
     return rows[:limit]
 
 
@@ -337,14 +422,20 @@ def screener_status() -> dict[str, Any]:
     }
 
 
-def summarize_symbol_screener(symbol: str) -> dict[str, Any]:
-    sym = _normalize_symbol(symbol)
-    rows = load_stock_memory(symbol=sym, limit=50)
-    if not rows:
-        return {'symbol': sym, 'count': 0}
-    latest = rows[0]
+def summarize_symbol_screener(query: str) -> dict[str, Any]:
+    raw = strip_screener_query(query)
+    sym = _normalize_symbol(raw)
+    latest = resolve_screener_query(raw)
+    if not latest:
+        return {'symbol': sym, 'symbol_key': sym, 'count': 0}
+    sym_key = _normalize_symbol(latest.get('symbol_key') or latest.get('symbol'))
+    rows = load_stock_memory(sym_key, limit=50)
+    display_name = str(latest.get('display_name') or latest.get('company_name') or sym_key)
     return {
-        'symbol': sym,
+        'symbol': sym_key,
+        'symbol_key': sym_key,
+        'company_name': str(latest.get('company_name') or display_name),
+        'display_name': display_name,
         'count': len(rows),
         'latest': latest,
         'imported_at': str(latest.get('imported_at') or ''),
