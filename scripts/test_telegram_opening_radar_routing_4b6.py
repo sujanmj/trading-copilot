@@ -38,8 +38,8 @@ def main() -> int:
         normalize_parsed_command,
     )
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51N':
-        return _fail(f'expected AstraEdge 51N got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51O':
+        return _fail(f'expected AstraEdge 51O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     if REMOVED_OPENING_ALIAS_MESSAGE != REDIRECT:
         return _fail('redirect message mismatch')
 
@@ -98,8 +98,8 @@ def main() -> int:
         return _fail('/schedule must mention /gainers')
 
     health_text = format_canonical_health_text()
-    if 'AstraEdge 51N' not in health_text:
-        return _fail('/health must show AstraEdge 51N')
+    if 'AstraEdge 51O' not in health_text:
+        return _fail('/health must show AstraEdge 51O')
 
     cmd_names = {row.get('command') for row in TELEGRAM_BOT_COMMANDS}
     if 'opening' in cmd_names:

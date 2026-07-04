@@ -2217,27 +2217,61 @@ def format_tradecard_memory_stock_telegram(symbol: str) -> str:
     sym = _normalize_tradecard_ticker(symbol)
     if not sym:
         return strip_stage_markers('Supply a symbol: /memory stock SYMBOL')
-    summary = summarize_symbol_memory(sym)
-    if not int(summary.get('count') or 0):
-        return strip_stage_markers(f'No tradecard memory for {sym} yet.')
-    lines = [
-        f'<b>MEMORY — {sym}</b>',
-        f'Seen in tradecards: {summary.get("count")} times',
-        f'Best rank: {summary.get("best_rank") or "—"}',
-        f'Last score: {summary.get("last_score") or 0}',
-        f'Cap bucket: {str(summary.get("cap_bucket") or "unknown").title()}',
-    ]
-    reasons = summary.get('last_reasons') or []
-    if reasons:
-        lines.append('Last reasons:')
-        for reason in reasons[:5]:
-            lines.append(f'- {reason}')
-    risks = summary.get('last_risk') or []
-    if risks:
-        lines.append('Last risk:')
-        for risk in risks[:3]:
-            lines.append(f'- {risk}')
-    lines.append(f'Last outcome: {summary.get("last_outcome") or "pending"}')
+
+    tc_summary = summarize_symbol_memory(sym)
+    screener_lines: list[str] = []
+    try:
+        from backend.trading.screener_memory import summarize_symbol_screener
+
+        sc = summarize_symbol_screener(sym)
+        if int(sc.get('count') or 0):
+            latest = sc.get('latest') or {}
+            screener_lines = [
+                '',
+                '<b>Screener memory:</b>',
+                f'Imports: {sc.get("count")} · Last import: {sc.get("imported_at") or "—"}',
+                f'Long-term score: {sc.get("longterm_score") or 0}',
+                f'Verdict: {str(sc.get("verdict") or "unknown").replace("_", " ")}',
+            ]
+            reasons = sc.get('reasons') or []
+            if reasons:
+                screener_lines.append('Fundamental reasons:')
+                for reason in reasons[:3]:
+                    screener_lines.append(f'- {reason}')
+            risks = sc.get('risk_flags') or []
+            if risks:
+                screener_lines.append('Fundamental risks:')
+                for risk in risks[:3]:
+                    screener_lines.append(f'- {risk}')
+    except Exception:
+        pass
+
+    if not int(tc_summary.get('count') or 0) and not screener_lines:
+        return strip_stage_markers(f'No memory for {sym} yet (tradecard or Screener).')
+
+    lines = [f'<b>MEMORY — {sym}</b>']
+    if int(tc_summary.get('count') or 0):
+        lines.extend([
+            '<b>Tradecard memory:</b>',
+            f'Seen in tradecards: {tc_summary.get("count")} times',
+            f'Best rank: {tc_summary.get("best_rank") or "—"}',
+            f'Last score: {tc_summary.get("last_score") or 0}',
+            f'Cap bucket: {str(tc_summary.get("cap_bucket") or "unknown").title()}',
+        ])
+        reasons = tc_summary.get('last_reasons') or []
+        if reasons:
+            lines.append('Last reasons:')
+            for reason in reasons[:5]:
+                lines.append(f'- {reason}')
+        risks = tc_summary.get('last_risk') or []
+        if risks:
+            lines.append('Last risk:')
+            for risk in risks[:3]:
+                lines.append(f'- {risk}')
+        lines.append(f'Last outcome: {tc_summary.get("last_outcome") or "pending"}')
+    else:
+        lines.append('Tradecard memory: none yet.')
+    lines.extend(screener_lines)
     return strip_stage_markers('\n'.join(lines))
 
 
@@ -3417,4 +3451,183 @@ def format_tradecard_beat_others_line(ticker: str) -> str:
     if not beaten:
         return ''
     return f'Opening board: beat {", ".join(beaten)} (score {best_score}).'
+
+
+def _format_cap_label(bucket: str) -> str:
+    text = str(bucket or 'unknown').strip()
+    if text == 'unknown':
+        return 'Unknown cap'
+    return text.title()
+
+
+def format_screener_status_telegram() -> str:
+    from backend.trading.screener_memory import screener_status
+
+    status = screener_status()
+    imp = status.get('latest_import') or {}
+    if not imp:
+        return strip_stage_markers(
+            '<b>SCREENER — STATUS</b>\n'
+            'No Screener imports yet.\n'
+            'Place CSV in data/imports and run /screener import longterm &lt;filename&gt;'
+        )
+    lines = [
+        '<b>SCREENER — STATUS</b>',
+        '<i>Fundamental research only — not intraday tradecard</i>',
+        f'Latest import: {imp.get("imported_at") or "—"}',
+        f'Screen: {imp.get("screen_name") or "—"}',
+        f'Query: {imp.get("query_text") or "—"}',
+        f'Rows imported: {imp.get("row_count") or 0}',
+        f'Total stored stocks: {status.get("total_stocks") or 0}',
+    ]
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_screener_latest_telegram() -> str:
+    from backend.trading.longterm_scoring import VERDICT_REJECT, VERDICT_VALUE_TRAP, VERDICT_LIQUIDITY
+    from backend.trading.screener_memory import latest_import, latest_import_stocks
+
+    imp = latest_import()
+    if not imp:
+        return strip_stage_markers('No Screener imports yet.')
+    stocks = latest_import_stocks(limit=500)
+    risk_verdicts = {VERDICT_REJECT, VERDICT_VALUE_TRAP, VERDICT_LIQUIDITY}
+    risk_count = sum(1 for s in stocks if str(s.get('verdict') or '') in risk_verdicts)
+    top = stocks[:5]
+    lines = [
+        '<b>SCREENER — LATEST IMPORT</b>',
+        '<i>Research watchlist — not buy/sell advice</i>',
+        f'Screen: {imp.get("screen_name") or "—"}',
+        f'Query: {imp.get("query_text") or "—"}',
+        f'Imported: {imp.get("imported_at") or "—"}',
+        f'Rows: {imp.get("row_count") or 0} · Risk/reject: {risk_count}',
+        '',
+        '<b>Top long-term candidates:</b>',
+    ]
+    if not top:
+        lines.append('No scored stocks in latest import.')
+    for idx, row in enumerate(top, start=1):
+        sym = str(row.get('symbol') or '?')
+        score = int(row.get('longterm_score') or 0)
+        verdict = str(row.get('verdict') or 'unknown').replace('_', ' ')
+        lines.append(f'{idx}. <b>{sym}</b> — score {score} — {verdict}')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_screener_import_telegram(args: str) -> str:
+    from backend.trading.screener_memory import import_screener_csv, imports_dir_path, resolve_import_filepath
+
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower in ('longterm', 'import longterm', ''):
+        return strip_stage_markers(
+            '<b>SCREENER IMPORT</b>\n'
+            'Upload support pending. Place CSV in data/imports and run:\n'
+            '<code>/screener import longterm filename.csv</code>\n'
+            f'Import folder: {imports_dir_path()}'
+        )
+    if lower.startswith('longterm '):
+        filename = raw.split(None, 1)[1].strip()
+    else:
+        filename = raw
+    try:
+        path = resolve_import_filepath(filename)
+        result = import_screener_csv(path, screen_name=Path(filename).stem, query_text=Path(filename).stem)
+        imp = result.get('import') or {}
+        return strip_stage_markers(
+            '<b>SCREENER IMPORT OK</b>\n'
+            f'File: {imp.get("filename") or filename}\n'
+            f'Screen: {imp.get("screen_name") or "—"}\n'
+            f'Rows: {imp.get("row_count") or 0} · Stored: {result.get("stored_count") or 0}\n'
+            'Use /longterm for ranked watchlist research.'
+        )
+    except FileNotFoundError:
+        return strip_stage_markers(
+            f'CSV not found: {filename}\n'
+            f'Place file in {imports_dir_path()} then retry.'
+        )
+    except Exception as exc:
+        return strip_stage_markers(f'Screener import failed: {str(exc)[:160]}')
+
+
+def format_longterm_telegram(limit: int = 10) -> str:
+    from backend.trading.screener_memory import latest_import, latest_import_stocks
+
+    imp = latest_import()
+    if not imp:
+        return strip_stage_markers(
+            'No long-term Screener memory yet.\n'
+            'Import CSV via /screener import longterm filename.csv'
+        )
+    stocks = latest_import_stocks(limit=500)[:limit]
+    lines = [
+        '<b>LONG-TERM WATCHLIST</b>',
+        '<i>Research only — requires live confirmation for intraday tradecard</i>',
+        f'Import: {imp.get("imported_at") or "—"} · Screen: {imp.get("screen_name") or "—"}',
+        '',
+    ]
+    if not stocks:
+        lines.append('No scored stocks in latest import.')
+        return strip_stage_markers('\n'.join(lines))
+    for idx, row in enumerate(stocks, start=1):
+        sym = str(row.get('symbol') or '?')
+        score = int(row.get('longterm_score') or 0)
+        cap = _format_cap_label(str(row.get('cap_bucket') or 'unknown'))
+        verdict = str(row.get('verdict') or 'unknown').replace('_', ' ')
+        lines.append(f'{idx}. <b>{sym}</b> — {score} — {cap} — {verdict}')
+        reasons = row.get('reasons') or []
+        if reasons:
+            lines.append(f'   Reasons: {" · ".join(reasons[:3])}')
+        risks = row.get('risk_flags') or []
+        if risks:
+            lines.append(f'   Risk: {" · ".join(risks[:2])}')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_longterm_explain_telegram(symbol: str) -> str:
+    from backend.trading.screener_memory import summarize_symbol_screener
+    from backend.trading.tradecard_memory import summarize_symbol_memory
+
+    sym = _normalize_tradecard_ticker(symbol)
+    if not sym:
+        return strip_stage_markers('Supply a symbol: /longterm explain SYMBOL')
+    sc = summarize_symbol_screener(sym)
+    if not int(sc.get('count') or 0):
+        return strip_stage_markers(f'No Screener memory for {sym}.')
+    latest = sc.get('latest') or {}
+    lines = [
+        f'<b>LONG-TERM — {sym}</b>',
+        '<i>Research watchlist — not intraday tradecard</i>',
+        f'Import date: {sc.get("imported_at") or "—"}',
+        f'Screen: {sc.get("screen_name") or "—"}',
+        f'Long-term score: {sc.get("longterm_score") or 0}',
+        f'Cap bucket: {_format_cap_label(sc.get("cap_bucket") or "unknown")}',
+        f'Verdict: {str(sc.get("verdict") or "unknown").replace("_", " ")}',
+        '',
+        '<b>Ratios:</b>',
+        f'PE: {latest.get("pe") or "Unknown"}',
+        f'Debt/Equity: {latest.get("debt_to_equity") or "Unknown"}',
+        f'ROCE: {latest.get("roce") or "Unknown"}',
+        f'ROE: {latest.get("roe") or "Unknown"}',
+        f'Market cap: {latest.get("market_cap") or "Unknown"}',
+    ]
+    reasons = sc.get('reasons') or []
+    if reasons:
+        lines.extend(['', '<b>Reasons:</b>'])
+        for reason in reasons[:6]:
+            lines.append(f'- {reason}')
+    risks = sc.get('risk_flags') or []
+    if risks:
+        lines.extend(['', '<b>Risk flags:</b>'])
+        for risk in risks[:6]:
+            lines.append(f'- {risk}')
+    tc = summarize_symbol_memory(sym)
+    if int(tc.get('count') or 0):
+        lines.extend([
+            '',
+            '<b>Tradecard memory:</b>',
+            f'Seen: {tc.get("count")} times · Best rank: {tc.get("best_rank") or "—"}',
+            f'Last outcome: {tc.get("last_outcome") or "pending"}',
+        ])
+    return strip_stage_markers('\n'.join(lines))
 

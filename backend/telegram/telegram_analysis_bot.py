@@ -101,9 +101,14 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /clock — runtime UTC / IST clock
 /schedule — premarket + brief schedule
 /memory — market memory
-/memory stock SYMBOL — tradecard decision memory for symbol
+/memory stock SYMBOL — tradecard + Screener memory for symbol
 /memory latest — latest tradecard memory records
 /memory stats — tradecard memory counts
+/screener status — latest Screener import status
+/screener latest — latest import summary + top long-term picks
+/screener import longterm — import CSV from data/imports
+/longterm — top long-term watchlist from Screener memory
+/longterm explain SYMBOL — long-term ratios + tradecard memory
 /broker — broker intelligence
 /qa — QA status
 /missed — missed-entry opportunities logged today
@@ -285,6 +290,18 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'removed_opening_alias', ''
     if lower == 'tradecards':
         return 'tradecards', ''
+    if lower == 'screener status':
+        return 'screener', 'status'
+    if lower == 'screener latest':
+        return 'screener', 'latest'
+    if lower.startswith('screener import'):
+        return 'screener', raw[len('screener'):].strip()
+    if lower == 'screener':
+        return 'screener', 'status'
+    if lower.startswith('longterm explain '):
+        return 'longterm', raw[len('longterm '):].strip()
+    if lower == 'longterm':
+        return 'longterm', ''
     if lower == 'feed':
         return 'feed', ''
     if lower in ('feed news', 'myfeed add', 'myfeed news'):
@@ -856,6 +873,16 @@ def handle_analysis_command(
 
         result = run_without_ai(run_tradecards_only, command='tradecards')
         response_text = result.get('text') or 'Tradecards board unavailable.'
+    elif cmd == 'screener':
+        from backend.telegram.lazy_command_runner import run_screener_only
+
+        result = run_without_ai(lambda: run_screener_only(args), command='screener')
+        response_text = result.get('text') or 'Screener unavailable.'
+    elif cmd == 'longterm':
+        from backend.telegram.lazy_command_runner import run_longterm_only
+
+        result = run_without_ai(lambda: run_longterm_only(args), command='longterm')
+        response_text = result.get('text') or 'Long-term watchlist unavailable.'
     elif cmd == 'catalysts':
         from backend.telegram.lazy_command_runner import run_catalysts_only
 

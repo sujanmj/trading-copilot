@@ -734,6 +734,40 @@ def run_tradecards_only(args: str = '') -> dict[str, Any]:
     return _runner_result('tradecards', text=text)
 
 
+def run_screener_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import (
+        format_screener_import_telegram,
+        format_screener_latest_telegram,
+        format_screener_status_telegram,
+    )
+
+    raw = str(args or '').strip().lower()
+    if raw == 'status' or not raw:
+        text = format_screener_status_telegram()
+        return _runner_result('screener', text=text, mode='status')
+    if raw == 'latest':
+        text = format_screener_latest_telegram()
+        return _runner_result('screener', text=text, mode='latest')
+    if raw.startswith('import'):
+        text = format_screener_import_telegram(str(args or '').strip())
+        return _runner_result('screener', text=text, mode='import')
+    text = format_screener_status_telegram()
+    return _runner_result('screener', text=text, mode='status')
+
+
+def run_longterm_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import format_longterm_explain_telegram, format_longterm_telegram
+
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower.startswith('explain '):
+        sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_longterm_explain_telegram(sym)
+        return _runner_result('longterm', text=text, mode='explain')
+    text = format_longterm_telegram()
+    return _runner_result('longterm', text=text)
+
+
 def run_catalysts_only(args: str = '') -> dict[str, Any]:
     from backend.intelligence.stock_catalyst_radar import format_catalyst_radar_telegram
 

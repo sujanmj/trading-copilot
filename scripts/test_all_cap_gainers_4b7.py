@@ -435,8 +435,8 @@ def main() -> int:
     from backend.trading.all_cap_gainers import STAGE as GAINER_STAGE
     from backend.trading.opening_rally_radar import STAGE as RADAR_STAGE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51N':
-        return _fail(f'expected AstraEdge 51N got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51O':
+        return _fail(f'expected AstraEdge 51O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     if GAINER_STAGE != '4B.12' or RADAR_STAGE != '4B.12':
         return _fail(f'expected stage 4B.12 got gainer={GAINER_STAGE!r} radar={RADAR_STAGE!r}')
 

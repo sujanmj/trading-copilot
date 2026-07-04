@@ -308,11 +308,11 @@ def test_temp_path_monkeypatch() -> int:
     return 0
 
 
-def test_build_label_51n() -> int:
+def test_build_label_51o() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, ASTRAEDGE_BUILD_STAGE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51N' or ASTRAEDGE_BUILD_STAGE != '51N':
-        return _fail(f'expected AstraEdge 51N got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51O' or ASTRAEDGE_BUILD_STAGE != '51O':
+        return _fail(f'expected AstraEdge 51O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -326,7 +326,7 @@ def main() -> int:
         test_memory_latest,
         test_memory_stats,
         test_temp_path_monkeypatch,
-        test_build_label_51n,
+        test_build_label_51o,
     ]
     failed = 0
     for test in tests:
