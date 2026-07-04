@@ -289,7 +289,26 @@ def run_daily_pack_only() -> dict[str, Any]:
     return _runner_result('daily_pack', text='\n'.join(lines), payload=pack)
 
 
-def run_memory_only() -> dict[str, Any]:
+def run_memory_only(args: str = '') -> dict[str, Any]:
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower.startswith('stock '):
+        from backend.telegram.response_format import format_tradecard_memory_stock_telegram
+
+        sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_tradecard_memory_stock_telegram(sym)
+        return _runner_result('memory', text=text, mode='tradecard_stock')
+    if lower == 'latest':
+        from backend.telegram.response_format import format_tradecard_memory_latest_telegram
+
+        text = format_tradecard_memory_latest_telegram(limit=5)
+        return _runner_result('memory', text=text, mode='tradecard_latest')
+    if lower == 'stats':
+        from backend.telegram.response_format import format_tradecard_memory_stats_telegram
+
+        text = format_tradecard_memory_stats_telegram()
+        return _runner_result('memory', text=text, mode='tradecard_stats')
+
     from backend.telegram.response_format import (
         format_cache_age_label,
         format_memory_outcome_line,

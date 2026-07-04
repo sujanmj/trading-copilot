@@ -2151,6 +2151,127 @@ def _inject_tradecard_cap_bucket_line(
         lines.insert(2, cap_line)
 
 
+def _append_tradecard_memory_snippet(lines: list[str], symbol: str) -> None:
+    """Short prior-decision memory block for /tradecard."""
+    sym = _normalize_tradecard_ticker(symbol)
+    if not sym:
+        return
+    try:
+        from backend.trading.tradecard_memory import summarize_symbol_memory
+
+        summary = summarize_symbol_memory(sym)
+        if not int(summary.get('count') or 0):
+            return
+        patterns = summary.get('common_patterns') or []
+        pattern_txt = ' / '.join(patterns[:2]) if patterns else 'unknown'
+        lines.extend([
+            '',
+            '<b>Memory:</b>',
+            f'Seen before: {summary.get("count")} times',
+            f'Last status: {summary.get("last_outcome") or "pending"}',
+            f'Best previous rank: {summary.get("best_rank") or "—"}',
+            f'Common pattern: {pattern_txt}',
+        ])
+    except Exception:
+        return
+
+
+def _persist_tradecards_decision_memory(board: dict[str, Any]) -> None:
+    try:
+        from backend.trading.tradecard_memory import record_tradecards_memory
+
+        record_tradecards_memory(board, command_source='/tradecards')
+    except Exception:
+        pass
+
+
+def _persist_tradecard_decision_memory(
+    *,
+    board: dict[str, Any] | None,
+    sync: dict[str, Any] | None,
+    symbol: str,
+    row: dict[str, Any] | None = None,
+    card: dict[str, Any] | None = None,
+    evidence_matrix: dict[str, Any] | None = None,
+    no_current_entry: bool = False,
+) -> None:
+    try:
+        from backend.trading.tradecard_memory import record_tradecard_memory
+
+        record_tradecard_memory(
+            board=board,
+            sync=sync,
+            symbol=symbol,
+            row=row,
+            card=card,
+            evidence_matrix=evidence_matrix,
+            no_current_entry=no_current_entry,
+        )
+    except Exception:
+        pass
+
+
+def format_tradecard_memory_stock_telegram(symbol: str) -> str:
+    from backend.trading.tradecard_memory import summarize_symbol_memory
+
+    sym = _normalize_tradecard_ticker(symbol)
+    if not sym:
+        return strip_stage_markers('Supply a symbol: /memory stock SYMBOL')
+    summary = summarize_symbol_memory(sym)
+    if not int(summary.get('count') or 0):
+        return strip_stage_markers(f'No tradecard memory for {sym} yet.')
+    lines = [
+        f'<b>MEMORY — {sym}</b>',
+        f'Seen in tradecards: {summary.get("count")} times',
+        f'Best rank: {summary.get("best_rank") or "—"}',
+        f'Last score: {summary.get("last_score") or 0}',
+        f'Cap bucket: {str(summary.get("cap_bucket") or "unknown").title()}',
+    ]
+    reasons = summary.get('last_reasons') or []
+    if reasons:
+        lines.append('Last reasons:')
+        for reason in reasons[:5]:
+            lines.append(f'- {reason}')
+    risks = summary.get('last_risk') or []
+    if risks:
+        lines.append('Last risk:')
+        for risk in risks[:3]:
+            lines.append(f'- {risk}')
+    lines.append(f'Last outcome: {summary.get("last_outcome") or "pending"}')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_tradecard_memory_latest_telegram(limit: int = 5) -> str:
+    from backend.trading.tradecard_memory import latest_tradecard_memory
+
+    rows = latest_tradecard_memory(limit=limit)
+    if not rows:
+        return strip_stage_markers('No tradecard memory records yet.')
+    lines = ['<b>TRADECARD MEMORY — LATEST</b>']
+    for row in rows[:limit]:
+        sym = str(row.get('symbol') or '?')
+        rank = int(row.get('rank') or 0)
+        score = int(row.get('score') or 0)
+        outcome = str(row.get('outcome_status') or 'pending')
+        src = str(row.get('command_source') or '')
+        lines.append(f'• <b>{sym}</b> rank {rank or "—"} · score {score} · {outcome} · {src}')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_tradecard_memory_stats_telegram() -> str:
+    from backend.trading.tradecard_memory import memory_stats
+
+    stats = memory_stats()
+    lines = [
+        '<b>TRADECARD MEMORY — STATS</b>',
+        f'Total records: {stats.get("total") or 0}',
+        f'Active pending: {stats.get("pending") or 0}',
+        f'Reference only: {stats.get("reference_only") or 0}',
+        f'Stale skipped: {stats.get("stale_skipped") or 0}',
+    ]
+    return strip_stage_markers('\n'.join(lines))
+
+
 def _finalize_tradecard_lines(
     lines: list[str],
     card: dict[str, Any] | None = None,
@@ -2158,9 +2279,14 @@ def _finalize_tradecard_lines(
     row: dict[str, Any] | None = None,
     gainer_bucket: str = '',
     include_cap_bucket: bool = True,
+    include_memory: bool = True,
 ) -> str:
     if include_cap_bucket:
         _inject_tradecard_cap_bucket_line(lines, card, row=row, gainer_bucket=gainer_bucket)
+    if include_memory:
+        sym = _normalize_tradecard_ticker((card or {}).get('ticker'))
+        if sym:
+            _append_tradecard_memory_snippet(lines, sym)
     return strip_stage_markers('\n'.join(lines))
 
 
@@ -2530,14 +2656,22 @@ def format_tradecard_telegram(
         if sync.get('session_stale'):
             from backend.trading.opening_session_freshness import format_stale_tradecard_notice
 
-            stale_text = format_stale_tradecard_notice(board)
-            return strip_stage_markers(stale_text)
+            return strip_stage_markers(format_stale_tradecard_notice(board))
         from backend.trading.opening_session_freshness import format_reference_tradecard_notice
 
-        ref_text = format_reference_tradecard_notice(
-            board,
-            ticker=str(sync.get('reference_best') or sync.get('tradecards_best') or '').strip().upper(),
-        )
+        ref_sym = str(sync.get('reference_best') or sync.get('tradecards_best') or '').strip().upper()
+        ref_text = format_reference_tradecard_notice(board, ticker=ref_sym)
+        if ref_sym:
+            _persist_tradecard_decision_memory(
+                board=board,
+                sync=sync,
+                symbol=ref_sym,
+                row=sync.get('board_row') if isinstance(sync.get('board_row'), dict) else None,
+                no_current_entry=True,
+            )
+            ref_lines = ref_text.splitlines()
+            _append_tradecard_memory_snippet(ref_lines, ref_sym)
+            ref_text = '\n'.join(ref_lines)
         return strip_stage_markers(ref_text)
     if sync_ticker and sync_ticker != _normalize_tradecard_ticker(card.get('ticker')):
         from backend.trading.trade_card_engine import build_trade_card
@@ -2610,6 +2744,21 @@ def format_tradecard_telegram(
     evidence_decision = _evidence_decision(evidence_matrix, _tradecard_status_label(status))
     evidence_confidence = _evidence_confidence(evidence_matrix, card.get('confidence'))
     evidence_valid_entry = _evidence_allows_valid_entry(evidence_matrix)
+
+    if effective_ticker:
+        opening_ctx = (card or {}).get('_opening_radar_context') or {}
+        board_row = opening_ctx.get('board_row') if isinstance(opening_ctx.get('board_row'), dict) else opening_ctx
+        _persist_tradecard_decision_memory(
+            board=sync.get('board'),
+            sync=sync,
+            symbol=effective_ticker,
+            row=board_row if isinstance(board_row, dict) else None,
+            card=card,
+            evidence_matrix=evidence_matrix,
+            no_current_entry=status in (
+                'NO_ACTIVE_ENTRY', 'NO_TRADE', 'ENTRY_MISSED', 'WAIT_FOR_VOLUME', 'WAIT_FOR_PULLBACK',
+            ),
+        )
 
     if data_stale and effective_ticker:
         stale_reason = reason or 'quote/scanner refresh failed — cache too old for live entry'
@@ -3188,6 +3337,7 @@ def format_tradecards_telegram(
     from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
 
     data = board or build_opening_rally_board()
+    _persist_tradecards_decision_memory(data)
     from backend.trading.opening_session_freshness import (
         format_reference_tradecards_telegram,
         format_stale_tradecards_telegram,

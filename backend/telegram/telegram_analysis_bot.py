@@ -101,6 +101,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /clock — runtime UTC / IST clock
 /schedule — premarket + brief schedule
 /memory — market memory
+/memory stock SYMBOL — tradecard decision memory for symbol
+/memory latest — latest tradecard memory records
+/memory stats — tradecard memory counts
 /broker — broker intelligence
 /qa — QA status
 /missed — missed-entry opportunities logged today
@@ -699,7 +702,7 @@ def handle_analysis_command(
         result = run_without_ai(lambda: {'text': format_canonical_status_text()}, command='status')
         response_text = result.get('text') or format_canonical_status_text()
     elif cmd == 'memory':
-        result = run_without_ai(run_memory_only, command='memory')
+        result = run_without_ai(lambda: run_memory_only(args), command='memory')
         response_text = result.get('text') or 'Memory unavailable.'
     elif cmd == 'outcomes':
         response_text = format_outcomes_status_text()

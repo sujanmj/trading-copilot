@@ -193,8 +193,8 @@ def test_multi_day_stale_still_blocked() -> int:
 def test_build_label_51l() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51M':
-        return _fail(f'expected AstraEdge 51M got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51N':
+        return _fail(f'expected AstraEdge 51N got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

@@ -229,8 +229,8 @@ def test_no_stale_unrelated_symbol_selected() -> int:
 def main() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51M':
-        return _fail(f'expected AstraEdge 51M got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51N':
+        return _fail(f'expected AstraEdge 51N got {ASTRAEDGE_TELEGRAM_BUILD!r}')
 
     tests = (
         test_tradecards_best_persistent_syncs_tradecard,
