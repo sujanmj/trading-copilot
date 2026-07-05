@@ -587,6 +587,13 @@ def build_opening_rally_board(
     )
     gainer_by_symbol = gainer_scan.get('by_symbol') or {}
 
+    try:
+        from backend.trading.intraday_candle_memory import clear_old_candles
+
+        clear_old_candles(max_days=5)
+    except Exception:
+        pass
+
     universe: set[str] = (
         set(catalyst_map.keys())
         | set(scanner_index.keys())
@@ -621,9 +628,9 @@ def build_opening_rally_board(
                 previous_mover=sym in prev_movers,
             )
         try:
-            from backend.trading.chart_patterns import apply_pattern_evidence_to_row
+            from backend.trading.intraday_candle_memory import capture_snapshot_from_market_row
 
-            row = apply_pattern_evidence_to_row(row, scanner_row=scanner_index.get(sym))
+            capture_snapshot_from_market_row(sym, scanner_index.get(sym), source='radar')
         except Exception:
             pass
         if row.get('state') == 'REJECTED' and row.get('score', 0) <= 0:
@@ -664,6 +671,17 @@ def build_opening_rally_board(
         premarket_payload=premarket_payload if premarket_payload is not None else _load_json(PREMARKET_FILE),
         now=ist_now,
     )
+    if not payload.get('reference_only') and not payload.get('session_stale'):
+        try:
+            from backend.trading.chart_patterns import apply_pattern_evidence_to_row
+
+            updated_rows: list[dict[str, Any]] = []
+            for row in list(payload.get('ranked_candidates') or []):
+                scanner_row = row.get('scanner_row') if isinstance(row.get('scanner_row'), dict) else None
+                updated_rows.append(apply_pattern_evidence_to_row(row, scanner_row=scanner_row))
+            payload['ranked_candidates'] = updated_rows
+        except Exception:
+            pass
     if not payload.get('reference_only'):
         _log_opening_radar_events(payload)
     return payload

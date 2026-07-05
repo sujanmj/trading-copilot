@@ -290,6 +290,7 @@ def test_tradecard_memory_stores_pattern_fields() -> int:
             'score': 74,
             'state': 'TRADECARD_CANDIDATE',
             'why': ['ascending triangle near breakout'],
+            'pattern_detected': True,
             'chart_pattern': 'Ascending triangle',
             'pattern_status': 'near_breakout',
             'breakout_level': 178.2,
@@ -322,6 +323,7 @@ def test_memory_stock_shows_pattern_memory() -> int:
             'score': 74,
             'state': 'TRADECARD_CANDIDATE',
             'why': ['ascending triangle near breakout'],
+            'pattern_detected': True,
             'chart_pattern': 'Ascending triangle',
             'pattern_status': 'near_breakout',
             'breakout_level': 178.2,
@@ -345,7 +347,7 @@ def test_patterns_command() -> int:
     from backend.telegram.response_format import format_patterns_telegram
 
     missing = format_patterns_telegram('WIPRO')
-    if 'No candle data available' not in missing:
+    if 'No candle history available' not in missing:
         return _fail(f'expected missing candle message got {missing!r}')
 
     candles = _ascending_triangle_candles()
@@ -356,11 +358,11 @@ def test_patterns_command() -> int:
     return 0
 
 
-def test_build_label_51r() -> int:
+def test_build_label_51s() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51R' or ASTRAEDGE_BUILD_STAGE != '51R':
-        return _fail(f'expected AstraEdge 51R got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51S' or ASTRAEDGE_BUILD_STAGE != '51S':
+        return _fail(f'expected AstraEdge 51S got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -407,7 +409,7 @@ def main() -> int:
         test_tradecard_memory_stores_pattern_fields,
         test_memory_stock_shows_pattern_memory,
         test_patterns_command,
-        test_build_label_51r,
+        test_build_label_51s,
         test_regression_prior_phases,
     ]
     failed = 0

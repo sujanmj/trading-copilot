@@ -10,7 +10,7 @@ from __future__ import annotations
 import statistics
 from typing import Any
 
-STAGE = '4B.15'
+STAGE = '4B.15A'
 MIN_CANDLES = 12
 PATTERN_BOOST_CAP = 15
 DEFAULT_LOOKBACK = 24
@@ -52,10 +52,21 @@ def _normalize_candle(raw: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def load_candles_for_symbol(symbol: str, *, limit: int = DEFAULT_LOOKBACK) -> list[dict[str, Any]]:
-    """Load OHLCV candles from historical store; empty list if unavailable."""
+    """Load OHLCV candles from intraday memory, then historical store."""
     sym = str(symbol or '').strip().upper()
     if not sym:
         return []
+
+    try:
+        from backend.trading.intraday_candle_memory import build_ohlcv_from_snapshots
+
+        for timeframe in ('5m', 'snapshot'):
+            intraday = build_ohlcv_from_snapshots(sym, timeframe=timeframe, limit=max(MIN_CANDLES, limit))
+            if len(intraday) >= MIN_CANDLES:
+                return intraday[-limit:]
+    except Exception:
+        pass
+
     try:
         from backend.storage.historical_market_store import get_prices
 
@@ -450,6 +461,7 @@ def apply_pattern_evidence_to_row(
     updated['pattern_reasons'] = list(best.get('reasons') or []) + reasons
     updated['pattern_risks'] = list(dict.fromkeys(list(best.get('risk_flags') or []) + risks))[:6]
     updated['best_pattern'] = best
+    updated['pattern_detected'] = True
     updated['above_open'] = bool(row.get('above_open'))
     updated['above_vwap'] = bool(row.get('above_vwap'))
     if risks and not live_confirmed:
@@ -459,6 +471,16 @@ def apply_pattern_evidence_to_row(
 
 def pattern_fields_for_memory(row: dict[str, Any] | None) -> dict[str, Any]:
     base = dict(row or {})
+    empty = {
+        'chart_pattern': '',
+        'pattern_status': '',
+        'breakout_level': None,
+        'pattern_confidence': 0,
+        'pattern_reasons': [],
+        'pattern_risks': [],
+    }
+    if not base.get('pattern_detected'):
+        return empty
     best = base.get('best_pattern') if isinstance(base.get('best_pattern'), dict) else {}
     return {
         'chart_pattern': str(base.get('chart_pattern') or best.get('label') or ''),

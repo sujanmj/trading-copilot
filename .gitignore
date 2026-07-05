@@ -31,6 +31,8 @@ data/_temp_*.txt
 data/_telegram_*.json
 data/imports/
 data/imports/**
+data/intraday_candles.jsonl
+data/*.jsonl
 
 # ============================================================
 # PYTHON

@@ -3733,15 +3733,18 @@ def format_longterm_explain_telegram(symbol: str) -> str:
 
 
 def format_patterns_telegram(symbol: str) -> str:
-    from backend.trading.chart_patterns import detect_chart_patterns, load_candles_for_symbol
+    from backend.trading.chart_patterns import MIN_CANDLES, detect_chart_patterns, load_candles_for_symbol
 
     sym = _normalize_tradecard_ticker(symbol)
     if not sym:
         return strip_stage_markers('Supply a symbol: /patterns SYMBOL')
 
     candles = load_candles_for_symbol(sym)
-    if len(candles) < 12:
-        return strip_stage_markers(f'No candle data available for {sym} yet.')
+    if len(candles) < MIN_CANDLES:
+        return strip_stage_markers(
+            f'No candle history available for {sym} yet. '
+            'Pattern detection needs intraday OHLCV snapshots.'
+        )
 
     result = detect_chart_patterns(sym, candles)
     best = result.get('best_pattern')
