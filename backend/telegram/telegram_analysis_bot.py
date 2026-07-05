@@ -160,7 +160,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /tradecard explain — full trade card plan notes
 /tradecard journal — today's tradecard journal
 /tradecard outcome — tradecard outcome summary
-/patterns SYMBOL — chart pattern debug (OHLCV only)
+
+<b>Chart Patterns:</b>
+/patterns SYMBOL — detect chart pattern from intraday OHLCV candles
 
 <b>Briefs:</b>
 /news — news only
