@@ -210,7 +210,7 @@ def load_tradecard_memory(symbol: str | None = None, limit: int = 50) -> list[di
                 rows.append(row)
     except OSError:
         return []
-    rows.sort(key=lambda r: str(r.get('created_at') or ''), reverse=True)
+    rows.sort(key=lambda r: (str(r.get('created_at') or ''), -int(r.get('rank') or 0)), reverse=True)
     return rows[: max(1, int(limit or 50))]
 
 

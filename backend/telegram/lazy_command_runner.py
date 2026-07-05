@@ -557,33 +557,47 @@ def _read_qa_report(path: Path, label: str) -> dict[str, Any]:
     }
 
 
-def run_qa_status_only() -> dict[str, Any]:
-    sections = [
-        _read_qa_report(LIVE_SMOKE_REPORT, 'live_smoke'),
-        _read_qa_report(E2E_REPORT, 'gui_e2e'),
-        _read_qa_report(LOCAL_READINESS_REPORT, 'local_readiness'),
-        _read_qa_report(QA_REPORT_PATH, 'telegram_qa'),
-    ]
-    lines = ['<b>🧪 QA status</b>']
-    hints = []
-    for row in sections:
-        label = row['label']
-        status = row['status']
-        age = row['age_minutes']
-        age_txt = f'{age}m ago' if age >= 0 else 'no report'
-        lines.append(f"• {label}: <code>{status}</code> ({age_txt})")
-        if status == 'no_report':
-            hints.append(row.get('hint') or '')
+def run_qa_only(args: str = '') -> dict[str, Any]:
+    from backend.qa.qa_runner import (
+        explain_qa,
+        format_qa_result,
+        get_qa_status,
+        load_last_qa_result,
+        run_qa_full,
+        run_qa_smoke,
+    )
 
-    if hints:
-        lines.extend([
-            '',
-            '<b>Run QA:</b>',
-            'python scripts\\live_system_smoke.py',
-            'python scripts\\local_system_readiness.py',
-            'python scripts\\validate_gui_e2e_matrix.py',
-        ])
-    return _runner_result('qa', text='\n'.join(lines), payload={'sections': sections})
+    raw = str(args or '').strip().lower()
+    payload: dict[str, Any] = {}
+
+    if raw == 'smoke':
+        payload = run_qa_smoke()
+        text = format_qa_result(payload)
+    elif raw == 'full':
+        payload = run_qa_full()
+        text = format_qa_result(payload)
+    elif raw == 'last':
+        payload = load_last_qa_result() or {}
+        if not payload:
+            text = 'No QA run stored yet. Try /qa smoke or /qa full.'
+        else:
+            text = format_qa_result(payload, detail='last')
+    elif raw == 'explain':
+        text = explain_qa()
+    elif raw:
+        text = (
+            'Unknown /qa subcommand.\n\n'
+            f'{get_qa_status()}'
+        )
+    else:
+        text = get_qa_status()
+
+    return _runner_result('qa', text=text, payload=payload)
+
+
+def run_qa_status_only() -> dict[str, Any]:
+    """Backward-compatible alias for canonical /qa menu."""
+    return run_qa_only('')
 
 
 def run_aihub_full_only() -> dict[str, Any]:

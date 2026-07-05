@@ -93,6 +93,21 @@ def _safe_float(value: object, default: float = 0.0) -> float:
         return default
 
 
+def _symbol_rank_tiebreak(value: object) -> tuple[int, ...]:
+    """Higher tuple ranks earlier with reverse=True (symbol A before Z on ties)."""
+    sym = _normalize_ticker(value)
+    return tuple(-ord(ch) for ch in sym)
+
+
+def _opening_candidate_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        0 if row.get('state') == 'REJECTED' else 1,
+        int(row.get('score') or 0),
+        _safe_float(row.get('volume_ratio')),
+        _symbol_rank_tiebreak(row.get('ticker')),
+    )
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
@@ -602,7 +617,7 @@ def build_opening_rally_board(
     )
 
     ranked: list[dict[str, Any]] = []
-    for sym in universe:
+    for sym in sorted(universe):
         if not sym:
             continue
         themes = theme_matches_for_symbol(sym)
@@ -637,14 +652,7 @@ def build_opening_rally_board(
             continue
         ranked.append(row)
 
-    ranked.sort(
-        key=lambda r: (
-            0 if r.get('state') == 'REJECTED' else 1,
-            int(r.get('score') or 0),
-            _safe_float(r.get('volume_ratio')),
-        ),
-        reverse=True,
-    )
+    ranked.sort(key=_opening_candidate_sort_key, reverse=True)
 
     ref_promoted = list(gainer_scan.get('reference_promoted_symbols') or [])
     payload = {

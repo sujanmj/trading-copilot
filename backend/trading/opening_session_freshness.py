@@ -499,6 +499,7 @@ def _reference_row_sort_key(row: dict[str, Any], promoted_index: dict[str, int])
         int(row.get('score') or 0),
         float(row.get('volume_ratio') or 0),
         -promoted_index.get(sym, 9999),
+        tuple(-ord(ch) for ch in sym),
     )
 
 

@@ -251,11 +251,11 @@ def test_missing_columns_no_crash() -> int:
     return 0
 
 
-def test_build_label_51t() -> int:
+def test_build_label_51u() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51T' or ASTRAEDGE_BUILD_STAGE != '51T':
-        return _fail(f'expected AstraEdge 51T got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51U' or ASTRAEDGE_BUILD_STAGE != '51U':
+        return _fail(f'expected AstraEdge 51U got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -271,7 +271,7 @@ def main() -> int:
         test_memory_stock_combined,
         test_screener_does_not_create_tradecard,
         test_missing_columns_no_crash,
-        test_build_label_51t,
+        test_build_label_51u,
     ]
     failed = 0
     for test in tests:

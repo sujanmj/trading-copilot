@@ -358,11 +358,11 @@ def test_patterns_command() -> int:
     return 0
 
 
-def test_build_label_51t() -> int:
+def test_build_label_51u() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51T' or ASTRAEDGE_BUILD_STAGE != '51T':
-        return _fail(f'expected AstraEdge 51T got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51U' or ASTRAEDGE_BUILD_STAGE != '51U':
+        return _fail(f'expected AstraEdge 51U got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -409,7 +409,7 @@ def main() -> int:
         test_tradecard_memory_stores_pattern_fields,
         test_memory_stock_shows_pattern_memory,
         test_patterns_command,
-        test_build_label_51t,
+        test_build_label_51u,
         test_regression_prior_phases,
     ]
     failed = 0

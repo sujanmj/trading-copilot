@@ -32,6 +32,8 @@ data/_telegram_*.json
 data/imports/
 data/imports/**
 data/intraday_candles.jsonl
+data/qa_last_result.json
+data/qa_runs.jsonl
 data/*.jsonl
 
 # ============================================================

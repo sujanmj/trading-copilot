@@ -31,11 +31,18 @@ def _dt(y: int, m: int, d: int, hour: int, minute: int) -> datetime:
     return datetime(y, m, d, hour, minute, tzinfo=IST)
 
 
-def _row(ticker: str, *, score: int = 70, state: str = 'TOP_GAINER_CONFIRM', bucket: str = 'large cap') -> dict:
+def _row(
+    ticker: str,
+    *,
+    score: int = 70,
+    volume_ratio: float = 1.2,
+    state: str = 'TOP_GAINER_CONFIRM',
+    bucket: str = 'large cap',
+) -> dict:
     return {
         'ticker': ticker,
         'change_percent': 3.8,
-        'volume_ratio': 1.2,
+        'volume_ratio': volume_ratio,
         'price': 500.0,
         'open_price': 480.0,
         'vwap': 490.0,
@@ -72,7 +79,9 @@ def _live_board(*tickers: str) -> dict:
     scanner = {
         'session_date': '2026-05-27',
         'scan_time_local': '2026-05-27 10:30:00',
-        'top_signals': [_row(t) for t in tickers],
+        'top_signals': [
+            _row(t, volume_ratio=1.5 - (idx * 0.15)) for idx, t in enumerate(tickers)
+        ],
     }
     now = _dt(2026, 5, 27, 10, 30)
     with patch('backend.trading.opening_rally_radar._live_registry', return_value={}), \
@@ -98,11 +107,17 @@ def test_tradecards_stores_ranked_candidates() -> int:
         rows = load_tradecard_memory(limit=20)
         if len(rows) < 2:
             return _fail(f'expected at least 2 tradecards records got {len(rows)}')
+        ranked = list(board.get('ranked_candidates') or [])
+        expected_rank1 = str((ranked[0] or {}).get('ticker') or '').upper()
         top = rows[0]
         if not top.get('symbol'):
             return _fail('memory record missing symbol')
         if int(top.get('rank') or 0) != 1:
             return _fail(f'expected rank 1 on newest record got {top.get("rank")!r}')
+        if str(top.get('symbol') or '').upper() != expected_rank1:
+            return _fail(
+                f'expected rank-1 symbol {expected_rank1!r} on newest record got {top.get("symbol")!r}'
+            )
         if not top.get('cap_bucket'):
             return _fail('memory record missing cap_bucket')
         if not top.get('reasons'):
@@ -311,8 +326,8 @@ def test_temp_path_monkeypatch() -> int:
 def test_build_label_51o() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, ASTRAEDGE_BUILD_STAGE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51T' or ASTRAEDGE_BUILD_STAGE != '51T':
-        return _fail(f'expected AstraEdge 51T got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51U' or ASTRAEDGE_BUILD_STAGE != '51U':
+        return _fail(f'expected AstraEdge 51U got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

@@ -43,6 +43,7 @@ from backend.telegram.lazy_command_runner import (
     run_memory_only,
     run_news_only,
     run_resolve_outcomes_admin,
+    run_qa_only,
     run_qa_status_only,
     run_scan_only,
     run_theme_only,
@@ -101,8 +102,14 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /clock — runtime UTC / IST clock
 /schedule — premarket + brief schedule
 /broker — broker intelligence
-/qa — QA status
 /missed — missed-entry opportunities logged today
+
+<b>QA:</b>
+/qa — QA help and status
+/qa smoke — fast safe checks
+/qa full — safe regression suite
+/qa last — last QA result
+/qa explain — what QA covers
 
 <b>Trade Memory:</b>
 /memory — market memory dashboard
@@ -765,8 +772,8 @@ def handle_analysis_command(
         result = run_without_ai(lambda: run_news_only(refresh=refresh_news), command='news')
         response_text = result.get('text') or 'News unavailable.'
     elif cmd == 'qa':
-        result = run_without_ai(run_qa_status_only, command='qa')
-        response_text = result.get('text') or 'QA status unavailable.'
+        result = run_without_ai(lambda: run_qa_only(args), command='qa')
+        response_text = result.get('text') or 'QA unavailable.'
     elif cmd in ('ask', 'q', 'question'):
         if dry_run and not is_llm_command(cmd, args):
             response_text = 'Use /ask ai <question> for LLM.'
