@@ -139,7 +139,11 @@ def build_memory_record(
         if reason:
             reasons = [reason]
 
-    return {
+    from backend.trading.chart_patterns import pattern_fields_for_memory
+
+    pattern_fields = pattern_fields_for_memory(base_row)
+
+    record = {
         'memory_id': uuid.uuid4().hex,
         'created_at': ist_now.replace(microsecond=0).isoformat(),
         'current_ist': ist_now.strftime('%Y-%m-%d %H:%M IST'),
@@ -166,6 +170,8 @@ def build_memory_record(
         'outcome_status': outcome,
         'outcome_reason': '',
     }
+    record.update(pattern_fields)
+    return record
 
 
 def append_tradecard_memory(record: dict[str, Any]) -> dict[str, Any]:
@@ -239,6 +245,8 @@ def summarize_symbol_memory(symbol: str) -> dict[str, Any]:
             token = str(reason).strip().lower()
             if token and token not in patterns:
                 patterns.append(token)
+    chart_pattern = str(latest.get('chart_pattern') or '')
+    pattern_status = str(latest.get('pattern_status') or '')
     return {
         'symbol': sym,
         'count': len(rows),
@@ -249,6 +257,10 @@ def summarize_symbol_memory(symbol: str) -> dict[str, Any]:
         'last_risk': list(latest.get('risk_filters') or [])[:3],
         'last_outcome': str(latest.get('outcome_status') or 'pending'),
         'common_patterns': patterns[:4],
+        'chart_pattern': chart_pattern,
+        'pattern_status': pattern_status,
+        'breakout_level': latest.get('breakout_level'),
+        'pattern_confidence': int(latest.get('pattern_confidence') or 0),
     }
 
 

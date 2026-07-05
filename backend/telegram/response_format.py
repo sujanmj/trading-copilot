@@ -2151,6 +2151,34 @@ def _inject_tradecard_cap_bucket_line(
         lines.insert(2, cap_line)
 
 
+def _append_tradecard_pattern_section(lines: list[str], card: dict[str, Any] | None, row: dict[str, Any] | None = None) -> None:
+    ctx = dict((card or {}).get('_opening_radar_context') or {})
+    base_row = dict(row or ctx.get('board_row') or ctx or {})
+    best = base_row.get('best_pattern') if isinstance(base_row.get('best_pattern'), dict) else {}
+    label = str(base_row.get('chart_pattern') or best.get('label') or '').strip()
+    if not label:
+        return
+    status = str(base_row.get('pattern_status') or best.get('status') or 'forming').replace('_', ' ')
+    breakout = base_row.get('breakout_level') if base_row.get('breakout_level') is not None else best.get('breakout_level')
+    support = best.get('support_level')
+    vol_ok = bool(best.get('volume_confirmed'))
+    vwap_ok = bool(best.get('vwap_confirmed'))
+    risks = list(base_row.get('pattern_risks') or best.get('risk_flags') or [])
+    lines.extend([
+        '',
+        '<b>Pattern:</b>',
+        f'{label} — {status}',
+    ])
+    if breakout is not None:
+        lines.append(f'Breakout level: {breakout}')
+    if support is not None:
+        lines.append(f'Support: {support}')
+    lines.append(f'Volume: {"confirmed" if vol_ok else "not confirmed"}')
+    lines.append(f'VWAP: {"confirmed" if vwap_ok else "not confirmed"}')
+    if risks:
+        lines.append(f'Risk: {risks[0]}')
+
+
 def _append_tradecard_memory_snippet(lines: list[str], symbol: str) -> None:
     """Short prior-decision memory block for /tradecard."""
     sym = _normalize_tradecard_ticker(symbol)
@@ -2172,6 +2200,17 @@ def _append_tradecard_memory_snippet(lines: list[str], symbol: str) -> None:
             f'Best previous rank: {summary.get("best_rank") or "—"}',
             f'Common pattern: {pattern_txt}',
         ])
+        if str(summary.get('chart_pattern') or '').strip():
+            status = str(summary.get('pattern_status') or 'forming').replace('_', ' ')
+            breakout = summary.get('breakout_level')
+            lines.extend([
+                '',
+                '<b>Pattern memory:</b>',
+                f'Last pattern: {summary.get("chart_pattern")} {status}',
+            ])
+            if breakout is not None:
+                lines.append(f'Breakout level: {breakout}')
+            lines.append(f'Last status: {summary.get("last_outcome") or "pending"}')
     except Exception:
         return
 
@@ -2254,7 +2293,19 @@ def format_tradecard_memory_stock_telegram(symbol: str) -> str:
     except Exception:
         pass
 
-    if not int(tc_summary.get('count') or 0) and not screener_lines:
+    pattern_lines: list[str] = []
+    if str(tc_summary.get('chart_pattern') or '').strip():
+        status = str(tc_summary.get('pattern_status') or 'forming').replace('_', ' ')
+        pattern_lines = [
+            '',
+            '<b>Pattern memory:</b>',
+            f'Last pattern: {tc_summary.get("chart_pattern")} {status}',
+        ]
+        if tc_summary.get('breakout_level') is not None:
+            pattern_lines.append(f'Breakout level: {tc_summary.get("breakout_level")}')
+        pattern_lines.append(f'Last status: {tc_summary.get("last_outcome") or "pending"}')
+
+    if not int(tc_summary.get('count') or 0) and not screener_lines and not pattern_lines:
         label = raw_query or tradecard_sym or 'symbol'
         return strip_stage_markers(f'No memory for {label} yet (tradecard or Screener).')
 
@@ -2282,6 +2333,7 @@ def format_tradecard_memory_stock_telegram(symbol: str) -> str:
     else:
         lines.append('Tradecard memory: none yet.')
     lines.extend(screener_lines)
+    lines.extend(pattern_lines)
     return strip_stage_markers('\n'.join(lines))
 
 
@@ -2327,6 +2379,11 @@ def _finalize_tradecard_lines(
 ) -> str:
     if include_cap_bucket:
         _inject_tradecard_cap_bucket_line(lines, card, row=row, gainer_bucket=gainer_bucket)
+    ctx_row = row
+    if not ctx_row and card:
+        ctx = dict((card or {}).get('_opening_radar_context') or {})
+        ctx_row = ctx.get('board_row') if isinstance(ctx.get('board_row'), dict) else ctx
+    _append_tradecard_pattern_section(lines, card, row=ctx_row if isinstance(ctx_row, dict) else None)
     if include_memory:
         sym = _normalize_tradecard_ticker((card or {}).get('ticker'))
         if sym:
@@ -3672,5 +3729,48 @@ def format_longterm_explain_telegram(symbol: str) -> str:
             f'Seen: {tc.get("count")} times · Best rank: {tc.get("best_rank") or "—"}',
             f'Last outcome: {tc.get("last_outcome") or "pending"}',
         ])
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_patterns_telegram(symbol: str) -> str:
+    from backend.trading.chart_patterns import detect_chart_patterns, load_candles_for_symbol
+
+    sym = _normalize_tradecard_ticker(symbol)
+    if not sym:
+        return strip_stage_markers('Supply a symbol: /patterns SYMBOL')
+
+    candles = load_candles_for_symbol(sym)
+    if len(candles) < 12:
+        return strip_stage_markers(f'No candle data available for {sym} yet.')
+
+    result = detect_chart_patterns(sym, candles)
+    best = result.get('best_pattern')
+    lines = [f'<b>PATTERN — {sym}</b>', '<i>OHLCV research only — not buy/sell advice</i>', '']
+    if not best:
+        lines.append('No chart pattern detected from available candles.')
+        return strip_stage_markers('\n'.join(lines))
+
+    status = str(best.get('status') or 'forming').replace('_', ' ')
+    lines.extend([
+        f'Pattern: <b>{best.get("label") or "—"}</b>',
+        f'Status: {status}',
+        f'Confidence: {int(best.get("confidence") or 0)}',
+        f'Breakout level: {best.get("breakout_level") or "—"}',
+        f'Support: {best.get("support_level") or "—"}',
+        f'Resistance: {best.get("resistance_level") or "—"}',
+        f'Volume: {"confirmed" if best.get("volume_confirmed") else "not confirmed"}',
+        f'VWAP: {"confirmed" if best.get("vwap_confirmed") else "not confirmed"}',
+    ])
+    reasons = best.get('reasons') or []
+    if reasons:
+        lines.append('')
+        lines.append('Reasons:')
+        for reason in reasons[:4]:
+            lines.append(f'- {reason}')
+    risks = best.get('risk_flags') or []
+    if risks:
+        lines.append('Risk:')
+        for risk in risks[:3]:
+            lines.append(f'- {risk}')
     return strip_stage_markers('\n'.join(lines))
 

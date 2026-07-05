@@ -462,6 +462,8 @@ def score_opening_candidate(
         'sector_breadth': sector_breadth or {},
         'catalyst': catalyst,
         'scanner_row': scanner_row,
+        'above_open': above_open,
+        'above_vwap': above_vwap,
     }
 
 
@@ -618,6 +620,12 @@ def build_opening_rally_board(
                 sector_breadth=sym in sector_breadth,
                 previous_mover=sym in prev_movers,
             )
+        try:
+            from backend.trading.chart_patterns import apply_pattern_evidence_to_row
+
+            row = apply_pattern_evidence_to_row(row, scanner_row=scanner_index.get(sym))
+        except Exception:
+            pass
         if row.get('state') == 'REJECTED' and row.get('score', 0) <= 0:
             continue
         ranked.append(row)
@@ -700,6 +708,11 @@ def _opening_tradecard_eligible(row: dict[str, Any]) -> bool:
         return False
     if row.get('gainer_promoted') and not row.get('has_catalyst') and not (row.get('themes') or []):
         if state not in gainer_confirmed_states:
+            return False
+    if int(row.get('pattern_boost') or 0) > 0:
+        from backend.trading.chart_patterns import has_live_radar_confirmation
+
+        if not has_live_radar_confirmation(row):
             return False
     return True
 
@@ -852,6 +865,10 @@ def opening_board_context_for_ticker(
         'tradecards_rank': tradecards_rank,
         'tradecards_best': _normalize_ticker(best_sym) == sym,
         'from_board': True,
+        'chart_pattern': str(base.get('chart_pattern') or ''),
+        'pattern_status': str(base.get('pattern_status') or ''),
+        'breakout_level': base.get('breakout_level'),
+        'best_pattern': base.get('best_pattern'),
     }
 
 

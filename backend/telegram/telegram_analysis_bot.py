@@ -160,6 +160,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /tradecard explain — full trade card plan notes
 /tradecard journal — today's tradecard journal
 /tradecard outcome — tradecard outcome summary
+/patterns SYMBOL — chart pattern debug (OHLCV only)
 
 <b>Briefs:</b>
 /news — news only
@@ -306,6 +307,10 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'longterm', raw[len('longterm '):].strip()
     if lower == 'longterm':
         return 'longterm', ''
+    if lower.startswith('patterns '):
+        return 'patterns', raw[len('patterns '):].strip()
+    if lower == 'patterns':
+        return 'patterns', ''
     if lower == 'feed':
         return 'feed', ''
     if lower in ('feed news', 'myfeed add', 'myfeed news'):
@@ -896,6 +901,11 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_longterm_only(args), command='longterm')
         response_text = result.get('text') or 'Long-term watchlist unavailable.'
+    elif cmd == 'patterns':
+        from backend.telegram.lazy_command_runner import run_patterns_only
+
+        result = run_without_ai(lambda: run_patterns_only(args), command='patterns')
+        response_text = result.get('text') or 'Pattern scan unavailable.'
     elif cmd == 'catalysts':
         from backend.telegram.lazy_command_runner import run_catalysts_only
 
