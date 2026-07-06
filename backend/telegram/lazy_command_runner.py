@@ -783,11 +783,38 @@ def run_longterm_only(args: str = '') -> dict[str, Any]:
 
 
 def run_patterns_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import format_patterns_symbol_guidance
+
+    sym = str(args or '').strip()
+    if sym:
+        text = format_patterns_symbol_guidance(sym)
+        return _runner_result('patterns', text=text, mode='guidance')
+
+    from backend.trading.pattern_board import build_pattern_board, format_patterns_board
+
+    board = build_pattern_board(limit=10, refresh_snapshots=True)
+    text = format_patterns_board(board)
+    return _runner_result('patterns', text=text, mode='board', payload=board)
+
+
+def run_pattern_only(args: str = '') -> dict[str, Any]:
     from backend.telegram.response_format import format_patterns_telegram
 
     sym = str(args or '').strip()
-    text = format_patterns_telegram(sym)
-    return _runner_result('patterns', text=text, mode='symbol' if sym else 'usage')
+    if sym:
+        text = format_patterns_telegram(sym)
+        return _runner_result('pattern', text=text, mode='symbol')
+
+    from backend.trading.pattern_board import (
+        build_pattern_board,
+        format_single_pattern_pick,
+        select_best_pattern_candidate,
+    )
+
+    board = build_pattern_board(limit=10, refresh_snapshots=True)
+    pick = select_best_pattern_candidate(board)
+    text = format_single_pattern_pick(pick)
+    return _runner_result('pattern', text=text, mode='pick', payload=pick)
 
 
 def run_candles_only(args: str = '') -> dict[str, Any]:

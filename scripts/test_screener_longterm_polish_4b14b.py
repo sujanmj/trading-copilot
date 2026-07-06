@@ -205,11 +205,11 @@ def test_screener_status_no_import_csv_xlsx_wording() -> int:
     return 0
 
 
-def test_build_label_51v() -> int:
+def test_build_label_51w() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51V' or ASTRAEDGE_BUILD_STAGE != '51V':
-        return _fail(f'expected AstraEdge 51V got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51W' or ASTRAEDGE_BUILD_STAGE != '51W':
+        return _fail(f'expected AstraEdge 51W got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -251,7 +251,7 @@ def main() -> int:
         test_longterm_display_uses_company_name,
         test_longterm_explain_shows_debt_when_present,
         test_screener_status_no_import_csv_xlsx_wording,
-        test_build_label_51v,
+        test_build_label_51w,
         test_regression_4b14a_4b14_4b13,
     ]
     failed = 0

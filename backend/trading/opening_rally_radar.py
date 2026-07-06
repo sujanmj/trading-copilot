@@ -984,8 +984,12 @@ def select_synced_tradecard(
 
     if selected and best_row and not data.get('reference_only') and not data.get('session_stale'):
         try:
-            from backend.trading.intraday_candle_memory import capture_snapshot_from_candidate
+            from backend.trading.intraday_candle_memory import (
+                capture_snapshot_from_candidate,
+                record_candidate_symbols,
+            )
 
+            record_candidate_symbols([selected], source='tradecard')
             capture_snapshot_from_candidate(best_row, source='tradecard')
         except Exception:
             pass

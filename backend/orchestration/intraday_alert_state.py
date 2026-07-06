@@ -130,6 +130,12 @@ def record_intraday_sent(ev: dict) -> None:
         'setup_status': str(ev.get('setup_status') or ev.get('type') or ''),
     }
     save_intraday_alert_state(state)
+    try:
+        from backend.trading.intraday_candle_memory import capture_snapshot_from_alert_signal
+
+        capture_snapshot_from_alert_signal(ev)
+    except Exception:
+        pass
 
 
 def filter_intraday_events(events: list[dict], regime: str) -> dict[str, Any]:
@@ -197,5 +203,12 @@ def format_intraday_batch(partition: dict, regime: str) -> str:
 
     if not partition.get('new') and not partition.get('changed'):
         lines.insert(1, '<i>No material intraday changes this cycle.</i>')
+
+    try:
+        from backend.trading.intraday_candle_memory import capture_intraday_batch_snapshots
+
+        capture_intraday_batch_snapshots(partition)
+    except Exception:
+        pass
 
     return '\n'.join(lines)

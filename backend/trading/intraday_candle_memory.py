@@ -18,10 +18,21 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.17'
+STAGE = '4B.17A'
 DEFAULT_CANDLE_FILE = DATA_DIR / 'intraday_candles.jsonl'
-VALID_SOURCES = frozenset({'scanner', 'gainers', 'radar', 'tradecards', 'tradecard', 'quote_snapshot', 'test'})
-VALID_TIMEFRAMES = frozenset({'snapshot', '1m', '5m'})
+HEARTBEAT_FILE = DATA_DIR / 'candidate_heartbeat.json'
+
+
+def heartbeat_file_path() -> Path:
+    override = os.environ.get('CANDIDATE_HEARTBEAT_FILE', '').strip()
+    return Path(override) if override else HEARTBEAT_FILE
+
+
+VALID_SOURCES = frozenset({
+    'scanner', 'gainers', 'radar', 'tradecards', 'tradecard', 'quote_snapshot', 'test',
+    'intraday_alert', 'intraday_batch', 'heartbeat', 'patterns_board', 'pattern_pick', 'candles',
+})
+VALID_TIMEFRAMES = frozenset({'snapshot', '1m', '5m', 'seq'})
 MIN_DERIVED_CANDLES = 5
 MIN_SNAPSHOTS_FOR_PATTERNS = 2
 
@@ -59,6 +70,74 @@ def _append_jsonl(path: Path, record: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a', encoding='utf-8') as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + '\n')
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _save_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+
+
+def record_candidate_symbols(symbols: list[str] | tuple[str, ...], *, source: str = 'heartbeat') -> None:
+    """Track recent candidate universe for heartbeat snapshot refresh."""
+    state = _load_json(heartbeat_file_path())
+    recent: dict[str, str] = dict(state.get('symbols') or {})
+    for sym in symbols:
+        clean = _normalize_symbol(sym)
+        if clean:
+            recent[clean] = source
+    trimmed = list(recent.items())[-40:]
+    _save_json(heartbeat_file_path(), {
+        'symbols': dict(trimmed),
+        'updated_at': _now_ist().replace(microsecond=0).isoformat(),
+    })
+
+
+def get_recent_candidate_symbols(*, limit: int = 20) -> list[str]:
+    state = _load_json(heartbeat_file_path())
+    symbols = list((state.get('symbols') or {}).keys())
+    return symbols[-limit:]
+
+
+def _scanner_row_for_symbol(sym: str) -> dict[str, Any]:
+    try:
+        from backend.trading.opening_rally_radar import SCANNER_FILE, _load_json, _scanner_index
+
+        scanner = _scanner_index(_load_json(SCANNER_FILE))
+        row = dict(scanner.get(sym) or {})
+        if row:
+            return row
+    except Exception:
+        pass
+    return {'ticker': sym}
+
+
+def refresh_candidate_snapshots(
+    symbols: list[str] | None = None,
+    *,
+    source: str = 'heartbeat',
+) -> int:
+    """Refresh snapshots for recent candidate symbols using latest scanner quotes."""
+    syms = symbols or get_recent_candidate_symbols()
+    stored = 0
+    for sym in syms:
+        clean = _normalize_symbol(sym)
+        if not clean:
+            continue
+        row = _scanner_row_for_symbol(clean)
+        candidate = {'ticker': clean, **row}
+        if capture_snapshot_from_candidate(candidate, source=source):
+            stored += 1
+    return stored
 
 
 def _load_jsonl(path: Path, limit: int = 100000) -> list[dict[str, Any]]:
@@ -243,6 +322,23 @@ def build_ohlcv_from_snapshots(
         return []
 
     tf = str(timeframe or '5m').lower()
+    if tf == 'seq':
+        candles: list[dict[str, Any]] = []
+        for snap in snapshots:
+            close = _safe_float(snap.get('close'))
+            if close is None:
+                continue
+            candles.append({
+                'timestamp': str(snap.get('created_at') or ''),
+                'open': close,
+                'high': close,
+                'low': close,
+                'close': close,
+                'volume': _safe_float(snap.get('volume'), 0.0) or 0.0,
+                'derived_from_snapshots': True,
+            })
+        return candles[-limit:]
+
     if tf == 'snapshot':
         candles = [c for c in (_snapshot_to_candle(s) for s in snapshots) if c]
         return candles[-limit:]
@@ -258,7 +354,11 @@ def get_candle_readiness(symbol: str, *, session_date: str | None = None) -> dic
     snapshots = load_recent_candles(sym, session_date=session_date, limit=500)
     derived_5m = build_ohlcv_from_snapshots(sym, timeframe='5m', session_date=session_date, limit=120)
     derived_1m = build_ohlcv_from_snapshots(sym, timeframe='1m', session_date=session_date, limit=120)
-    derived = derived_5m if len(derived_5m) >= len(derived_1m) else derived_1m
+    derived_seq = build_ohlcv_from_snapshots(sym, timeframe='seq', session_date=session_date, limit=120)
+    derived = derived_5m
+    for candidate in (derived_1m, derived_seq):
+        if len(candidate) > len(derived):
+            derived = candidate
     latest = snapshots[-1] if snapshots else {}
     latest_close = _safe_float(latest.get('close'))
     latest_high = _safe_float(latest.get('high'))
@@ -357,6 +457,8 @@ def capture_candidate_snapshots(
     source: str = 'radar',
 ) -> int:
     """Append snapshots for each candidate that has price data."""
+    syms = [_normalize_symbol(c.get('ticker')) for c in candidates if isinstance(c, dict)]
+    record_candidate_symbols([s for s in syms if s], source=source)
     stored = 0
     for candidate in candidates:
         if capture_snapshot_from_candidate(candidate, source=source):
@@ -377,3 +479,25 @@ def capture_snapshot_from_market_row(
     if not snap:
         return None
     return append_candle_snapshot(symbol, snap)
+
+
+def capture_snapshot_from_alert_signal(ev: dict[str, Any]) -> dict[str, Any] | None:
+    """Capture snapshot when an intraday alert/batch event fires."""
+    signal = ev.get('signal') if isinstance(ev.get('signal'), dict) else ev
+    if not isinstance(signal, dict):
+        return None
+    sym = _normalize_symbol(signal.get('ticker') or signal.get('symbol') or ev.get('ticker'))
+    if not sym:
+        return None
+    record_candidate_symbols([sym], source='intraday_alert')
+    return capture_snapshot_from_candidate({'ticker': sym, **signal}, source='intraday_alert')
+
+
+def capture_intraday_batch_snapshots(partition: dict[str, Any]) -> int:
+    """Capture snapshots for intraday batch new/changed events."""
+    count = 0
+    for key in ('new', 'changed'):
+        for ev in partition.get(key) or []:
+            if capture_snapshot_from_alert_signal(ev):
+                count += 1
+    return count

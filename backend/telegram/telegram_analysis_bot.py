@@ -169,8 +169,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /tradecard outcome — tradecard outcome summary
 
 <b>Chart Patterns:</b>
-/patterns SYMBOL — detect chart pattern from intraday OHLCV candles
-/pattern SYMBOL — alias for /patterns
+/patterns — scan chart patterns for /tradecards top 10
+/pattern — best chart-pattern candidate from /tradecards top 10
+/pattern SYMBOL — check chart pattern for one stock
 /candles SYMBOL — debug candle snapshots and pattern readiness
 
 <b>Briefs:</b>
@@ -323,9 +324,9 @@ def parse_command(text: str) -> tuple[str, str]:
     if lower == 'patterns':
         return 'patterns', ''
     if lower.startswith('pattern '):
-        return 'patterns', raw[len('pattern '):].strip()
+        return 'pattern', raw[len('pattern '):].strip()
     if lower == 'pattern':
-        return 'patterns', ''
+        return 'pattern', ''
     if lower.startswith('candles '):
         return 'candles', raw[len('candles '):].strip()
     if lower == 'candles':
@@ -925,6 +926,11 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_patterns_only(args), command='patterns')
         response_text = result.get('text') or 'Pattern scan unavailable.'
+    elif cmd == 'pattern':
+        from backend.telegram.lazy_command_runner import run_pattern_only
+
+        result = run_without_ai(lambda: run_pattern_only(args), command='pattern')
+        response_text = result.get('text') or 'Pattern pick unavailable.'
     elif cmd == 'candles':
         from backend.telegram.lazy_command_runner import run_candles_only
 

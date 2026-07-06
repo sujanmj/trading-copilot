@@ -3748,6 +3748,15 @@ def format_longterm_explain_telegram(symbol: str) -> str:
     return strip_stage_markers('\n'.join(lines))
 
 
+def format_patterns_symbol_guidance(symbol: str) -> str:
+    sym = _normalize_tradecard_ticker(symbol) or str(symbol or '').strip().upper()
+    example = sym or 'METROPOLIS'
+    return strip_stage_markers(
+        'For a single stock, use: /pattern SYMBOL\n'
+        f'Example: /pattern {example}'
+    )
+
+
 def format_patterns_telegram(symbol: str) -> str:
     from backend.trading.chart_patterns import detect_chart_patterns, load_candles_for_symbol
     from backend.trading.intraday_candle_memory import MIN_DERIVED_CANDLES, get_candle_readiness
@@ -3755,6 +3764,14 @@ def format_patterns_telegram(symbol: str) -> str:
     sym = _normalize_tradecard_ticker(symbol)
     if not sym:
         return strip_stage_markers('Supply a symbol: /patterns SYMBOL')
+
+    from backend.trading.intraday_candle_memory import (
+        get_recent_candidate_symbols,
+        refresh_candidate_snapshots,
+    )
+
+    if sym in get_recent_candidate_symbols(limit=40):
+        refresh_candidate_snapshots([sym], source='patterns')
 
     readiness = get_candle_readiness(sym)
     snapshot_count = int(readiness.get('snapshot_count') or 0)
@@ -3816,11 +3833,19 @@ def format_patterns_telegram(symbol: str) -> str:
 
 
 def format_candles_telegram(symbol: str) -> str:
-    from backend.trading.intraday_candle_memory import MIN_DERIVED_CANDLES, get_candle_readiness
+    from backend.trading.intraday_candle_memory import (
+        MIN_DERIVED_CANDLES,
+        get_candle_readiness,
+        get_recent_candidate_symbols,
+        refresh_candidate_snapshots,
+    )
 
     sym = _normalize_tradecard_ticker(symbol)
     if not sym:
         return strip_stage_markers('Supply a symbol: /candles SYMBOL')
+
+    if sym in get_recent_candidate_symbols(limit=40):
+        refresh_candidate_snapshots([sym], source='candles')
 
     info = get_candle_readiness(sym)
     lines = [

@@ -131,34 +131,34 @@ def test_candles_command_output() -> int:
 
 
 def test_patterns_not_enough_bars_message() -> int:
-    from backend.telegram.lazy_command_runner import run_patterns_only
+    from backend.telegram.lazy_command_runner import run_pattern_only
     from backend.trading.intraday_candle_memory import append_candle_snapshot
 
     with _CandleEnv():
         append_candle_snapshot('METROPOLIS', _partial_snapshot('METROPOLIS', 1800.0, minute=0))
         append_candle_snapshot('METROPOLIS', _partial_snapshot('METROPOLIS', 1801.0, minute=1))
-        text = run_patterns_only('METROPOLIS').get('text') or ''
+        text = run_pattern_only('METROPOLIS').get('text') or ''
     if 'not enough bars yet' not in text.lower():
-        return _fail('/patterns must say not enough bars when candles < 5')
+        return _fail('/pattern must say not enough bars when candles < 5')
     if 'Snapshots:' not in text:
-        return _fail('/patterns must show snapshot count')
+        return _fail('/pattern must show snapshot count')
     return 0
 
 
 def test_patterns_runs_when_enough_derived_candles() -> int:
-    from backend.telegram.lazy_command_runner import run_patterns_only
+    from backend.telegram.lazy_command_runner import run_pattern_only
     from backend.trading.intraday_candle_memory import append_candle_snapshot
 
     with _CandleEnv():
         for idx in range(6):
             append_candle_snapshot('METROPOLIS', _partial_snapshot('METROPOLIS', 1800 + idx, minute=idx * 5))
-        text = run_patterns_only('METROPOLIS').get('text') or ''
+        text = run_pattern_only('METROPOLIS').get('text') or ''
     if 'No candle snapshots available' in text:
-        return _fail('/patterns should not say no snapshots when history exists')
+        return _fail('/pattern should not say no snapshots when history exists')
     if 'not enough bars yet' in text.lower():
-        return _fail('/patterns should run when derived candles >= 5')
+        return _fail('/pattern should run when derived candles >= 5')
     if 'PATTERN — METROPOLIS' not in text:
-        return _fail('/patterns must run pattern header when ready')
+        return _fail('/pattern must run pattern header when ready')
     return 0
 
 
@@ -166,8 +166,8 @@ def test_pattern_alias() -> int:
     from backend.telegram.telegram_analysis_bot import parse_command
 
     cmd, args = parse_command('/pattern METROPOLIS')
-    if cmd != 'patterns' or args.upper() != 'METROPOLIS':
-        return _fail('/pattern alias must route to patterns command')
+    if cmd != 'pattern' or args.upper() != 'METROPOLIS':
+        return _fail('/pattern alias must route to pattern command')
     return 0
 
 
@@ -198,11 +198,11 @@ def test_pattern_alone_not_tradecard_eligible() -> int:
     return 0
 
 
-def test_build_label_51v() -> int:
+def test_build_label_51w() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51V' or ASTRAEDGE_BUILD_STAGE != '51V':
-        return _fail(f'expected AstraEdge 51V got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51W' or ASTRAEDGE_BUILD_STAGE != '51W':
+        return _fail(f'expected AstraEdge 51W got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -245,7 +245,7 @@ def main() -> int:
         test_pattern_alias,
         test_radar_candidate_capture,
         test_pattern_alone_not_tradecard_eligible,
-        test_build_label_51v,
+        test_build_label_51w,
         test_regression_prior_phases,
     ]
     failed = 0

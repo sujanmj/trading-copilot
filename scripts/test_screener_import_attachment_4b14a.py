@@ -273,11 +273,11 @@ def test_core_excludes_memory_screener_longterm() -> int:
     return 0
 
 
-def test_build_label_51v() -> int:
+def test_build_label_51w() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51V' or ASTRAEDGE_BUILD_STAGE != '51V':
-        return _fail(f'expected AstraEdge 51V got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51W' or ASTRAEDGE_BUILD_STAGE != '51W':
+        return _fail(f'expected AstraEdge 51W got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -323,7 +323,7 @@ def main() -> int:
         test_help_trade_memory_section,
         test_help_screener_longterm_section,
         test_core_excludes_memory_screener_longterm,
-        test_build_label_51v,
+        test_build_label_51w,
         test_regression_4b14_4b13_4b12,
     ]
     failed = 0
