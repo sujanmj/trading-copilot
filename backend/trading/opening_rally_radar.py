@@ -461,7 +461,7 @@ def score_opening_candidate(
         strong_price_reaction=strong_price_reaction,
     )
 
-    return {
+    out = {
         'ticker': sym,
         'score': int(round(max(0, score))),
         'state': state,
@@ -480,6 +480,16 @@ def score_opening_candidate(
         'above_open': above_open,
         'above_vwap': above_vwap,
     }
+    if isinstance(scanner_row, dict):
+        for key in (
+            'price', 'last_price', 'ltp', 'current_price',
+            'open', 'open_price', 'high', 'day_high', 'low', 'day_low',
+            'volume', 'traded_volume', 'vwap',
+        ):
+            val = scanner_row.get(key)
+            if val not in (None, '') and key not in out:
+                out[key] = val
+    return out
 
 
 def _resolve_state(
@@ -643,9 +653,9 @@ def build_opening_rally_board(
                 previous_mover=sym in prev_movers,
             )
         try:
-            from backend.trading.intraday_candle_memory import capture_snapshot_from_market_row
+            from backend.trading.intraday_candle_memory import capture_snapshot_from_candidate
 
-            capture_snapshot_from_market_row(sym, scanner_index.get(sym), source='radar')
+            capture_snapshot_from_candidate(row, source='radar')
         except Exception:
             pass
         if row.get('state') == 'REJECTED' and row.get('score', 0) <= 0:
@@ -971,6 +981,14 @@ def select_synced_tradecard(
         if legacy:
             source = 'legacy'
             reason = reason or 'fallback to legacy trade card engine'
+
+    if selected and best_row and not data.get('reference_only') and not data.get('session_stale'):
+        try:
+            from backend.trading.intraday_candle_memory import capture_snapshot_from_candidate
+
+            capture_snapshot_from_candidate(best_row, source='tradecard')
+        except Exception:
+            pass
 
     print(
         f'[TRADECARD_SELECTOR_SYNC] tradecards_best={tradecards_best or "-"} '

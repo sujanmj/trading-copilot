@@ -790,6 +790,14 @@ def run_patterns_only(args: str = '') -> dict[str, Any]:
     return _runner_result('patterns', text=text, mode='symbol' if sym else 'usage')
 
 
+def run_candles_only(args: str = '') -> dict[str, Any]:
+    from backend.telegram.response_format import format_candles_telegram
+
+    sym = str(args or '').strip()
+    text = format_candles_telegram(sym)
+    return _runner_result('candles', text=text, mode='symbol' if sym else 'usage')
+
+
 def run_catalysts_only(args: str = '') -> dict[str, Any]:
     from backend.intelligence.stock_catalyst_radar import format_catalyst_radar_telegram
 

@@ -358,7 +358,18 @@ def scan_all_cap_gainers(
         'missed_symbols': missed,
         'total_scanned': total,
     }
-    return apply_session_guard_to_gainer_scan(result, scanner_payload=scanner_data, now=now)
+    guarded = apply_session_guard_to_gainer_scan(result, scanner_payload=scanner_data, now=now)
+    if not guarded.get('reference_only') and not guarded.get('session_stale'):
+        try:
+            from backend.trading.intraday_candle_memory import capture_candidate_snapshots
+
+            flat: list[dict[str, Any]] = []
+            for rows in (guarded.get('buckets') or {}).values():
+                flat.extend(list(rows or []))
+            capture_candidate_snapshots(flat, source='gainers')
+        except Exception:
+            pass
+    return guarded
 
 
 def apply_gainer_context_to_candidate(

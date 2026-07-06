@@ -139,7 +139,7 @@ def test_patterns_uses_candle_memory() -> int:
         for i in range(15):
             append_candle_snapshot('WIPRO', _full_snapshot('WIPRO', 170.0 + i, minute=i))
         text = format_patterns_telegram('WIPRO')
-        if 'No candle history available' in text:
+        if 'No candle snapshots available' in text:
             return _fail('patterns must use intraday candle memory when available')
         if 'PATTERN — WIPRO' not in text:
             return _fail(f'unexpected patterns output: {text!r}')
@@ -151,10 +151,10 @@ def test_patterns_missing_history_message() -> int:
 
     with _CandleEnv():
         text = format_patterns_telegram('WIPRO')
-        if 'No candle history available for WIPRO yet' not in text:
+        if 'No candle snapshots available for WIPRO yet' not in text:
             return _fail(f'expected missing history message got {text!r}')
-        if 'intraday OHLCV snapshots' not in text:
-            return _fail('message must mention intraday OHLCV snapshots')
+        if '/radar or /tradecards' not in text:
+            return _fail('message must mention /radar or /tradecards')
     return 0
 
 
@@ -209,11 +209,11 @@ def test_gitignore_covers_intraday_jsonl() -> int:
     return 0
 
 
-def test_build_label_51u() -> int:
+def test_build_label_51v() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51U' or ASTRAEDGE_BUILD_STAGE != '51U':
-        return _fail(f'expected AstraEdge 51U got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51V' or ASTRAEDGE_BUILD_STAGE != '51V':
+        return _fail(f'expected AstraEdge 51V got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -255,7 +255,7 @@ def main() -> int:
         test_pattern_boost_only_with_candles,
         test_pattern_alone_not_tradecard_eligible,
         test_gitignore_covers_intraday_jsonl,
-        test_build_label_51u,
+        test_build_label_51v,
         test_regression_prior_phases,
     ]
     failed = 0

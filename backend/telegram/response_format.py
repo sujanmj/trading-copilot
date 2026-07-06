@@ -2215,7 +2215,23 @@ def _append_tradecard_memory_snippet(lines: list[str], symbol: str) -> None:
         return
 
 
+def _capture_tradecards_candidates(board: dict[str, Any]) -> None:
+    if board.get('reference_only') or board.get('session_stale'):
+        return
+    try:
+        from backend.trading.intraday_candle_memory import capture_candidate_snapshots
+
+        candidates = [
+            r for r in (board.get('ranked_candidates') or [])
+            if str(r.get('state') or '').upper() != 'REJECTED'
+        ]
+        capture_candidate_snapshots(candidates[:10], source='tradecards')
+    except Exception:
+        return
+
+
 def _persist_tradecards_decision_memory(board: dict[str, Any]) -> None:
+    _capture_tradecards_candidates(board)
     try:
         from backend.trading.tradecard_memory import record_tradecards_memory
 
@@ -3733,17 +3749,38 @@ def format_longterm_explain_telegram(symbol: str) -> str:
 
 
 def format_patterns_telegram(symbol: str) -> str:
-    from backend.trading.chart_patterns import MIN_CANDLES, detect_chart_patterns, load_candles_for_symbol
+    from backend.trading.chart_patterns import detect_chart_patterns, load_candles_for_symbol
+    from backend.trading.intraday_candle_memory import MIN_DERIVED_CANDLES, get_candle_readiness
 
     sym = _normalize_tradecard_ticker(symbol)
     if not sym:
         return strip_stage_markers('Supply a symbol: /patterns SYMBOL')
 
-    candles = load_candles_for_symbol(sym)
-    if len(candles) < MIN_CANDLES:
+    readiness = get_candle_readiness(sym)
+    snapshot_count = int(readiness.get('snapshot_count') or 0)
+    derived_count = int(readiness.get('derived_count') or 0)
+
+    if snapshot_count == 0:
         return strip_stage_markers(
-            f'No candle history available for {sym} yet. '
-            'Pattern detection needs intraday OHLCV snapshots.'
+            f'No candle snapshots available for {sym} yet. '
+            'Run /radar or /tradecards during market.'
+        )
+
+    if not readiness.get('pattern_ready'):
+        return strip_stage_markers(
+            f'Candle history started for {sym}, but not enough bars yet.\n'
+            f'Snapshots: {snapshot_count}\n'
+            f'Derived candles: {derived_count}\n'
+            f'Need at least {MIN_DERIVED_CANDLES} candles.'
+        )
+
+    candles = load_candles_for_symbol(sym)
+    if len(candles) < MIN_DERIVED_CANDLES:
+        return strip_stage_markers(
+            f'Candle history started for {sym}, but not enough bars yet.\n'
+            f'Snapshots: {snapshot_count}\n'
+            f'Derived candles: {derived_count}\n'
+            f'Need at least {MIN_DERIVED_CANDLES} candles.'
         )
 
     result = detect_chart_patterns(sym, candles)
@@ -3775,5 +3812,37 @@ def format_patterns_telegram(symbol: str) -> str:
         lines.append('Risk:')
         for risk in risks[:3]:
             lines.append(f'- {risk}')
+    return strip_stage_markers('\n'.join(lines))
+
+
+def format_candles_telegram(symbol: str) -> str:
+    from backend.trading.intraday_candle_memory import MIN_DERIVED_CANDLES, get_candle_readiness
+
+    sym = _normalize_tradecard_ticker(symbol)
+    if not sym:
+        return strip_stage_markers('Supply a symbol: /candles SYMBOL')
+
+    info = get_candle_readiness(sym)
+    lines = [
+        f'CANDLES — {sym}',
+        f'Snapshots: {int(info.get("snapshot_count") or 0)}',
+        f'Derived candles: {int(info.get("derived_count") or 0)}',
+    ]
+    latest_close = info.get('latest_close')
+    if latest_close is not None:
+        lines.append(f'Latest close: {latest_close}')
+    latest_high = info.get('latest_high')
+    latest_low = info.get('latest_low')
+    if latest_high is not None:
+        lines.append(f'Latest high: {latest_high}')
+    if latest_low is not None:
+        lines.append(f'Latest low: {latest_low}')
+    lines.append(f'Source quality: {info.get("source_quality") or "none"}')
+    lines.append(f'Pattern-ready: {"yes" if info.get("pattern_ready") else "no"}')
+    reason = str(info.get('reason') or '').strip()
+    if reason and not info.get('pattern_ready'):
+        lines.append(f'Reason: {reason}')
+    elif not info.get('pattern_ready') and int(info.get('derived_count') or 0) < MIN_DERIVED_CANDLES:
+        lines.append(f'Reason: need at least {MIN_DERIVED_CANDLES} derived candles')
     return strip_stage_markers('\n'.join(lines))
 

@@ -1,5 +1,5 @@
 """
-Intraday candle memory — Phase 4B.15A.
+Intraday candle memory — Phase 4B.15A / 4B.17.
 
 Lightweight JSONL store of OHLCV snapshots for chart pattern detection.
 Paper/research only — no LLM calls.
@@ -18,10 +18,12 @@ from zoneinfo import ZoneInfo
 from backend.utils.config import DATA_DIR
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.15A'
+STAGE = '4B.17'
 DEFAULT_CANDLE_FILE = DATA_DIR / 'intraday_candles.jsonl'
-VALID_SOURCES = frozenset({'scanner', 'gainers', 'radar', 'quote_snapshot', 'test'})
+VALID_SOURCES = frozenset({'scanner', 'gainers', 'radar', 'tradecards', 'tradecard', 'quote_snapshot', 'test'})
 VALID_TIMEFRAMES = frozenset({'snapshot', '1m', '5m'})
+MIN_DERIVED_CANDLES = 5
+MIN_SNAPSHOTS_FOR_PATTERNS = 2
 
 
 def candle_file_path() -> Path:
@@ -88,38 +90,21 @@ def quote_snapshot_from_row(
     timeframe: str = 'snapshot',
 ) -> dict[str, Any] | None:
     """Build a candle snapshot from scanner/gainer/quote row without faking OHLC."""
+    from backend.trading.ohlcv_candidate_adapter import extract_candidate_ohlcv, is_usable_ohlcv_snapshot
+
     sym = _normalize_symbol(symbol)
     if not sym or not isinstance(row, dict):
         return None
-    close = _safe_float(row.get('price') or row.get('close') or row.get('last_price'))
-    if close is None:
+    payload = extract_candidate_ohlcv({'ticker': sym, **row})
+    if not is_usable_ohlcv_snapshot(payload):
         return None
-    open_ = _safe_float(row.get('open') or row.get('open_price'))
-    high = _safe_float(row.get('high') or row.get('day_high'))
-    low = _safe_float(row.get('low') or row.get('day_low'))
-    volume = _safe_float(row.get('volume') or row.get('traded_volume'))
-    vwap = _safe_float(row.get('vwap'))
-    partial = open_ is None or high is None or low is None
     ist_now = _now_ist()
-    payload: dict[str, Any] = {
+    payload.update({
         'created_at': ist_now.replace(microsecond=0).isoformat(),
         'session_date': _session_date(ist_now),
-        'symbol': sym,
-        'close': close,
         'source': source if source in VALID_SOURCES else 'quote_snapshot',
         'timeframe': timeframe if timeframe in VALID_TIMEFRAMES else 'snapshot',
-        'source_quality': 'partial' if partial else 'full',
-    }
-    if open_ is not None:
-        payload['open'] = open_
-    if high is not None:
-        payload['high'] = high
-    if low is not None:
-        payload['low'] = low
-    if volume is not None:
-        payload['volume'] = volume
-    if vwap is not None:
-        payload['vwap'] = vwap
+    })
     return payload
 
 
@@ -164,13 +149,13 @@ def load_recent_candles(
 
 
 def _snapshot_to_candle(row: dict[str, Any]) -> dict[str, Any] | None:
-    if str(row.get('source_quality') or '') == 'partial':
-        return None
     close = _safe_float(row.get('close'))
+    if close is None:
+        return None
+    open_ = _safe_float(row.get('open'))
     high = _safe_float(row.get('high'))
     low = _safe_float(row.get('low'))
-    open_ = _safe_float(row.get('open'))
-    if close is None or high is None or low is None or open_ is None:
+    if open_ is None or high is None or low is None:
         return None
     return {
         'timestamp': str(row.get('created_at') or row.get('session_date') or ''),
@@ -179,6 +164,7 @@ def _snapshot_to_candle(row: dict[str, Any]) -> dict[str, Any] | None:
         'low': low,
         'close': close,
         'volume': _safe_float(row.get('volume'), 0.0) or 0.0,
+        'derived_from_snapshots': False,
     }
 
 
@@ -194,6 +180,56 @@ def _bucket_key(created_at: str, minutes: int) -> str:
         return str(created_at)
 
 
+def _derive_candles_from_snapshots(
+    snapshots: list[dict[str, Any]],
+    *,
+    bucket_minutes: int,
+) -> list[dict[str, Any]]:
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for snap in snapshots:
+        close = _safe_float(snap.get('close'))
+        if close is None:
+            continue
+        key = _bucket_key(str(snap.get('created_at') or ''), bucket_minutes)
+        buckets.setdefault(key, []).append(snap)
+
+    candles: list[dict[str, Any]] = []
+    for key in sorted(buckets.keys()):
+        group = buckets[key]
+        closes = [c for c in (_safe_float(s.get('close')) for s in group) if c is not None]
+        if not closes:
+            continue
+        opens = [o for o in (_safe_float(s.get('open')) for s in group) if o is not None]
+        highs = [h for h in (_safe_float(s.get('high')) for s in group) if h is not None]
+        lows = [l for l in (_safe_float(s.get('low')) for s in group) if l is not None]
+        volumes = [v for v in (_safe_float(s.get('volume')) for s in group) if v is not None]
+
+        open_ = opens[0] if opens else closes[0]
+        high = max(highs + closes)
+        low = min(lows + closes)
+        close = closes[-1]
+        volume = volumes[-1] if volumes else 0.0
+        derived = (
+            len(group) > 1
+            or any(str(s.get('source_quality') or '') == 'partial' for s in group)
+            or not opens
+            or not highs
+            or not lows
+        )
+        candle: dict[str, Any] = {
+            'timestamp': key,
+            'open': open_,
+            'high': high,
+            'low': low,
+            'close': close,
+            'volume': volume,
+        }
+        if derived:
+            candle['derived_from_snapshots'] = True
+        candles.append(candle)
+    return candles
+
+
 def build_ohlcv_from_snapshots(
     symbol: str,
     *,
@@ -201,42 +237,67 @@ def build_ohlcv_from_snapshots(
     session_date: str | None = None,
     limit: int = 80,
 ) -> list[dict[str, Any]]:
-    """Build OHLCV candle list from stored snapshots."""
-    snapshots = load_recent_candles(symbol, session_date=session_date, limit=limit * 4)
-    full = [s for s in snapshots if str(s.get('source_quality') or '') != 'partial']
-    if not full:
+    """Build OHLCV candles from stored snapshots, including partial/derived bars."""
+    snapshots = load_recent_candles(symbol, session_date=session_date, limit=limit * 8)
+    if not snapshots:
         return []
 
     tf = str(timeframe or '5m').lower()
     if tf == 'snapshot':
-        candles = [c for c in (_snapshot_to_candle(s) for s in full) if c]
+        candles = [c for c in (_snapshot_to_candle(s) for s in snapshots) if c]
         return candles[-limit:]
 
     bucket_minutes = 1 if tf == '1m' else 5
-    buckets: dict[str, list[dict[str, Any]]] = {}
-    for snap in full:
-        key = _bucket_key(str(snap.get('created_at') or ''), bucket_minutes)
-        buckets.setdefault(key, []).append(snap)
-
-    candles: list[dict[str, Any]] = []
-    for key in sorted(buckets.keys()):
-        group = buckets[key]
-        opens = [_safe_float(s.get('open')) for s in group]
-        highs = [_safe_float(s.get('high')) for s in group]
-        lows = [_safe_float(s.get('low')) for s in group]
-        closes = [_safe_float(s.get('close')) for s in group]
-        volumes = [_safe_float(s.get('volume'), 0.0) or 0.0 for s in group]
-        if not all(opens) or not all(highs) or not all(lows) or not all(closes):
-            continue
-        candles.append({
-            'timestamp': key,
-            'open': opens[0],
-            'high': max(h for h in highs if h is not None),
-            'low': min(l for l in lows if l is not None),
-            'close': closes[-1],
-            'volume': sum(volumes),
-        })
+    candles = _derive_candles_from_snapshots(snapshots, bucket_minutes=bucket_minutes)
     return candles[-limit:]
+
+
+def get_candle_readiness(symbol: str, *, session_date: str | None = None) -> dict[str, Any]:
+    """Summarize snapshot/candle counts and pattern readiness for /candles and /patterns."""
+    sym = _normalize_symbol(symbol)
+    snapshots = load_recent_candles(sym, session_date=session_date, limit=500)
+    derived_5m = build_ohlcv_from_snapshots(sym, timeframe='5m', session_date=session_date, limit=120)
+    derived_1m = build_ohlcv_from_snapshots(sym, timeframe='1m', session_date=session_date, limit=120)
+    derived = derived_5m if len(derived_5m) >= len(derived_1m) else derived_1m
+    latest = snapshots[-1] if snapshots else {}
+    latest_close = _safe_float(latest.get('close'))
+    latest_high = _safe_float(latest.get('high'))
+    latest_low = _safe_float(latest.get('low'))
+
+    qualities = {str(s.get('source_quality') or 'partial') for s in snapshots}
+    if not snapshots:
+        source_quality = 'none'
+    elif qualities == {'full'}:
+        source_quality = 'full'
+    elif any(c.get('derived_from_snapshots') for c in derived):
+        source_quality = 'derived'
+    else:
+        source_quality = 'partial'
+
+    snapshot_count = len(snapshots)
+    derived_count = len(derived)
+    pattern_ready = snapshot_count >= MIN_SNAPSHOTS_FOR_PATTERNS and derived_count >= MIN_DERIVED_CANDLES
+    reason = ''
+    if snapshot_count == 0:
+        reason = 'no snapshots yet'
+    elif snapshot_count < MIN_SNAPSHOTS_FOR_PATTERNS:
+        reason = f'need at least {MIN_SNAPSHOTS_FOR_PATTERNS} snapshots'
+    elif derived_count < MIN_DERIVED_CANDLES:
+        reason = f'need at least {MIN_DERIVED_CANDLES} derived candles'
+
+    return {
+        'symbol': sym,
+        'snapshot_count': snapshot_count,
+        'derived_count': derived_count,
+        'latest_close': latest_close,
+        'latest_high': latest_high,
+        'latest_low': latest_low,
+        'source_quality': source_quality,
+        'pattern_ready': pattern_ready,
+        'reason': reason,
+        'derived_candles': derived,
+        'snapshots': snapshots,
+    }
 
 
 def clear_old_candles(*, max_days: int = 5) -> int:
@@ -266,6 +327,43 @@ def clear_old_candles(*, max_days: int = 5) -> int:
     return removed
 
 
+def capture_snapshot_from_candidate(
+    candidate: dict[str, Any] | None,
+    *,
+    source: str = 'radar',
+) -> dict[str, Any] | None:
+    """Capture snapshot from a radar/gainer/tradecard candidate row."""
+    from backend.trading.ohlcv_candidate_adapter import extract_candidate_ohlcv, is_usable_ohlcv_snapshot
+
+    if not isinstance(candidate, dict):
+        return None
+    payload = extract_candidate_ohlcv(candidate)
+    if not is_usable_ohlcv_snapshot(payload):
+        return None
+    ist_now = _now_ist()
+    payload.update({
+        'created_at': ist_now.replace(microsecond=0).isoformat(),
+        'session_date': _session_date(ist_now),
+        'source': source if source in VALID_SOURCES else 'quote_snapshot',
+        'timeframe': 'snapshot',
+    })
+    sym = payload.get('symbol') or _normalize_symbol(candidate.get('ticker'))
+    return append_candle_snapshot(str(sym), payload)
+
+
+def capture_candidate_snapshots(
+    candidates: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    *,
+    source: str = 'radar',
+) -> int:
+    """Append snapshots for each candidate that has price data."""
+    stored = 0
+    for candidate in candidates:
+        if capture_snapshot_from_candidate(candidate, source=source):
+            stored += 1
+    return stored
+
+
 def capture_snapshot_from_market_row(
     symbol: str,
     row: dict[str, Any] | None,
@@ -273,6 +371,8 @@ def capture_snapshot_from_market_row(
     source: str = 'scanner',
 ) -> dict[str, Any] | None:
     """Capture snapshot if quote fields exist; no-op when row empty."""
+    if isinstance(row, dict) and row.get('scanner_row'):
+        return capture_snapshot_from_candidate(row, source=source)
     snap = quote_snapshot_from_row(symbol, row, source=source, timeframe='snapshot')
     if not snap:
         return None

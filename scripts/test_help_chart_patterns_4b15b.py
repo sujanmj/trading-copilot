@@ -31,6 +31,10 @@ def test_help_chart_patterns_section() -> int:
         return _fail('help must contain Chart Patterns section')
     if '/patterns SYMBOL — detect chart pattern from intraday OHLCV candles' not in HELP_TEXT:
         return _fail('help must list /patterns under Chart Patterns')
+    if '/pattern SYMBOL — alias for /patterns' not in HELP_TEXT:
+        return _fail('help must list /pattern alias')
+    if '/candles SYMBOL — debug candle snapshots and pattern readiness' not in HELP_TEXT:
+        return _fail('help must list /candles debug command')
     return 0
 
 
@@ -79,11 +83,11 @@ def test_trade_card_section_commands_only() -> int:
     return 0
 
 
-def test_build_label_51u() -> int:
+def test_build_label_51v() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51U' or ASTRAEDGE_BUILD_STAGE != '51U':
-        return _fail(f'expected AstraEdge 51U got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51V' or ASTRAEDGE_BUILD_STAGE != '51V':
+        return _fail(f'expected AstraEdge 51V got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -92,7 +96,7 @@ def main() -> int:
         test_help_chart_patterns_section,
         test_patterns_under_chart_patterns_not_trade_card,
         test_trade_card_section_commands_only,
-        test_build_label_51u,
+        test_build_label_51v,
     ):
         rc = fn()
         if rc:

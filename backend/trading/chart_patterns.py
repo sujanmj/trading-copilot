@@ -10,8 +10,8 @@ from __future__ import annotations
 import statistics
 from typing import Any
 
-STAGE = '4B.15A'
-MIN_CANDLES = 12
+STAGE = '4B.17'
+MIN_CANDLES = 5
 PATTERN_BOOST_CAP = 15
 DEFAULT_LOOKBACK = 24
 
@@ -58,23 +58,30 @@ def load_candles_for_symbol(symbol: str, *, limit: int = DEFAULT_LOOKBACK) -> li
         return []
 
     try:
-        from backend.trading.intraday_candle_memory import build_ohlcv_from_snapshots
+        from backend.trading.intraday_candle_memory import (
+            MIN_DERIVED_CANDLES,
+            get_candle_readiness,
+        )
 
-        for timeframe in ('5m', 'snapshot'):
-            intraday = build_ohlcv_from_snapshots(sym, timeframe=timeframe, limit=max(MIN_CANDLES, limit))
-            if len(intraday) >= MIN_CANDLES:
-                return intraday[-limit:]
+        readiness = get_candle_readiness(sym)
+        if readiness.get('pattern_ready'):
+            derived = readiness.get('derived_candles') or []
+            if len(derived) >= MIN_DERIVED_CANDLES:
+                return list(derived)[-limit:]
+
+        if int(readiness.get('snapshot_count') or 0) > 0:
+            return []
     except Exception:
         pass
 
     try:
         from backend.storage.historical_market_store import get_prices
 
-        rows = get_prices(market='NSE', ticker=sym, limit=max(MIN_CANDLES, limit))
+        rows = get_prices(market='NSE', ticker=sym, limit=max(12, limit))
     except Exception:
         return []
     candles = [c for c in (_normalize_candle(r) for r in rows) if c]
-    if len(candles) < MIN_CANDLES:
+    if len(candles) < 12:
         return []
     return candles[-limit:]
 
