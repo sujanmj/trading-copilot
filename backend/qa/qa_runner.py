@@ -31,6 +31,7 @@ FULL_SCRIPT_ALLOWLIST: tuple[tuple[str, str], ...] = (
     ('tradecard memory', 'scripts/test_tradecard_memory_4b13.py'),
     ('cap bucket visibility', 'scripts/test_cap_bucket_visibility_4b12.py'),
     ('tradecard closed market', 'scripts/test_tradecard_closed_market_no_legacy_4b12.py'),
+    ('pattern board consistency', 'scripts/test_pattern_board_consistency_4b17b.py'),
     ('telegram routing', 'scripts/test_telegram_stage_51a_canonical_routing.py'),
 )
 

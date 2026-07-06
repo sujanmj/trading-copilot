@@ -309,11 +309,11 @@ def test_help_chart_patterns_section() -> int:
     return 0
 
 
-def test_build_label_51w() -> int:
+def test_build_label_51x() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51W' or ASTRAEDGE_BUILD_STAGE != '51W':
-        return _fail(f'expected AstraEdge 51W got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51X' or ASTRAEDGE_BUILD_STAGE != '51X':
+        return _fail(f'expected AstraEdge 51X got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -361,7 +361,7 @@ def main() -> int:
         test_patterns_board_refreshes_snapshots,
         test_min_readiness_still_five,
         test_help_chart_patterns_section,
-        test_build_label_51w,
+        test_build_label_51x,
         test_regression_prior_phases,
     ]
     failed = 0

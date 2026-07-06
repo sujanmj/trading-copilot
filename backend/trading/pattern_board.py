@@ -1,5 +1,5 @@
 """
-Pattern board — Phase 4B.17A.
+Pattern board — Phase 4B.17B.
 
 Scan /tradecards top candidates for chart pattern readiness (paper/research only).
 """
@@ -8,12 +8,16 @@ from __future__ import annotations
 
 from typing import Any
 
-STAGE = '4B.17A'
+STAGE = '4B.17B'
 BULLISH_PATTERNS = frozenset({
     'ascending_triangle',
     'symmetrical_triangle',
     'breakout_retest',
     'breakout_confirmed',
+})
+CAUTION_PATTERNS = frozenset({
+    'descending_triangle',
+    'failed_breakout',
 })
 
 
@@ -29,6 +33,28 @@ def _cap_bucket_label(row: dict[str, Any]) -> str:
     except Exception:
         bucket = str(row.get('gainer_bucket') or row.get('cap_bucket') or '').strip()
         return bucket.replace('_', ' ').title() if bucket else '—'
+
+
+def _preserved_tradecard_score(row: dict[str, Any]) -> int:
+    for key in ('tradecard_score', 'score'):
+        val = row.get(key)
+        if val not in (None, ''):
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                pass
+    return 0
+
+
+def _preserved_tradecard_rank(row: dict[str, Any], *, fallback: int) -> int:
+    for key in ('tradecard_rank', 'rank'):
+        val = row.get(key)
+        if val not in (None, ''):
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                pass
+    return fallback
 
 
 def _pattern_score(best: dict[str, Any] | None) -> int:
@@ -50,14 +76,128 @@ def _pattern_score(best: dict[str, Any] | None) -> int:
     return score
 
 
-def _is_bullish_active_pattern(best: dict[str, Any] | None) -> bool:
+def _is_caution_pattern(best: dict[str, Any] | None) -> bool:
     if not best:
         return False
     pattern = str(best.get('pattern') or '')
     status = str(best.get('status') or '')
-    if pattern in ('descending_triangle', 'failed_breakout'):
+    if pattern in CAUTION_PATTERNS:
+        return True
+    if status == 'failed_breakout':
+        return True
+    risks = ' '.join(str(r) for r in (best.get('risk_flags') or [])).lower()
+    return 'descending triangle caution' in risks
+
+
+def _is_actionable_bullish_pattern(best: dict[str, Any] | None) -> bool:
+    if not best or _is_caution_pattern(best):
         return False
-    return status in ('breakout_confirmed', 'near_breakout', 'retest_confirmed', 'forming')
+    pattern = str(best.get('pattern') or '')
+    status = str(best.get('status') or '')
+    vwap_ok = bool(best.get('vwap_confirmed'))
+    label = str(best.get('label') or '').lower()
+
+    if status == 'breakout_confirmed':
+        return True
+    if status == 'retest_confirmed' and pattern in ('breakout_retest', 'ascending_triangle'):
+        return True
+    if status == 'near_breakout' and pattern in ('ascending_triangle', 'symmetrical_triangle'):
+        return True
+    if status == 'near_breakout' and vwap_ok:
+        return True
+    if pattern == 'symmetrical_triangle' and status == 'forming' and 'compression' in label:
+        return True
+    return False
+
+
+def _best_pattern_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    if isinstance(row.get('best_pattern'), dict):
+        return dict(row['best_pattern'])
+    label = str(row.get('chart_pattern') or '').strip()
+    if not label:
+        return None
+    return {
+        'label': label,
+        'status': str(row.get('pattern_status') or 'forming'),
+        'pattern': str(row.get('pattern_key') or ''),
+        'confidence': int(row.get('pattern_confidence') or 0),
+        'breakout_level': row.get('breakout_level'),
+        'support_level': row.get('support_level'),
+        'resistance_level': row.get('resistance_level'),
+        'risk_flags': list(row.get('pattern_risks') or row.get('risk_flags') or []),
+        'reasons': list(row.get('pattern_reasons') or row.get('reasons') or []),
+        'vwap_confirmed': bool(row.get('above_vwap')),
+        'volume_confirmed': False,
+        'retest_confirmed': str(row.get('pattern_status') or '') == 'retest_confirmed',
+    }
+
+
+def _resolve_best_pattern(
+    row: dict[str, Any],
+    sym: str,
+    *,
+    pattern_ready: bool,
+    candles: list[dict[str, Any]],
+    current_price: float | None,
+    vwap: float | None,
+) -> dict[str, Any] | None:
+    if not pattern_ready or not sym:
+        return None
+
+    from backend.trading.chart_patterns import detect_chart_patterns
+
+    existing = _best_pattern_from_row(row)
+    detected: dict[str, Any] | None = None
+    if candles:
+        result = detect_chart_patterns(sym, candles, current_price=current_price, vwap=vwap)
+        raw = result.get('best_pattern')
+        if isinstance(raw, dict):
+            detected = dict(raw)
+
+    if existing:
+        if detected and _is_caution_pattern(detected) and not _is_caution_pattern(existing):
+            return existing
+        return existing
+    return detected
+
+
+def _pattern_display_label(best: dict[str, Any] | None) -> str:
+    if not best:
+        return ''
+    from backend.trading.chart_patterns import pattern_phrase_for_why
+    phrase = pattern_phrase_for_why(best).strip()
+    if phrase:
+        return phrase
+    label = str(best.get('label') or 'Pattern').strip()
+    status = str(best.get('status') or 'forming').replace('_', ' ').strip()
+    return f'{label} {status}'.strip()
+
+
+def _not_ready_reason(entry: dict[str, Any]) -> str:
+    reason = str(entry.get('reason') or '').strip()
+    if reason:
+        return reason
+    from backend.trading.intraday_candle_memory import MIN_DERIVED_CANDLES
+    candles = int(entry.get('derived_candles_count') or 0)
+    if candles < MIN_DERIVED_CANDLES:
+        return f'need at least {MIN_DERIVED_CANDLES} derived candles'
+    return 'not enough candles'
+
+
+def _closest_status_label(entry: dict[str, Any]) -> str:
+    if not entry.get('pattern_ready'):
+        return _not_ready_reason(entry)
+    best = entry.get('best_pattern')
+    if best and _is_caution_pattern(best):
+        pattern = str(best.get('pattern') or '')
+        if pattern == 'descending_triangle':
+            return 'descending triangle caution'
+        if pattern == 'failed_breakout':
+            return 'failed breakout caution'
+        return 'caution pattern'
+    if best and _is_actionable_bullish_pattern(best):
+        return 'actionable pattern'
+    return 'ready, no active bullish pattern'
 
 
 def get_tradecard_pattern_universe(*, limit: int = 10) -> tuple[list[dict[str, Any]], dict[str, Any], str]:
@@ -88,7 +228,7 @@ def get_tradecard_pattern_universe(*, limit: int = 10) -> tuple[list[dict[str, A
 
 
 def _analyze_candidate(row: dict[str, Any], *, rank: int) -> dict[str, Any]:
-    from backend.trading.chart_patterns import detect_chart_patterns, load_candles_for_symbol
+    from backend.trading.chart_patterns import load_candles_for_symbol
     from backend.trading.intraday_candle_memory import MIN_DERIVED_CANDLES, get_candle_readiness
 
     sym = _normalize_symbol(row.get('ticker'))
@@ -96,9 +236,12 @@ def _analyze_candidate(row: dict[str, Any], *, rank: int) -> dict[str, Any]:
     snapshot_count = int(readiness.get('snapshot_count') or 0)
     derived_count = int(readiness.get('derived_count') or 0)
     pattern_ready = bool(readiness.get('pattern_ready'))
-    reason = str(readiness.get('reason') or '')
-    if derived_count < MIN_DERIVED_CANDLES:
-        reason = reason or f'need at least {MIN_DERIVED_CANDLES} derived candles'
+
+    reason = ''
+    if not pattern_ready:
+        reason = str(readiness.get('reason') or '').strip()
+        if not reason and derived_count < MIN_DERIVED_CANDLES:
+            reason = f'need at least {MIN_DERIVED_CANDLES} derived candles'
 
     best_pattern: dict[str, Any] | None = None
     pattern_status = ''
@@ -122,22 +265,28 @@ def _analyze_candidate(row: dict[str, Any], *, rank: int) -> dict[str, Any]:
             vwap_f = float(vwap) if vwap not in (None, '') else None
         except (TypeError, ValueError):
             vwap_f = None
-        result = detect_chart_patterns(sym, candles, current_price=current_f, vwap=vwap_f)
-        best_pattern = result.get('best_pattern')
+        best_pattern = _resolve_best_pattern(
+            row,
+            sym,
+            pattern_ready=pattern_ready,
+            candles=candles,
+            current_price=current_f,
+            vwap=vwap_f,
+        )
         if best_pattern:
             pattern_status = str(best_pattern.get('status') or '')
             breakout_level = best_pattern.get('breakout_level')
             support_level = best_pattern.get('support_level')
             resistance_level = best_pattern.get('resistance_level')
-            risk_flags = list(best_pattern.get('risk_flags') or [])
-            reasons = list(best_pattern.get('reasons') or [])
+            risk_flags = list(best_pattern.get('risk_flags') or row.get('pattern_risks') or [])
+            reasons = list(best_pattern.get('reasons') or row.get('pattern_reasons') or [])
             pattern_score = _pattern_score(best_pattern)
 
     return {
         'symbol': sym,
         'cap_bucket': _cap_bucket_label(row),
-        'tradecard_rank': rank,
-        'tradecard_score': int(row.get('score') or 0),
+        'tradecard_rank': _preserved_tradecard_rank(row, fallback=rank),
+        'tradecard_score': _preserved_tradecard_score(row),
         'snapshots_count': snapshot_count,
         'derived_candles_count': derived_count,
         'pattern_ready': pattern_ready,
@@ -190,7 +339,9 @@ def select_best_pattern_candidate(pattern_board: dict[str, Any]) -> dict[str, An
     entries = list(pattern_board.get('entries') or [])
     ready = [
         e for e in entries
-        if e.get('pattern_ready') and e.get('best_pattern') and _is_bullish_active_pattern(e.get('best_pattern'))
+        if e.get('pattern_ready')
+        and e.get('best_pattern')
+        and _is_actionable_bullish_pattern(e.get('best_pattern'))
     ]
     if ready:
         ready.sort(
@@ -241,41 +392,40 @@ def format_patterns_board(pattern_board: dict[str, Any]) -> str:
         candles = int(entry.get('derived_candles_count') or 0)
         ready = bool(entry.get('pattern_ready'))
         status_label = 'READY' if ready else 'NOT READY'
-        lines.append(f'{rank}. <b>{sym}</b> — {cap} — {status_label}')
-        lines.append(f'   Tradecard rank: {rank} | Score: {score}')
-        lines.append(f'   Candles: {candles} | Snapshots: {snaps}')
+        lines.append(f'<b>{sym}</b> — {cap} — {status_label}')
+        lines.append(f'Tradecard rank: {rank} | Tradecard score: {score}')
 
-        best = entry.get('best_pattern')
-        if ready and best:
-            label = str(best.get('label') or 'Pattern')
-            pstatus = str(best.get('pattern_status') or best.get('status') or 'forming').replace('_', ' ')
-            lines.append(f'   Pattern: {label} {pstatus}')
-            if entry.get('breakout_level') is not None:
-                lines.append(f'   Breakout: {entry.get("breakout_level")}')
-            risks = entry.get('risk_flags') or []
-            if risks:
-                lines.append(f'   Risk: {risks[0]}')
+        if ready:
+            lines.append(f'Candles: {candles} | Snapshots: {snaps}')
+            best = entry.get('best_pattern')
+            if best:
+                lines.append(f'Pattern: {_pattern_display_label(best)}')
+                if entry.get('breakout_level') is not None:
+                    lines.append(f'Breakout: {entry.get("breakout_level")}')
+                risks = entry.get('risk_flags') or []
+                if risks:
+                    lines.append(f'Risk: {risks[0]}')
+                pscore = int(entry.get('pattern_score') or 0)
+                if pscore:
+                    lines.append(f'Pattern score: {pscore}')
+            else:
+                lines.append('Pattern: no active pattern detected')
         else:
-            reason = entry.get('reason') or f'need at least {MIN_DERIVED_CANDLES} derived candles'
-            if candles < MIN_DERIVED_CANDLES:
-                lines.append(f'   Candles: {candles}/{MIN_DERIVED_CANDLES}')
-            lines.append(f'   Reason: {reason}')
+            lines.append(f'Candles: {candles}/{MIN_DERIVED_CANDLES} | Snapshots: {snaps}')
+            lines.append(f'Reason: {_not_ready_reason(entry)}')
         lines.append('')
 
     return '\n'.join(lines).rstrip()
 
 
 def format_single_pattern_pick(pattern_pick: dict[str, Any]) -> str:
-    from backend.trading.intraday_candle_memory import MIN_DERIVED_CANDLES
-
     scanned = int(pattern_pick.get('scanned_count') or 0)
     if pattern_pick.get('valid') and pattern_pick.get('pick'):
         entry = pattern_pick['pick']
         sym = entry.get('symbol') or '?'
         cap = entry.get('cap_bucket') or '—'
         best = entry.get('best_pattern') or {}
-        label = str(best.get('label') or 'Pattern')
-        pstatus = str(entry.get('pattern_status') or 'forming').replace('_', ' ')
+        label = _pattern_display_label(best) or str(best.get('label') or 'Pattern')
         candles = int(entry.get('derived_candles_count') or 0)
         lines = [
             '<b>PATTERN — BEST FROM TRADECARD TOP 10</b>',
@@ -285,6 +435,7 @@ def format_single_pattern_pick(pattern_pick: dict[str, Any]) -> str:
         ]
         if entry.get('breakout_level') is not None:
             lines.append(f'Breakout: {entry.get("breakout_level")}')
+        pstatus = str(entry.get('pattern_status') or best.get('status') or 'forming').replace('_', ' ')
         lines.append(f'Status: {pstatus}')
         risks = entry.get('risk_flags') or []
         if risks:
@@ -299,7 +450,6 @@ def format_single_pattern_pick(pattern_pick: dict[str, Any]) -> str:
     ]
     for idx, entry in enumerate(pattern_pick.get('closest') or [], start=1):
         sym = entry.get('symbol') or '?'
-        candles = int(entry.get('derived_candles_count') or 0)
-        need = max(0, MIN_DERIVED_CANDLES - candles)
-        lines.append(f'{idx}. {sym} — candles {candles}/{MIN_DERIVED_CANDLES}' + (f' — need {need} more' if need else ''))
+        status = _closest_status_label(entry)
+        lines.append(f'{idx}. {sym} — {status}')
     return '\n'.join(lines)
