@@ -87,6 +87,7 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'gainers', 'description': 'All-cap top gainers'},
     {'command': 'tradecards', 'description': 'Top tradecard candidates'},
     {'command': 'tradecard', 'description': 'Single paper trade card'},
+    {'command': 'catalyst', 'description': 'Catalyst state for one ticker'},
     {'command': 'catalysts', 'description': 'Stock catalyst radar'},
     {'command': 'today', 'description': 'Today confluence pick'},
     {'command': 'premarket', 'description': 'Premarket top setups'},
@@ -152,6 +153,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /myfeed clean-old — archive dirty image/OCR rows (admin)
 
 <b>Catalyst Radar:</b>
+/catalyst SYMBOL — catalyst state for one ticker
 /catalysts — stock-specific catalyst radar
 /catalysts today — today's catalyst priority list
 /catalysts explain &lt;ticker&gt; — catalyst reason for ticker
@@ -327,6 +329,10 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'pattern', raw[len('pattern '):].strip()
     if lower == 'pattern':
         return 'pattern', ''
+    if lower.startswith('catalyst '):
+        return 'catalyst', raw[len('catalyst '):].strip()
+    if lower == 'catalyst':
+        return 'catalyst', ''
     if lower.startswith('candles '):
         return 'candles', raw[len('candles '):].strip()
     if lower == 'candles':
@@ -936,6 +942,11 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_candles_only(args), command='candles')
         response_text = result.get('text') or 'Candle debug unavailable.'
+    elif cmd == 'catalyst':
+        from backend.telegram.lazy_command_runner import run_catalyst_only
+
+        result = run_without_ai(lambda: run_catalyst_only(args), command='catalyst')
+        response_text = result.get('text') or 'Catalyst lookup unavailable.'
     elif cmd == 'catalysts':
         from backend.telegram.lazy_command_runner import run_catalysts_only
 

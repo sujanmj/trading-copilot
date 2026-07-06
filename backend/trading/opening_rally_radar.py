@@ -592,15 +592,19 @@ def build_opening_rally_board(
     """Build ranked opening rally candidate board."""
     ist_now = _now_ist(now)
     phase = opening_radar_time_phase(ist_now)
+    from backend.trading.all_cap_gainers import scan_all_cap_gainers, apply_gainer_context_to_candidate
+    from backend.trading.catalyst_classification import (
+        apply_catalyst_classification,
+        build_extended_catalyst_map,
+    )
+
     scanner_data = scanner_payload if scanner_payload is not None else _load_json(SCANNER_FILE)
-    catalyst_map = _catalyst_map(catalyst_payload)
+    catalyst_map = build_extended_catalyst_map(catalyst_payload)
     scanner_index = _scanner_index(scanner_payload)
     sector_breadth = _sector_breadth_map(scanner_index)
     reg = registry if registry is not None else _live_registry()
     prev_movers = _previous_session_movers(premarket_payload)
     macro_penalty = _macro_risk_penalty()
-
-    from backend.trading.all_cap_gainers import scan_all_cap_gainers, apply_gainer_context_to_candidate
 
     gainer_scan = scan_all_cap_gainers(
         scanner_payload=scanner_data,
@@ -652,6 +656,12 @@ def build_opening_rally_board(
                 sector_breadth=sym in sector_breadth,
                 previous_mover=sym in prev_movers,
             )
+        row = apply_catalyst_classification(
+            row,
+            catalyst=catalyst_map.get(sym),
+            gainer_meta=gmeta,
+            now=ist_now,
+        )
         try:
             from backend.trading.intraday_candle_memory import capture_snapshot_from_candidate
 
@@ -743,6 +753,10 @@ def _opening_tradecard_eligible(row: dict[str, Any]) -> bool:
     if _is_circuit_low_liquidity(row):
         return False
     if row.get('gainer_promoted') and not row.get('has_catalyst') and not (row.get('themes') or []):
+        cat_state = str(row.get('catalyst_state') or '').upper()
+        if cat_state in ('PRICE_VOLUME_ONLY', 'UNKNOWN_CATALYST'):
+            if state in gainer_confirmed_states or state == 'MOMENTUM_ONLY_WATCH':
+                return True
         if state not in gainer_confirmed_states:
             return False
     if int(row.get('pattern_boost') or 0) > 0:

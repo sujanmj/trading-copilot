@@ -21,6 +21,12 @@ ENTITY_PHRASE_RULES: tuple[tuple[str, str, str], ...] = (
     (r'\badani enterprises\b', 'ADANIENT', 'Adani Enterprises'),
     (r'\badani airports?\b|\badani airport proposal\b|\badani group\b', 'ADANIENT', 'Adani Group'),
     (r'\badani\b', 'ADANIENT', 'Adani Group'),
+    (r'\bbharat electronics\b', 'BEL', 'Bharat Electronics'),
+    (r'\bmetropolis healthcare\b', 'METROPOLIS', 'Metropolis Healthcare'),
+    (r'\bdixon technologies\b', 'DIXON', 'Dixon Technologies'),
+    (r'\bhitachi energy india\b', 'POWERINDIA', 'Hitachi Energy India'),
+    (r'\bsiemens energy india\b', 'ENRIN', 'Siemens Energy India'),
+    (r'\bh t media\b|\bht media\b', 'HTMEDIA', 'H T Media'),
 )
 
 ENTITY_ONLY_PATTERNS: tuple[tuple[str, str], ...] = (

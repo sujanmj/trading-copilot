@@ -22,7 +22,7 @@ from backend.trading.opening_rally_radar import (
     theme_matches_for_symbol,
 )
 
-STAGE = '4B.12'
+STAGE = '4B.18'
 
 IST = ZoneInfo('Asia/Kolkata')
 
@@ -209,7 +209,24 @@ def _gainer_risk_assessment(sym: str, row: dict[str, Any], meta: dict[str, Any])
     return False, ''
 
 
-def _score_gainer_boost(meta: dict[str, Any], row: dict[str, Any], *, has_catalyst: bool, sector_breadth: bool, previous_mover: bool) -> tuple[float, float, list[str]]:
+def _score_gainer_boost(
+    meta: dict[str, Any],
+    row: dict[str, Any],
+    *,
+    has_catalyst: bool,
+    sector_breadth: bool,
+    previous_mover: bool,
+    catalyst_state: str = '',
+) -> tuple[float, float, list[str]]:
+    from backend.trading.catalyst_classification import (
+        BROKER_APP_ALERT,
+        CATALYST_CONFIRMED,
+        PRICE_VOLUME_ONLY,
+        THEME_ONLY,
+        UNKNOWN_CATALYST,
+        catalyst_score_boost,
+    )
+
     score_delta = 0.0
     penalty = 0.0
     notes: list[str] = []
@@ -222,7 +239,13 @@ def _score_gainer_boost(meta: dict[str, Any], row: dict[str, Any], *, has_cataly
         notes.append('top-10 gainer boost')
     if sector_breadth:
         score_delta += 10
-    if has_catalyst:
+    state = str(catalyst_state or meta.get('catalyst_state') or '')
+    if state in (CATALYST_CONFIRMED, BROKER_APP_ALERT):
+        cls = meta.get('catalyst_classification') if isinstance(meta.get('catalyst_classification'), dict) else {}
+        score_delta += catalyst_score_boost({'state': state, 'catalyst': cls.get('catalyst')})
+    elif state == THEME_ONLY:
+        score_delta += 3
+    elif has_catalyst:
         score_delta += 8
     if previous_mover:
         score_delta += 6
@@ -236,9 +259,16 @@ def _score_gainer_boost(meta: dict[str, Any], row: dict[str, Any], *, has_cataly
     if vol_ratio < CIRCUIT_LOW_LIQ_VOL and change >= 8:
         penalty += 12
         notes.append('low liquidity penalty')
-    if change >= 8 and not has_catalyst and not sector_breadth:
+    if (
+        change >= 8
+        and not has_catalyst
+        and not sector_breadth
+        and state not in (PRICE_VOLUME_ONLY, UNKNOWN_CATALYST)
+    ):
         penalty += 8
         notes.append('no news/no breadth penalty')
+    if state == UNKNOWN_CATALYST:
+        notes.append('unknown catalyst risk flag')
     if change >= 6 and meta.get('extended'):
         penalty += 10
         notes.append('extended opening range penalty')
@@ -261,7 +291,12 @@ def scan_all_cap_gainers(
 
     scanner_data = scanner_payload if scanner_payload is not None else _load_json(SCANNER_FILE)
     scanner_index = _scanner_index(scanner_data)
-    catalyst_map = catalyst_map or {}
+    if catalyst_map is None:
+        from backend.trading.catalyst_classification import build_extended_catalyst_map
+
+        catalyst_map = build_extended_catalyst_map()
+    from backend.trading.catalyst_classification import classify_gainer_row_catalyst
+
     previous_movers = previous_movers or set()
     sector_breadth_symbols = sector_breadth_symbols or set()
     sector_breadth_map = sector_breadth_map or {}
@@ -300,6 +335,7 @@ def scan_all_cap_gainers(
             'has_catalyst': sym in catalyst_map,
             'extended': _safe_float(row.get('change_percent')) >= 6.0,
         }
+        meta = classify_gainer_row_catalyst(sym, meta, catalyst_map=catalyst_map, scanner_row=row)
         blocked, risk_reason = _gainer_risk_assessment(sym, row, meta)
         meta['risk_blocked'] = blocked
         meta['risk_reason'] = risk_reason
@@ -349,6 +385,30 @@ def scan_all_cap_gainers(
         ),
     )
 
+    from backend.trading.catalyst_classification import (
+        CATALYST_CONFIRMED,
+        BROKER_APP_ALERT,
+        PRICE_VOLUME_ONLY,
+        UNKNOWN_CATALYST,
+    )
+
+    with_catalyst = [
+        sym for sym, meta in by_symbol.items()
+        if str(meta.get('catalyst_state') or '') in (CATALYST_CONFIRMED, BROKER_APP_ALERT)
+    ]
+    without_catalyst = [
+        sym for sym, meta in by_symbol.items()
+        if str(meta.get('catalyst_state') or '') in (PRICE_VOLUME_ONLY, UNKNOWN_CATALYST)
+    ]
+    unexplained = [
+        sym for sym, meta in by_symbol.items()
+        if str(meta.get('catalyst_state') or '') == UNKNOWN_CATALYST
+        or (
+            str(meta.get('catalyst_state') or '') == PRICE_VOLUME_ONLY
+            and _safe_float(meta.get('volume_ratio')) >= 2.0
+        )
+    ]
+
     result = {
         'ok': True,
         'stage': STAGE,
@@ -357,6 +417,9 @@ def scan_all_cap_gainers(
         'promoted_symbols': promoted,
         'missed_symbols': missed,
         'total_scanned': total,
+        'gainers_with_catalyst': with_catalyst[:15],
+        'gainers_without_catalyst': without_catalyst[:15],
+        'unexplained_movers': unexplained[:10],
     }
     guarded = apply_session_guard_to_gainer_scan(result, scanner_payload=scanner_data, now=now)
     if not guarded.get('reference_only') and not guarded.get('session_stale'):
@@ -391,6 +454,7 @@ def apply_gainer_context_to_candidate(
         has_catalyst=has_catalyst,
         sector_breadth=sector_breadth,
         previous_mover=previous_mover,
+        catalyst_state=str(gainer_meta.get('catalyst_state') or ''),
     )
     score = int(row.get('score') or 0) + int(boost) - int(penalty)
     score = max(0, score)

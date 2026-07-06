@@ -5,7 +5,7 @@ My Feed ingest, classify, and reply formatting (Stage 50A / 50W verified intake)
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Optional
 
 from backend.my_feed.my_feed_db import (
     archive_item,
@@ -188,6 +188,99 @@ def format_needs_text_reply() -> str:
     ])
 
 
+def _ingest_broker_app_alert(raw_text: str, *, source: str) -> Optional[dict[str, Any]]:
+    """Fast-path broker/app alert pasted via /feed — no external verification."""
+    from backend.trading.catalyst_classification import is_broker_app_alert_text, parse_broker_app_alert
+
+    raw = str(raw_text or '').strip()
+    if not is_broker_app_alert_text(raw):
+        return None
+    parsed = parse_broker_app_alert(raw)
+    sym = str(parsed.get('symbol') or '').strip().upper()
+    if not sym:
+        return None
+    duplicate = find_recent_duplicate(raw)
+    if duplicate:
+        return {
+            'ok': True,
+            'duplicate': True,
+            'record': duplicate,
+            'saved_count': 0,
+            'message': 'Duplicate broker alert — already saved recently.',
+            'verification_status': duplicate.get('verification_status'),
+        }
+    classified = _classify_item({
+        'cleaned_summary': parsed.get('summary') or raw,
+        'items_found': 1,
+        'tickers': [sym],
+    })
+    classified['event_type'] = 'broker_app_alert'
+    classified['suggested_action'] = 'BROKER ALERT WATCH'
+    classified['impact_score'] = max(float(classified.get('impact_score') or 0), 78.0)
+    record = insert_feed_item({
+        'source': source,
+        'raw_market_text': raw,
+        'cleaned_summary': str(parsed.get('summary') or raw.splitlines()[0]).strip(),
+        'detected_source_app': 'broker_app',
+        'tickers': [sym],
+        'sectors': classified['sectors'],
+        'themes': classified['themes'],
+        'event_type': 'broker_app_alert',
+        'sentiment': 'bullish',
+        'impact_score': classified['impact_score'],
+        'urgency': 'high',
+        'suggested_action': classified['suggested_action'],
+        'confirmation_required': False,
+        'status': 'active',
+        'verification_status': 'VERIFIED',
+        'verified_headline': str(parsed.get('headline') or parsed.get('summary') or raw.splitlines()[0]).strip(),
+        'source_name': parsed.get('broker') or 'broker app',
+        'side': 'BULLISH',
+        'raw_user_text': raw,
+        'payload': {
+            'broker_app_alert': True,
+            'broker_alert': parsed,
+            'alert_type': parsed.get('alert_type'),
+            'target_price': parsed.get('target_price'),
+            'broker': parsed.get('broker'),
+            'confidence': parsed.get('confidence'),
+        },
+    })
+    try:
+        from backend.my_feed.cache_invalidation import invalidate_myfeed_caches
+
+        invalidate_myfeed_caches()
+    except Exception:
+        pass
+    from backend.my_feed.feed_verification import format_verification_telegram_reply
+
+    verification = {
+        'verification_status': 'VERIFIED',
+        'raw_user_text': raw,
+        'claim_summary': record.get('cleaned_summary') or '',
+        'verified_headline': record.get('verified_headline') or '',
+        'ticker': sym,
+        'entity': parsed.get('company_name') or '',
+        'event_type': 'broker_app_alert',
+        'side': 'BULLISH',
+        'source_name': parsed.get('broker') or 'broker app',
+    }
+    return {
+        'ok': True,
+        'reply': format_verification_telegram_reply(
+            record,
+            verification,
+            ignored_private_items=0,
+            items_found=1,
+        ),
+        'record': record,
+        'duplicate': False,
+        'saved_count': 1,
+        'message': 'Saved broker app alert',
+        'verification_status': 'VERIFIED',
+    }
+
+
 def _verify_and_build_text_record(
     extracted: dict[str, Any],
     *,
@@ -255,6 +348,10 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
         }
 
     try:
+        broker_result = _ingest_broker_app_alert(raw, source=source)
+        if broker_result is not None:
+            return broker_result
+
         extracted = filter_market_text(raw)
         if not extracted.get('cleaned_summary') and raw and source in ('telegram_text', 'gui_text'):
             extracted = {

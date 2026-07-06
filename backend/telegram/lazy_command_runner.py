@@ -825,6 +825,14 @@ def run_candles_only(args: str = '') -> dict[str, Any]:
     return _runner_result('candles', text=text, mode='symbol' if sym else 'usage')
 
 
+def run_catalyst_only(args: str = '') -> dict[str, Any]:
+    from backend.trading.catalyst_classification import format_catalyst_symbol_telegram
+
+    sym = str(args or '').strip()
+    text = format_catalyst_symbol_telegram(sym)
+    return _runner_result('catalyst', text=text, mode='symbol' if sym else 'usage')
+
+
 def run_catalysts_only(args: str = '') -> dict[str, Any]:
     from backend.intelligence.stock_catalyst_radar import format_catalyst_radar_telegram
 

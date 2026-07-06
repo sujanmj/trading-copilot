@@ -3230,10 +3230,14 @@ def format_opening_radar_telegram(
         lines.extend([
             f'{idx}. <b>{sym}</b> — {cap} — {state}',
             f'   Score: {score}',
+            f'   {row.get("catalyst_line") or "Catalyst: missing — price-volume only"}',
             f'   Why: {why}',
             f'   Action: {action}',
             '',
         ])
+        risk_line = str(row.get('catalyst_risk_line') or '').strip()
+        if risk_line:
+            lines.insert(-1, f'   {risk_line}')
     lines.append('Paper only — no blind chase before /tradecard.')
     gscan = data.get('gainer_scan') or {}
     promoted = gscan.get('promoted') or []
@@ -3306,6 +3310,17 @@ def format_all_cap_gainers_telegram(
     promoted = scan.get('promoted_symbols') or []
     if promoted:
         lines.append(f'<b>Promoted to /radar:</b> {", ".join(promoted[:12])}')
+    with_cat = scan.get('gainers_with_catalyst') or []
+    without_cat = scan.get('gainers_without_catalyst') or []
+    unexplained = scan.get('unexplained_movers') or []
+    if with_cat or without_cat:
+        lines.append('')
+        if with_cat:
+            lines.append(f'<b>With catalyst:</b> {", ".join(with_cat[:10])}')
+        if without_cat:
+            lines.append(f'<b>Without catalyst:</b> {", ".join(without_cat[:10])}')
+        if unexplained:
+            lines.append(f'<b>High-volume unexplained:</b> {", ".join(unexplained[:8])}')
     return strip_stage_markers('\n'.join(lines))
 
 
@@ -3496,7 +3511,11 @@ def format_tradecards_telegram(
         score = int(row.get('score') or 0)
         why = ' + '.join(row.get('why') or []) or '—'
         lines.append(f'{idx}. <b>{sym}</b> — {cap} — {state} — Score {score}')
+        lines.append(f'   {row.get("catalyst_line") or "Catalyst: missing — price-volume only"}')
         lines.append(f'   {why}')
+        risk_line = str(row.get('catalyst_risk_line') or '').strip()
+        if risk_line:
+            lines.append(f'   {risk_line}')
         state_upper = str(row.get('state') or '').upper()
         if state_upper == 'NEW_LISTING_MOMENTUM':
             lines.append('   Risk: new listing — volume confirm required; chase risk on extension.')
