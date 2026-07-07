@@ -368,8 +368,8 @@ def test_patterns_command() -> int:
 def test_build_label_51w() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Y' or ASTRAEDGE_BUILD_STAGE != '51Y':
-        return _fail(f'expected AstraEdge 51Y got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Z' or ASTRAEDGE_BUILD_STAGE != '51Z':
+        return _fail(f'expected AstraEdge 51Z got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -387,6 +387,11 @@ def _run_regression(script: str) -> int:
 
 
 def test_regression_prior_phases() -> int:
+    from backend.qa.smoke_mode import should_skip_nested_regression
+
+    if should_skip_nested_regression():
+        print('SKIP: test_regression_prior_phases (ASTRAEDGE_QA_SMOKE=1)')
+        return 0
     for script in (
         'test_screener_longterm_polish_4b14b.py',
         'test_screener_import_attachment_4b14a.py',

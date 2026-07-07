@@ -550,12 +550,18 @@ def daily_review_quality_buckets(
     research_watchlist = sum(1 for row in sent_rows if row.get('category') == 'PRE_MARKET')
     missed = missed_opportunities_summary(limit=200).get('count', 0)
     try:
-        from backend.orchestration.alert_event_log import summarize_opening_workflow_for_date
+        from backend.trading.opening_workflow_accounting import summarize_opening_workflow_accounting
 
         today = datetime.now(IST).date().isoformat()
-        opening_workflow = summarize_opening_workflow_for_date(today)
+        opening_workflow = summarize_opening_workflow_accounting(today)
     except Exception:
-        opening_workflow = {}
+        try:
+            from backend.orchestration.alert_event_log import summarize_opening_workflow_for_date
+
+            today = datetime.now(IST).date().isoformat()
+            opening_workflow = summarize_opening_workflow_for_date(today)
+        except Exception:
+            opening_workflow = {}
     if tradecard_counts is None:
         try:
             from backend.trading.tradecard_journal import summarize_today_outcomes
@@ -566,6 +572,8 @@ def daily_review_quality_buckets(
     generated = int(tradecard_counts.get('generated') or 0)
     filled = int(tradecard_counts.get('filled') or 0)
     resolved = int(tradecard_counts.get('T1') or 0) + int(tradecard_counts.get('T2') or 0) + int(tradecard_counts.get('SL') or 0)
+    opening_confirmed = int(opening_workflow.get('confirmed') or 0)
+    live_confirmed = max(int(tradecard_counts.get('valid_entry') or 0), opening_confirmed)
     if actual_learning_summary is None and not tradecard_counts_provided:
         try:
             from backend.analytics.actual_learning_resolver import load_latest_actual_learning_summary
@@ -582,7 +590,7 @@ def daily_review_quality_buckets(
     pending_reasons = actual.get('pending_reasons') if isinstance(actual.get('pending_reasons'), dict) else {}
     return {
         'research_watchlist_sent': research_watchlist,
-        'live_confirmed_setups': int(tradecard_counts.get('valid_entry') or 0),
+        'live_confirmed_setups': live_confirmed,
         'rejected_setups': 0,
         'missed_opportunities': int(missed),
         'tradecards_generated': generated,
@@ -630,8 +638,17 @@ def format_daily_review_quality_lines(
         "Opening workflow:",
         f"Radar armed: {int(opening.get('radar_armed') or 0)}",
         f"Opening radar: {int(opening.get('opening_radar') or 0)}",
+        f"Early tradecards generated: {int(opening.get('early_tradecards_generated') or 0)}",
+        f"Final confirmation generated: {int(opening.get('final_confirmation_generated') or 0)}",
         f"Early tradecard best: {opening.get('early_tradecard_best') or '-'}",
         f"Final confirmation best: {opening.get('final_confirmation_best') or '-'}",
+        (
+            "Final state: "
+            f"confirmed {int(opening.get('confirmed') or 0)} · "
+            f"rejected {int(opening.get('rejected') or 0)} · "
+            f"wait {int(opening.get('wait_pullback') or 0)} · "
+            f"pullback {int(opening.get('pullback_only') or 0)}"
+        ),
         f"Learning candidate captured: {learning_candidate_text}",
         (
             "Tradecards generated/filled/resolved W/L/N/P: "

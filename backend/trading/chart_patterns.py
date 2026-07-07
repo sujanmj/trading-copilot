@@ -421,9 +421,17 @@ def pattern_score_delta(
 def pattern_phrase_for_why(best_pattern: dict[str, Any] | None) -> str:
     if not best_pattern:
         return ''
-    label = str(best_pattern.get('label') or 'Pattern')
-    status = str(best_pattern.get('status') or 'forming').replace('_', ' ')
-    return f'{label} {status}'
+    label = str(best_pattern.get('label') or 'Pattern').strip()
+    status = str(best_pattern.get('status') or 'forming').replace('_', ' ').strip()
+    if not status:
+        return label
+    label_words = label.lower().split()
+    status_words = status.lower().split()
+    while status_words and label_words and label_words[-1] == status_words[0]:
+        status_words.pop(0)
+    if not status_words:
+        return label
+    return f'{label} {" ".join(status_words)}'
 
 
 def apply_pattern_evidence_to_row(

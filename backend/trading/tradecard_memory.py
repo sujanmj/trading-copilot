@@ -36,11 +36,16 @@ def _normalize_symbol(value: object) -> str:
 
 
 def _normalize_cap_bucket(row: dict[str, Any] | None) -> str:
-    from backend.trading.all_cap_gainers import format_cap_bucket_metadata
+    from backend.trading.all_cap_gainers import format_cap_bucket_metadata, resolve_cap_bucket_for_symbol
 
-    meta = format_cap_bucket_metadata(row)
+    sym = _normalize_symbol((row or {}).get('ticker'))
+    meta = format_cap_bucket_metadata(row, symbol=sym)
     if meta.startswith('cap_bucket='):
-        return meta.split('=', 1)[1].strip()
+        bucket = meta.split('=', 1)[1].strip()
+        if bucket:
+            return bucket
+    if sym:
+        return resolve_cap_bucket_for_symbol(sym, row) or 'unknown'
     return 'unknown'
 
 
@@ -210,7 +215,14 @@ def load_tradecard_memory(symbol: str | None = None, limit: int = 50) -> list[di
                 rows.append(row)
     except OSError:
         return []
-    rows.sort(key=lambda r: (str(r.get('created_at') or ''), -int(r.get('rank') or 0)), reverse=True)
+    rows.sort(
+        key=lambda r: (
+            str(r.get('created_at') or ''),
+            -int(r.get('rank') or 0),
+            str(r.get('memory_id') or ''),
+        ),
+        reverse=True,
+    )
     return rows[: max(1, int(limit or 50))]
 
 
@@ -283,6 +295,7 @@ def record_tradecards_memory(
         best_sym = _normalize_symbol(
             board.get('reference_best_pick') or board.get('tradecards_best_pick') or ''
         )
+        batch_created = _now_ist().replace(microsecond=0)
         for idx, row in enumerate(candidates, start=1):
             sym = _normalize_symbol(row.get('ticker'))
             if not sym:
@@ -297,6 +310,8 @@ def record_tradecards_memory(
                 no_current_entry=True,
                 raw_summary_text=' + '.join(row.get('why') or [])[:200],
             )
+            record['created_at'] = batch_created.isoformat()
+            record['current_ist'] = batch_created.strftime('%Y-%m-%d %H:%M IST')
             stored.append(append_tradecard_memory(record))
         return stored
 
@@ -304,6 +319,7 @@ def record_tradecards_memory(
         r for r in (board.get('ranked_candidates') or [])
         if str(r.get('state') or '').upper() != 'REJECTED'
     ][:10]
+    batch_created = _now_ist().replace(microsecond=0)
     for idx, row in enumerate(candidates, start=1):
         sym = _normalize_symbol(row.get('ticker'))
         if not sym:
@@ -317,6 +333,8 @@ def record_tradecards_memory(
             selected_best=(idx == 1),
             raw_summary_text=' + '.join(row.get('why') or [])[:200],
         )
+        record['created_at'] = batch_created.isoformat()
+        record['current_ist'] = batch_created.strftime('%Y-%m-%d %H:%M IST')
         stored.append(append_tradecard_memory(record))
     return stored
 

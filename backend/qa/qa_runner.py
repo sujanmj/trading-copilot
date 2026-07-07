@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+from backend.qa.smoke_mode import QA_SMOKE_ENV
 from backend.utils.config import DATA_DIR, PROJECT_ROOT
 
 QA_LAST_RESULT_PATH = DATA_DIR / 'qa_last_result.json'
@@ -32,6 +33,7 @@ FULL_SCRIPT_ALLOWLIST: tuple[tuple[str, str], ...] = (
     ('cap bucket visibility', 'scripts/test_cap_bucket_visibility_4b12.py'),
     ('tradecard closed market', 'scripts/test_tradecard_closed_market_no_legacy_4b12.py'),
     ('pattern board consistency', 'scripts/test_pattern_board_consistency_4b17b.py'),
+    ('qa smoke isolation', 'scripts/test_qa_smoke_isolation_4b18a.py'),
     ('telegram routing', 'scripts/test_telegram_stage_51a_canonical_routing.py'),
 )
 
@@ -46,6 +48,64 @@ ERROR_TAIL_MAX_LINES = 8
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _fail_token_from_script(script_rel: str) -> str:
+    stem = Path(script_rel).stem
+    if stem.startswith('test_'):
+        stem = stem[5:]
+    return stem.upper().replace('-', '_') + '_FAIL'
+
+
+def _parse_script_failure(script_rel: str, stdout: str, stderr: str) -> dict[str, str]:
+    """Extract direct failure for the running script (not nested cascade noise)."""
+    token = _fail_token_from_script(script_rel)
+    own_fail = ''
+    nested_hints: list[str] = []
+    failed_test = ''
+
+    for line in (stdout + '\n' + stderr).splitlines():
+        stripped = line.strip()
+        if '_FAIL:' not in stripped:
+            continue
+        if f'{token}:' in stripped:
+            own_fail = stripped
+        else:
+            nested_hints.append(stripped)
+
+    if own_fail:
+        message = own_fail.split(':', 1)[-1].strip()
+        summary = message[:160]
+        if ' failed with code ' in message:
+            failed_test = message.split(' failed with code ')[0].strip()
+        elif message.endswith(' failed'):
+            failed_test = message[:-len(' failed')].strip()
+        else:
+            failed_test = message.split(':', 1)[0].strip()[:80]
+    else:
+        summary = _summary_from_output(stderr or stdout, fallback='failed')
+
+    tail_lines: list[str] = []
+    if own_fail:
+        tail_lines.append(own_fail)
+    elif nested_hints:
+        tail_lines.append(nested_hints[-1])
+    combined = '\n'.join(part for part in (stdout, stderr) if part).strip()
+    if combined:
+        for line in combined.splitlines()[-ERROR_TAIL_MAX_LINES:]:
+            if line.strip() and line.strip() not in tail_lines:
+                tail_lines.append(line.strip())
+    error_tail = '\n'.join(tail_lines[-ERROR_TAIL_MAX_LINES:])[:1200]
+
+    detail: dict[str, str] = {
+        'summary': summary,
+        'error_tail': error_tail or 'no output captured',
+    }
+    if failed_test:
+        detail['failed_test'] = failed_test
+    if nested_hints and own_fail:
+        detail['nested_hint'] = nested_hints[-1][:240]
+    return detail
 
 
 def _error_tail(stdout: str, stderr: str) -> str:
@@ -80,7 +140,7 @@ def load_last_qa_result() -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _execute_script(name: str, script_rel: str, *, timeout: int) -> dict[str, Any]:
+def _execute_script(name: str, script_rel: str, *, timeout: int, smoke_mode: bool = False) -> dict[str, Any]:
     if script_rel not in ALL_SCRIPT_ALLOWLIST:
         return {
             'name': name,
@@ -117,6 +177,10 @@ def _execute_script(name: str, script_rel: str, *, timeout: int) -> dict[str, An
     env['PYTHONIOENCODING'] = 'utf-8'
     env['PYTHONUTF8'] = '1'
     env['PYTHONPATH'] = str(PROJECT_ROOT)
+    if smoke_mode:
+        env[QA_SMOKE_ENV] = '1'
+    else:
+        env.pop(QA_SMOKE_ENV, None)
 
     started = time.monotonic()
     try:
@@ -160,17 +224,29 @@ def _execute_script(name: str, script_rel: str, *, timeout: int) -> dict[str, An
             'summary': _summary_from_output(stdout, fallback='passed'),
         }
 
-    tail = _error_tail(stdout, stderr)
-    return {
+    parsed = _parse_script_failure(script_rel, stdout, stderr)
+    row: dict[str, Any] = {
         'name': name,
+        'script': script_rel,
         'status': 'FAIL',
         'duration_seconds': duration,
-        'summary': _summary_from_output(tail, fallback=f'exit code {proc.returncode}'),
-        'error_tail': tail,
+        'summary': parsed.get('summary') or f'exit code {proc.returncode}',
+        'error_tail': parsed.get('error_tail') or _error_tail(stdout, stderr),
     }
+    if parsed.get('failed_test'):
+        row['failed_test'] = parsed['failed_test']
+    if parsed.get('nested_hint'):
+        row['nested_hint'] = parsed['nested_hint']
+    return row
 
 
-def _run_script_suite(mode: str, scripts: tuple[tuple[str, str], ...], *, timeout: int) -> dict[str, Any]:
+def _run_script_suite(
+    mode: str,
+    scripts: tuple[tuple[str, str], ...],
+    *,
+    timeout: int,
+    smoke_mode: bool = False,
+) -> dict[str, Any]:
     started_at = _now_iso()
     wall_start = time.monotonic()
     tests: list[dict[str, Any]] = []
@@ -179,7 +255,7 @@ def _run_script_suite(mode: str, scripts: tuple[tuple[str, str], ...], *, timeou
     skipped_count = 0
 
     for display_name, script_rel in scripts:
-        row = _execute_script(display_name, script_rel, timeout=timeout)
+        row = _execute_script(display_name, script_rel, timeout=timeout, smoke_mode=smoke_mode)
         tests.append(row)
         status = row.get('status')
         if status == 'PASS':
@@ -210,6 +286,7 @@ def run_qa_smoke() -> dict[str, Any]:
         'smoke',
         SMOKE_SCRIPT_ALLOWLIST,
         timeout=SMOKE_SCRIPT_TIMEOUT_SECONDS,
+        smoke_mode=True,
     )
 
 
@@ -218,6 +295,7 @@ def run_qa_full() -> dict[str, Any]:
         'full',
         FULL_SCRIPT_ALLOWLIST,
         timeout=FULL_SCRIPT_TIMEOUT_SECONDS,
+        smoke_mode=False,
     )
 
 
@@ -278,11 +356,21 @@ def format_qa_result(result: dict[str, Any], *, detail: str = 'summary') -> str:
             lines.append('Failed:')
             for row in failed_rows:
                 name = row.get('name') or 'unknown'
+                failed_test = row.get('failed_test')
                 summary = row.get('summary') or row.get('error_tail') or 'failed'
-                lines.append(f"- {name}: {summary}")
+                if failed_test:
+                    lines.append(f"- {name} — {failed_test}")
+                else:
+                    lines.append(f"- {name}: {summary}")
+                if failed_test and summary and summary != failed_test:
+                    lines.append(f"  {summary[:240]}")
                 tail = row.get('error_tail')
                 if tail and tail != summary:
-                    lines.append(f"  {tail[:240]}")
+                    for tail_line in tail.splitlines()[:3]:
+                        lines.append(f"  {tail_line[:240]}")
+                nested = row.get('nested_hint')
+                if nested:
+                    lines.append(f"  nested: {nested[:200]}")
         elif tests:
             lines.append('')
             lines.append('All checks passed.')

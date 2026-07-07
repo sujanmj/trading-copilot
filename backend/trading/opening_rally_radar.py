@@ -1388,24 +1388,24 @@ def run_scheduled_early_tradecards_0925(
         command='early_tradecards_0925',
     )
     if sent:
-        best_row = next(
-            (
-                r for r in candidates
-                if _normalize_ticker(r.get('ticker')) == _normalize_ticker(best_sym)
-            ),
-            None,
+        from backend.trading.opening_workflow_accounting import (
+            record_scheduled_early_tradecards,
+            sort_early_tradecard_candidates,
         )
+
+        ranked = sort_early_tradecard_candidates(candidates)
         _capture_opening_workflow(
             stage='0925',
             board=board,
-            candidates=candidates,
+            candidates=ranked,
             best_sym=best_sym or '',
             timestamp=ts,
         )
-        _persist_opening_best_tradecard(
-            row=best_row,
-            now=ist_now,
-            state=str((best_row or {}).get('state') or 'TRADECARD_CANDIDATE'),
+        record_scheduled_early_tradecards(
+            board,
+            best_sym=best_sym or '',
+            candidates=ranked,
+            timestamp=ts,
         )
     return sent
 
@@ -1464,6 +1464,8 @@ def run_scheduled_final_confirmation_0931(
         command='final_opening_confirmation_0931',
     )
     if sent:
+        from backend.trading.opening_workflow_accounting import record_scheduled_final_confirmation
+
         _capture_opening_workflow(
             stage='0931',
             board=board,
@@ -1471,10 +1473,13 @@ def run_scheduled_final_confirmation_0931(
             best_sym=best_sym or '',
             timestamp=ts,
         )
-        _persist_opening_best_tradecard(
-            row=best_row,
+        record_scheduled_final_confirmation(
+            board,
+            best_sym=best_sym or '',
+            best_row=best_row,
+            confirm_state=confirm_state,
+            timestamp=ts,
             now=ist_now,
-            state=confirm_state,
         )
     return sent
 

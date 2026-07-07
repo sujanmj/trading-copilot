@@ -56,21 +56,24 @@ def _row(
 
 
 class _MemoryEnv:
+    """Isolated empty tradecard memory file for each test."""
+
     def __init__(self) -> None:
-        self.tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.jsonl')
-        self.path = Path(self.tmp.name)
-        self.tmp.close()
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmpdir.name) / 'tradecard_memory.jsonl'
 
     def __enter__(self) -> Path:
         os.environ['TRADECARD_MEMORY_FILE'] = str(self.path)
-        if self.path.exists():
-            self.path.unlink()
+        self.path.write_text('', encoding='utf-8')
         return self.path
 
     def __exit__(self, *args: object) -> None:
         os.environ.pop('TRADECARD_MEMORY_FILE', None)
-        if self.path.exists():
-            self.path.unlink()
+        self._tmpdir.cleanup()
+
+
+def _fixed_memory_now() -> datetime:
+    return _dt(2026, 5, 27, 10, 30)
 
 
 def _live_board(*tickers: str) -> dict:
@@ -80,7 +83,12 @@ def _live_board(*tickers: str) -> dict:
         'session_date': '2026-05-27',
         'scan_time_local': '2026-05-27 10:30:00',
         'top_signals': [
-            _row(t, volume_ratio=1.5 - (idx * 0.15)) for idx, t in enumerate(tickers)
+            _row(
+                t,
+                score=78 - (idx * 6),
+                volume_ratio=2.4 - (idx * 0.35),
+            )
+            for idx, t in enumerate(tickers)
         ],
     }
     now = _dt(2026, 5, 27, 10, 30)
@@ -99,16 +107,19 @@ def _live_board(*tickers: str) -> dict:
 def test_tradecards_stores_ranked_candidates() -> int:
     from backend.trading.tradecard_memory import load_tradecard_memory, record_tradecards_memory
 
-    with _MemoryEnv():
+    fixed_now = _fixed_memory_now()
+    with _MemoryEnv(), patch('backend.trading.tradecard_memory._now_ist', return_value=fixed_now):
         board = _live_board('PERSISTENT', 'COFORGE')
         if board.get('reference_only'):
             return _fail('live board must not be reference_only for this test')
+        ranked = list(board.get('ranked_candidates') or [])
+        if len(ranked) < 2:
+            return _fail(f'expected at least 2 ranked candidates got {len(ranked)}')
+        expected_rank1 = str((ranked[0] or {}).get('ticker') or '').upper()
         record_tradecards_memory(board, command_source='/tradecards')
         rows = load_tradecard_memory(limit=20)
         if len(rows) < 2:
             return _fail(f'expected at least 2 tradecards records got {len(rows)}')
-        ranked = list(board.get('ranked_candidates') or [])
-        expected_rank1 = str((ranked[0] or {}).get('ticker') or '').upper()
         top = rows[0]
         if not top.get('symbol'):
             return _fail('memory record missing symbol')
@@ -118,6 +129,8 @@ def test_tradecards_stores_ranked_candidates() -> int:
             return _fail(
                 f'expected rank-1 symbol {expected_rank1!r} on newest record got {top.get("symbol")!r}'
             )
+        if top.get('created_at') != fixed_now.replace(microsecond=0).isoformat():
+            return _fail('batch tradecards memory must share one deterministic created_at')
         if not top.get('cap_bucket'):
             return _fail('memory record missing cap_bucket')
         if not top.get('reasons'):
@@ -130,19 +143,20 @@ def test_tradecards_stores_ranked_candidates() -> int:
 def test_tradecard_stores_selected_best() -> int:
     from backend.trading.tradecard_memory import load_tradecard_memory, record_tradecard_memory
 
-    with _MemoryEnv():
+    fixed_now = _fixed_memory_now()
+    with _MemoryEnv(), patch('backend.trading.tradecard_memory._now_ist', return_value=fixed_now):
         board = _live_board('PERSISTENT')
         sync = {
             'selected': 'PERSISTENT',
             'tradecards_best': 'PERSISTENT',
             'board': board,
-            'board_row': _row('PERSISTENT'),
+            'board_row': _row('PERSISTENT', score=78, volume_ratio=2.4),
         }
         record_tradecard_memory(
             board=board,
             sync=sync,
             symbol='PERSISTENT',
-            row=_row('PERSISTENT'),
+            row=_row('PERSISTENT', score=78, volume_ratio=2.4),
             card={'ticker': 'PERSISTENT', 'status': 'VALID_ENTRY', 'reason': 'aligned with board'},
             evidence_matrix={
                 'direct_confirms': ['volume 2.2x'],
@@ -154,8 +168,13 @@ def test_tradecard_stores_selected_best() -> int:
         rows = load_tradecard_memory(symbol='PERSISTENT', limit=5)
         if not rows:
             return _fail('expected tradecard memory record')
-        if not rows[0].get('selected_best'):
+        newest = rows[0]
+        if not newest.get('selected_best'):
             return _fail('selected /tradecard must set selected_best=true')
+        if int(newest.get('rank') or 0) != 1:
+            return _fail(f'newest selected-best record must be rank 1 got {newest.get("rank")!r}')
+        if newest.get('created_at') != fixed_now.replace(microsecond=0).isoformat():
+            return _fail('selected-best record must use deterministic created_at')
     return 0
 
 
@@ -221,17 +240,19 @@ def test_memory_stock_summary() -> int:
     from backend.telegram.response_format import format_tradecard_memory_stock_telegram
     from backend.trading.tradecard_memory import append_tradecard_memory, build_memory_record, summarize_symbol_memory
 
-    with _MemoryEnv():
+    with _MemoryEnv(), patch('backend.trading.tradecard_memory._now_ist', return_value=_fixed_memory_now()):
         board = {'session_date': '2026-05-27', 'data_status': 'current', 'market_lifecycle': 'MARKET_OPEN'}
         for rank, sym in enumerate(('PERSISTENT', 'PERSISTENT'), start=1):
-            append_tradecard_memory(build_memory_record(
+            record = build_memory_record(
                 command_source='/tradecards',
                 board=board,
                 symbol=sym,
                 row=_row(sym, score=90 - rank),
                 rank=rank,
                 selected_best=(rank == 1),
-            ))
+            )
+            record['created_at'] = _dt(2026, 5, 27, 10, 29 + rank).replace(microsecond=0).isoformat()
+            append_tradecard_memory(record)
         summary = summarize_symbol_memory('PERSISTENT')
         if int(summary.get('count') or 0) != 2:
             return _fail(f'expected count 2 got {summary.get("count")!r}')
@@ -247,7 +268,7 @@ def test_memory_latest() -> int:
     from backend.telegram.response_format import format_tradecard_memory_latest_telegram
     from backend.trading.tradecard_memory import append_tradecard_memory, build_memory_record, latest_tradecard_memory
 
-    with _MemoryEnv():
+    with _MemoryEnv(), patch('backend.trading.tradecard_memory._now_ist', return_value=_fixed_memory_now()):
         board = {'session_date': '2026-05-27', 'data_status': 'current'}
         append_tradecard_memory(build_memory_record(
             command_source='/tradecard',
@@ -270,18 +291,20 @@ def test_memory_stats() -> int:
     from backend.telegram.response_format import format_tradecard_memory_stats_telegram
     from backend.trading.tradecard_memory import append_tradecard_memory, build_memory_record, memory_stats
 
-    with _MemoryEnv():
+    with _MemoryEnv(), patch('backend.trading.tradecard_memory._now_ist', return_value=_fixed_memory_now()):
         board = {'session_date': '2026-05-27', 'data_status': 'current'}
-        append_tradecard_memory(build_memory_record(
+        record_a = build_memory_record(
             command_source='/tradecards',
             board=board,
             symbol='PERSISTENT',
             row=_row('PERSISTENT'),
             rank=1,
             selected_best=True,
-        ))
+        )
+        record_a['created_at'] = _dt(2026, 5, 27, 10, 30).replace(microsecond=0).isoformat()
+        append_tradecard_memory(record_a)
         ref_board = {'session_date': '2026-07-04', 'reference_only': True, 'data_status': 'previous_session_reference'}
-        append_tradecard_memory(build_memory_record(
+        record_b = build_memory_record(
             command_source='/tradecards',
             board=ref_board,
             symbol='COFORGE',
@@ -289,7 +312,9 @@ def test_memory_stats() -> int:
             rank=1,
             selected_best=True,
             no_current_entry=True,
-        ))
+        )
+        record_b['created_at'] = _dt(2026, 5, 27, 10, 31).replace(microsecond=0).isoformat()
+        append_tradecard_memory(record_b)
         stats = memory_stats()
         if int(stats.get('total') or 0) != 2:
             return _fail(f'expected total 2 got {stats.get("total")!r}')
@@ -304,7 +329,7 @@ def test_memory_stats() -> int:
 def test_temp_path_monkeypatch() -> int:
     from backend.trading.tradecard_memory import append_tradecard_memory, build_memory_record, memory_file_path
 
-    with _MemoryEnv() as path:
+    with _MemoryEnv() as path, patch('backend.trading.tradecard_memory._now_ist', return_value=_fixed_memory_now()):
         append_tradecard_memory(build_memory_record(
             command_source='test',
             board={'session_date': '2026-05-27'},
@@ -326,8 +351,8 @@ def test_temp_path_monkeypatch() -> int:
 def test_build_label_51o() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, ASTRAEDGE_BUILD_STAGE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Y' or ASTRAEDGE_BUILD_STAGE != '51Y':
-        return _fail(f'expected AstraEdge 51Y got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Z' or ASTRAEDGE_BUILD_STAGE != '51Z':
+        return _fail(f'expected AstraEdge 51Z got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

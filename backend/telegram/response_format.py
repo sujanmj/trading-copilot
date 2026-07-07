@@ -3381,6 +3381,7 @@ def format_early_tradecards_scheduled_telegram(
         build_opening_rally_board,
         pick_best_opening_tradecard,
     )
+    from backend.trading.opening_workflow_accounting import sort_early_tradecard_candidates
 
     data = board or build_opening_rally_board()
     time_ist = str(data.get('time_ist') or '09:25')
@@ -3389,7 +3390,9 @@ def format_early_tradecards_scheduled_telegram(
         '<i>Provisional ranks · paper/research only</i>',
         '',
     ]
-    candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
+    candidates = sort_early_tradecard_candidates([
+        r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED'
+    ])
     for idx, row in enumerate(candidates[:10], start=1):
         sym = str(row.get('ticker') or '?')
         state = _opening_state_display(str(row.get('state') or ''))

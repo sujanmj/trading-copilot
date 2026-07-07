@@ -312,8 +312,8 @@ def test_help_chart_patterns_section() -> int:
 def test_build_label_51x() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Y' or ASTRAEDGE_BUILD_STAGE != '51Y':
-        return _fail(f'expected AstraEdge 51Y got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Z' or ASTRAEDGE_BUILD_STAGE != '51Z':
+        return _fail(f'expected AstraEdge 51Z got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -331,6 +331,11 @@ def _run_script(name: str) -> int:
 
 
 def test_regression_prior_phases() -> int:
+    from backend.qa.smoke_mode import should_skip_nested_regression
+
+    if should_skip_nested_regression():
+        print('SKIP: test_regression_prior_phases (ASTRAEDGE_QA_SMOKE=1)')
+        return 0
     for script in (
         'test_ohlcv_candidate_capture_4b17.py',
         'test_qa_command_4b16.py',

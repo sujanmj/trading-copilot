@@ -168,12 +168,13 @@ def test_unknown_cap_bucket_no_crash() -> int:
         'phase': 'OPEN',
         'data_status': 'live',
     }
-    text = format_tradecards_telegram(board=board)
+    with patch('backend.trading.all_cap_gainers._screener_cap_bucket_exact', return_value=''):
+        text = format_tradecards_telegram(board=board)
     if 'Unknown cap' not in text:
         return _fail('missing gainer_bucket must render Unknown cap inline')
-    if format_cap_bucket_inline() != 'Unknown cap':
+    if format_cap_bucket_inline({'ticker': 'MYSTERY'}) != 'Unknown cap':
         return _fail('format_cap_bucket_inline without bucket must return Unknown cap')
-    if format_cap_bucket_header() != 'Cap bucket: Unknown':
+    if format_cap_bucket_header({'ticker': 'MYSTERY'}) != 'Cap bucket: Unknown':
         return _fail('format_cap_bucket_header without bucket must return Cap bucket: Unknown')
     return 0
 
@@ -290,8 +291,8 @@ def test_evidence_matrix_cap_metadata() -> int:
 def test_build_label_51m() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Y' or ASTRAEDGE_BUILD_STAGE != '51Y':
-        return _fail(f'expected AstraEdge 51Y got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51Z' or ASTRAEDGE_BUILD_STAGE != '51Z':
+        return _fail(f'expected AstraEdge 51Z got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

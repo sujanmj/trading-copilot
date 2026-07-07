@@ -37,12 +37,19 @@ LARGE_CAP_TICKERS = frozenset({
     'HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK', 'BHARTIARTL',
     'RELIANCE', 'ITC', 'LT', 'MARUTI', 'TITAN', 'ASIANPAINT', 'NESTLEIND',
     'M&M', 'BAJFINANCE', 'SUNPHARMA', 'ULTRACEMCO', 'POWERGRID', 'NTPC',
+    'BEL',
 })
 
 MID_CAP_TICKERS = frozenset({
     'SONACOMS', 'AEGISLOG', 'THANGAMAYL', 'COFORGE', 'PERSISTENT', 'MPHASIS',
     'INDHOTEL', 'AUROPHARMA', 'BHEL', 'IRCTC', 'POLYCAB', 'DIXON', 'APLAPOLLO',
+    'METROPOLIS',
 })
+
+CAP_BUCKET_ALIASES: dict[str, str] = {
+    'BEL': BUCKET_LARGE,
+    'METROPOLIS': BUCKET_MID,
+}
 
 NEW_LISTING_DEMERGER_TICKERS = frozenset({
     'VISL', 'VOGL', 'VEDPOWER', 'VALIND', 'VEDL',
@@ -63,13 +70,63 @@ def _normalize_cap_bucket_label(raw: object) -> str:
     return str(raw or '').strip().lower().replace('_', ' ')
 
 
+def _screener_cap_bucket_exact(ticker: str) -> str:
+    """Return cap bucket from screener memory only when the row symbol matches exactly."""
+    if not ticker:
+        return ''
+    try:
+        from backend.trading.screener_memory import resolve_screener_query, summarize_symbol_screener
+
+        screener_row = resolve_screener_query(ticker)
+        if screener_row:
+            row_sym = _normalize_ticker(
+                screener_row.get('symbol_key') or screener_row.get('symbol')
+            )
+            if row_sym == ticker:
+                bucket = _normalize_cap_bucket_label(screener_row.get('cap_bucket'))
+                if bucket and bucket != 'unknown':
+                    return bucket
+        summary = summarize_symbol_screener(ticker)
+        summary_sym = _normalize_ticker(summary.get('symbol_key') or summary.get('symbol'))
+        if summary_sym == ticker:
+            bucket = _normalize_cap_bucket_label(summary.get('cap_bucket'))
+            if bucket and bucket != 'unknown':
+                return bucket
+    except Exception:
+        pass
+    return ''
+
+
+def resolve_cap_bucket_for_symbol(sym: str, row: dict[str, Any] | None = None) -> str:
+    """Resolve cap bucket from row fields, exact screener match, then safe aliases."""
+    ticker = _normalize_ticker(sym)
+    data = row or {}
+    raw = _normalize_cap_bucket_label(
+        data.get('gainer_bucket') or data.get('cap_bucket')
+    )
+    if raw:
+        return raw
+    if ticker:
+        raw = _screener_cap_bucket_exact(ticker)
+        if raw:
+            return raw
+        alias = CAP_BUCKET_ALIASES.get(ticker)
+        if alias:
+            return alias
+    return ''
+
+
 def format_cap_bucket_inline(
     row: dict[str, Any] | None = None,
     *,
     gainer_bucket: str = '',
+    symbol: str = '',
 ) -> str:
     """Inline tradecards/radar label — 'Large cap' or 'Unknown cap'."""
     raw = _normalize_cap_bucket_label(gainer_bucket or (row or {}).get('gainer_bucket'))
+    if not raw:
+        sym = _normalize_ticker(symbol or (row or {}).get('ticker'))
+        raw = resolve_cap_bucket_for_symbol(sym, row) if sym else ''
     if not raw:
         return 'Unknown cap'
     parts = raw.split()
@@ -80,21 +137,26 @@ def format_cap_bucket_header(
     row: dict[str, Any] | None = None,
     *,
     gainer_bucket: str = '',
+    symbol: str = '',
 ) -> str:
     """Tradecard header line — 'Cap bucket: Large cap' or 'Cap bucket: Unknown'."""
-    raw = _normalize_cap_bucket_label(gainer_bucket or (row or {}).get('gainer_bucket'))
-    if not raw:
+    inline = format_cap_bucket_inline(row, gainer_bucket=gainer_bucket, symbol=symbol)
+    if inline == 'Unknown cap':
         return 'Cap bucket: Unknown'
-    return f'Cap bucket: {format_cap_bucket_inline(gainer_bucket=raw)}'
+    return f'Cap bucket: {inline}'
 
 
 def format_cap_bucket_metadata(
     row: dict[str, Any] | None = None,
     *,
     gainer_bucket: str = '',
+    symbol: str = '',
 ) -> str:
     """Evidence matrix metadata token — 'cap_bucket=large cap' or empty."""
     raw = _normalize_cap_bucket_label(gainer_bucket or (row or {}).get('gainer_bucket'))
+    if not raw:
+        sym = _normalize_ticker(symbol or (row or {}).get('ticker'))
+        raw = resolve_cap_bucket_for_symbol(sym, row) if sym else ''
     return f'cap_bucket={raw}' if raw else ''
 
 

@@ -279,6 +279,12 @@ def summarize_alert_review_tracking(review_date: str) -> dict[str, int]:
         'wait_volume_count': 0,
         'entry_missed_count': 0,
     }
+    try:
+        from backend.orchestration.alert_event_log import count_individual_intraday_alerts
+
+        counts['intraday_alert_count'] = count_individual_intraday_alerts(review_date)
+    except Exception:
+        pass
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -288,14 +294,20 @@ def summarize_alert_review_tracking(review_date: str) -> dict[str, int]:
             counts['premarket_watch_count'] += 1
         elif alert_type == 'open':
             counts['open_setup_count'] += 1
-        elif alert_type == 'intraday':
-            counts['intraday_alert_count'] += 1
         elif alert_type in ('today', 'tomorrow'):
             counts['live_watch_count'] += 1
         if 'WAIT FOR VOLUME' in reason or 'WEAK PARTICIPATION' in reason:
             counts['wait_volume_count'] += 1
         if 'ENTRY MISSED' in reason or 'EXTENDED' in reason:
             counts['entry_missed_count'] += 1
+
+    try:
+        from backend.trading.opening_workflow_accounting import summarize_opening_workflow_accounting
+
+        opening = summarize_opening_workflow_accounting(review_date)
+        counts['confirmed_count'] += int(opening.get('confirmed') or 0)
+    except Exception:
+        opening = {}
 
     tg = _query_telegram_alert_outcomes(review_date)
     for type_counts in (tg.get('by_type') or {}).values():

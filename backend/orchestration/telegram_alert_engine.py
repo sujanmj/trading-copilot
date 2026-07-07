@@ -543,6 +543,12 @@ def try_intraday_events() -> int:
         if _dispatch(INTRADAY_EVENT, text, conf, 'intraday batch', dedupe_key=dedupe, regime=regime, volatility=vol):
             for ev in to_send:
                 record_intraday_sent(ev)
+            try:
+                from backend.orchestration.alert_event_log import log_intraday_batch_ticker_events
+
+                log_intraday_batch_ticker_events(to_send, regime=regime)
+            except Exception:
+                pass
             sent += 1
     return sent
 
