@@ -1,9 +1,10 @@
 """
-Premarket IST scheduler (Stage 46H + 4B.3 opening workflow).
+Premarket IST scheduler (Stage 46H + 4B.3 opening workflow + 4B.18F macro checkpoint).
 
 Silent background builds: 07:45, 08:00, 08:15 (data for 09:00 radar).
+Macro Shock Checkpoint: 08:30 IST.
 Opening rally Telegram alerts: 09:00, 09:20, 09:25, 09:31.
-Legacy 08:30/08:45 auto-alerts skipped when opening workflow is enabled.
+Legacy 08:30/08:45 setup alerts skipped when opening workflow is enabled.
 """
 
 from __future__ import annotations
@@ -28,6 +29,11 @@ PREMARKET_SLOTS: dict[str, tuple[int, int]] = {
     'scanner_build': (8, 15),
     'premarket_top3': (8, 30),
     'premarket_action': (8, 45),
+}
+
+# Dedicated macro checkpoint runs at 08:30 even when legacy top3 is skipped.
+MACRO_CHECKPOINT_SLOTS: dict[str, tuple[int, int]] = {
+    'macro_shock_checkpoint': (8, 30),
 }
 
 SILENT_BUILD_SLOTS: dict[str, str] = {
@@ -55,6 +61,13 @@ SCHEDULED_ALERT_NAMES: dict[str, str] = {
     '0931': 'Final Opening Confirmation',
 }
 
+SCHEDULE_DISPLAY_PREP = [
+    '07:45 — overnight global + US close + commodities',
+    '08:00 — India news + govt + broker digest',
+    '08:15 — premarket scanner/watchlist build',
+    '08:30 — Macro Shock Checkpoint',
+]
+
 SCHEDULE_DISPLAY_OPENING = [
     '09:00 — Radar Armed',
     '09:20 — Opening Rally Radar',
@@ -69,7 +82,7 @@ SCHEDULE_DISPLAY_LEGACY_BUILDS = [
     '07:45 — overnight global + US close + commodities',
     '08:00 — India news + govt + broker digest',
     '08:15 — premarket scanner/watchlist build',
-    '08:30 — Telegram premarket top 3 setups',
+    '08:30 — Macro Shock Checkpoint',
     '08:45 — final premarket action plan',
 ]
 
@@ -115,6 +128,15 @@ def due_premarket_slots(now: Optional[datetime] = None) -> list[str]:
     return due
 
 
+def due_macro_checkpoint_slots(now: Optional[datetime] = None) -> list[str]:
+    now = now or datetime.now(IST)
+    due: list[str] = []
+    for slot, (hour, minute) in MACRO_CHECKPOINT_SLOTS.items():
+        if now.hour == hour and now.minute == minute and not _already_sent(slot, now):
+            due.append(slot)
+    return due
+
+
 def due_opening_morning_slots(now: Optional[datetime] = None) -> list[str]:
     now = now or datetime.now(IST)
     due: list[str] = []
@@ -128,6 +150,7 @@ def due_opening_morning_slots(now: Optional[datetime] = None) -> list[str]:
 WEEKEND_SUPPRESS_SEND_SLOTS = frozenset({
     'premarket_top3',
     'premarket_action',
+    'macro_shock_checkpoint',
     *OPENING_MORNING_SLOTS.keys(),
 })
 
@@ -145,6 +168,29 @@ def _is_weekend_research_mode(now: Optional[datetime] = None) -> bool:
 
 def is_opening_workflow_enabled() -> bool:
     return OPENING_WORKFLOW_ENABLED
+
+
+def run_macro_shock_checkpoint_slot(
+    *,
+    send_fn: Optional[Callable[[str], bool]] = None,
+    now: Optional[datetime] = None,
+) -> bool:
+    ist_now = now or datetime.now(IST)
+    if _is_weekend_research_mode(ist_now):
+        print(
+            'WEEKEND_SCHEDULE_SUPPRESSED macro_checkpoint reason=weekend_research_mode '
+            'slot=macro_shock_checkpoint',
+            flush=True,
+        )
+        return False
+    try:
+        from backend.trading.macro_shock_sentinel import run_macro_shock_checkpoint_0830
+
+        result = run_macro_shock_checkpoint_0830(send_fn=send_fn, now=ist_now)
+        return bool(result.get('sent') or result.get('ok'))
+    except Exception as exc:
+        print(f'[PREMARKET_SCHED] macro_checkpoint failed: {exc}', flush=True)
+        return False
 
 
 def run_premarket_slot(
@@ -229,14 +275,16 @@ def format_schedule_text() -> str:
         '<b>📅 Schedule (IST)</b>',
         '',
         '<b>Background prep:</b>',
-        '• Runs silently before market open',
+    ]
+    lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY_PREP)
+    lines.extend([
         '',
         '<b>Opening rally workflow</b>',
-    ]
+    ])
     lines.extend(f'• {row}' for row in SCHEDULE_DISPLAY_OPENING)
     lines.extend([
         '',
-        '<b>Manual anytime:</b> /radar · /gainers · /tradecards · /tradecard',
+        '<b>Manual anytime:</b> /radar · /gainers · /tradecards · /tradecard · /macro',
         '',
         '<b>Commands:</b> /premarket · /premarket full · /action plan',
     ])
@@ -257,6 +305,12 @@ def run_premarket_scheduler_loop(
                 _mark_sent(slot, now)
             except Exception as exc:
                 print(f'[PREMARKET_SCHED] slot={slot} failed: {exc}', flush=True)
+        for slot in due_macro_checkpoint_slots(now):
+            try:
+                run_macro_shock_checkpoint_slot(send_fn=send_fn, now=now)
+                _mark_sent(slot, now)
+            except Exception as exc:
+                print(f'[PREMARKET_SCHED] macro slot={slot} failed: {exc}', flush=True)
         for slot in due_opening_morning_slots(now):
             try:
                 if slot == 'radar_armed_0900':

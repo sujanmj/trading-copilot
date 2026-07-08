@@ -566,11 +566,35 @@ def evaluate_emergency_macro(
     return True, 'ok', theme
 
 
-def record_emergency_macro_sent(headline: str, confidence: float, theme: str) -> None:
+def record_emergency_macro_sent(
+    headline: str,
+    confidence: float,
+    theme: str,
+    *,
+    item: Optional[dict] = None,
+) -> None:
     state = _load_emergency_state()
     now = _now().isoformat()
     norm = normalize_headline(headline)
     state.setdefault('headlines', {})[norm] = {'sent_at': now, 'confidence': confidence, 'theme': theme}
     state.setdefault('themes', {})[theme] = {'sent_at': now, 'confidence': confidence, 'headline': headline[:120]}
+    state['active'] = True
+    state['severity'] = 'emergency_macro'
+    state['last_headline'] = headline[:240]
+    state['last_confidence'] = float(confidence)
     _save_emergency_state(state)
     _log('EMERGENCY_MACRO_SENT', f'theme={theme}')
+    try:
+        from backend.trading.macro_shock_sentinel import persist_emergency_macro_to_sentinel
+
+        persist_emergency_macro_to_sentinel(
+            headline,
+            confidence=float(confidence),
+            theme=theme,
+            source='emergency_macro',
+            item=item,
+            direct_market_impact=True,
+            timestamp=now,
+        )
+    except Exception as exc:
+        _log('EMERGENCY_MACRO_PERSIST_FAIL', str(exc)[:160])

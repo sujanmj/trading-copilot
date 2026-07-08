@@ -418,6 +418,7 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
                 item=record,
                 send_fn=None,
                 slot='immediate',
+                from_manual_feed=True,
             )
         except Exception:
             pass
@@ -497,6 +498,7 @@ def ingest_notifications(
                 item=record,
                 send_fn=None,
                 slot='immediate',
+                from_manual_feed=True,
             )
         except Exception:
             pass

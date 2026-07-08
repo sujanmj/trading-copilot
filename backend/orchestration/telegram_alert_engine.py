@@ -783,7 +783,7 @@ def try_emergency_macro(scheduled: bool = True) -> tuple[int, int]:
         EMERGENCY_MACRO_ALERT, dedupe_key=dedupe,
         headline=headline, sentiment='NEUTRAL', confidence=conf,
     )
-    record_emergency_macro_sent(headline, conf, theme)
+    record_emergency_macro_sent(headline, conf, theme, item=item)
     get_observability().record_emergency(headline[:120])
     get_observability().record_sent(EMERGENCY_MACRO_ALERT, headline[:100], {'confidence': conf})
     try:

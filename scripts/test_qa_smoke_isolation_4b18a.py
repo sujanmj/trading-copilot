@@ -203,8 +203,8 @@ def test_regression_qa_command_4b16() -> int:
 def test_build_label_51z() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52C' or ASTRAEDGE_BUILD_STAGE != '52C':
-        return _fail(f'expected AstraEdge 52C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52D' or ASTRAEDGE_BUILD_STAGE != '52D':
+        return _fail(f'expected AstraEdge 52D got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

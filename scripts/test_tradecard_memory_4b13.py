@@ -351,8 +351,8 @@ def test_temp_path_monkeypatch() -> int:
 def test_build_label_51o() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, ASTRAEDGE_BUILD_STAGE
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52C' or ASTRAEDGE_BUILD_STAGE != '52C':
-        return _fail(f'expected AstraEdge 52C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52D' or ASTRAEDGE_BUILD_STAGE != '52D':
+        return _fail(f'expected AstraEdge 52D got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

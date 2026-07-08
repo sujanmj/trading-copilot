@@ -35,8 +35,22 @@ SEVERITY_RANK = {
 }
 
 REGIME_RED = 'RED MARKET'
+REGIME_RISK_OFF = 'RISK_OFF'
 REGIME_WATCH = 'WATCH MODE'
 REGIME_NORMAL = 'NORMAL'
+
+EMERGENCY_FEED_SOURCE = 'emergency_macro'
+EMERGENCY_MIN_PERSIST_CONFIDENCE = 0.75
+
+BOND_YIELD_CLUSTERS = (
+    'bond yield',
+    'bond yields',
+    'yields hit',
+    'yield spike',
+    'ecb rate',
+    'rate hike bets',
+    'rate hike',
+)
 
 GEOPOLITICAL_CLUSTERS = (
     'iran ceasefire over',
@@ -68,6 +82,7 @@ OIL_CLUSTERS = (
     'oil jumps',
     'crude spike',
     'oil spike',
+    'oil surge',
     'supply disruption',
     'hormuz risk',
     'crude surges',
@@ -88,6 +103,9 @@ MARKET_CRASH_CLUSTERS = (
     'oil importer pressure',
     'sensex crash',
     'nifty crash',
+    'sensex crashes',
+    'nifty crashes',
+    'sensex/nifty',
     'sensex falls',
     'nifty falls',
     'market selloff',
@@ -201,12 +219,19 @@ def _detect_source_name(text: str, item: dict[str, Any] | None = None) -> str:
     return ''
 
 
-def classify_macro_themes(text: str, *, geo_hits: list[str], oil_hits: list[str], crash_hits: list[str]) -> list[str]:
+def classify_macro_themes(
+    text: str,
+    *,
+    geo_hits: list[str],
+    oil_hits: list[str],
+    crash_hits: list[str],
+    emergency_theme: str = '',
+) -> list[str]:
     lower = str(text or '').lower()
     themes: list[str] = []
-    if crash_hits or any(k in lower for k in ('sensex', 'nifty', 'selloff', 'gap down', 'gap-down', 'crash')):
+    if crash_hits or any(k in lower for k in ('sensex', 'nifty', 'selloff', 'gap down', 'gap-down', 'crash', 'risk-off', 'risk off')):
         themes.append(THEME_LABELS['market_crash'])
-    if oil_hits or _parse_oil_move_pct(text):
+    if oil_hits or _parse_oil_move_pct(text) or 'oil surge' in lower or 'oil prices' in lower:
         themes.append(THEME_LABELS['crude_oil'])
     if 'iran' in lower or any('iran' in h for h in geo_hits):
         themes.append(THEME_LABELS['iran'])
@@ -218,12 +243,18 @@ def classify_macro_themes(text: str, *, geo_hits: list[str], oil_hits: list[str]
         themes.append(THEME_LABELS['inr_risk'])
     if 'fii' in lower:
         themes.append(THEME_LABELS['fii_risk'])
+    if emergency_theme.replace('_', ' ') in ('macro policy', 'macro') or 'bond yield' in lower or 'rate hike' in lower:
+        themes.append('macro policy')
+    if any(k in lower for k in ('risk-off', 'risk off', 'selloff', 'bond yield', 'oil surge')):
+        if 'risk-off' not in themes and 'risk off' not in themes:
+            themes.append('risk-off')
     # Preserve order, dedupe.
     seen: set[str] = set()
     ordered: list[str] = []
     for theme in themes:
-        if theme not in seen:
-            seen.add(theme)
+        key = theme.lower()
+        if key not in seen:
+            seen.add(key)
             ordered.append(theme)
     return ordered
 
@@ -232,18 +263,31 @@ def score_macro_severity(
     text: str,
     *,
     item: dict[str, Any] | None = None,
+    confidence: float | None = None,
+    direct_market_impact: bool = False,
+    emergency_theme: str = '',
 ) -> dict[str, Any]:
     """Return severity assessment for a headline/cluster."""
     headline = str(text or '').strip()
     lower = headline.lower()
     geo_hits = _cluster_hits(lower, GEOPOLITICAL_CLUSTERS)
     oil_hits = _cluster_hits(lower, OIL_CLUSTERS)
+    if 'oil surge' in lower or 'fuels' in lower and 'oil' in lower:
+        if 'oil surge' not in oil_hits:
+            oil_hits = list(oil_hits) + ['oil surge']
     crash_hits = _cluster_hits(lower, MARKET_CRASH_CLUSTERS)
+    bond_hits = _cluster_hits(lower, BOND_YIELD_CLUSTERS)
     secondary_hits = _cluster_hits(lower, SECONDARY_IMPACT_CLUSTERS)
     oil_pct = _parse_oil_move_pct(headline)
     source = _detect_source_name(headline, item)
     major_source = bool(source) or any(s.strip() in lower for s in MAJOR_SOURCES)
-    themes = classify_macro_themes(headline, geo_hits=geo_hits, oil_hits=oil_hits, crash_hits=crash_hits)
+    themes = classify_macro_themes(
+        headline,
+        geo_hits=geo_hits,
+        oil_hits=oil_hits,
+        crash_hits=crash_hits,
+        emergency_theme=emergency_theme,
+    )
 
     india_gap_down = any(
         k in lower for k in (
@@ -254,6 +298,8 @@ def score_macro_severity(
     geo_escalation = bool(geo_hits) or ('iran' in lower and any(k in lower for k in ('war', 'ceasefire', 'strike', 'trump')))
     oil_spike = oil_pct is not None and oil_pct >= 4.0
     oil_moderate = oil_pct is not None and oil_pct >= 2.5
+    oil_surge = bool(oil_hits) or 'oil surge' in lower
+    bond_shock = bool(bond_hits)
 
     severity = SEVERITY_LOW
     triggers: list[str] = []
@@ -262,12 +308,18 @@ def score_macro_severity(
         triggers.append('geopolitical escalation')
     if oil_spike:
         triggers.append(f'oil jump {oil_pct:.1f}%')
+    elif oil_surge:
+        triggers.append('oil surge')
     elif oil_moderate:
         triggers.append(f'oil move {oil_pct:.1f}%')
+    if bond_shock:
+        triggers.append('bond yield shock')
     if india_gap_down:
         triggers.append('India index/futures gap-down risk')
     if crash_hits:
         triggers.append('market crash risk')
+
+    conf = float(confidence) if confidence is not None else None
 
     if (geo_escalation and oil_spike) or oil_spike or india_gap_down or (
         major_source and india_gap_down
@@ -279,16 +331,26 @@ def score_macro_severity(
         ) and 'iran' in lower
     ):
         severity = SEVERITY_CRITICAL
-    elif oil_spike or (geo_escalation and oil_moderate) or (
+    elif oil_spike or oil_surge or bond_shock or (geo_escalation and oil_moderate) or (
         major_source and len(secondary_hits) >= 2 and (geo_hits or oil_hits or crash_hits)
     ) or (
         len(themes) >= 3 and (geo_hits or oil_hits)
-    ):
+    ) or (geo_escalation and crash_hits):
         severity = SEVERITY_HIGH
-    elif geo_hits or oil_hits or crash_hits or oil_moderate:
+    elif geo_hits or oil_hits or crash_hits or oil_moderate or bond_hits:
         severity = SEVERITY_WATCH
     elif secondary_hits:
         severity = SEVERITY_LOW
+
+    # Emergency Macro path: direct impact + high confidence floors severity to HIGH.
+    if direct_market_impact and conf is not None and conf >= 0.90:
+        if SEVERITY_RANK.get(severity, 0) < SEVERITY_RANK[SEVERITY_HIGH]:
+            severity = SEVERITY_HIGH
+            if 'direct market impact' not in triggers:
+                triggers.append('direct market impact')
+    elif direct_market_impact and conf is not None and conf >= EMERGENCY_MIN_PERSIST_CONFIDENCE:
+        if SEVERITY_RANK.get(severity, 0) < SEVERITY_RANK[SEVERITY_WATCH]:
+            severity = SEVERITY_WATCH
 
     regime = REGIME_NORMAL
     gap_down_risk = False
@@ -296,14 +358,22 @@ def score_macro_severity(
         regime = REGIME_RED
         gap_down_risk = True
     elif severity == SEVERITY_HIGH:
-        regime = REGIME_RED if india_gap_down or crash_hits else REGIME_WATCH
-        gap_down_risk = bool(india_gap_down or crash_hits)
+        if india_gap_down or crash_hits:
+            regime = REGIME_RED
+            gap_down_risk = True
+        else:
+            regime = REGIME_RISK_OFF
+            gap_down_risk = False
 
     impact_parts: list[str] = []
+    if direct_market_impact:
+        impact_parts.append('direct market impact')
     if gap_down_risk or crash_hits:
         impact_parts.append('India risk-off; broad-market selloff risk')
-    if oil_spike or oil_hits:
+    if oil_spike or oil_hits or oil_surge:
         impact_parts.append('oil-importer pressure')
+    if bond_shock:
+        impact_parts.append('global yield / rate-hike risk-off')
     if 'inr' in lower or 'rupee' in lower:
         impact_parts.append('INR weakness risk')
     if 'inflation' in lower:
@@ -327,27 +397,42 @@ def score_macro_severity(
         'geo_hits': geo_hits,
         'oil_hits': oil_hits,
         'crash_hits': crash_hits,
+        'bond_hits': bond_hits,
         'oil_pct': oil_pct,
         'major_source': major_source,
+        'confidence': conf,
+        'direct_market_impact': bool(direct_market_impact),
+        'emergency_theme': emergency_theme or '',
         'detected_at': _now_ist().replace(microsecond=0).isoformat(),
         'session_date': _session_date(),
     }
 
 
-def store_macro_shock_memory(assessment: dict[str, Any], *, original_source: str = '') -> dict[str, Any]:
-    """Persist macro shock into my_feed with source macro_shock_sentinel."""
-    from backend.my_feed.my_feed_db import insert_feed_item
+def store_macro_shock_memory(
+    assessment: dict[str, Any],
+    *,
+    original_source: str = '',
+    feed_source: str = 'macro_shock_sentinel',
+) -> dict[str, Any]:
+    """Persist macro shock into my_feed (dedupe same headline within session)."""
+    from backend.my_feed.my_feed_db import find_recent_duplicate, insert_feed_item
 
     headline = str(assessment.get('headline') or assessment.get('trigger') or 'Macro shock')
     themes = list(assessment.get('themes') or [])
     severity = str(assessment.get('severity') or SEVERITY_WATCH)
     impact = float({'LOW': 40, 'WATCH': 62, 'HIGH': 82, 'CRITICAL': 95}.get(severity, 60))
+    src = feed_source or 'macro_shock_sentinel'
+
+    duplicate = find_recent_duplicate(headline, hours=18)
+    if duplicate and str(duplicate.get('event_type') or '') == 'macro_shock':
+        # Update active state pointer only — do not insert a second feed row.
+        return duplicate
 
     record = insert_feed_item({
-        'source': 'macro_shock_sentinel',
+        'source': src,
         'raw_market_text': headline,
         'cleaned_summary': headline,
-        'detected_source_app': original_source or (assessment.get('sources') or [''])[0],
+        'detected_source_app': original_source or (assessment.get('sources') or [''])[0] or src,
         'tickers': [],
         'sectors': [],
         'themes': themes,
@@ -359,17 +444,149 @@ def store_macro_shock_memory(assessment: dict[str, Any], *, original_source: str
         'confirmation_required': True,
         'status': 'active',
         'payload': {
+            'feed_type': 'macro_shock',
             'macro_severity': severity,
             'macro_regime': assessment.get('regime'),
             'macro_trigger': assessment.get('trigger'),
             'macro_impact': assessment.get('impact'),
             'gap_down_risk': bool(assessment.get('gap_down_risk')),
-            'original_source': original_source,
+            'original_source': original_source or src,
             'original_headline': headline,
             'original_timestamp': assessment.get('detected_at'),
+            'confidence': assessment.get('confidence'),
+            'direct_market_impact': bool(assessment.get('direct_market_impact')),
+            'emergency_theme': assessment.get('emergency_theme') or '',
+            'catalyst_eligible': False,
+            'macro_regime_only': True,
         },
     })
     return record
+
+
+def _bump_duplicate_meta(assessment: dict[str, Any]) -> dict[str, Any]:
+    """On same-headline revisit, bump source_count / updated_at in active state."""
+    state = _load_state()
+    active = state.get('active') if isinstance(state.get('active'), dict) else {}
+    h_hash = _headline_hash(str(assessment.get('headline') or ''))
+    count = int(active.get('source_count') or 1)
+    if _headline_hash(str(active.get('headline') or '')) == h_hash:
+        count += 1
+    else:
+        count = max(count, 1)
+    sources = list(active.get('sources') or [])
+    for src in assessment.get('sources') or []:
+        if src and src not in sources:
+            sources.append(src)
+    merged = {
+        **active,
+        **assessment,
+        'sources': sources or list(assessment.get('sources') or []),
+        'source_count': count,
+        'updated_at': _now_ist().replace(microsecond=0).isoformat(),
+    }
+    # Keep higher severity for the session.
+    prev_rank = SEVERITY_RANK.get(str(active.get('severity') or ''), -1)
+    new_rank = SEVERITY_RANK.get(str(assessment.get('severity') or ''), 0)
+    if prev_rank > new_rank and active.get('session_date') == _session_date():
+        merged['severity'] = active.get('severity')
+        merged['regime'] = active.get('regime') or merged.get('regime')
+        merged['gap_down_risk'] = bool(active.get('gap_down_risk') or merged.get('gap_down_risk'))
+    state['active'] = merged
+    _save_state(state)
+    return merged
+
+
+def persist_emergency_macro_to_sentinel(
+    headline: str,
+    *,
+    confidence: float = 0.0,
+    theme: str = '',
+    source: str = 'emergency_macro',
+    summary: str = '',
+    timestamp: str = '',
+    item: dict[str, Any] | None = None,
+    direct_market_impact: bool = True,
+) -> dict[str, Any]:
+    """
+    Persist a sent Emergency Macro alert into macro shock state + my_feed.
+
+    Called after Telegram emergency macro is successfully sent.
+    Does not send another Telegram alert (already delivered upstream).
+    """
+    text = str(headline or summary or '').strip()
+    if not text:
+        return {'ok': False, 'reason': 'empty', 'persisted': False}
+
+    conf = float(confidence or 0)
+    if conf < EMERGENCY_MIN_PERSIST_CONFIDENCE and not direct_market_impact:
+        return {'ok': True, 'reason': 'below_persist_threshold', 'persisted': False}
+
+    assessment = score_macro_severity(
+        text,
+        item=item,
+        confidence=conf,
+        direct_market_impact=direct_market_impact,
+        emergency_theme=str(theme or ''),
+    )
+    if timestamp:
+        assessment['detected_at'] = str(timestamp)
+    if source:
+        sources = list(assessment.get('sources') or [])
+        if source not in sources:
+            sources.insert(0, source)
+        assessment['sources'] = sources
+    assessment['emergency_theme'] = str(theme or assessment.get('emergency_theme') or '')
+    assessment['confidence'] = conf
+    assessment['direct_market_impact'] = bool(direct_market_impact)
+
+    severity = str(assessment.get('severity') or SEVERITY_LOW)
+    if SEVERITY_RANK.get(severity, 0) < SEVERITY_RANK[SEVERITY_WATCH]:
+        return {'ok': True, 'assessment': assessment, 'persisted': False, 'reason': 'low_severity'}
+
+    state = _load_state()
+    prev = state.get('active') if isinstance(state.get('active'), dict) else {}
+    same_headline = (
+        prev.get('session_date') == _session_date()
+        and _headline_hash(str(prev.get('headline') or '')) == _headline_hash(text)
+    )
+
+    if same_headline:
+        active = _bump_duplicate_meta(assessment)
+        feed_id = str(active.get('feed_id') or '')
+        print(
+            f'[MACRO_SHOCK_PERSIST] emergency_macro duplicate severity={severity} '
+            f'source_count={active.get("source_count")}',
+            flush=True,
+        )
+        return {
+            'ok': True,
+            'assessment': active,
+            'persisted': True,
+            'duplicate': True,
+            'feed_id': feed_id,
+            'reason': 'duplicate_updated',
+        }
+
+    record = store_macro_shock_memory(
+        assessment,
+        original_source=source or EMERGENCY_FEED_SOURCE,
+        feed_source=EMERGENCY_FEED_SOURCE,
+    )
+    feed_id = str(record.get('feed_id') or '')
+    # If find_recent_duplicate returned an older row, still merge into active state.
+    active = _merge_active_state(assessment, feed_id=feed_id)
+    print(
+        f'[MACRO_SHOCK_PERSIST] emergency_macro severity={severity} feed_id={feed_id}',
+        flush=True,
+    )
+    return {
+        'ok': True,
+        'assessment': active,
+        'persisted': True,
+        'duplicate': bool(record.get('feed_id') and same_headline),
+        'feed_id': feed_id,
+        'reason': 'persisted',
+    }
 
 
 def _merge_active_state(assessment: dict[str, Any], *, feed_id: str = '') -> dict[str, Any]:
@@ -445,11 +662,11 @@ def _trading_guard_text(active: dict[str, Any] | None) -> str:
     severity = str(active.get('severity') or '')
     if severity == SEVERITY_CRITICAL:
         return (
-            'no fresh longs before 09:20 live confirmation; '
-            'stale catalyst/watchlist names cannot be CONFIRMED today'
+            'tighten confirmation; no stale catalyst-only confirmations; '
+            'no fresh longs before 09:20 live confirmation'
         )
     if severity == SEVERITY_HIGH:
-        return 'tighten entries; require live scanner + positive relative strength'
+        return 'tighten confirmation; no stale catalyst-only confirmations'
     return 'monitor headlines; avoid blind catalyst-only longs'
 
 
@@ -524,8 +741,9 @@ def format_macro_command_telegram(args: str = '') -> str:
         rows = [
             sanitize_item_for_api(row)
             for row in list_feed_items(limit=20, today_only=True)
-            if str(row.get('source') or '') == 'macro_shock_sentinel'
+            if str(row.get('source') or '') in ('macro_shock_sentinel', EMERGENCY_FEED_SOURCE)
                or str(row.get('event_type') or '') == 'macro_shock'
+               or str((row.get('payload') or {}).get('feed_type') if isinstance(row.get('payload'), dict) else '') == 'macro_shock'
         ]
         lines = [
             '<b>/macro today</b>',
@@ -556,9 +774,13 @@ def format_macro_command_telegram(args: str = '') -> str:
         ])
         if active.get('sources'):
             lines.append(f'<b>Sources:</b> {", ".join(active.get("sources") or [])}')
+        lines.append(f'<b>Action:</b> {_trading_guard_text(active)}')
         lines.append(f'<b>Trading guard:</b> {_trading_guard_text(active)}')
-        if active.get('gap_down_risk'):
-            lines.append('<b>Risk:</b> RED MARKET / GAP-DOWN RISK')
+        if active.get('gap_down_risk') or summary.get('regime') in (REGIME_RED, REGIME_RISK_OFF):
+            if active.get('gap_down_risk'):
+                lines.append('<b>Risk:</b> RED MARKET / GAP-DOWN RISK')
+            else:
+                lines.append(f'<b>Risk:</b> {summary.get("regime")}')
     else:
         lines.append('No active macro shock — overnight sentinel armed.')
     lines.append('<i>Paper/research only</i>')
@@ -642,6 +864,132 @@ def _record_alert_sent(assessment: dict[str, Any], *, slot: str = 'immediate') -
     _save_state(state)
 
 
+STOCK_SPECIFIC_NEWS_PATTERNS = (
+    r'\b(order win|wins order|bag(s|ged)? order|contract win)\b',
+    r'\b(q[1-4]\s*(results?|earnings)|earnings beat|results beat)\b',
+    r'\b(board approves|preferential allotment|buyback|demerger|fund raise)\b',
+    r'\b(shares (surge|jump|rally|plunge)|stock (surges|jumps))\b',
+)
+
+
+def is_stock_specific_feed_news(text: str, *, item: dict[str, Any] | None = None) -> bool:
+    """True for normal company/stock news that should NOT become macro shock."""
+    lower = str(text or '').lower()
+    if not lower:
+        return False
+    # Broad market / geo / oil / yields always win over stock-specific heuristics.
+    if any(k in lower for k in (
+        'iran', 'ceasefire', 'strait of hormuz', 'hormuz', 'crude', 'oil surge', 'oil jump',
+        'sensex', 'nifty', 'gift nifty', 'risk-off', 'risk off', 'bond yield', 'sanctions',
+        'war ', ' inflation', 'global selloff', 'market crash',
+    )):
+        return False
+    tickers = []
+    if item:
+        tickers = list(item.get('tickers') or [])
+    if not tickers and re.search(r'\b[A-Z]{3,12}\b', str(text or '')):
+        # Heuristic: upper tickers alone are weak; require stock pattern.
+        pass
+    if any(re.search(pat, lower) for pat in STOCK_SPECIFIC_NEWS_PATTERNS):
+        return True
+    event_type = str((item or {}).get('event_type') or '').lower()
+    if event_type in ('results', 'corporate_action') and not any(
+        k in lower for k in ('crude', 'oil', 'iran', 'sensex', 'nifty', 'war', 'sanction')
+    ):
+        return True
+    return False
+
+
+def annotate_feed_item_as_macro_shock(
+    feed_id: str,
+    assessment: dict[str, Any],
+) -> bool:
+    """Mark an existing /feed row as macro_shock so /myfeed today + /macro today see it."""
+    if not feed_id:
+        return False
+    try:
+        from backend.my_feed.my_feed_db import update_feed_item_metadata
+
+        themes = list(assessment.get('themes') or [])
+        if 'macro policy' not in themes and assessment.get('emergency_theme'):
+            themes.append(str(assessment.get('emergency_theme')).replace('_', ' '))
+        severity = str(assessment.get('severity') or SEVERITY_WATCH)
+        return bool(update_feed_item_metadata(feed_id, {
+            'event_type': 'macro_shock',
+            'themes': themes,
+            'urgency': 'high' if severity in (SEVERITY_HIGH, SEVERITY_CRITICAL) else 'medium',
+            'suggested_action': 'MACRO SHOCK ALERT',
+            'confirmation_required': True,
+            'impact_score': float(
+                {'LOW': 40, 'WATCH': 62, 'HIGH': 82, 'CRITICAL': 95}.get(severity, 60)
+            ),
+            'sentiment': 'bearish',
+        }))
+    except Exception:
+        return False
+
+
+def classify_manual_feed_macro(
+    headline: str,
+    *,
+    source: str = '',
+    item: dict[str, Any] | None = None,
+    timestamp: str = '',
+) -> dict[str, Any]:
+    """
+    Classify a manual /feed item into macro shock memory when macro-relevant.
+    Does not send Telegram (user already posted). Updates /macro + /myfeed visibility.
+    """
+    text = str(headline or '').strip()
+    if not text:
+        return {'ok': False, 'reason': 'empty', 'classified': False}
+    if is_stock_specific_feed_news(text, item=item):
+        return {'ok': True, 'reason': 'stock_specific', 'classified': False}
+
+    assessment = score_macro_severity(text, item=item)
+    if timestamp:
+        assessment['detected_at'] = str(timestamp)
+    if source:
+        sources = list(assessment.get('sources') or [])
+        if source not in sources:
+            sources.insert(0, source)
+        assessment['sources'] = sources
+
+    severity = str(assessment.get('severity') or SEVERITY_LOW)
+    if SEVERITY_RANK.get(severity, 0) < SEVERITY_RANK[SEVERITY_WATCH]:
+        return {'ok': True, 'assessment': assessment, 'classified': False, 'reason': 'low_severity'}
+
+    feed_id = str((item or {}).get('feed_id') or '')
+    annotated = False
+    if feed_id:
+        annotated = annotate_feed_item_as_macro_shock(feed_id, assessment)
+    else:
+        try:
+            record = store_macro_shock_memory(
+                assessment,
+                original_source=source or 'telegram_text',
+                feed_source='telegram_text',
+            )
+            feed_id = str(record.get('feed_id') or '')
+            annotated = bool(feed_id)
+        except Exception:
+            pass
+
+    active = _merge_active_state(assessment, feed_id=feed_id)
+    print(
+        f'[MACRO_SHOCK_FEED] classified=yes severity={severity} feed_id={feed_id}',
+        flush=True,
+    )
+    return {
+        'ok': True,
+        'assessment': active,
+        'classified': True,
+        'annotated': annotated,
+        'feed_id': feed_id,
+        'reason': 'macro_shock',
+    }
+
+
 def process_macro_headline(
     headline: str,
     *,
@@ -650,6 +998,7 @@ def process_macro_headline(
     send_fn: Callable[[str], bool] | None = None,
     slot: str = 'immediate',
     store_memory: bool = True,
+    from_manual_feed: bool = False,
 ) -> dict[str, Any]:
     """
     Analyze headline, optionally store memory, optionally send Telegram alert.
@@ -659,20 +1008,53 @@ def process_macro_headline(
     if not text:
         return {'ok': False, 'reason': 'empty', 'sent': False}
 
-    assessment = score_macro_severity(text, item=item)
-    severity = str(assessment.get('severity') or SEVERITY_LOW)
+    if from_manual_feed or str(source or '') in ('telegram_text', 'gui_text', 'my_feed'):
+        classified = classify_manual_feed_macro(
+            text,
+            source=source,
+            item=item,
+            timestamp=str((item or {}).get('created_at') or ''),
+        )
+        # Manual /feed: classify/memory only unless a send_fn is explicitly provided
+        # for HIGH/CRITICAL (rare). Do not auto-spam Telegram.
+        if send_fn is None:
+            return {
+                'ok': True,
+                'assessment': classified.get('assessment'),
+                'sent': False,
+                'reason': classified.get('reason') or 'manual_feed',
+                'feed_id': classified.get('feed_id') or '',
+                'classified': bool(classified.get('classified')),
+            }
+        if not classified.get('classified'):
+            return {
+                'ok': True,
+                'assessment': classified.get('assessment'),
+                'sent': False,
+                'reason': classified.get('reason') or 'not_macro',
+                'feed_id': '',
+                'classified': False,
+            }
+        # Fall through with assessment for optional alerting.
+        assessment = classified.get('assessment') or score_macro_severity(text, item=item)
+    else:
+        if is_stock_specific_feed_news(text, item=item):
+            return {'ok': True, 'assessment': None, 'sent': False, 'reason': 'stock_specific'}
+        assessment = score_macro_severity(text, item=item)
+
+    severity = str((assessment or {}).get('severity') or SEVERITY_LOW)
     if SEVERITY_RANK.get(severity, 0) < SEVERITY_RANK[SEVERITY_WATCH]:
         return {'ok': True, 'assessment': assessment, 'sent': False, 'reason': 'low_severity'}
 
-    feed_id = ''
-    if store_memory and severity in (SEVERITY_WATCH, SEVERITY_HIGH, SEVERITY_CRITICAL):
+    feed_id = str((assessment or {}).get('feed_id') or (item or {}).get('feed_id') or '')
+    if store_memory and not from_manual_feed and severity in (SEVERITY_WATCH, SEVERITY_HIGH, SEVERITY_CRITICAL):
         try:
             record = store_macro_shock_memory(assessment, original_source=source)
-            feed_id = str(record.get('feed_id') or '')
+            feed_id = str(record.get('feed_id') or '') or feed_id
         except Exception:
             pass
 
-    active = _merge_active_state(assessment, feed_id=feed_id)
+    active = _merge_active_state(assessment or {}, feed_id=feed_id)
     assessment = active
 
     should_send, reason = _should_send_alert(assessment, slot=slot)
@@ -706,7 +1088,73 @@ def process_macro_headline(
         'sent': sent,
         'reason': reason,
         'feed_id': feed_id,
+        'classified': True,
     }
+
+
+def run_macro_shock_checkpoint_0830(
+    *,
+    send_fn: Callable[[str], bool] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """
+    08:30 IST Macro Shock Checkpoint:
+    scan latest my_feed / news-style items, update sentinel memory,
+    send one Telegram alert only if HIGH/CRITICAL and not already alerted.
+    """
+    ist_now = _now_ist(now)
+    polled = poll_recent_feeds_for_macro_shock(send_fn=None, limit=40)
+    # Also scan known global/news json caches when present.
+    try:
+        from backend.storage.data_paths import get_data_path
+        import json as _json
+
+        for name in ('news_latest.json', 'govt_latest.json', 'global_markets_latest.json'):
+            path = get_data_path(name)
+            if not path.is_file():
+                continue
+            try:
+                payload = _json.loads(path.read_text(encoding='utf-8'))
+            except (OSError, _json.JSONDecodeError):
+                continue
+            candidates: list[str] = []
+            if isinstance(payload, dict):
+                for art in (payload.get('articles') or [])[:12]:
+                    if isinstance(art, dict):
+                        candidates.append(str(art.get('title') or art.get('headline') or ''))
+                for item in (payload.get('high_impact_items') or [])[:8]:
+                    if isinstance(item, dict):
+                        candidates.append(str(item.get('english_headline') or item.get('title') or ''))
+            for title in candidates:
+                if not title.strip():
+                    continue
+                process_macro_headline(title, source=name, send_fn=None, slot='0830_scan', store_memory=True)
+    except Exception:
+        pass
+
+    active = get_active_macro_shock(now=ist_now)
+    if not active:
+        print('[MACRO_SHOCK_CHECKPOINT] slot=0830 status=no_active_shock', flush=True)
+        return {'ok': True, 'sent': False, 'reason': 'no_active_shock', 'polled': polled}
+
+    severity = str(active.get('severity') or '')
+    if severity not in (SEVERITY_HIGH, SEVERITY_CRITICAL):
+        print(f'[MACRO_SHOCK_CHECKPOINT] slot=0830 status=below_alert severity={severity}', flush=True)
+        return {'ok': True, 'sent': False, 'reason': 'below_alert', 'assessment': active}
+
+    result = process_macro_headline(
+        str(active.get('headline') or active.get('trigger') or ''),
+        source=str((active.get('sources') or ['checkpoint'])[0]),
+        send_fn=send_fn,
+        slot='0830',
+        store_memory=False,
+    )
+    print(
+        f'[MACRO_SHOCK_CHECKPOINT] slot=0830 sent={bool(result.get("sent"))} '
+        f'reason={result.get("reason")}',
+        flush=True,
+    )
+    return result
 
 
 def poll_recent_feeds_for_macro_shock(
@@ -722,7 +1170,7 @@ def poll_recent_feeds_for_macro_shock(
         summary = str(row.get('cleaned_summary') or row.get('raw_market_text') or '')
         if not summary:
             continue
-        if str(row.get('source') or '') == 'macro_shock_sentinel':
+        if str(row.get('source') or '') in ('macro_shock_sentinel', EMERGENCY_FEED_SOURCE):
             continue
         assessment = score_macro_severity(summary, item=row)
         if SEVERITY_RANK.get(str(assessment.get('severity') or ''), 0) < SEVERITY_RANK[SEVERITY_HIGH]:
