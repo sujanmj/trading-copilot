@@ -57,6 +57,12 @@ PRIORITY_MEDIUM = 55
 PRIORITY_LOW = 35
 
 COMPANY_NAME_TO_TICKER: dict[str, str] = {
+    'state bank of india': 'SBIN',
+    'sbi bank': 'SBIN',
+    'sbi funds management': 'SBIN',
+    'sbi research': 'SBIN',
+    'sbin': 'SBIN',
+    'sbi': 'SBIN',
     'general insurance corporation of india': 'GICRE',
     'general insurance corporation': 'GICRE',
     'gic re': 'GICRE',

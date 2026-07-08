@@ -34,6 +34,12 @@ def sanitize_item_for_api(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
+    from backend.my_feed.entity_mapping import looks_like_market_wide_macro, resolve_company_ticker
+    from backend.my_feed.suggested_actions import (
+        MYFEED_ACTIONS_REQUIRING_CONFIRMATION,
+        normalize_myfeed_suggested_action,
+    )
+
     summary = str(extracted.get('cleaned_summary') or '')
     lower = summary.lower()
     sentiment = 'neutral'
@@ -42,27 +48,53 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     elif any(w in lower for w in ('fall', 'drop', 'crash', 'downgrade', 'miss', 'weak', 'risk')):
         sentiment = 'bearish'
 
+    resolved = resolve_company_ticker(summary, candidates=list(extracted.get('tickers') or []))
+    tickers = list(resolved.get('tickers') or extracted.get('tickers') or extract_tickers(summary))
+    if resolved.get('ticker'):
+        tickers = [str(resolved['ticker'])]
+
     event_type = 'news'
+    feed_type = 'news'
     themes: list[str] = []
-    tickers = extracted.get('tickers') or extract_tickers(summary)
+    macro = False
 
     geo_attack = any(w in lower for w in (
         'attack', 'attacks', 'missile', 'war', 'conflict', 'sanction', 'ceasefire', 'base', 'bases',
     ))
     geo_country = any(w in lower for w in ('iran', 'kuwait', 'jordan', 'bahrain', 'israel', 'ukraine'))
-    if geo_attack or geo_country or any(w in lower for w in ('geopolitical', 'inshorts:')):
-        event_type = 'geopolitical'
-        for theme in ('Geopolitical', 'Oil', 'Gold', 'Defence', 'Airlines'):
-            if theme not in themes:
-                themes.append(theme)
+    market_wide = looks_like_market_wide_macro(summary)
+
+    if market_wide and (geo_attack or geo_country or any(w in lower for w in (
+        'geopolitical', 'nifty', 'sensex', 'crude', 'oil surge', 'risk-off', 'bond yield', 'inflation',
+    ))):
+        event_type = 'geopolitical' if (geo_attack or geo_country) else 'macro'
+        feed_type = 'macro_shock'
+        macro = True
+        for theme in ('Geopolitical', 'Oil', 'Gold', 'Defence', 'Airlines', 'macro policy'):
+            if theme.lower() in lower or theme == 'macro policy':
+                if theme not in themes:
+                    themes.append(theme)
+    elif tickers and not market_wide:
+        event_type = 'company_news'
+        feed_type = 'company_news'
+        if any(w in lower for w in ('results', 'earnings', 'q1', 'q2', 'q3', 'q4')):
+            event_type = 'results'
+        elif any(w in lower for w in ('block deal', 'insider', 'stake', 'jv', 'ipo', 'fundraising', 'deposit program')):
+            event_type = 'corporate_action'
     elif any(w in lower for w in ('results', 'earnings', 'q1', 'q2', 'q3', 'q4')):
         event_type = 'results'
-    elif any(w in lower for w in ('rbi', 'sebi', 'policy', 'budget', 'rate')):
+        feed_type = 'company_news'
+    elif market_wide and any(w in lower for w in ('rbi', 'sebi', 'policy', 'budget', 'rate', 'fed', 'inflation')):
         event_type = 'macro'
+        feed_type = 'macro_shock'
+        macro = True
     elif any(w in lower for w in ('block deal', 'insider', 'stake', 'jv')):
         event_type = 'corporate_action'
-    elif any(w in lower for w in ('crude', 'gold', 'silver', 'commodity', 'oil')):
+        feed_type = 'company_news'
+    elif any(w in lower for w in ('crude', 'gold', 'silver', 'commodity', 'oil')) and market_wide:
         event_type = 'commodity'
+        feed_type = 'macro_shock'
+        macro = True
         if any(w in lower for w in ('gold', 'silver')):
             themes.append('Precious Metals')
         themes.append('Commodity Risk')
@@ -71,7 +103,7 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
         100.0,
         35.0 + extracted.get('items_found', 0) * 8.0 + len(tickers) * 5.0,
     )
-    if geo_attack or geo_country:
+    if macro and (geo_attack or geo_country):
         impact_score = max(impact_score, 75.0)
     if tickers and re.search(r'\bsurges?\s+\d', lower):
         impact_score = max(impact_score, 72.0)
@@ -82,48 +114,41 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     elif impact_score < 45:
         urgency = 'low'
 
-    suggested_action = 'NEWS ONLY'
-    if event_type == 'geopolitical':
+    if macro and event_type in ('geopolitical', 'macro'):
         suggested_action = 'MARKET RISK ALERT'
-    elif event_type == 'commodity':
+    elif macro and event_type == 'commodity':
         if 'silver' in lower:
             suggested_action = 'SILVER WATCH'
-            if 'Precious Metals' not in themes:
-                themes.append('Precious Metals')
         elif 'gold' in lower:
             suggested_action = 'GOLD WATCH'
-            if 'Precious Metals' not in themes:
-                themes.append('Precious Metals')
         elif any(w in lower for w in ('crude', 'oil')):
             suggested_action = 'OIL RISK WATCH'
         else:
             suggested_action = 'COMMODITY RISK ALERT'
-        if 'Commodity Risk' not in themes:
-            themes.append('Commodity Risk')
-    elif sentiment == 'bearish' or any(w in lower for w in ('avoid', 'fraud', 'default', 'downgrade', 'breakdown')):
-        suggested_action = 'AVOID / RISK WATCH'
-    elif any(w in lower for w in ('fall', 'drop', 'weak', 'risk', 'volatility', 'uncertain')):
-        suggested_action = 'AVOID / RISK WATCH'
-    elif tickers and re.search(r'\bsurges?\s+\d', lower):
-        suggested_action = 'WATCH FOR CONFIRMATION'
-    elif sentiment == 'bullish' and impact_score >= 45:
-        suggested_action = 'WATCH FOR CONFIRMATION'
-    elif impact_score < 45:
-        suggested_action = 'NEWS ONLY'
+    elif feed_type == 'company_news' or (tickers and not macro):
+        suggested_action = 'STOCK NEWS' if sentiment != 'bearish' else 'WATCH'
+        if any(w in lower for w in ('fall', 'fell', 'drop', 'decline', 'sell futures', 'suggested selling')):
+            suggested_action = 'WATCH'
     else:
-        suggested_action = 'WATCH FOR CONFIRMATION'
+        suggested_action = 'NEWS ONLY'
 
-    suggested_action = normalize_myfeed_suggested_action(suggested_action)
+    suggested_action = normalize_myfeed_suggested_action(suggested_action, fallback='NEWS ONLY')
 
     return {
-        'sentiment': sentiment,
         'event_type': event_type,
-        'impact_score': round(impact_score, 1),
+        'feed_type': feed_type,
+        'macro': macro,
+        'themes': themes,
+        'sectors': [],
+        'sentiment': sentiment,
+        'impact_score': impact_score,
         'urgency': urgency,
         'suggested_action': suggested_action,
         'confirmation_required': suggested_action in MYFEED_ACTIONS_REQUIRING_CONFIRMATION,
-        'themes': themes,
-        'sectors': [],
+        'tickers': tickers,
+        'company': str(resolved.get('company') or ''),
+        'ticker_confidence': str(resolved.get('ticker_confidence') or 'low'),
+        'resolver_source': str(resolved.get('resolver_source') or ''),
     }
 
 
@@ -294,22 +319,53 @@ def _verify_and_build_text_record(
         verification_payload_fields,
         verify_user_feed_claim,
     )
+    from backend.my_feed.entity_mapping import looks_like_market_wide_macro, resolve_company_ticker
 
     claim = normalize_claim(raw_text)
-    verification = verify_user_feed_claim(claim)
+    verification = verify_user_feed_claim(claim, allow_auto_refresh=True)
     classified = _classify_item(extracted)
-    tickers = extracted.get('tickers') or extract_tickers(extracted['cleaned_summary'])
-    verify_ticker = str(verification.get('ticker') or '').strip().upper()
+
+    resolved = resolve_company_ticker(
+        extracted.get('cleaned_summary') or raw_text,
+        candidates=list(extracted.get('tickers') or []) + list(claim.get('tickers') or []),
+    )
+    tickers = list(resolved.get('tickers') or [])
+    if not tickers:
+        tickers = list(claim.get('tickers') or extracted.get('tickers') or extract_tickers(extracted['cleaned_summary']))
+    verify_ticker = str(verification.get('ticker') or resolved.get('ticker') or '').strip().upper()
     if verify_ticker:
-        tickers = [verify_ticker, *[t for t in tickers if str(t).upper() != verify_ticker]]
+        tickers = [verify_ticker]
+
+    # Never let verification overwrite a strong resolved ticker with wrong noise.
+    if resolved.get('ticker') and str(resolved.get('ticker_confidence') or '') == 'high':
+        tickers = [str(resolved['ticker'])]
+        verification['ticker'] = tickers[0]
+        verification['company'] = resolved.get('company') or verification.get('company')
+        verification['entity'] = verification.get('company') or verification.get('entity')
 
     status = str(verification.get('verification_status') or 'UNVERIFIED').upper()
     cleaned_summary = extracted['cleaned_summary']
     if is_catalyst_eligible_status(status) and verification.get('verified_headline'):
         cleaned_summary = str(verification.get('verified_headline') or cleaned_summary)
 
+    feed_type = str(classified.get('feed_type') or claim.get('feed_type') or 'news')
+    suggested_action = str(classified.get('suggested_action') or 'NEWS ONLY')
+    event_type = str(classified.get('event_type') or verification.get('event_type') or 'news')
+    if feed_type == 'company_news':
+        event_type = event_type if event_type in ('results', 'corporate_action', 'company_news') else 'company_news'
+
     payload = verification_payload_fields(verification, normalized_claim=claim)
     payload['raw_user_text'] = str(raw_text or '').strip()
+    payload['feed_type'] = feed_type
+    payload['company'] = str(
+        verification.get('company')
+        or resolved.get('company')
+        or claim.get('company')
+        or ''
+    )
+    payload['macro'] = bool(classified.get('macro'))
+    payload['resolver_source'] = str(resolved.get('resolver_source') or '')
+
     record = insert_feed_item({
         'source': source,
         'raw_market_text': extracted['raw_market_text'],
@@ -318,15 +374,35 @@ def _verify_and_build_text_record(
         'tickers': tickers,
         'sectors': classified['sectors'],
         'themes': classified['themes'],
-        'event_type': str(verification.get('event_type') or classified['event_type']),
+        'event_type': event_type,
         'sentiment': classified['sentiment'],
         'impact_score': classified['impact_score'],
         'urgency': classified['urgency'],
-        'suggested_action': classified['suggested_action'],
+        'suggested_action': suggested_action,
         'confirmation_required': classified['confirmation_required'],
         'status': 'active',
         'payload': payload,
     })
+    # Surface feed_type/company on record for reply formatting.
+    record['feed_type'] = feed_type
+    record['company'] = payload.get('company') or ''
+    record['macro'] = payload.get('macro')
+
+    # Macro sentinel only for true market-wide macro.
+    if classified.get('macro') and looks_like_market_wide_macro(cleaned_summary):
+        try:
+            from backend.trading.macro_shock_sentinel import process_macro_headline
+
+            process_macro_headline(
+                cleaned_summary,
+                source=str(record.get('detected_source_app') or source),
+                item=record,
+                send_fn=None,
+                slot='immediate',
+                from_manual_feed=True,
+            )
+        except Exception:
+            pass
     return record, verification
 
 
@@ -407,19 +483,6 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
             from backend.my_feed.cache_invalidation import invalidate_myfeed_caches
 
             invalidate_myfeed_caches()
-        except Exception:
-            pass
-        try:
-            from backend.trading.macro_shock_sentinel import process_macro_headline
-
-            process_macro_headline(
-                str(record.get('cleaned_summary') or raw),
-                source=str(record.get('detected_source_app') or source),
-                item=record,
-                send_fn=None,
-                slot='immediate',
-                from_manual_feed=True,
-            )
         except Exception:
             pass
         return {

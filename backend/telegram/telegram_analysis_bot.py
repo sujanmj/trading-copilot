@@ -148,6 +148,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 
 <b>My Feed:</b>
 /feed &lt;market news text&gt; — save text to My Feed
+/feed verify FEED_ID — re-check saved feed against fresh news
+/news refresh — refresh news cache only
+/news refresh SYMBOL — refresh news for one company/ticker
 /myfeed list — latest saved feed
 /myfeed today — today's feed
 /myfeed scan — tickers/themes impact
@@ -796,8 +799,16 @@ def handle_analysis_command(
         response_text = run_without_ai(lambda: {'text': _handle_aihub(args)}, command='aihub').get('text') or _handle_aihub(args)
     elif cmd == 'news':
         refresh_news = not in_full_snapshot
-        result = run_without_ai(lambda: run_news_only(refresh=refresh_news), command='news')
+        news_args = args
+        if str(args or '').strip().lower().startswith('refresh'):
+            refresh_news = False
+        result = run_without_ai(
+            lambda: run_news_only(refresh=refresh_news, args=news_args),
+            command='news',
+        )
         response_text = result.get('text') or 'News unavailable.'
+        if str(args or '').strip().lower().startswith('refresh'):
+            return [send_analysis_message(response_text, command='news_refresh', dry_run=dry_run, parse_mode='')]
     elif cmd == 'qa':
         result = run_without_ai(lambda: run_qa_only(args), command='qa')
         response_text = result.get('text') or 'QA unavailable.'
@@ -861,6 +872,10 @@ def handle_analysis_command(
         text_blob = str(args or '').strip()
         if not text_blob:
             response_text = FEED_TEXT_ONLY_USAGE
+        elif text_blob.lower().startswith('verify'):
+            result = run_without_ai(lambda: run_feed_text_only(args), command='feed_verify')
+            response_text = result.get('text') or 'FEED_VERIFY_FAILED'
+            return [send_analysis_message(response_text, command='feed_verify', dry_run=dry_run, parse_mode='')]
         else:
             try:
                 result = run_without_ai(lambda: run_feed_text_only(args), command='feed_text')
@@ -869,7 +884,7 @@ def handle_analysis_command(
                 from backend.my_feed.feed_verification import format_feed_save_failed_reply
 
                 response_text = format_feed_save_failed_reply(reason=str(exc))
-        return [send_analysis_message(response_text, command='feed', dry_run=dry_run, parse_mode='')]
+            return [send_analysis_message(response_text, command='feed', dry_run=dry_run, parse_mode='')]
     elif cmd == 'myfeed':
         from backend.telegram.my_feed_intake import MYFEED_SUBCOMMAND_USAGE
 

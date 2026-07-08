@@ -254,8 +254,8 @@ def test_missing_columns_no_crash() -> int:
 def test_build_label_51w() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52D' or ASTRAEDGE_BUILD_STAGE != '52D':
-        return _fail(f'expected AstraEdge 52D got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52E' or ASTRAEDGE_BUILD_STAGE != '52E':
+        return _fail(f'expected AstraEdge 52E got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

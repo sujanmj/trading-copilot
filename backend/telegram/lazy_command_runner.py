@@ -115,8 +115,29 @@ def _runner_result(scope: str, *, text: str = '', payload: dict | None = None, *
     }
 
 
-def run_news_only(*, refresh: bool = True) -> dict[str, Any]:
+def run_news_only(*, refresh: bool = True, args: str = '') -> dict[str, Any]:
     from backend.telegram.freshness_consistency import get_news_freshness_dual
+
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower.startswith('refresh'):
+        from backend.my_feed.entity_mapping import resolve_company_ticker
+        from backend.my_feed.news_refresh import format_news_refresh_telegram, run_news_cache_refresh
+
+        sym_arg = raw[len('refresh'):].strip()
+        company = ''
+        symbol = ''
+        if sym_arg:
+            resolved = resolve_company_ticker(sym_arg)
+            symbol = str(resolved.get('ticker') or sym_arg).upper()
+            if symbol == 'SBI':
+                symbol = 'SBIN'
+            company = str(resolved.get('company') or '')
+            if not company and symbol == 'SBIN':
+                company = 'State Bank of India'
+        result = run_news_cache_refresh(symbol=symbol, company=company)
+        text = format_news_refresh_telegram(result)
+        return _runner_result('news_refresh', text=text, payload=result, refresh=result.get('refresh'))
 
     refresh_result = None
     if refresh:
@@ -143,6 +164,33 @@ def run_news_only(*, refresh: bool = True) -> dict[str, Any]:
     if refresh_result and not refresh_result.get('ok'):
         lines.append(f"Refresh note: {refresh_result.get('error') or refresh_result.get('news', 'partial')}")
     return _runner_result('news', text='\n'.join(lines), payload=payload, refresh=refresh_result)
+
+
+def run_feed_text_only(args: str = '') -> dict[str, Any]:
+    text_blob = str(args or '').strip()
+    lower = text_blob.lower()
+    if lower.startswith('verify '):
+        from backend.my_feed.feed_verification import reverify_feed_item
+
+        feed_id = text_blob.split(None, 1)[1].strip() if ' ' in text_blob else ''
+        result = reverify_feed_item(feed_id)
+        return _runner_result(
+            'feed_verify',
+            text=result.get('text') or 'FEED_VERIFY_FAILED',
+            payload=result,
+            ok=bool(result.get('ok')),
+        )
+    if lower == 'verify':
+        return _runner_result(
+            'feed_verify',
+            text='Usage: /feed verify FEED_ID',
+            ok=False,
+        )
+
+    from backend.my_feed.feed_processor import ingest_text
+
+    result = ingest_text(text_blob, source='telegram_text')
+    return _runner_result('feed_text', text=result.get('reply') or 'MY_FEED_NEEDS_TEXT', payload=result)
 
 
 def run_scan_only() -> dict[str, Any]:
@@ -660,14 +708,6 @@ def run_budget_only(args: str = '') -> dict[str, Any]:
 
     text = handle_budget_command(args)
     return _runner_result('budget', text=text)
-
-
-def run_feed_text_only(args: str = '') -> dict[str, Any]:
-    from backend.my_feed.feed_processor import ingest_text
-
-    text_blob = str(args or '').strip()
-    result = ingest_text(text_blob, source='telegram_text')
-    return _runner_result('feed_text', text=result.get('reply') or 'MY_FEED_NEEDS_TEXT', payload=result)
 
 
 def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[str, Any]:

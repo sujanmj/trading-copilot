@@ -256,8 +256,9 @@ def normalize_claim(raw_text: str) -> dict[str, Any]:
     from backend.my_feed.entity_mapping import (
         filter_claim_tickers,
         infer_event_type_from_text,
-        map_entities_from_text,
+        looks_like_market_wide_macro,
         refine_side_from_headline,
+        resolve_company_ticker,
     )
 
     text = str(raw_text or '').strip()
@@ -265,20 +266,32 @@ def normalize_claim(raw_text: str) -> dict[str, Any]:
 
     filtered = filter_market_text(text)
     cleaned = str(filtered.get('cleaned_summary') or text).strip()
-    mapped = map_entities_from_text(cleaned)
+    resolved = resolve_company_ticker(cleaned, candidates=list(filtered.get('tickers') or []))
     fuzzy = list(filtered.get('tickers') or extract_tickers(cleaned))
-    if not fuzzy:
+    if not fuzzy and not resolved.get('tickers'):
         try:
             from backend.intelligence.stock_catalyst_radar import resolve_tickers_from_text
 
             fuzzy = resolve_tickers_from_text(cleaned)
         except Exception:
             pass
-    tickers = filter_claim_tickers(cleaned, (mapped.get('tickers') or []) + list(fuzzy))
-    entity = str(mapped.get('entity') or '')
-    entities = list(mapped.get('entities') or [])
-    if not entity and tickers:
-        entity = tickers[0]
+
+    if resolved.get('ticker') and str(resolved.get('ticker_confidence') or '') == 'high':
+        tickers = [str(resolved['ticker'])]
+        entity = str(resolved.get('company') or resolved.get('entity') or tickers[0])
+        entities = list(resolved.get('entities') or [entity])
+        ticker_confidence = 'high'
+    else:
+        tickers = filter_claim_tickers(
+            cleaned,
+            list(resolved.get('tickers') or []) + list(fuzzy),
+        )
+        entity = str(resolved.get('company') or resolved.get('entity') or '')
+        entities = list(resolved.get('entities') or [])
+        if not entity and tickers:
+            entity = tickers[0]
+        ticker_confidence = str(resolved.get('ticker_confidence') or ('high' if tickers else 'low'))
+
     if not tickers and entities and 'adani' in cleaned.lower():
         tickers = ['ADANIENT']
         entity = entities[0] if entities else 'Adani Group'
@@ -299,16 +312,23 @@ def normalize_claim(raw_text: str) -> dict[str, Any]:
         event_type = inferred_event
     side = refine_side_from_headline(cleaned, default=str(side or 'NEUTRAL').upper())
 
+    feed_type = 'company_news' if tickers and not looks_like_market_wide_macro(cleaned) else 'news'
+    if looks_like_market_wide_macro(cleaned):
+        feed_type = 'macro_shock'
+
     keywords = sorted(_tokenize(cleaned))[:24]
     return {
         'raw_user_text': text,
         'claim_summary': cleaned,
         'entity': entity,
         'entities': entities,
+        'company': str(resolved.get('company') or entity or ''),
         'ticker': tickers[0] if tickers else '',
         'tickers': tickers,
-        'ticker_confidence': mapped.get('ticker_confidence') or ('high' if tickers else 'low'),
+        'ticker_confidence': ticker_confidence,
+        'resolver_source': str(resolved.get('resolver_source') or ''),
         'event_type': str(event_type or 'GENERAL_NEWS'),
+        'feed_type': feed_type,
         'side': str(side or 'NEUTRAL').upper(),
         'keywords': keywords,
     }
@@ -468,22 +488,43 @@ def _finalize_verification_result(claim: dict[str, Any], result: dict[str, Any])
     from backend.my_feed.entity_mapping import (
         filter_claim_tickers,
         infer_event_type_from_text,
-        map_entities_from_text,
         refine_side_from_headline,
+        resolve_company_ticker,
     )
 
     headline = str(result.get('verified_headline') or '')
     blob = f"{claim.get('claim_summary') or ''} {headline}".strip()
-    mapped = map_entities_from_text(blob)
-    tickers = filter_claim_tickers(
-        blob,
-        list(mapped.get('tickers') or []) + list(result.get('tickers') or []) + list(claim.get('tickers') or []),
+    resolved = resolve_company_ticker(
+        claim.get('claim_summary') or blob,
+        candidates=list(result.get('tickers') or []) + list(claim.get('tickers') or []),
     )
-    if 'ADANIPORTS' in (mapped.get('tickers') or []):
-        tickers = ['ADANIPORTS']
-    ticker = tickers[0] if tickers else str(result.get('ticker') or claim.get('ticker') or '').upper()
-    ticker_confidence = mapped.get('ticker_confidence') or result.get('ticker_confidence') or claim.get('ticker_confidence') or 'low'
-    entities = list(mapped.get('entities') or result.get('entities') or claim.get('entities') or [])
+    if resolved.get('ticker') and str(resolved.get('ticker_confidence') or '') == 'high':
+        tickers = [str(resolved['ticker'])]
+        ticker = tickers[0]
+        ticker_confidence = 'high'
+        entity = str(resolved.get('company') or resolved.get('entity') or ticker)
+        entities = list(resolved.get('entities') or [entity])
+        company = str(resolved.get('company') or entity)
+    else:
+        tickers = filter_claim_tickers(
+            blob,
+            list(resolved.get('tickers') or [])
+            + list(result.get('tickers') or [])
+            + list(claim.get('tickers') or []),
+        )
+        if 'ADANIPORTS' in (resolved.get('tickers') or []):
+            tickers = ['ADANIPORTS']
+        ticker = tickers[0] if tickers else str(result.get('ticker') or claim.get('ticker') or '').upper()
+        ticker_confidence = (
+            resolved.get('ticker_confidence')
+            or result.get('ticker_confidence')
+            or claim.get('ticker_confidence')
+            or 'low'
+        )
+        entities = list(resolved.get('entities') or result.get('entities') or claim.get('entities') or [])
+        company = str(resolved.get('company') or claim.get('company') or '')
+        entity = str(resolved.get('entity') or result.get('entity') or claim.get('entity') or company or ticker or '')
+
     if 'Kenya airport proposal' in entities or 'China / Kenya airport proposal' in entities:
         tickers = filter_claim_tickers(blob, ['ADANIENT'] if 'adani' in blob.lower() else [])
         ticker = tickers[0] if tickers else ''
@@ -493,6 +534,11 @@ def _finalize_verification_result(claim: dict[str, Any], result: dict[str, Any])
         ticker_confidence = 'high'
     elif ticker == 'ADANIENT' and 'shelved' in blob.lower():
         ticker_confidence = 'low'
+    if ticker == 'SBIN':
+        ticker_confidence = 'high'
+        company = company or 'State Bank of India'
+        entity = company
+        tickers = ['SBIN']
 
     event = infer_event_type_from_text(claim.get('claim_summary') or '', headline=headline) or result.get('event_type')
     side = refine_side_from_headline(
@@ -500,7 +546,6 @@ def _finalize_verification_result(claim: dict[str, Any], result: dict[str, Any])
         headline=headline,
         default=str(result.get('side') or claim.get('side') or 'NEUTRAL'),
     )
-    entity = str(mapped.get('entity') or result.get('entity') or claim.get('entity') or ticker or '')
     if entities and not entity:
         entity = entities[0]
 
@@ -513,11 +558,14 @@ def _finalize_verification_result(claim: dict[str, Any], result: dict[str, Any])
         'ticker': ticker,
         'tickers': tickers,
         'entity': entity,
+        'company': company or entity,
         'entities': entities,
         'event_type': event or claim.get('event_type') or 'GENERAL_NEWS',
+        'feed_type': claim.get('feed_type') or result.get('feed_type') or '',
         'side': side,
         'ticker_confidence': ticker_confidence,
         'verification_status': status,
+        'resolver_source': resolved.get('resolver_source') or claim.get('resolver_source') or '',
     })
     return out
 
@@ -526,15 +574,43 @@ def verify_user_feed_claim(
     claim: dict[str, Any],
     *,
     data_dir: Path | None = None,
+    allow_auto_refresh: bool = True,
 ) -> dict[str, Any]:
-    """Internal cache first, then lightweight external trusted-source search."""
+    """Internal cache first, optional lightweight news refresh, then external search."""
+    auto_refresh_meta: dict[str, Any] = {'attempted': False, 'did_refresh': False}
+    if allow_auto_refresh:
+        try:
+            from backend.my_feed.news_refresh import should_auto_refresh_news_for_feed, run_news_cache_refresh
+
+            do_refresh, reason, age = should_auto_refresh_news_for_feed(data_dir=data_dir)
+            auto_refresh_meta = {
+                'attempted': True,
+                'did_refresh': False,
+                'reason': reason,
+                'cache_age_minutes': age,
+            }
+            if do_refresh:
+                refresh = run_news_cache_refresh(
+                    symbol=str(claim.get('ticker') or ''),
+                    company=str(claim.get('company') or claim.get('entity') or ''),
+                )
+                auto_refresh_meta['did_refresh'] = bool(refresh.get('ok'))
+                auto_refresh_meta['refresh'] = {
+                    'ok': refresh.get('ok'),
+                    'items_found': refresh.get('items_found'),
+                }
+        except Exception as exc:
+            auto_refresh_meta['error'] = str(exc)[:160]
+
     internal = verify_claim_against_sources(
         claim,
         data_dir=data_dir,
         verification_source='internal_cache',
     )
     if internal.get('verification_status') != VERIFICATION_UNVERIFIED:
-        return _finalize_verification_result(claim, internal)
+        out = _finalize_verification_result(claim, internal)
+        out['auto_refresh'] = auto_refresh_meta
+        return out
 
     from backend.my_feed.external_verification_search import search_external_verification_articles
 
@@ -546,9 +622,99 @@ def verify_user_feed_claim(
             verification_source='external_search',
         )
         if external.get('verification_status') != VERIFICATION_UNVERIFIED:
-            return _finalize_verification_result(claim, external)
+            out = _finalize_verification_result(claim, external)
+            out['auto_refresh'] = auto_refresh_meta
+            return out
 
-    return _finalize_verification_result(claim, internal)
+    out = _finalize_verification_result(claim, internal)
+    out['auto_refresh'] = auto_refresh_meta
+    return out
+
+
+def reverify_feed_item(feed_id: str, *, data_dir: Path | None = None) -> dict[str, Any]:
+    """Re-check a saved feed against current news cache; update status in place."""
+    from backend.my_feed.my_feed_db import get_item, update_feed_item_metadata
+
+    item = get_item(str(feed_id or '').strip())
+    if not item:
+        return {
+            'ok': False,
+            'reason': 'not_found',
+            'feed_id': feed_id,
+            'text': f'FEED_VERIFY_FAILED\nfeed_id={feed_id}\nreason=not_found',
+        }
+
+    old_status = item_verification_status(item)
+    raw = str(
+        item.get('raw_user_text')
+        or item.get('raw_market_text')
+        or item.get('cleaned_summary')
+        or ''
+    )
+    claim = normalize_claim(raw)
+    # Prefer already-resolved ticker if high confidence.
+    if item.get('tickers') and not claim.get('ticker'):
+        claim['ticker'] = str((item.get('tickers') or [''])[0]).upper()
+        claim['tickers'] = [claim['ticker']]
+    verification = verify_user_feed_claim(claim, data_dir=data_dir, allow_auto_refresh=True)
+    new_status = str(verification.get('verification_status') or VERIFICATION_UNVERIFIED).upper()
+    ticker = str(verification.get('ticker') or claim.get('ticker') or '').upper()
+    company = str(verification.get('company') or verification.get('entity') or '')
+
+    payload_fields = verification_payload_fields(verification, normalized_claim=claim)
+    # Merge payload via metadata helper + direct payload update.
+    update_fields: dict[str, Any] = {
+        'tickers': [ticker] if ticker else list(item.get('tickers') or []),
+        'event_type': str(verification.get('event_type') or item.get('event_type') or 'company_news'),
+    }
+    if claim.get('feed_type') == 'company_news':
+        update_fields['suggested_action'] = 'STOCK NEWS' if new_status == VERIFICATION_VERIFIED else 'WATCH'
+    update_feed_item_metadata(str(item.get('feed_id')), update_fields)
+
+    # Patch payload verification fields.
+    try:
+        from backend.my_feed.my_feed_db import _connect, _json_dump, _json_load
+
+        with _connect() as conn:
+            row = conn.execute(
+                'SELECT payload FROM feed_items WHERE feed_id = ?',
+                (str(item.get('feed_id')),),
+            ).fetchone()
+            payload = _json_load(row['payload']) if row and row['payload'] else {}
+            if not isinstance(payload, dict):
+                payload = {}
+            payload.update(payload_fields)
+            payload['company'] = company
+            payload['feed_type'] = claim.get('feed_type') or payload.get('feed_type') or 'company_news'
+            conn.execute(
+                'UPDATE feed_items SET payload = ? WHERE feed_id = ?',
+                (_json_dump(payload), str(item.get('feed_id'))),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+    matched = str(verification.get('source_name') or '')
+    lines = [
+        'FEED_VERIFICATION_UPDATED',
+        f'feed_id={item.get("feed_id")}',
+        f'ticker={ticker or "—"}',
+        f'company={company or "—"}',
+        f'old_status={old_status}',
+        f'new_status={new_status}',
+        f'matched_source={matched or "—"}',
+    ]
+    return {
+        'ok': True,
+        'feed_id': item.get('feed_id'),
+        'ticker': ticker,
+        'company': company,
+        'old_status': old_status,
+        'new_status': new_status,
+        'matched_source': matched,
+        'verification': verification,
+        'text': '\n'.join(lines),
+    }
 
 
 def item_verification_status(item: dict[str, Any]) -> str:
@@ -568,7 +734,13 @@ def format_feed_save_failed_reply(*, reason: str = '') -> str:
 def _ticker_entity_line(record: dict[str, Any], verification: dict[str, Any]) -> str:
     tickers = [str(t).strip().upper() for t in (record.get('tickers') or []) if str(t).strip()]
     ticker = str(verification.get('ticker') or (tickers[0] if tickers else '')).strip().upper()
-    entity = str(verification.get('entity') or ticker or '').strip()
+    entity = str(
+        verification.get('company')
+        or verification.get('entity')
+        or record.get('company')
+        or ticker
+        or ''
+    ).strip()
     parts = [p for p in dict.fromkeys([ticker, entity]) if p and p != '—']
     return ' / '.join(parts) if parts else '—'
 
@@ -597,6 +769,23 @@ def format_verification_telegram_reply(
     tickers_disp = ', '.join(dict.fromkeys(tickers)) or '—'
     action = str(record.get('suggested_action') or 'NEWS ONLY')
     impact = record.get('impact_score') or 0
+    company = str(
+        verification.get('company')
+        or record.get('company')
+        or verification.get('entity')
+        or ''
+    ).strip()
+    feed_type = str(
+        record.get('feed_type')
+        or verification.get('feed_type')
+        or ('company_news' if tickers and action in ('STOCK NEWS', 'WATCH') else 'news')
+    )
+
+    reason = (
+        'trusted source match found'
+        if status == VERIFICATION_VERIFIED
+        else 'no trusted source match yet'
+    )
 
     lines = [
         'MY_FEED_SAVED',
@@ -605,9 +794,12 @@ def format_verification_telegram_reply(
         f'items_found={items_found or 1}',
         f'ignored_private_items={ignored_private_items}',
         f'tickers={tickers_disp}',
+        f'company={company or "—"}',
+        f'feed_type={feed_type}',
         f'impact_score={impact}',
         f'suggested_action={action}',
         f'catalyst_eligible={catalyst_yes}',
+        f'Reason: {reason}',
     ]
 
     if status == VERIFICATION_VERIFIED:
@@ -651,15 +843,19 @@ def format_verification_telegram_reply(
         if headline:
             lines.append(f'Cached headline: {headline[:160]}')
     else:
+        suggest_sym = (tickers[0] if tickers else '').upper()
         lines.extend([
             '⚠️ Feed saved as UNVERIFIED',
             f'Feed ID: {feed_id}',
             f'Claim: {claim or "—"}',
             f'Ticker/entity: {ticker_entity}',
             'Used as catalyst evidence: no',
-            'Reason: could not confirm from trusted sources yet.',
             'Not used for catalyst/tradecard boost until verified.',
         ])
+        if suggest_sym:
+            lines.append(f'Try: /news refresh {suggest_sym} then /feed verify {feed_id}')
+        else:
+            lines.append(f'Try: /news refresh then /feed verify {feed_id}')
 
     return '\n'.join(lines)
 
@@ -672,8 +868,9 @@ def verification_payload_fields(
     """Fields stored in feed_items.payload for verification metadata."""
     keys = (
         'verification_status', 'raw_user_text', 'verified_headline', 'verified_summary',
-        'source_name', 'source_time', 'source_url', 'ticker', 'entity', 'event_type',
-        'side', 'confidence', 'verification_source', 'ticker_confidence', 'entities',
+        'source_name', 'source_time', 'source_url', 'ticker', 'entity', 'company',
+        'event_type', 'feed_type', 'side', 'confidence', 'verification_source',
+        'ticker_confidence', 'entities', 'resolver_source',
     )
     out: dict[str, Any] = {}
     for key in keys:
@@ -682,6 +879,10 @@ def verification_payload_fields(
             out[key] = val
     if normalized_claim:
         out['normalized_claim'] = normalized_claim
+        if normalized_claim.get('feed_type') and not out.get('feed_type'):
+            out['feed_type'] = normalized_claim.get('feed_type')
+        if normalized_claim.get('company') and not out.get('company'):
+            out['company'] = normalized_claim.get('company')
     status = str(out.get('verification_status') or VERIFICATION_UNVERIFIED).upper()
     out['verification_status'] = status
     out['catalyst_eligible'] = is_catalyst_eligible_status(status)
