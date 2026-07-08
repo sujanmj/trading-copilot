@@ -3168,6 +3168,52 @@ def _opening_state_label(state: str) -> str:
 from backend.telegram.premarket_scheduler import SCHEDULED_ALERT_NAMES
 
 
+def _state_extension_risk_message(row: dict[str, Any]) -> str:
+    state_upper = str(row.get('state') or '').upper()
+    if state_upper == 'NEW_LISTING_MOMENTUM':
+        return 'new listing — volume confirm required; chase risk on extension.'
+    if state_upper == 'DEMERGER_MOMENTUM':
+        return 'demerger entity — confirm breadth/volume before paper plan.'
+    if state_upper == 'CHASE_RISK' or row.get('pullback_only'):
+        return 'extended/chase — VWAP/retest only; no market chase.'
+    if row.get('gainer_promoted') and state_upper == 'TOP_GAINER_CONFIRM':
+        return 'top gainer — confirm VWAP/volume before paper plan.'
+    return ''
+
+
+def _format_candidate_risk_line(row: dict[str, Any]) -> str:
+    """One merged Risk line for radar/tradecards (4B.18C)."""
+    catalyst = str(row.get('catalyst_risk_line') or '').strip()
+    cat_body = catalyst[6:].strip() if catalyst.lower().startswith('risk:') else catalyst
+    extra = _state_extension_risk_message(row)
+    if cat_body and extra:
+        cat_low = cat_body.lower()
+        extra_low = extra.lower()
+        if 'catalyst not found' in cat_low and 'extended/chase' in extra_low:
+            return 'Risk: catalyst not found + extended/chase — confirm manually; VWAP/retest only; no blind chase.'
+        if cat_low == extra_low:
+            return f'Risk: {cat_body}'
+        return f'Risk: {cat_body} + {extra}'
+    if catalyst:
+        return catalyst
+    if extra:
+        return f'Risk: {extra}'
+    return ''
+
+
+def _opening_board_for_display(board: dict[str, Any] | None) -> dict[str, Any]:
+    from backend.trading.opening_rally_radar import build_opening_rally_board, rerank_opening_candidates
+
+    data = board or build_opening_rally_board()
+    if data.get('reference_only') or data.get('session_stale'):
+        return data
+    updated = dict(data)
+    updated['ranked_candidates'] = rerank_opening_candidates(
+        list(data.get('ranked_candidates') or []),
+    )
+    return updated
+
+
 def _scheduled_alert_title(slot: str, time_ist: str) -> str:
     name = SCHEDULED_ALERT_NAMES.get(slot, 'Opening Rally Radar')
     return f'<b>{name} — {time_ist} IST</b>'
@@ -3185,7 +3231,7 @@ def format_opening_radar_telegram(
         opening_radar_time_phase,
     )
 
-    data = board or build_opening_rally_board()
+    data = _opening_board_for_display(board)
     if data.get('reference_only'):
         from backend.trading.opening_session_freshness import (
             format_reference_radar_telegram,
@@ -3233,11 +3279,11 @@ def format_opening_radar_telegram(
             f'   {row.get("catalyst_line") or "Catalyst: missing — price-volume only"}',
             f'   Why: {why}',
             f'   Action: {action}',
-            '',
         ])
-        risk_line = str(row.get('catalyst_risk_line') or '').strip()
+        risk_line = _format_candidate_risk_line(row)
         if risk_line:
-            lines.insert(-1, f'   {risk_line}')
+            lines.append(f'   {risk_line}')
+        lines.append('')
     lines.append('Paper only — no blind chase before /tradecard.')
     gscan = data.get('gainer_scan') or {}
     promoted = gscan.get('promoted') or []
@@ -3375,9 +3421,9 @@ def format_early_tradecards_scheduled_telegram(
     *,
     board: dict[str, Any] | None = None,
 ) -> str:
-    """Scheduled 09:25 — provisional tradecard board."""
+    """Scheduled 09:25 — provisional tradecard board with live-confirm labels."""
+    from backend.trading.live_confirmation_guard import provisional_label_for_row
     from backend.trading.opening_rally_radar import (
-        _opening_state_display,
         build_opening_rally_board,
         pick_best_opening_tradecard,
     )
@@ -3395,11 +3441,13 @@ def format_early_tradecards_scheduled_telegram(
     ])
     for idx, row in enumerate(candidates[:10], start=1):
         sym = str(row.get('ticker') or '?')
-        state = _opening_state_display(str(row.get('state') or ''))
+        label = provisional_label_for_row(row, board=data)
         score = int(row.get('score') or 0)
         why = ' + '.join(row.get('why') or []) or '—'
-        lines.append(f'{idx}. <b>{sym}</b> — {state} — Score {score}')
+        lines.append(f'{idx}. <b>{sym}</b> — {label} — Score {score}')
         lines.append(f'   {why}')
+        if label in ('WAIT LIVE CONFIRM', 'WATCH ONLY'):
+            lines.append('   Note: catalyst/theme watch — wait for live scanner confirmation.')
         if row.get('pullback_only') or str(row.get('state') or '').upper() == 'CHASE_RISK':
             lines.append('   Risk: extended; confirm VWAP/retest/opening-range hold.')
     best_sym, best_score, _ = pick_best_opening_tradecard(data)
@@ -3409,9 +3457,10 @@ def format_early_tradecards_scheduled_telegram(
             {},
         )
         why = ' + '.join(best_row.get('why') or []) or 'opening board leader'
+        best_label = provisional_label_for_row(best_row, board=data)
         lines.extend([
             '',
-            f'<b>Best provisional pick:</b> {best_sym}',
+            f'<b>Best provisional pick:</b> {best_sym} — {best_label}',
             f'Why: {why}',
         ])
         if best_row.get('pullback_only') or str(best_row.get('state') or '').upper() == 'CHASE_RISK':
@@ -3430,35 +3479,63 @@ def format_final_opening_confirmation_telegram(
     best_score: int = 0,
     confirm_state: str = '',
     best_row: dict[str, Any] | None = None,
+    watch_sym: str = '',
+    reason: str = '',
+    no_trade: bool = False,
 ) -> str:
-    """Scheduled 09:31 — final opening confirmation."""
+    """Scheduled 09:31 — final opening confirmation under live gate."""
     from backend.trading.opening_rally_radar import build_opening_rally_board
 
     data = board or build_opening_rally_board()
     time_ist = str(data.get('time_ist') or '09:31')
     sym = str(best_sym or '').strip().upper()
-    state = str(confirm_state or 'NO_CLEAN_ENTRY').upper().replace(' ', '_')
+    watch = str(watch_sym or '').strip().upper()
+    state = str(confirm_state or 'NO_TRADE').upper().replace(' ', '_')
     row = best_row or {}
-    why = ' + '.join(row.get('why') or []) or 'opening board review'
+    why = str(reason or '').strip() or (' + '.join(row.get('why') or []) or 'opening board review')
     lines = [
         _scheduled_alert_title('0931', time_ist),
         '<i>Paper/research only — no blind entry</i>',
         '',
-        f'<b>Best pick:</b> {sym or "—"}',
+    ]
+    if no_trade or (state in ('NO_TRADE', 'NO_CLEAN_ENTRY') and not sym):
+        lines.extend([
+            '<b>Final Opening Confirmation — NO TRADE</b>',
+            f'Reason: {why or "no candidate passed live confirmation gate"}',
+        ])
+        if watch:
+            lines.append(f'Best watch: {watch}')
+        lines.extend([
+            '',
+            'Action: wait for next scanner update / no blind entry',
+        ])
+        return strip_stage_markers('\n'.join(lines))
+
+    lines.extend([
+        f'<b>Best pick:</b> {sym or watch or "—"}',
         f'<b>State:</b> {state.replace("_", " ")}',
         f'Score: {int(best_score or row.get("score") or 0)}',
         f'Why: {why}',
         '',
-    ]
+    ])
     if state == 'CONFIRMED':
         lines.append('Action: review /tradecard for levels; confirm volume/VWAP on chart.')
     elif state == 'PULLBACK_ONLY_PLAN':
         lines.append('Action: no chase; paper entry only on VWAP/retest/opening-range hold.')
         lines.append('Plan: strongest candidate but extended; no market chase.')
+    elif state == 'WAIT_LIVE_CONFIRM':
+        lines.append('Action: wait for live scanner confirmation — no blind entry on stale catalyst.')
+        if watch and watch != sym:
+            lines.append(f'Best watch: {watch}')
     elif state == 'WAIT_FOR_PULLBACK':
         lines.append('Action: wait for pullback/retest — no chase at open extension.')
     elif state == 'CHASE_RISK':
         lines.append('Action: chase risk — VWAP/retest only; no fresh entry.')
+    elif state == 'NO_TRADE':
+        lines.append('Action: no trade — live confirmation gate failed.')
+        if watch:
+            lines.append(f'Best watch: {watch}')
+        lines.append('Action: wait for next scanner update / no blind entry')
     else:
         lines.append('Action: no clean entry — watch /radar or /tradecards for next setup.')
     return strip_stage_markers('\n'.join(lines))
@@ -3471,7 +3548,7 @@ def format_tradecards_telegram(
     """Format /tradecards — top multi-candidate tradecard board."""
     from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
 
-    data = board or build_opening_rally_board()
+    data = _opening_board_for_display(board)
     _persist_tradecards_decision_memory(data)
     from backend.trading.opening_session_freshness import (
         format_reference_tradecards_telegram,
@@ -3516,18 +3593,9 @@ def format_tradecards_telegram(
         lines.append(f'{idx}. <b>{sym}</b> — {cap} — {state} — Score {score}')
         lines.append(f'   {row.get("catalyst_line") or "Catalyst: missing — price-volume only"}')
         lines.append(f'   {why}')
-        risk_line = str(row.get('catalyst_risk_line') or '').strip()
+        risk_line = _format_candidate_risk_line(row)
         if risk_line:
             lines.append(f'   {risk_line}')
-        state_upper = str(row.get('state') or '').upper()
-        if state_upper == 'NEW_LISTING_MOMENTUM':
-            lines.append('   Risk: new listing — volume confirm required; chase risk on extension.')
-        elif state_upper == 'DEMERGER_MOMENTUM':
-            lines.append('   Risk: demerger entity — confirm breadth/volume before paper plan.')
-        elif state_upper == 'CHASE_RISK' or row.get('pullback_only'):
-            lines.append('   Risk: extended/chase — VWAP/retest only; no market chase.')
-        elif row.get('gainer_promoted') and state_upper == 'TOP_GAINER_CONFIRM':
-            lines.append('   Risk: top gainer — confirm VWAP/volume before paper plan.')
 
     best_sym, best_score, beaten = pick_best_opening_tradecard(data)
     if best_sym:

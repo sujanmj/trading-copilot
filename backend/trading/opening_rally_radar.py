@@ -108,6 +108,72 @@ def _opening_candidate_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _catalyst_sort_tier(row: dict[str, Any]) -> int:
+    """Higher tier wins on tie-break (confirmed catalyst > theme > price-volume)."""
+    if bool(row.get('has_catalyst')):
+        return 3
+    state = str(row.get('catalyst_state') or '').upper()
+    if state in ('CATALYST_CONFIRMED', 'BROKER_APP_ALERT'):
+        return 3
+    if row.get('themes') or state == 'THEME_ONLY':
+        return 2
+    return 1
+
+
+def _action_safety_sort_tier(row: dict[str, Any]) -> int:
+    state = str(row.get('state') or '').upper()
+    if state == 'CHASE_RISK':
+        return 0
+    if state in ('PULLBACK_ONLY_PLAN', 'MOMENTUM_ONLY_WATCH'):
+        return 1
+    return 2
+
+
+def _volume_confirm_sort_tier(row: dict[str, Any]) -> int:
+    vol = _safe_float(row.get('volume_ratio'))
+    if vol >= 2.0:
+        return 2
+    if vol >= 1.2:
+        return 1
+    return 0
+
+
+def final_display_sort_key(row: dict[str, Any], *, prior_rank: int = 999) -> tuple[Any, ...]:
+    """Sort key for final displayed score after all boosts (4B.18C)."""
+    rank = int(prior_rank or 999)
+    return (
+        int(row.get('score') or 0),
+        _catalyst_sort_tier(row),
+        _volume_confirm_sort_tier(row),
+        _action_safety_sort_tier(row),
+        -rank,
+        _symbol_rank_tiebreak(row.get('ticker')),
+    )
+
+
+def rerank_opening_candidates(
+    candidates: list[dict[str, Any]],
+    *,
+    preserve_prior_rank: bool = True,
+) -> list[dict[str, Any]]:
+    """Re-sort candidates by final displayed score after all enrichments."""
+    ranked = [dict(r) for r in candidates]
+    if preserve_prior_rank:
+        for idx, row in enumerate(ranked, start=1):
+            row.setdefault('_prior_radar_rank', int(row.get('tradecards_rank') or idx))
+    ranked.sort(
+        key=lambda r: final_display_sort_key(
+            r,
+            prior_rank=int(r.get('_prior_radar_rank') or 999),
+        ),
+        reverse=True,
+    )
+    for idx, row in enumerate(ranked, start=1):
+        row['tradecards_rank'] = idx
+        row.pop('_prior_radar_rank', None)
+    return ranked
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
@@ -710,6 +776,9 @@ def build_opening_rally_board(
             payload['ranked_candidates'] = updated_rows
         except Exception:
             pass
+        payload['ranked_candidates'] = rerank_opening_candidates(
+            list(payload.get('ranked_candidates') or []),
+        )
     if not payload.get('reference_only'):
         _log_opening_radar_events(payload)
     return payload
@@ -853,6 +922,15 @@ def pick_best_opening_tradecard(
         candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
     if not candidates:
         return None, 0, []
+
+    rank_map = {
+        _normalize_ticker(r.get('ticker')): idx
+        for idx, r in enumerate(data.get('ranked_candidates') or [], start=1)
+    }
+    for row in candidates:
+        sym_key = _normalize_ticker(row.get('ticker'))
+        row['_prior_radar_rank'] = rank_map.get(sym_key, 999)
+    candidates = rerank_opening_candidates(candidates, preserve_prior_rank=True)
 
     best = candidates[0]
     sym = _normalize_ticker(best.get('ticker'))
@@ -1039,36 +1117,28 @@ def resolve_final_confirmation_state(
     row: dict[str, Any] | None,
     *,
     now: datetime | None = None,
+    board: dict[str, Any] | None = None,
 ) -> str:
-    """Map opening-board row to final confirmation state at ~09:31."""
+    """Map opening-board row to final confirmation state at ~09:31 (live gate)."""
+    from backend.trading.live_confirmation_guard import evaluate_live_confirmation
+
     if not row:
-        return 'NO_CLEAN_ENTRY'
-    state = str(row.get('state') or '').upper()
-    score = int(row.get('score') or 0)
-    change_pct = _safe_float(row.get('change_percent'))
-    has_catalyst = bool(row.get('has_catalyst'))
-    if state == 'REJECTED':
-        return 'NO_CLEAN_ENTRY'
-    if state == 'CHASE_RISK' or change_pct >= EXTENDED_MOVE_PCT or row.get('pullback_only'):
-        if score >= 55:
-            print(
-                f'[OPENING_PULLBACK_ONLY_PLAN] symbol={row.get("ticker")} reason=extended_but_strongest',
-                flush=True,
-            )
-            return 'PULLBACK_ONLY_PLAN'
-        return 'CHASE_RISK'
-    if state == 'MOMENTUM_ONLY_WATCH':
-        return 'WAIT_FOR_PULLBACK'
-    if state in ('TRADECARD_CANDIDATE', 'VOLUME_IGNITION') and score >= 60:
-        if has_catalyst or (state == 'VOLUME_IGNITION' and score >= 70):
-            return 'CONFIRMED'
-        return 'WAIT_FOR_PULLBACK'
-    if state == 'RADAR_ARMED':
-        return 'WAIT_FOR_PULLBACK'
-    mins = _minutes_since_midnight(_now_ist(now))
-    if mins >= 9 * 60 + 31 and score < 55:
-        return 'NO_CLEAN_ENTRY'
-    return 'WAIT_FOR_PULLBACK'
+        return 'NO_TRADE'
+    verdict = evaluate_live_confirmation(row, now=now, board=board)
+    state = str(verdict.get('state') or 'NO_TRADE')
+    if state == 'PULLBACK_ONLY':
+        print(
+            f'[OPENING_PULLBACK_ONLY_PLAN] symbol={row.get("ticker")} reason=extended_but_live',
+            flush=True,
+        )
+        return 'PULLBACK_ONLY_PLAN'
+    if state == 'WATCH_ONLY':
+        return 'WAIT_LIVE_CONFIRM'
+    if state == 'CONFIRMED':
+        return 'CONFIRMED'
+    if state == 'WAIT_LIVE_CONFIRM':
+        return 'WAIT_LIVE_CONFIRM'
+    return 'NO_TRADE'
 
 
 def _opening_row_price(row: dict[str, Any] | None) -> float | None:
@@ -1415,27 +1485,19 @@ def run_scheduled_final_confirmation_0931(
     now: datetime | None = None,
     send_fn: Callable[[str], bool] | None = None,
 ) -> bool:
-    """09:31 IST — final opening confirmation or chase/no-entry state."""
+    """09:31 IST — final opening confirmation under live confirmation gate."""
+    from backend.trading.live_confirmation_guard import select_final_confirmation_pick
+
     ist_now = _now_ist(now)
     board = build_opening_rally_board(now=ist_now)
-    best_sym, best_score, _ = pick_best_opening_tradecard(board)
-    best_row = next(
-        (
-            r for r in (board.get('ranked_candidates') or [])
-            if _normalize_ticker(r.get('ticker')) == _normalize_ticker(best_sym)
-        ),
-        None,
-    )
-    confirm_state = resolve_final_confirmation_state(best_row, now=ist_now)
+    pick = select_final_confirmation_pick(board, now=ist_now)
+    confirm_state = str(pick.get('confirm_state') or 'NO_TRADE')
+    best_sym = str(pick.get('best_sym') or '')
+    best_row = pick.get('best_row') if isinstance(pick.get('best_row'), dict) else {}
+    best_score = int(pick.get('best_score') or 0)
+    watch_sym = str(pick.get('watch_sym') or '')
+    reason = str(pick.get('reason') or '')
     ts = ist_now.replace(microsecond=0).isoformat()
-    if not best_sym:
-        print('[OPENING_RADAR_NO_CANDIDATES] reason=no_final_confirmation_pick', flush=True)
-        print(
-            f'[FINAL_OPENING_CONFIRMATION] time={ts} best=- '
-            f'state=no_clean_entry sent=no',
-            flush=True,
-        )
-        return False
 
     from backend.telegram.response_format import format_final_opening_confirmation_telegram
 
@@ -1445,10 +1507,13 @@ def run_scheduled_final_confirmation_0931(
         best_score=best_score,
         confirm_state=confirm_state,
         best_row=best_row,
+        watch_sym=watch_sym,
+        reason=reason,
+        no_trade=bool(pick.get('no_trade')),
     )
     if not _gate_scheduled_alert('final_opening_confirmation_0931', text):
         print(
-            f'[FINAL_OPENING_CONFIRMATION] time={ts} best={best_sym} '
+            f'[FINAL_OPENING_CONFIRMATION] time={ts} best={best_sym or watch_sym or "-"} '
             f'state={confirm_state.lower()} sent=no',
             flush=True,
         )
@@ -1458,7 +1523,7 @@ def run_scheduled_final_confirmation_0931(
         text=text,
         log_tag='FINAL_OPENING_CONFIRMATION',
         log_fields=(
-            f'time={ts} best={best_sym} state={confirm_state.lower()}'
+            f'time={ts} best={best_sym or watch_sym or "-"} state={confirm_state.lower()}'
         ),
         send_fn=send_fn,
         command='final_opening_confirmation_0931',
@@ -1466,16 +1531,17 @@ def run_scheduled_final_confirmation_0931(
     if sent:
         from backend.trading.opening_workflow_accounting import record_scheduled_final_confirmation
 
+        persist_sym = best_sym or watch_sym
         _capture_opening_workflow(
             stage='0931',
             board=board,
             candidates=[best_row] if best_row else [],
-            best_sym=best_sym or '',
+            best_sym=persist_sym or '',
             timestamp=ts,
         )
         record_scheduled_final_confirmation(
             board,
-            best_sym=best_sym or '',
+            best_sym=persist_sym or '',
             best_row=best_row,
             confirm_state=confirm_state,
             timestamp=ts,

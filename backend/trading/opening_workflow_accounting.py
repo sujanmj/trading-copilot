@@ -122,11 +122,11 @@ def _confirmation_bucket(confirm_state: str) -> str:
     token = str(confirm_state or '').upper().replace(' ', '_')
     if token == 'CONFIRMED':
         return 'confirmed'
-    if token in ('NO_CLEAN_ENTRY', 'REJECTED'):
+    if token in ('NO_CLEAN_ENTRY', 'REJECTED', 'NO_TRADE'):
         return 'rejected'
-    if token in ('WAIT_FOR_PULLBACK',):
+    if token in ('WAIT_FOR_PULLBACK', 'WAIT_LIVE_CONFIRM', 'WATCH_ONLY'):
         return 'wait_pullback'
-    if token in ('PULLBACK_ONLY_PLAN',):
+    if token in ('PULLBACK_ONLY_PLAN', 'PULLBACK_ONLY'):
         return 'pullback_only'
     if token in ('CHASE_RISK',):
         return 'chase_risk'
