@@ -96,6 +96,13 @@ def emergency_macro_crash_active(*, board: dict[str, Any] | None = None) -> bool
     if bool(data.get('emergency_macro') or data.get('macro_crash') or data.get('crash_mode')):
         return True
     try:
+        from backend.trading.macro_shock_sentinel import macro_shock_active_for_trading
+
+        if macro_shock_active_for_trading():
+            return True
+    except Exception:
+        pass
+    try:
         penalty = float(data.get('macro_penalty') or 0)
     except (TypeError, ValueError):
         penalty = 0.0

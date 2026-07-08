@@ -3255,6 +3255,15 @@ def format_opening_radar_telegram(
         *format_session_metadata_block(data),
         '',
     ]
+    macro = data.get('macro_shock') or {}
+    if macro.get('active') and str(macro.get('severity') or '') in ('HIGH', 'CRITICAL'):
+        regime = str(data.get('macro_regime') or macro.get('regime') or 'RED MARKET')
+        risk_label = 'GAP-DOWN RISK' if data.get('gap_down_risk') or macro.get('gap_down_risk') else 'ELEVATED RISK'
+        lines.extend([
+            f'<b>🚨 {regime} / {risk_label}</b>',
+            '<b>Action:</b> no fresh longs without live scanner + positive relative strength',
+            '',
+        ])
     candidates = [
         r for r in (data.get('ranked_candidates') or [])
         if r.get('state') != 'REJECTED'
@@ -3401,6 +3410,15 @@ def format_radar_armed_scheduled_telegram(
         '<i>News + theme watchlist · paper/research only</i>',
         '',
     ]
+    macro = data.get('macro_shock') or {}
+    if macro.get('active') and str(macro.get('severity') or '') in ('HIGH', 'CRITICAL'):
+        regime = str(data.get('macro_regime') or macro.get('regime') or 'RED MARKET')
+        lines.extend([
+            f'<b>⚠️ Macro regime:</b> {regime}',
+            f'<b>Gap-down risk:</b> {"yes" if macro.get("gap_down_risk") or data.get("gap_down_risk") else "elevated"}',
+            '<b>Guard:</b> no fresh longs before 09:20 live confirmation',
+            '',
+        ])
     for idx, row in enumerate(armed[:8], start=1):
         sym = str(row.get('ticker') or '?')
         score = int(row.get('score') or 0)

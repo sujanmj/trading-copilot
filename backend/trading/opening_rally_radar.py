@@ -326,6 +326,14 @@ def _previous_session_movers(payload: dict[str, Any] | None = None) -> set[str]:
 
 def _macro_risk_penalty() -> float:
     try:
+        from backend.trading.macro_shock_sentinel import macro_risk_penalty
+
+        sentinel_penalty = macro_risk_penalty()
+        if sentinel_penalty:
+            return sentinel_penalty
+    except Exception:
+        pass
+    try:
         global_m = _load_json(DATA_DIR / 'global_markets_latest.json')
         sentiment = str(global_m.get('sentiment') or global_m.get('overall_sentiment') or '').lower()
         if any(term in sentiment for term in ('risk-off', 'risk off', 'bearish', 'weak')):
@@ -781,6 +789,12 @@ def build_opening_rally_board(
         )
     if not payload.get('reference_only'):
         _log_opening_radar_events(payload)
+    try:
+        from backend.trading.macro_shock_sentinel import apply_macro_shock_to_board
+
+        payload = apply_macro_shock_to_board(payload, now=ist_now)
+    except Exception:
+        pass
     return payload
 
 

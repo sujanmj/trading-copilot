@@ -437,6 +437,12 @@ def run_memory_only(args: str = '') -> dict[str, Any]:
                     lines.append(format_memory_outcome_line(row))
         else:
             lines.append('• No recent outcomes in cache.')
+    try:
+        from backend.trading.macro_shock_sentinel import format_macro_memory_snippet
+
+        lines.extend(format_macro_memory_snippet())
+    except Exception:
+        pass
     return _runner_result('memory', text='\n'.join(lines), payload=dashboard)
 
 
@@ -823,6 +829,13 @@ def run_candles_only(args: str = '') -> dict[str, Any]:
     sym = str(args or '').strip()
     text = format_candles_telegram(sym)
     return _runner_result('candles', text=text, mode='symbol' if sym else 'usage')
+
+
+def run_macro_only(args: str = '') -> dict[str, Any]:
+    from backend.trading.macro_shock_sentinel import format_macro_command_telegram
+
+    text = format_macro_command_telegram(args)
+    return _runner_result('macro', text=text)
 
 
 def run_catalyst_only(args: str = '') -> dict[str, Any]:

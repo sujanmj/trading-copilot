@@ -409,6 +409,18 @@ def ingest_text(text: str, *, source: str = 'telegram_text') -> dict[str, Any]:
             invalidate_myfeed_caches()
         except Exception:
             pass
+        try:
+            from backend.trading.macro_shock_sentinel import process_macro_headline
+
+            process_macro_headline(
+                str(record.get('cleaned_summary') or raw),
+                source=str(record.get('detected_source_app') or source),
+                item=record,
+                send_fn=None,
+                slot='immediate',
+            )
+        except Exception:
+            pass
         return {
             'ok': True,
             'reply': format_verification_telegram_reply(
@@ -476,6 +488,18 @@ def ingest_notifications(
             'status': 'active',
         })
         saved_records.append(record)
+        try:
+            from backend.trading.macro_shock_sentinel import process_macro_headline
+
+            process_macro_headline(
+                cleaned,
+                source=str(record.get('detected_source_app') or source),
+                item=record,
+                send_fn=None,
+                slot='immediate',
+            )
+        except Exception:
+            pass
 
     if saved_records:
         try:

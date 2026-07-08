@@ -163,6 +163,16 @@ def run_premarket_slot(
         try:
             build_premarket_conviction_report(persist=True)
             print(f'[SILENT_PREMARKET_BUILD] time={ts} stage={stage} status=ok', flush=True)
+            try:
+                from backend.trading.macro_shock_sentinel import run_scheduled_macro_shock_check
+
+                macro_slot = {
+                    'overnight_global': '0745',
+                    'india_digest': '0800',
+                }.get(slot, slot)
+                run_scheduled_macro_shock_check(macro_slot, send_fn=send_fn, now=ist_now)
+            except Exception as macro_exc:
+                print(f'[MACRO_SHOCK_SCHED] slot={slot} warn={macro_exc}', flush=True)
             return True
         except Exception:
             print(f'[SILENT_PREMARKET_BUILD] time={ts} stage={stage} status=fail', flush=True)
@@ -249,10 +259,23 @@ def run_premarket_scheduler_loop(
                 print(f'[PREMARKET_SCHED] slot={slot} failed: {exc}', flush=True)
         for slot in due_opening_morning_slots(now):
             try:
+                if slot == 'radar_armed_0900':
+                    try:
+                        from backend.trading.macro_shock_sentinel import run_scheduled_macro_shock_check
+
+                        run_scheduled_macro_shock_check('0900', send_fn=send_fn, now=now)
+                    except Exception as macro_exc:
+                        print(f'[MACRO_SHOCK_SCHED] slot=0900 warn={macro_exc}', flush=True)
                 run_opening_morning_slot(slot, now=now, send_fn=send_fn)
                 _mark_sent(slot, now)
             except Exception as exc:
                 print(f'[PREMARKET_SCHED] opening slot={slot} failed: {exc}', flush=True)
+        try:
+            from backend.trading.macro_shock_sentinel import poll_recent_feeds_for_macro_shock
+
+            poll_recent_feeds_for_macro_shock(send_fn=send_fn)
+        except Exception:
+            pass
         stop.wait(30)
 
 

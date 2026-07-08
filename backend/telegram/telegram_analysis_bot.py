@@ -87,6 +87,7 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'gainers', 'description': 'All-cap top gainers'},
     {'command': 'tradecards', 'description': 'Top tradecard candidates'},
     {'command': 'tradecard', 'description': 'Single paper trade card'},
+    {'command': 'macro', 'description': 'Overnight macro shock regime'},
     {'command': 'catalyst', 'description': 'Catalyst state for one ticker'},
     {'command': 'catalysts', 'description': 'Stock catalyst radar'},
     {'command': 'today', 'description': 'Today confluence pick'},
@@ -151,6 +152,11 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /myfeed today — today's feed
 /myfeed scan — tickers/themes impact
 /myfeed clean-old — archive dirty image/OCR rows (admin)
+
+<b>Macro Shock:</b>
+/macro — current macro regime + trading guard
+/macro today — today's macro shock memory
+/macro explain — macro shock trigger + impact detail
 
 <b>Catalyst Radar:</b>
 /catalyst SYMBOL — catalyst state for one ticker
@@ -333,6 +339,10 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'catalyst', raw[len('catalyst '):].strip()
     if lower == 'catalyst':
         return 'catalyst', ''
+    if lower.startswith('macro '):
+        return 'macro', raw[len('macro '):].strip()
+    if lower == 'macro':
+        return 'macro', ''
     if lower.startswith('candles '):
         return 'candles', raw[len('candles '):].strip()
     if lower == 'candles':
@@ -942,6 +952,11 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_candles_only(args), command='candles')
         response_text = result.get('text') or 'Candle debug unavailable.'
+    elif cmd == 'macro':
+        from backend.telegram.lazy_command_runner import run_macro_only
+
+        result = run_without_ai(lambda: run_macro_only(args), command='macro')
+        response_text = result.get('text') or 'Macro shock status unavailable.'
     elif cmd == 'catalyst':
         from backend.telegram.lazy_command_runner import run_catalyst_only
 
