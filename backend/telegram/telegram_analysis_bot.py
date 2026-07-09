@@ -41,6 +41,7 @@ from backend.telegram.lazy_command_runner import (
     run_market_only,
     format_outcomes_status_text,
     run_memory_only,
+    run_learn_only,
     run_news_only,
     run_resolve_outcomes_admin,
     run_qa_only,
@@ -93,6 +94,7 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'today', 'description': 'Today confluence pick'},
     {'command': 'premarket', 'description': 'Premarket top setups'},
     {'command': 'refresh', 'description': 'Scoped cache refresh'},
+    {'command': 'learn', 'description': 'Candidate outcome learning'},
     {'command': 'help', 'description': 'Command list'},
 ]
 
@@ -118,6 +120,11 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /memory stock SYMBOL — tradecard + Screener memory for symbol
 /memory latest — latest tradecard memory records
 /memory stats — tradecard memory counts
+
+<b>Outcome Learning:</b>
+/learn today — 09:20 + 09:31 candidate outcome resolution
+/learn symbol SYMBOL — symbol outcome memory
+/learn patterns — best/worst reason tags
 
 <b>Screener / Long-term:</b>
 /screener status — latest Screener import status
@@ -176,7 +183,7 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 <b>Opening Rally:</b>
 /radar — opening rally radar (manual)
 /gainers — all-cap top gainers discovery
-/tradecards — top 5-10 tradecard candidates with reasons
+/tradecards — quality tradecards (score ≥60, max 10)
 
 <b>Trade Card:</b>
 /tradecard — one-stock paper trade card
@@ -324,6 +331,12 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'removed_opening_alias', ''
     if lower == 'tradecards':
         return 'tradecards', ''
+    if lower == 'learn today' or lower == 'learn':
+        return 'learn', 'today'
+    if lower.startswith('learn symbol '):
+        return 'learn', raw[len('learn '):].strip()
+    if lower == 'learn patterns':
+        return 'learn', 'patterns'
     if lower == 'screener status':
         return 'screener', 'status'
     if lower == 'screener latest':
@@ -812,6 +825,9 @@ def handle_analysis_command(
     elif cmd == 'memory':
         result = run_without_ai(lambda: run_memory_only(args), command='memory')
         response_text = result.get('text') or 'Memory unavailable.'
+    elif cmd == 'learn':
+        result = run_without_ai(lambda: run_learn_only(args), command='learn')
+        response_text = result.get('text') or 'Outcome learning unavailable.'
     elif cmd == 'outcomes':
         response_text = format_outcomes_status_text()
     elif cmd == 'resolve':

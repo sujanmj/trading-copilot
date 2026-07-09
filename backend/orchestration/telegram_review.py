@@ -243,11 +243,25 @@ def _prepare_daily_review_learning() -> dict:
     except Exception as exc:
         summary['tradecard_error'] = str(exc)[:120]
     try:
+        from backend.trading.candidate_outcome_learning import resolve_candidate_outcomes
+
+        col = resolve_candidate_outcomes(run_ai=True)
+        summary['candidate_outcomes_resolved'] = len(col.get('resolved') or [])
+        summary['candidate_ai_used'] = col.get('ai_used', 0)
+    except Exception as exc:
+        summary['candidate_outcome_error'] = str(exc)[:120]
+    try:
         from backend.analytics.actual_learning_resolver import run_actual_learning_resolver
 
-        summary = run_actual_learning_resolver(refresh_cache=True)
+        learning_summary = run_actual_learning_resolver(refresh_cache=True)
+        if isinstance(learning_summary, dict):
+            learning_summary.update(summary)
+            summary = learning_summary
     except Exception as exc:
-        summary = {'sample_updated': 0, 'pending_data': 0, 'errors': 1, 'error': str(exc)[:120]}
+        if not summary:
+            summary = {'sample_updated': 0, 'pending_data': 0, 'errors': 1, 'error': str(exc)[:120]}
+        else:
+            summary['actual_learning_error'] = str(exc)[:120]
     try:
         from backend.storage.outcome_resolver import refresh_memory_dashboard_cache
 

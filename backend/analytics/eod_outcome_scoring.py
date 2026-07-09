@@ -423,9 +423,24 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
         f"Useful: {summary.get('emergency_useful', 0)} · "
         f"Duplicate skipped: {summary.get('emergency_duplicate_skipped', 0)}\n\n"
         f"<b>Tomorrow:</b>\nFresh post-market intelligence generated\n\n"
+        f"{_candidate_outcome_learning_block(summary)}"
         f"{_tradecard_review_block(summary)}"
     )
     return msg
+
+
+def _candidate_outcome_learning_block(summary: dict) -> str:
+    try:
+        from backend.trading.candidate_outcome_learning import format_candidate_outcome_learning_block
+
+        lines = format_candidate_outcome_learning_block(
+            session_date=str(summary.get('date') or _today()),
+        )
+        if not lines:
+            return ''
+        return '\n'.join(lines) + '\n\n'
+    except Exception:
+        return ''
 
 
 def _tradecard_review_block(summary: dict) -> str:

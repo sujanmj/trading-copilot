@@ -1,229 +1,235 @@
-# Trading Copilot / AstraEdge
+# AstraEdge Trading Copilot
 
-AstraEdge is a safety-first market intelligence copilot for Indian equities. It combines scanner data, market context, news, macro signals, user-supplied feed items, and outcome learning into Telegram-first research workflows.
+AstraEdge Trading Copilot is an Indian market intelligence and paper-trading research copilot.
 
-The system is designed for **research and paper-trading intelligence only**. It is not a broker, not an execution bot, and does not place automated or one-click orders.
+It combines:
+- trusted news refresh
+- feed verification
+- macro shock sentinel
+- scanner/gainer freshness guard
+- opening rally radar
+- tradecards
+- catalyst radar
+- chart-pattern context
+- screener/long-term memory
+- Telegram command workflows
 
-- **Current build:** AstraEdge 50Z
-- **Primary interface:** Telegram bot
-- **Deployment:** Railway production FastAPI backend
-- **Persistence:** SQLite and JSON artifacts on the application data volume
-- **Local operator UI:** Electron desktop interface for monitoring and review
-
----
-
-## What It Does
-
-Trading Copilot helps an operator answer:
-
-- What is moving in the Indian market?
-- Which names have scanner, news, sector, macro, or catalyst support?
-- Is the current market mode suitable for active paper-trade planning?
-- Has a tradecard remained active, missed entry, or moved into next-session watch?
-- How have prior paper tradecards and intelligence calls resolved?
-
-It does **not** convert research into real-money execution. Any real-world decision must be verified manually by the user.
+**Current mode:** paper/research only  
+**Current Telegram build:** AstraEdge 52H  
+**Primary workflow:** Telegram command interface + Railway backend + optional local dashboard
 
 ---
 
-## Core Capabilities
+## Latest Build: AstraEdge 52H
 
-| Area | Capability |
-| --- | --- |
-| Market intelligence ingestion | Live scanner and quote refresh, news cache, government and macro intelligence, sector and theme context, global market context, broker or consensus context where available |
-| My Feed | Text-based user news intake for market-relevant items supplied directly through Telegram |
-| Decision context | NSE-focused intelligence, freshness checks, market-mode awareness, catalyst and scanner confluence |
-| Tradecards | Paper-only research cards with deterministic safety gates, entry-zone context, stop, T1/T2, confidence, source, and freshness |
-| Outcome learning | Tradecard journal, fill and target/stop sequencing, pending outcome review, calibration views |
-| Telegram operations | On-demand commands, scheduled briefs, status checks, refresh commands, AI Hub summaries |
-| Local review | Electron UI for operator monitoring, runtime inspection, and cached data review |
+### Unified News Source Aggregator
 
----
+AstraEdge 52H introduces a unified news provider registry.
 
-## Safety-First Tradecards
+- `/news refresh` refreshes all enabled trusted news providers together
+- `/news refresh SYMBOL` checks all enabled providers for one ticker/company
+- `/news sources` shows provider health/freshness
+- `/refresh status` shows news/scanner/macro/source freshness
+- provider failures return `NEWS_REFRESH_PARTIAL` (not full refresh failure)
+- Mint RSS / LiveMint is included as one provider inside the unified collector
 
-`/tradecard` creates a paper-only research card for one current candidate. The tradecard system is intentionally conservative:
-
-- Blocks active-entry tradecards outside valid market conditions.
-- Handles `NO ACTIVE ENTRY`, `ENTRY_MISSED`, `NEXT-SESSION WATCH`, `PREMARKET WATCH`, and `VALID_ENTRY` states.
-- Avoids blind entries and requires fresh price and volume confirmation.
-- Shows entry zone, stop, T1, T2, confidence, source, and freshness when a valid paper plan exists.
-- Uses a repeated same-ticker active lock so one active card is not duplicated.
-- Keeps `/tradecard explain` tied to the same latest card or audit card shown by `/tradecard`.
-- Tracks paper tradecard outcomes through `/tradecard outcome` and `/tradecard journal`.
-- Resolves outcome sequencing through entry fill, T1/T2, stop, no-fill, expiry, and conservative handling for ambiguous same-candle paths.
-- Adds tradecard results or provisional review into `/close` when appropriate.
-
-In research mode, premarket, or after-hours contexts, the bot favors watch-only wording such as next-session confirmation instead of presenting stale or non-live context as active.
+No Mint-specific refresh command is documented or required.
 
 ---
 
-## Telegram Commands
+## Current News Providers
 
-Telegram is the main operational interface for AstraEdge 50Z.
+Enabled/provider slots in the current setup:
 
-| Category | Commands |
-| --- | --- |
-| Core | `/status`, `/health`, `/schedule`, `/memory`, `/broker`, `/qa` |
-| Action | `/action plan`, `/bootstrap`, `/today`, `/tomorrow`, `/why <ticker>`, `/premarket`, `/premarket full` |
-| Refresh | `/refresh`, `/refresh quick`, `/refresh full` |
-| AI Hub | `/aihub`, `/aihub full`, `/aihub brain`, `/aihub govt`, `/aihub scan`, `/aihub market`, `/aihub global`, `/aihub news`, `/aihub tv`, `/aihub calib`, `/aihub journal`, `/aihub brain full` |
-| My Feed | `/feed <market news text>`, `/myfeed list`, `/myfeed today`, `/myfeed scan`, `/myfeed clean-old` |
-| Catalyst Radar | `/catalysts`, `/catalysts today`, `/catalysts explain <ticker>` |
-| Trade Card | `/tradecard`, `/tradecard today`, `/tradecard explain`, `/tradecard outcome`, `/tradecard journal` |
-| Briefs | `/news`, `/morning`, `/close`, `/full` |
-| Theme Wishlist | `/theme`, `/theme <basket>`, `/theme news`, `/theme scan`, `/theme budget`, `/theme refresh` |
-| Budget Impact | `/budget`, `/budget theme <basket>`, `/budget analyze <text>` |
-| AI | `/ask ai <question>` |
+- ET Markets
+- NDTV Profit
+- Mint RSS / LiveMint
+- BSE Corporate Announcements
+- RBI Press Releases
+- SEBI Press Releases
+- Investing.com India
+- Business Standard RSS (may show HTTP403/stale depending on source availability)
+- MCX (may show HTTP403/stale depending on source availability)
+- NSE / PIB (may show missing until feed stability improves)
 
 ---
 
-## Market Modes
+## Core Telegram Commands
 
-AstraEdge is market-mode aware and changes wording based on whether live confirmation is possible.
+### Health / QA
+- `/health`
+- `/clock`
+- `/status`
+- `/qa`
+- `/qa smoke`
+- `/qa full`
+- `/qa last`
+- `/qa explain`
 
-| Mode | Meaning | Typical behavior |
-| --- | --- | --- |
-| `INDIA_PREMARKET_MODE` | Before the regular session | Research and preparation only; active tradecards are blocked until market confirmation is available |
-| `INDIA_PREOPEN_MODE` | NSE pre-open window | Opening context and confirmation prep; no live active-entry assumption |
-| `INDIA_MARKET_HOURS` | Regular India market session | Live scanner and quote context may support paper tradecards when all safety gates pass |
-| `RESEARCH_MODE` | Weekend, holiday, closed-market, or research-only state | No live intraday/EOD confirmation; stale report packs are not presented as current |
-| After-hours / post-market | Closed-market review and next-session prep | Watch-only wording, outcome review, and next-session confirmation plans |
+### News
+- `/news`
+- `/news refresh`
+- `/news refresh SYMBOL`
+- `/news sources`
 
----
+### Refresh
+- `/refresh`
+- `/refresh quick`
+- `/refresh scanner`
+- `/refresh market`
+- `/refresh status`
+- `/refresh full`
 
-## AI Role
+### My Feed
+- `/feed <market news text>`
+- `/feed verify FEED_ID`
+- `/feed remove FEED_ID`
+- `/feed restore FEED_ID`
+- `/myfeed today`
+- `/myfeed list`
+- `/myfeed scan`
 
-AI is used as an assistant layer for:
+### Macro
+- `/macro`
+- `/macro today`
+- `/macro explain`
 
-- Summarization and explanation.
-- Normalizing noisy market text into structured context.
-- Synthesizing scanner, news, macro, sector, and user-feed inputs.
-- Helping answer `/ask ai` questions using cached system context.
+### Opening / Tradecards
+- `/radar`
+- `/gainers`
+- `/tradecards`
+- `/tradecard`
+- `/tradecard today`
+- `/tradecard explain`
+- `/tradecard journal`
+- `/tradecard outcome`
 
-The final tradecard safety gates are rule-based and deterministic. AI does not place trades, bypass safety checks, or make execution decisions. Provider routing is budget-aware and has fallback behavior, but public operation does not depend on exposing provider account details.
+### Catalysts
+- `/catalyst SYMBOL`
+- `/catalysts`
+- `/catalysts today`
+- `/catalysts explain SYMBOL`
+
+### Patterns
+- `/patterns`
+- `/pattern`
+- `/pattern SYMBOL`
+- `/candles SYMBOL`
+
+### Screener / Long-Term
+- `/screener status`
+- `/screener latest`
+- `/screener import longterm`
+- `/longterm`
+- `/longterm explain SYMBOL`
 
 ---
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  subgraph Sources
-    Scanner["Scanner + quote refresh"]
-    News["News cache"]
-    Macro["Government + macro"]
-    Themes["Sector + theme context"]
-    Broker["Broker/consensus context"]
-    Feed["My Feed text intake"]
-  end
-
-  Sources --> Backend["Railway FastAPI backend"]
-  Backend --> Store["SQLite + JSON data volume"]
-  Backend --> Telegram["Telegram command layer"]
-  Backend --> Jobs["Schedulers + background jobs"]
-  Backend --> AIHub["AI Hub summaries"]
-  Backend --> Cards["Tradecard engine"]
-  Cards --> Journal["Outcome journal + calibration loop"]
-  Store --> GUI["Local Electron operator UI"]
+```text
+Telegram
+  -> FastAPI backend (Railway)
+    -> command router
+      -> unified news provider registry
+      -> my feed + feed verification
+      -> macro shock sentinel
+      -> market/source freshness guard
+      -> opening rally radar
+      -> tradecards
+      -> catalyst + chart pattern context
+      -> screener + long-term memory
+      -> storage layer
+         -> /app/data (persistent volume)
 ```
-
-### Main Components
-
-| Component | Role |
-| --- | --- |
-| Railway FastAPI service | Production backend, health endpoints, data APIs, background startup |
-| Telegram command layer | Main operator interface and scheduled briefs |
-| Schedulers and background jobs | Refresh cycles, morning/close/overnight briefs, scanner and cache maintenance |
-| Scanner/news/macro collectors | Structured ingestion into runtime data artifacts |
-| SQLite and JSON persistence | Runtime state, journal rows, cache files, snapshots, and review artifacts |
-| Electron local GUI | Local monitoring and operator review interface |
-| Outcome and calibration loop | Paper-card tracking, journal review, and confidence calibration context |
-
-Railway deploys the Python backend. The Electron GUI is intended for local operator review and talks to the backend API.
 
 ---
 
-## Local Setup
+## Repository Layout
 
-Use a local virtual environment and keep secrets out of source control.
+- `backend/` — Python backend services, collectors, Telegram logic, analysis/routing
+- `scripts/` — phase/regression test scripts and local validation helpers
+- `frontend/` — optional local Electron dashboard
+- `data/` — runtime/generated JSON/SQLite artifacts (do not commit)
+- `test/` — additional test utilities
+- `tests-gui/` — GUI-facing tests
+- `docs/` — documentation and notes
+- `reports/` — generated reports and analysis artifacts
+
+---
+
+## Setup (Windows PowerShell)
 
 ```powershell
+git clone <your-repo-url>
+cd trading-copilot
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-Create a local environment file from the example template and fill in only your own local values:
-
-```powershell
 copy .env.example .env
-```
-
-Never commit real tokens, API keys, chat IDs, provider keys, broker credentials, or local machine paths.
-
-Run the local backend:
-
-```powershell
 python run_local.py
 ```
 
-Optional Railway deployment uses the checked-in Railway/Nixpacks configuration. Configure production environment variables in the deployment platform rather than committing them to the repo.
+Fill `.env` with only required local keys. Do not commit secrets.
 
 ---
 
-## Local GUI
+## Railway Deployment
 
-The local UI is an Electron app for monitoring and operator review. It is not required for Railway deployment.
+Railway deploys the **Python backend only**.  
+Runtime persistence uses the mounted `/app/data` volume.
 
-```powershell
-cd frontend
-npm install
-npm start
-```
-
-Do not commit `frontend/.env.local`.
+The local dashboard in `frontend/` is optional and not deployed on Railway.
 
 ---
 
-## Repo Hygiene
-
-- `data/` is runtime output and should not be committed.
-- `frontend/.env.local` is local-only and should not be committed.
-- Do not commit secrets, provider keys, Telegram tokens, broker credentials, private URLs, or machine-specific paths.
-- Run the secret and smoke checks before pushing public changes:
+## Focused Test Commands
 
 ```powershell
-python scripts\check_no_secrets_before_push.py
-python scripts\final_local_90_gate.py
-python scripts\railway_smoke_local.py
+.\.venv\Scripts\python.exe scripts\test_unified_news_sources_4b18j.py
+.\.venv\Scripts\python.exe scripts\test_market_freshness_guard_4b18i.py
+.\.venv\Scripts\python.exe scripts\test_feed_remove_4b18h.py
+.\.venv\Scripts\python.exe scripts\test_feed_ticker_resolver_4b18g.py
+.\.venv\Scripts\python.exe scripts\test_macro_emergency_persistence_4b18f.py
+.\.venv\Scripts\python.exe scripts\test_live_confirmation_guard_4b18d.py
 ```
 
 ---
 
-## Safety And Compliance
+## Data Hygiene
 
-AstraEdge is for educational, research, and paper-trading intelligence use only.
+Do not commit generated runtime data files.
 
-- Not financial advice.
-- Not SEBI-registered investment advice.
-- No investment recommendation is implied by any command output.
-- No automated order execution.
-- No one-click trading.
-- Market data, news, quotes, and cached intelligence may be delayed, stale, incomplete, or incorrect.
-- Users must independently verify all information before making any real-world financial decision.
-- All tradecards and signals are research or paper-trading outputs.
+```powershell
+git restore --staged data
+git restore data
+Remove-Item data\qa_last_result.json,data\qa_runs.jsonl,data\intraday_candles.jsonl,data\screener_imports.jsonl,data\screener_stock_memory.jsonl,data\tradecard_memory.jsonl,data\actual_learning_candidates.jsonl,data\alert_event_log.jsonl,data\top_gainers_cache.json,data\top_gainers_cache.jsonl,feed_remove_fail.txt -ErrorAction SilentlyContinue
+Remove-Item data\imports -Recurse -Force -ErrorAction SilentlyContinue
+```
 
 ---
 
-## Current Status
+## Safety / Disclaimer
 
-| Item | Status |
-| --- | --- |
-| Build | AstraEdge 50Z |
-| Focus | Safety-first Telegram intelligence |
-| Tradecards | Paper-only lifecycle, journal, and outcome review |
-| Research mode | Clear no-live-confirmation wording and stale-pack suppression |
-| Railway smoke | Local smoke path kept stable for scanner refresh and Telegram command checks |
+- Research and paper-trading intelligence only
+- Not financial advice
+- No live trade execution
+- No paywall bypass
+- No full copyrighted article storage
+- Unverified feed items are not treated as confirmed catalysts
 
-The project is actively evolving around safer Telegram operations, clearer market-mode behavior, and better paper-trade outcome feedback.
+All outputs require manual validation before any real-world decision.
+
+---
+
+## Roadmap
+
+Practical next improvements:
+
+- stabilize NSE/PIB providers
+- replace or disable persistent HTTP403 providers
+- add GitHub Actions CI
+- split large Telegram/radar/feed modules
+- add `SECURITY.md` and `LICENSE`
+- improve provider confidence scoring
+- improve outcome learning

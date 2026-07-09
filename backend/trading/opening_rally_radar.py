@@ -1448,6 +1448,17 @@ def run_scheduled_opening_radar_alert(
             candidates=candidates,
             timestamp=ts,
         )
+        try:
+            from backend.trading.candidate_outcome_learning import capture_quality_snapshots
+
+            capture_quality_snapshots(
+                board=board,
+                candidates=candidates,
+                stage='opening_0920',
+                now=ist_now,
+            )
+        except Exception:
+            pass
     return sent
 
 
@@ -1598,6 +1609,21 @@ def run_scheduled_final_confirmation_0931(
             timestamp=ts,
             now=ist_now,
         )
+        try:
+            from backend.trading.candidate_outcome_learning import capture_quality_snapshots
+
+            final_candidates = [
+                r for r in (board.get('ranked_candidates') or [])
+                if r.get('state') != 'REJECTED'
+            ]
+            capture_quality_snapshots(
+                board=board,
+                candidates=final_candidates,
+                stage='final_0931',
+                now=ist_now,
+            )
+        except Exception:
+            pass
     return sent
 
 

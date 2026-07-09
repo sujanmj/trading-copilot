@@ -235,12 +235,24 @@ def memory_stats() -> dict[str, Any]:
     pending = sum(1 for r in rows if r.get('outcome_status') == 'pending')
     reference_only = sum(1 for r in rows if r.get('outcome_status') == 'reference_only')
     stale = sum(1 for r in rows if r.get('outcome_status') == 'stale')
-    return {
+    stats = {
         'total': len(rows),
         'pending': pending,
         'reference_only': reference_only,
         'stale_skipped': stale,
     }
+    try:
+        from backend.trading.candidate_outcome_learning import learning_stats
+
+        stats.update(learning_stats())
+    except Exception:
+        stats.update({
+            'candidate_snapshots': 0,
+            'candidate_outcomes': 0,
+            'candidate_learning_records': 0,
+            'ai_explanations_used_today': 0,
+        })
+    return stats
 
 
 def summarize_symbol_memory(symbol: str) -> dict[str, Any]:

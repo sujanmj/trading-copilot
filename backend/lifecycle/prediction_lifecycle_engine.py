@@ -823,7 +823,14 @@ def _evaluate_outcomes() -> dict:
     except Exception as e:
         hr = {'evaluated': 0, 'error': str(e)}
     adaptive = {'status': 'deferred', 'message': 'Adaptive runs after calibration snapshot'}
+    try:
+        from backend.trading.candidate_outcome_learning import resolve_candidate_outcomes
+
+        candidate_learning = resolve_candidate_outcomes(run_ai=True)
+    except Exception as exc:
+        candidate_learning = {'error': str(exc)[:120]}
     resolution_summary = generate_daily_resolution_summary({'lifecycle': eval_stats, 'eod_intraday': eod_intraday})
+    resolution_summary['candidate_outcome_learning'] = candidate_learning
     return {
         'lifecycle': eval_stats,
         'eod_intraday': eod_intraday,

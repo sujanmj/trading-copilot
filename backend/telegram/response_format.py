@@ -2380,6 +2380,12 @@ def format_tradecard_memory_stats_telegram() -> str:
         f'Active pending: {stats.get("pending") or 0}',
         f'Reference only: {stats.get("reference_only") or 0}',
         f'Stale skipped: {stats.get("stale_skipped") or 0}',
+        '',
+        '<b>Candidate outcome learning:</b>',
+        f'candidate_snapshots: {stats.get("candidate_snapshots") or 0}',
+        f'candidate_outcomes: {stats.get("candidate_outcomes") or 0}',
+        f'candidate_learning_records: {stats.get("candidate_learning_records") or 0}',
+        f'ai_explanations_used_today: {stats.get("ai_explanations_used_today") or 0}',
     ]
     return strip_stage_markers('\n'.join(lines))
 
@@ -3487,10 +3493,19 @@ def format_early_tradecards_scheduled_telegram(
     except Exception:
         pass
     lines.append('')
+    from backend.trading.candidate_outcome_learning import (
+        filter_quality_candidates,
+        format_no_quality_tradecard_block,
+    )
+
     candidates = sort_early_tradecard_candidates([
         r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED'
     ])
-    for idx, row in enumerate(candidates[:10], start=1):
+    quality = filter_quality_candidates(candidates)
+    if not quality:
+        lines.extend(['', *format_no_quality_tradecard_block()])
+        return strip_stage_markers('\n'.join(lines))
+    for idx, row in enumerate(quality, start=1):
         sym = str(row.get('ticker') or '?')
         label = provisional_label_for_row(row, board=data)
         score = int(row.get('score') or 0)
@@ -3513,7 +3528,7 @@ def format_early_tradecards_scheduled_telegram(
     best_sym, best_score, _ = pick_best_opening_tradecard(data)
     if best_sym:
         best_row = next(
-            (r for r in candidates if str(r.get('ticker') or '').upper() == best_sym),
+            (r for r in quality if str(r.get('ticker') or '').upper() == best_sym),
             {},
         )
         why = ' + '.join(best_row.get('why') or []) or 'opening board leader'
@@ -3642,12 +3657,34 @@ def format_tradecards_telegram(
         lines.extend(['', *format_data_freshness_block(data), ''])
     except Exception:
         lines.append('')
+    from backend.trading.candidate_outcome_learning import (
+        capture_quality_snapshots,
+        filter_quality_candidates,
+        format_no_quality_tradecard_block,
+    )
+
     candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
     if not candidates:
         lines.append('No tradecard candidates on the opening board yet.')
         return strip_stage_markers('\n'.join(lines))
 
-    for idx, row in enumerate(candidates[:10], start=1):
+    quality = filter_quality_candidates(candidates)
+    scanner_current = str(data.get('scanner_freshness_status') or '').upper() == 'CURRENT'
+    market_active = not data.get('reference_only') and not data.get('session_stale')
+    if market_active and scanner_current and quality:
+        try:
+            capture_quality_snapshots(
+                board=data,
+                candidates=quality,
+                stage='manual_tradecards',
+            )
+        except Exception:
+            pass
+    if not quality:
+        lines.extend(['', *format_no_quality_tradecard_block()])
+        return strip_stage_markers('\n'.join(lines))
+
+    for idx, row in enumerate(quality, start=1):
         sym = str(row.get('ticker') or '?')
         from backend.trading.all_cap_gainers import format_cap_bucket_inline
 

@@ -531,6 +531,37 @@ def format_outcomes_status_text() -> str:
     ])
 
 
+def run_learn_only(args: str = '') -> dict[str, Any]:
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower in ('', 'today'):
+        from backend.trading.candidate_outcome_learning import format_learn_today_telegram
+
+        text = format_learn_today_telegram()
+        return _runner_result('learn', text=text, mode='today')
+    if lower.startswith('symbol '):
+        from backend.trading.candidate_outcome_learning import format_learn_symbol_telegram
+
+        sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_learn_symbol_telegram(sym)
+        return _runner_result('learn', text=text, mode='symbol')
+    if lower == 'patterns':
+        from backend.trading.candidate_outcome_learning import format_learn_patterns_telegram
+
+        text = format_learn_patterns_telegram()
+        return _runner_result('learn', text=text, mode='patterns')
+    return _runner_result(
+        'learn',
+        text=(
+            '<b>/learn</b>\n'
+            '/learn today — 09:20 + 09:31 candidate outcome resolution\n'
+            '/learn symbol SYMBOL — symbol outcome memory\n'
+            '/learn patterns — best/worst reason tags'
+        ),
+        mode='help',
+    )
+
+
 def run_resolve_outcomes_admin() -> dict[str, Any]:
     from backend.storage.outcome_resolver import run_outcome_resolver_once
 
