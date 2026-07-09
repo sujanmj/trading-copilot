@@ -876,9 +876,21 @@ def run_screener_only(args: str = '') -> dict[str, Any]:
 
 def run_longterm_only(args: str = '') -> dict[str, Any]:
     from backend.telegram.response_format import format_longterm_explain_telegram, format_longterm_telegram
+    from backend.trading.longterm_snapshot_memory import (
+        format_longterm_history_telegram,
+        format_longterm_memory_symbol_telegram,
+    )
 
     raw = str(args or '').strip()
     lower = raw.lower()
+    if lower.startswith('history'):
+        sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_longterm_history_telegram(sym)
+        return _runner_result('longterm', text=text, mode='history')
+    if lower.startswith('memory '):
+        sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_longterm_memory_symbol_telegram(sym)
+        return _runner_result('longterm', text=text, mode='memory')
     if lower.startswith('explain '):
         sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
         text = format_longterm_explain_telegram(sym)

@@ -137,6 +137,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /screener import longterm — upload CSV/XLSX or import from data/imports
 /longterm — top long-term watchlist from Screener memory
 /longterm explain SYMBOL — long-term ratios + tradecard memory
+/longterm history — recent long-term recommendation snapshots
+/longterm history SYMBOL — long-term history for symbol
+/longterm memory SYMBOL — stored long-term thesis memory
 
 <b>Action:</b>
 /action plan — final action plan
@@ -352,6 +355,12 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'screener', raw[len('screener'):].strip()
     if lower == 'screener':
         return 'screener', 'status'
+    if lower.startswith('longterm memory '):
+        return 'longterm', raw[len('longterm '):].strip()
+    if lower == 'longterm history':
+        return 'longterm', 'history'
+    if lower.startswith('longterm history '):
+        return 'longterm', raw[len('longterm '):].strip()
     if lower.startswith('longterm explain '):
         return 'longterm', raw[len('longterm '):].strip()
     if lower == 'longterm':

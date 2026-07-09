@@ -252,6 +252,16 @@ def memory_stats() -> dict[str, Any]:
             'candidate_learning_records': 0,
             'ai_explanations_used_today': 0,
         })
+    try:
+        from backend.trading.longterm_snapshot_memory import longterm_memory_stats
+
+        stats.update(longterm_memory_stats())
+    except Exception:
+        stats.update({
+            'screener_snapshots': 0,
+            'longterm_recommendation_snapshots': 0,
+            'longterm_symbols_tracked': 0,
+        })
     return stats
 
 

@@ -2386,6 +2386,11 @@ def format_tradecard_memory_stats_telegram() -> str:
         f'candidate_outcomes: {stats.get("candidate_outcomes") or 0}',
         f'candidate_learning_records: {stats.get("candidate_learning_records") or 0}',
         f'ai_explanations_used_today: {stats.get("ai_explanations_used_today") or 0}',
+        '',
+        '<b>Long-term Screener memory:</b>',
+        f'screener_snapshots: {stats.get("screener_snapshots") or 0}',
+        f'longterm_recommendation_snapshots: {stats.get("longterm_recommendation_snapshots") or 0}',
+        f'longterm_symbols_tracked: {stats.get("longterm_symbols_tracked") or 0}',
     ]
     return strip_stage_markers('\n'.join(lines))
 
@@ -3855,6 +3860,11 @@ def format_screener_import_telegram(args: str) -> str:
 
 
 def format_longterm_telegram(limit: int = 10) -> str:
+    from backend.trading.longterm_snapshot_memory import (
+        capture_longterm_recommendation_snapshots,
+        format_longterm_stock_block,
+        symbol_longterm_memory,
+    )
     from backend.trading.screener_memory import latest_import, latest_import_stocks
 
     imp = latest_import()
@@ -3864,6 +3874,19 @@ def format_longterm_telegram(limit: int = 10) -> str:
             'Import CSV/XLSX via /screener import longterm filename.csv'
         )
     stocks = latest_import_stocks(limit=500)[:limit]
+    snapshots: list[dict[str, Any]] = []
+    if stocks:
+        try:
+            snapshots = capture_longterm_recommendation_snapshots(
+                stocks,
+                import_id=str(imp.get('import_id') or ''),
+                limit=limit,
+            )
+        except Exception:
+            snapshots = []
+    snap_by_sym = {
+        str(s.get('symbol') or '').upper(): s for s in snapshots
+    }
     lines = [
         '<b>LONG-TERM WATCHLIST</b>',
         '<i>Research only — requires live confirmation for intraday tradecard</i>',
@@ -3874,17 +3897,12 @@ def format_longterm_telegram(limit: int = 10) -> str:
         lines.append('No scored stocks in latest import.')
         return strip_stage_markers('\n'.join(lines))
     for idx, row in enumerate(stocks, start=1):
-        label = str(row.get('display_name') or row.get('company_name') or row.get('symbol') or '?')
-        score = int(row.get('longterm_score') or 0)
-        cap = _format_cap_label(str(row.get('cap_bucket') or 'unknown'))
-        verdict = str(row.get('verdict') or 'unknown').replace('_', ' ')
-        lines.append(f'{idx}. <b>{label}</b> — score {score} — {cap} — {verdict}')
-        reasons = row.get('reasons') or []
-        if reasons:
-            lines.append(f'   Reasons: {" · ".join(reasons[:3])}')
-        risks = row.get('risk_flags') or []
-        if risks:
-            lines.append(f'   Risk: {" · ".join(risks[:2])}')
+        sym = str(row.get('symbol') or row.get('symbol_key') or '').upper()
+        row_with_rank = {**row, 'rank': idx}
+        snap = snap_by_sym.get(sym)
+        mem = symbol_longterm_memory(sym) if sym else {}
+        lines.extend(format_longterm_stock_block(row_with_rank, snapshot=snap, memory=mem))
+    lines.append('/longterm history · /longterm memory SYMBOL')
     return strip_stage_markers('\n'.join(lines))
 
 

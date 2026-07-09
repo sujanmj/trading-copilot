@@ -498,13 +498,20 @@ def import_screener_file(
             append_stock_memory(stock)
             stored.append(stock)
 
-    return {
+    result = {
         'ok': True,
         'import': import_record,
         'stored_count': len(stored),
         'stored_stocks': stored,
         'skipped': max(0, len(raw_rows) - len(stored)),
     }
+    try:
+        from backend.trading.longterm_snapshot_memory import capture_screener_import_snapshot
+
+        capture_screener_import_snapshot(result, source_file_name=path.name)
+    except Exception:
+        pass
+    return result
 
 
 def import_screener_csv(
