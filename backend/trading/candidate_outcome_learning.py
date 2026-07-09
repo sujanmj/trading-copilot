@@ -12,13 +12,13 @@ import json
 import uuid
 from datetime import datetime, time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from backend.storage.data_paths import get_data_path
 
 IST = ZoneInfo('Asia/Kolkata')
-STAGE = '4B.18K'
+STAGE = '4B.18K-A'
 
 MIN_QUALITY_SCORE = 60
 MAX_QUALITY_CANDIDATES = 10
@@ -269,42 +269,206 @@ def capture_quality_snapshots(
     return stored
 
 
+def _parse_ts(value: object) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if text.endswith('Z'):
+            text = text[:-1] + '+00:00'
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=IST)
+        return dt.astimezone(IST)
+    except ValueError:
+        return None
+
+
+def _session_from_ts(ts: datetime | None) -> str:
+    if ts is None:
+        return ''
+    return ts.astimezone(IST).date().isoformat()
+
+
+def _load_json_file(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _broker_eod_price(symbol: str, session_date: str) -> tuple[float | None, float | None, float | None, str, bool]:
+    """Broker/EOD tier — local broker cache + historical close."""
+    sym = _normalize_symbol(symbol)
+    close = high = low = None
+    source = ''
+    stale = False
+    for rel in ('broker_app_collector_latest.json', 'broker_intelligence_cache.json', 'daily_report_pack_latest.json'):
+        data = _load_json_file(get_data_path(rel))
+        if not data:
+            continue
+        ts = _parse_ts(data.get('generated_at') or data.get('last_updated') or data.get('timestamp'))
+        if ts and _session_from_ts(ts) != session_date:
+            stale = True
+        for row in data.get('rows') or data.get('picks') or data.get('items') or []:
+            if not isinstance(row, dict):
+                continue
+            if _normalize_symbol(row.get('ticker') or row.get('symbol')) != sym:
+                continue
+            close = _safe_float(row.get('close') or row.get('ltp') or row.get('price'))
+            high = _safe_float(row.get('high')) or close
+            low = _safe_float(row.get('low')) or close
+            if close:
+                source = rel
+                break
+        if close:
+            break
+    if close is None:
+        try:
+            from backend.analytics.actual_learning_resolver import capture_eod_price_evidence
+
+            evidence = capture_eod_price_evidence([sym], session_date=session_date)
+            rows = evidence.get(sym) or []
+            if rows:
+                last = rows[-1]
+                close = _safe_float(last.get('price'))
+                high = _safe_float(last.get('high')) or close
+                low = _safe_float(last.get('low')) or close
+                if close:
+                    source = str(last.get('source') or 'eod_price_evidence')
+        except Exception:
+            pass
+    if close is None:
+        try:
+            from backend.storage.historical_market_store import get_historical_db_path, get_prices
+
+            if get_historical_db_path().exists():
+                rows = get_prices(ticker=sym, market='NSE', to_date=session_date, limit=3)
+                for row in reversed(rows):
+                    if int(row.get('fake_prices') or 0):
+                        continue
+                    c = _safe_float(row.get('close'))
+                    if c and c > 0:
+                        close = c
+                        high = _safe_float(row.get('high')) or c
+                        low = _safe_float(row.get('low')) or c
+                        source = 'historical_market_store'
+                        break
+        except Exception:
+            pass
+    return close, high, low, source, stale and not source
+
+
+def _intraday_price_path(
+    symbol: str,
+    *,
+    session_date: str,
+    reference_price: float,
+) -> tuple[float | None, float | None, float | None, str, bool]:
+    sym = _normalize_symbol(symbol)
+    high = low = close = None
+    stale = False
+    try:
+        from backend.trading.intraday_candle_memory import load_recent_candles
+
+        candles = load_recent_candles(sym, session_date=session_date, limit=500)
+        highs: list[float] = []
+        lows: list[float] = []
+        closes: list[float] = []
+        for c in candles:
+            h = _safe_float(c.get('high'))
+            l = _safe_float(c.get('low'))
+            cl = _safe_float(c.get('close') or c.get('price') or c.get('ltp'))
+            if h and h > 0:
+                highs.append(h)
+            if l and l > 0:
+                lows.append(l)
+            if cl and cl > 0:
+                closes.append(cl)
+        if closes:
+            high = max(highs) if highs else max(closes)
+            low = min(lows) if lows else min(closes)
+            close = closes[-1]
+            return close, high, low, 'intraday_candle_memory', stale
+    except Exception:
+        pass
+    return None, None, None, '', stale
+
+
+def _scanner_gainer_price(symbol: str, session_date: str) -> tuple[float | None, float | None, float | None, str, bool]:
+    sym = _normalize_symbol(symbol)
+    stale = False
+    scanner = _load_json_file(get_data_path('scanner_data.json'))
+    if scanner:
+        ts = _parse_ts(scanner.get('last_updated') or scanner.get('scan_time_local'))
+        if ts and _session_from_ts(ts) != session_date:
+            stale = True
+        for key in ('top_signals', 'all_signals', 'signals'):
+            for row in scanner.get(key) or []:
+                if not isinstance(row, dict):
+                    continue
+                if _normalize_symbol(row.get('ticker') or row.get('symbol')) != sym:
+                    continue
+                close = _safe_float(row.get('price') or row.get('ltp') or row.get('close'))
+                high = _safe_float(row.get('high')) or close
+                low = _safe_float(row.get('low')) or close
+                if close:
+                    return close, high, low, 'scanner_data', stale
+    try:
+        from backend.analytics.actual_learning_resolver import capture_eod_price_evidence
+
+        evidence = capture_eod_price_evidence([sym], session_date=session_date)
+        rows = evidence.get(sym) or []
+        if rows:
+            last = rows[-1]
+            close = _safe_float(last.get('price'))
+            high = _safe_float(last.get('high')) or close
+            low = _safe_float(last.get('low')) or close
+            if close:
+                return close, high, low, str(last.get('source') or 'scanner_gainer_cache'), stale
+    except Exception:
+        pass
+    return None, None, None, '', stale
+
+
+def _quote_cache_price(symbol: str, session_date: str) -> tuple[float | None, float | None, float | None, str, bool]:
+    sym = _normalize_symbol(symbol)
+    stale = False
+    try:
+        from backend.storage.market_memory_outcomes import load_latest_market_data, lookup_latest_price
+
+        for rel in ('latest_market_data_memory_enriched.json', 'latest_market_data.json'):
+            market = load_latest_market_data(get_data_path(rel)) or {}
+            ts = _parse_ts(market.get('last_updated') or market.get('generated_at'))
+            if ts and _session_from_ts(ts) != session_date:
+                stale = True
+            close = lookup_latest_price(market, sym)
+            if close:
+                entry = (market.get('prices') or {}).get(sym) or {}
+                high = _safe_float(entry.get('high') if isinstance(entry, dict) else None) or close
+                low = _safe_float(entry.get('low') if isinstance(entry, dict) else None) or close
+                return close, high, low, rel, stale
+    except Exception:
+        pass
+    return None, None, None, '', stale
+
+
 def _price_path_after_reference(
     symbol: str,
     *,
     session_date: str,
     reference_price: float,
 ) -> dict[str, Any]:
-    """Compute close/MFE/MAE from intraday candles or latest market data."""
-    sym = _normalize_symbol(symbol)
-    high = reference_price
-    low = reference_price
-    close = None
-    try:
-        from backend.trading.intraday_candle_memory import load_recent_candles
-
-        candles = load_recent_candles(sym, session_date=session_date, limit=500)
-        prices = []
-        for c in candles:
-            for key in ('high', 'low', 'close', 'price', 'ltp'):
-                val = _safe_float(c.get(key))
-                if val and val > 0:
-                    prices.append(val)
-        if prices:
-            high = max(prices)
-            low = min(prices)
-            close = prices[-1]
-    except Exception:
-        pass
-    if close is None:
-        try:
-            from backend.storage.market_memory_outcomes import load_latest_market_data, lookup_latest_price
-
-            market = load_latest_market_data() or {}
-            close = lookup_latest_price(market, sym)
-        except Exception:
-            close = None
-    if close is None or reference_price <= 0:
+    """
+    Resolve close/MFE/MAE using ordered local sources only — never AI.
+    Order: broker/EOD → intraday → scanner/gainer → quote cache → public fallback.
+    """
+    if reference_price <= 0:
         return {
             'close_price': None,
             'high_after_reference': None,
@@ -312,7 +476,57 @@ def _price_path_after_reference(
             'close_return_pct': None,
             'max_favorable_excursion_pct': None,
             'max_adverse_excursion_pct': None,
+            'price_source': '',
+            'pending_reason': 'no_reference_price',
         }
+
+    tiers: list[tuple[str, Callable[..., tuple]]] = [
+        ('broker_eod', _broker_eod_price),
+        ('intraday', lambda s, d: _intraday_price_path(s, session_date=d, reference_price=reference_price)),
+        ('scanner_gainer', _scanner_gainer_price),
+        ('quote_cache', _quote_cache_price),
+    ]
+    close = high = low = None
+    source = ''
+    stale_flag = False
+    for _name, fn in tiers:
+        try:
+            if _name == 'intraday':
+                c, h, l, src, stale = fn(symbol, session_date)
+            else:
+                c, h, l, src, stale = fn(symbol, session_date)
+        except Exception:
+            continue
+        if c and c > 0:
+            close, high, low, source, stale_flag = c, h or c, l or c, src, stale
+            break
+
+    if close is None:
+        return {
+            'close_price': None,
+            'high_after_reference': None,
+            'low_after_reference': None,
+            'close_return_pct': None,
+            'max_favorable_excursion_pct': None,
+            'max_adverse_excursion_pct': None,
+            'price_source': '',
+            'pending_reason': 'missing_price_data',
+        }
+
+    if stale_flag:
+        return {
+            'close_price': close,
+            'high_after_reference': high,
+            'low_after_reference': low,
+            'close_return_pct': None,
+            'max_favorable_excursion_pct': None,
+            'max_adverse_excursion_pct': None,
+            'price_source': source,
+            'pending_reason': 'stale_price_data',
+        }
+
+    high = max(reference_price, high or close, close)
+    low = min(reference_price, low or close, close)
     close_return = ((close - reference_price) / reference_price) * 100.0
     mfe = ((high - reference_price) / reference_price) * 100.0
     mae = ((low - reference_price) / reference_price) * 100.0
@@ -323,10 +537,15 @@ def _price_path_after_reference(
         'close_return_pct': round(close_return, 3),
         'max_favorable_excursion_pct': round(mfe, 3),
         'max_adverse_excursion_pct': round(mae, 3),
+        'price_source': source,
+        'pending_reason': '',
     }
 
 
 def classify_outcome(metrics: dict[str, Any]) -> tuple[str, str]:
+    pending = str(metrics.get('pending_reason') or '').strip()
+    if pending in ('missing_price_data', 'stale_price_data', 'no_reference_price', 'no_price_data'):
+        return OUTCOME_PENDING, pending
     mfe = _safe_float(metrics.get('max_favorable_excursion_pct'))
     mae = _safe_float(metrics.get('max_adverse_excursion_pct'))
     close_ret = _safe_float(metrics.get('close_return_pct'))
@@ -415,6 +634,9 @@ def run_ai_explainer(
     outcome_record: dict[str, Any],
 ) -> dict[str, Any]:
     """AI fallback — compact explainer only; never overrides price outcome."""
+    if str(outcome_record.get('outcome') or '') not in (OUTCOME_WIN, OUTCOME_LOSS):
+        return {'ai_explain_status': 'SKIPPED', 'ai_reason_summary': '', 'ai_reason_tags': []}
+
     payload = {
         'symbol': snapshot.get('symbol'),
         'stage': snapshot.get('stage'),
@@ -434,20 +656,52 @@ def run_ai_explainer(
     prompt = (
         'Explain in 2 short sentences why this paper-research tradecard candidate '
         f'likely {outcome_record.get("outcome")}. Use only this JSON context. '
-        'Do not invent prices or trade advice. JSON:\n'
+        'Do not invent prices, hidden facts, or trade advice. JSON:\n'
         f'{json.dumps(payload, ensure_ascii=False)}'
     )
     try:
-        from backend.ai.ai_router import ask_ai
+        from backend.ai.ai_pool_router import (
+            OUTCOME_EXPLAINER_USE_CASE,
+            execute_pooled_ai,
+            should_escalate_outcome_explainer_to_claude,
+        )
 
-        text = ask_ai(prompt, use_case='summary', max_tokens=180, channel='candidate_outcome_learning')
-        if not text:
-            return {'ai_explain_status': 'SKIPPED', 'ai_reason_summary': '', 'ai_reason_tags': []}
+        allow_claude = should_escalate_outcome_explainer_to_claude(
+            snapshot,
+            outcome_record,
+            prior_failed_or_weak=False,
+        )
+        result = execute_pooled_ai(
+            prompt,
+            use_case=OUTCOME_EXPLAINER_USE_CASE,
+            max_tokens=180,
+            allow_claude=allow_claude,
+        )
+        if not result.get('success') or not result.get('text'):
+            if not allow_claude and should_escalate_outcome_explainer_to_claude(
+                snapshot, outcome_record, prior_failed_or_weak=True,
+            ):
+                result = execute_pooled_ai(
+                    prompt,
+                    use_case=OUTCOME_EXPLAINER_USE_CASE,
+                    max_tokens=180,
+                    allow_claude=True,
+                )
+        if result.get('success') and result.get('text'):
+            return {
+                'ai_explain_status': 'OK',
+                'ai_reason_summary': str(result['text']).strip()[:400],
+                'ai_reason_tags': list(outcome_record.get('reason_tags') or [])[:4],
+                'explanation_confidence': float(result.get('explanation_confidence') or 0.6),
+                'model_used': str(result.get('model') or ''),
+                'provider_used': str(result.get('provider_used') or ''),
+                'key_slot_used': str(result.get('key_slot_used') or ''),
+            }
         return {
-            'ai_explain_status': 'OK',
-            'ai_reason_summary': str(text).strip()[:400],
+            'ai_explain_status': str(result.get('ai_explain_status') or 'FAILED'),
+            'ai_reason_summary': '',
             'ai_reason_tags': list(outcome_record.get('reason_tags') or [])[:4],
-            'ai_confidence': 0.6,
+            'missing_data_note': str(result.get('error') or '')[:120],
         }
     except Exception as exc:
         return {
@@ -501,13 +755,14 @@ def resolve_candidate_outcomes(
             session_date=day,
             reference_price=ref,
         )
+        pending_from_metrics = str(metrics.get('pending_reason') or '').strip()
         outcome, pending_reason = classify_outcome(metrics)
         if outcome == OUTCOME_PENDING:
             outcome_rec = {
                 **snap,
                 **metrics,
                 'outcome': OUTCOME_PENDING,
-                'pending_reason': pending_reason or 'no_price_data',
+                'pending_reason': pending_reason or pending_from_metrics or 'missing_price_data',
                 'reason_tags': [],
                 'reason_summary': 'Price data unavailable for EOD resolution.',
                 'resolved_at': _now_ist().isoformat(),
@@ -645,7 +900,11 @@ def format_candidate_outcome_learning_block(
             if str(s.get('session_date') or '')[:10] == day
         ]
         if not snapshots:
-            return ['Candidate outcome learning: no quality snapshots today.']
+            return [
+                'No quality snapshots today.',
+                'Reason: 52I was not active during 09:20/09:31 capture window OR no candidate scored above 60.',
+                'Next capture: next market session 09:20/09:31.',
+            ]
         return ['Candidate outcome learning: snapshots captured; EOD resolution pending.']
 
     lines = ['', '<b>Candidate Outcome Learning</b>', '']
@@ -701,8 +960,9 @@ def format_candidate_outcome_learning_block(
 
 
 def format_learn_today_telegram(*, session_date: str | None = None) -> str:
+    """Read-only view — snapshots/resolution auto-run on schedule; no save side effects."""
     day = session_date or _session_date()
-    lines = [f'<b>/learn today — {day}</b>', '']
+    lines = [f'<b>/learn today — {day}</b>', '<i>Read-only — auto-captured at 09:20/09:31</i>', '']
     lines.extend(format_candidate_outcome_learning_block(session_date=day))
     lines.append('')
     lines.append('<i>Paper/research only — simulated outcome, not real P&amp;L</i>')

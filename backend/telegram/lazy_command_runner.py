@@ -562,6 +562,14 @@ def run_learn_only(args: str = '') -> dict[str, Any]:
     )
 
 
+def run_api_only(args: str = '') -> dict[str, Any]:
+    from backend.ai.api_status_formatter import format_api_status_telegram
+
+    text = format_api_status_telegram()
+    mode = 'status' if str(args or '').strip().lower() in ('', 'status', 'ai') else 'status'
+    return _runner_result('api', text=text, mode=mode)
+
+
 def run_resolve_outcomes_admin() -> dict[str, Any]:
     from backend.storage.outcome_resolver import run_outcome_resolver_once
 

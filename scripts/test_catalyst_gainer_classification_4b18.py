@@ -214,9 +214,10 @@ def test_tradecards_includes_catalyst_line() -> int:
 
     board = {
         'session_date': '2026-07-07',
+        'scanner_freshness_status': 'CURRENT',
         'ranked_candidates': [{
             'ticker': 'HTMEDIA',
-            'score': 54,
+            'score': 65,
             'state': 'PULLBACK_ONLY_PLAN',
             'gainer_bucket': 'Nifty 500 / broad market',
             'why': ['top gainer + volume 8.9x'],
@@ -317,8 +318,8 @@ def test_no_ai_calls() -> int:
 def test_build_label_51y() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52H' or ASTRAEDGE_BUILD_STAGE != '52H':
-        return _fail(f'expected AstraEdge 52H got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52I-A' or ASTRAEDGE_BUILD_STAGE != '52I-A':
+        return _fail(f'expected AstraEdge 52I-A got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

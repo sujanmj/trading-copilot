@@ -29,7 +29,11 @@ _load_env_files()
 
 
 def get_anthropic_key():
-    return os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    for var in ('ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'):
+        val = os.environ.get(var, '').strip()
+        if val:
+            return val
+    return ''
 
 
 def _ai_result(success, text='', model='', provider='', estimated_cost=0.0, error=None, **extra):

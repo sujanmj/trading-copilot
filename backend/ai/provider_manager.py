@@ -1,7 +1,7 @@
 """
 Tiered AI provider pooling — Gemini + Groq key pools, Claude strategist, health tracking.
 
-Failover only on quota / repeated timeout / API failure — no random rotation.
+Failover on quota / timeout / API failure; round-robin across keys for normal load.
 """
 
 from __future__ import annotations
@@ -25,16 +25,24 @@ MAX_TIMEOUT_STRIKES = 2
 BASE_COOLDOWN_SEC = 60
 MAX_COOLDOWN_SEC = 3600
 
-GEMINI_KEY_VARS = ('GOOGLE_API_KEY_1', 'GOOGLE_API_KEY_2', 'GOOGLE_API_KEY_3')
-GROQ_KEY_VARS = ('GROQ_API_KEY_1', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3')
-GEMINI_LEGACY_VARS = ('GOOGLE_API_KEY', 'GEMINI_API_KEY')
-GROQ_LEGACY_VARS = ('GROQ_API_KEY',)
+GEMINI_KEY_VARS = (
+    'GOOGLE_API_KEY_1', 'GOOGLE_API_KEY_2', 'GOOGLE_API_KEY_3',
+    'GEMINI_API_KEY_1', 'GEMINI_API_KEY_2', 'GEMINI_API_KEY_3',
+    'GOOGLE_API_KEY', 'GEMINI_API_KEY',
+    'GEMINI_API1', 'GEMINI_API2', 'GEMINI_API3',
+)
+GROQ_KEY_VARS = (
+    'GROQ_API_KEY_1', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3',
+    'GROQ_API_KEY',
+    'GROQ_API1', 'GROQ_API2', 'GROQ_API3',
+)
+GEMINI_LEGACY_VARS: Tuple[str, ...] = ()
+GROQ_LEGACY_VARS: Tuple[str, ...] = ()
+CLAUDE_KEY_VARS = ('ANTHROPIC_API_KEY', 'CLAUDE_API_KEY')
 GROQ_DEFAULT_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
 
 ENV_TYPO_PATTERNS = (
     (re.compile(r'^GORQ_', re.I), 'GORQ → did you mean GROQ?'),
-    (re.compile(r'^GROQ_API_KEY$', re.I), 'Use GROQ_API_KEY_1/2/3 pool vars instead of GROQ_API_KEY alone on Railway'),
-    (re.compile(r'^GEMINI_API_KEY_[123]$', re.I), 'GEMINI_API_KEY_N → did you mean GOOGLE_API_KEY_N?'),
     (re.compile(r'^GOOGLE_KEY_', re.I), 'GOOGLE_KEY → did you mean GOOGLE_API_KEY?'),
 )
 
@@ -56,9 +64,9 @@ def _log(tag: str, msg: str):
 
 def _mask_key(key: str) -> str:
     k = (key or '').strip()
-    if len(k) <= 8:
+    if len(k) < 4:
         return '***' if k else ''
-    return f"{k[:4]}…{k[-4:]}"
+    return f'...{k[-4:]}'
 
 
 def _env_var_present(var: str) -> bool:
@@ -80,7 +88,7 @@ def _scan_env_typos() -> List[str]:
 
 def _key_registry(prefix_vars: Tuple[str, ...], legacy_vars: Tuple[str, ...] = ()) -> List[dict]:
     rows = []
-    for var in prefix_vars:
+    for var in prefix_vars + legacy_vars:
         val = os.environ.get(var, '').strip()
         rows.append({
             'env_var': var,
@@ -88,32 +96,18 @@ def _key_registry(prefix_vars: Tuple[str, ...], legacy_vars: Tuple[str, ...] = (
             'masked': _mask_key(val) if val else None,
             'source': 'railway' if IS_RAILWAY and val else ('env_file' if val else 'missing'),
         })
-    if not any(r['present'] for r in rows):
-        for var in legacy_vars:
-            val = os.environ.get(var, '').strip()
-            if val:
-                rows.append({
-                    'env_var': var,
-                    'present': True,
-                    'masked': _mask_key(val),
-                    'source': 'legacy',
-                })
-                break
     return rows
 
 
 def _load_keys(prefix_vars: Tuple[str, ...], legacy_vars: Tuple[str, ...] = ()) -> List[Tuple[str, str]]:
     keys: List[Tuple[str, str]] = []
-    for var in prefix_vars:
+    seen_vals: set[str] = set()
+    for var in prefix_vars + legacy_vars:
         val = os.environ.get(var, '').strip()
-        if val:
-            keys.append((var, val))
-    if not keys:
-        for var in legacy_vars:
-            val = os.environ.get(var, '').strip()
-            if val:
-                keys.append((var, val))
-                break
+        if not val or val in seen_vals:
+            continue
+        keys.append((var, val))
+        seen_vals.add(val)
     return keys
 
 
@@ -121,7 +115,12 @@ def get_provider_env_diagnostics() -> dict:
     """Safe env/registry diagnostics for OPS and debug endpoints."""
     gemini_registry = _key_registry(GEMINI_KEY_VARS, GEMINI_LEGACY_VARS)
     groq_registry = _key_registry(GROQ_KEY_VARS, GROQ_LEGACY_VARS)
-    claude_key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+    claude_registry = _key_registry(CLAUDE_KEY_VARS)
+    claude_key = ''
+    for var in CLAUDE_KEY_VARS:
+        claude_key = os.environ.get(var, '').strip()
+        if claude_key:
+            break
     gemini_loaded = sum(1 for r in gemini_registry if r.get('present'))
     groq_loaded = sum(1 for r in groq_registry if r.get('present'))
     typos = _scan_env_typos()
@@ -136,9 +135,10 @@ def get_provider_env_diagnostics() -> dict:
         'railway': IS_RAILWAY,
         'gemini_loaded': gemini_loaded,
         'groq_loaded': groq_loaded,
-        'claude_loaded': bool(claude_key) and claude_key.startswith('sk-ant-'),
+        'claude_loaded': bool(claude_key) and (claude_key.startswith('sk-ant-') or len(claude_key) > 12),
         'gemini_keys': gemini_registry,
         'groq_keys': groq_registry,
+        'claude_keys': claude_registry,
         'claude_masked': _mask_key(claude_key) if claude_key else None,
         'typo_warnings': typos,
         'warnings': warnings,
@@ -191,7 +191,14 @@ def _slot_template(slot_id: str, key: str) -> dict:
         'avg_latency_ms': 0.0,
         'latency_samples': 0,
         'last_success': None,
+        'last_success_at': None,
+        'last_used_at': None,
         'last_error': None,
+        'error_count_today': 0,
+        'rate_limit_errors_today': 0,
+        'requests_today': 0,
+        'estimated_tokens_today': 0,
+        'stats_date': None,
         'health_score': 1.0,
         'has_key': bool(key),
     }
@@ -267,7 +274,32 @@ class ProviderPool:
         all_state['updated_at'] = datetime.now().isoformat()
         atomic_write_json(PROVIDER_HEALTH_FILE, all_state)
 
+    def _ensure_daily_stats(self, slot: dict) -> dict:
+        today = datetime.now().date().isoformat()
+        if slot.get('stats_date') != today:
+            slot['stats_date'] = today
+            slot['error_count_today'] = 0
+            slot['rate_limit_errors_today'] = 0
+            slot['requests_today'] = 0
+            slot['estimated_tokens_today'] = 0
+        return slot
+
+    def _advance_round_robin(self) -> int:
+        if not self._keys:
+            return 0
+        idx = int(self._state.get('round_robin_index') or 0) % len(self._keys)
+        self._state['round_robin_index'] = (idx + 1) % len(self._keys)
+        return idx
+
     def _slot_ids_ordered(self) -> List[str]:
+        if not self._keys:
+            return []
+        ids = [f"{self.provider_name}-{i + 1}" for i in range(len(self._keys))]
+        start = self._advance_round_robin()
+        return ids[start:] + ids[:start]
+
+    def _slot_ids_standby_order(self) -> List[str]:
+        """Non-mutating order for health summaries."""
         if not self._keys:
             return []
         ids = [f"{self.provider_name}-{i + 1}" for i in range(len(self._keys))]
@@ -310,10 +342,15 @@ class ProviderPool:
     def record_success(self, slot_id: str, latency_ms: float = 0.0):
         with _lock:
             slot = self._state['slots'].setdefault(slot_id, _slot_template(slot_id, ''))
+            slot = self._ensure_daily_stats(slot)
+            slot['requests_today'] = int(slot.get('requests_today') or 0) + 1
             slot['consecutive_failures'] = 0
             slot['active'] = True
             slot['cooldown_until'] = 0.0
-            slot['last_success'] = datetime.now().isoformat()
+            now_iso = datetime.now().isoformat()
+            slot['last_success'] = now_iso
+            slot['last_success_at'] = now_iso
+            slot['last_used_at'] = now_iso
             slot['last_error'] = None
             slot['health_score'] = min(1.0, float(slot.get('health_score', 0.8)) + 0.05)
             n = int(slot.get('latency_samples') or 0)
@@ -326,11 +363,16 @@ class ProviderPool:
     def record_failure(self, slot_id: str, error: str, *, quota: bool = False, timeout: bool = False):
         with _lock:
             slot = self._state['slots'].setdefault(slot_id, _slot_template(slot_id, ''))
+            slot = self._ensure_daily_stats(slot)
+            slot['requests_today'] = int(slot.get('requests_today') or 0) + 1
+            slot['last_used_at'] = datetime.now().isoformat()
             slot['consecutive_failures'] = int(slot.get('consecutive_failures') or 0) + 1
+            slot['error_count_today'] = int(slot.get('error_count_today') or 0) + 1
             slot['last_error'] = (error or '')[:300]
             slot['health_score'] = max(0.0, float(slot.get('health_score', 1.0)) - 0.15)
             if quota:
                 slot['quota_failures'] = int(slot.get('quota_failures') or 0) + 1
+                slot['rate_limit_errors_today'] = int(slot.get('rate_limit_errors_today') or 0) + 1
             if timeout:
                 slot['timeout_failures'] = int(slot.get('timeout_failures') or 0) + 1
             self._state['slots'][slot_id] = slot
@@ -424,7 +466,7 @@ class ProviderPool:
             return True
         self._recover_expired_cooldowns()
         now = time.time()
-        for slot_id in self._slot_ids_ordered():
+        for slot_id in self._slot_ids_standby_order():
             slot = self._state['slots'].get(slot_id) or {}
             if self._get_key_for_slot(slot_id) and now >= float(slot.get('cooldown_until') or 0):
                 return False
@@ -472,15 +514,22 @@ class GroqPoolManager(ProviderPool):
 
 
 class ClaudeProvider:
-    """Single-key strategist — no pool rotation."""
+    """Single-key strategist with ANTHROPIC/CLAUDE env aliases."""
 
     role = 'premium_strategist'
 
     def __init__(self):
-        self._key = os.environ.get('ANTHROPIC_API_KEY', '').strip()
+        self._key = ''
+        self._env_var = ''
+        for var in CLAUDE_KEY_VARS:
+            val = os.environ.get(var, '').strip()
+            if val:
+                self._key = val
+                self._env_var = var
+                break
 
     def is_available(self) -> bool:
-        return bool(self._key) and self._key.startswith('sk-ant-')
+        return bool(self._key) and (self._key.startswith('sk-ant-') or len(self._key) > 12)
 
     def summary(self) -> dict:
         return {

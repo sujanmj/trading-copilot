@@ -42,6 +42,7 @@ from backend.telegram.lazy_command_runner import (
     format_outcomes_status_text,
     run_memory_only,
     run_learn_only,
+    run_api_only,
     run_news_only,
     run_resolve_outcomes_admin,
     run_qa_only,
@@ -94,6 +95,7 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'today', 'description': 'Today confluence pick'},
     {'command': 'premarket', 'description': 'Premarket top setups'},
     {'command': 'refresh', 'description': 'Scoped cache refresh'},
+    {'command': 'api', 'description': 'AI/API provider status (masked)'},
     {'command': 'learn', 'description': 'Candidate outcome learning'},
     {'command': 'help', 'description': 'Command list'},
 ]
@@ -120,6 +122,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /memory stock SYMBOL — tradecard + Screener memory for symbol
 /memory latest — latest tradecard memory records
 /memory stats — tradecard memory counts
+
+<b>AI:</b>
+/api — AI/API provider status with masked keys and usage health
 
 <b>Outcome Learning:</b>
 /learn today — 09:20 + 09:31 candidate outcome resolution
@@ -337,6 +342,8 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'learn', raw[len('learn '):].strip()
     if lower == 'learn patterns':
         return 'learn', 'patterns'
+    if lower in ('api', 'api status', 'api ai'):
+        return 'api', 'status'
     if lower == 'screener status':
         return 'screener', 'status'
     if lower == 'screener latest':
@@ -828,6 +835,9 @@ def handle_analysis_command(
     elif cmd == 'learn':
         result = run_without_ai(lambda: run_learn_only(args), command='learn')
         response_text = result.get('text') or 'Outcome learning unavailable.'
+    elif cmd == 'api':
+        result = run_without_ai(lambda: run_api_only(args), command='api')
+        response_text = result.get('text') or 'API status unavailable.'
     elif cmd == 'outcomes':
         response_text = format_outcomes_status_text()
     elif cmd == 'resolve':
