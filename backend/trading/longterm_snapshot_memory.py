@@ -110,11 +110,16 @@ def capture_screener_import_snapshot(
     imp = import_result.get('import') if isinstance(import_result.get('import'), dict) else {}
     ist = _now_ist()
     stored = import_result.get('stored_stocks') or []
-    top_symbols = [
-        _normalize_symbol(r.get('symbol'))
-        for r in stored[:15]
-        if _normalize_symbol(r.get('symbol'))
-    ]
+    top_symbols = []
+    for r in stored[:15]:
+        try:
+            from backend.trading.screener_memory import resolve_canonical_screener_symbol
+
+            sym, _ = resolve_canonical_screener_symbol(r)
+        except Exception:
+            sym = _normalize_symbol(r.get('symbol'))
+        if sym and len(sym) >= 2:
+            top_symbols.append(sym)
     record = {
         'snapshot_id': uuid.uuid4().hex[:16],
         'import_id': str(imp.get('import_id') or ''),
@@ -139,6 +144,107 @@ def capture_screener_import_snapshot(
     return record
 
 
+def _screener_snapshot_exists(import_id: str) -> bool:
+    if not import_id:
+        return False
+    return any(
+        str(r.get('import_id') or '') == import_id
+        for r in _load_jsonl(_screener_snapshots_path())
+    )
+
+
+def ensure_screener_snapshot_for_import(import_id: str) -> dict[str, Any] | None:
+    """Backfill lightweight screener snapshot when /longterm uses a pre-52J import."""
+    if not import_id or _screener_snapshot_exists(import_id):
+        return None
+    try:
+        from backend.trading.screener_memory import (
+            load_screener_imports,
+            load_stock_memory,
+            resolve_canonical_screener_symbol,
+        )
+    except Exception:
+        return None
+
+    imp = next((r for r in load_screener_imports(limit=200) if str(r.get('import_id') or '') == import_id), None)
+    if not imp:
+        return None
+
+    stocks = [
+        r for r in load_stock_memory(limit=5000)
+        if str(r.get('import_id') or '') == import_id
+    ]
+    top_symbols: list[str] = []
+    for row in sorted(stocks, key=lambda r: int(r.get('longterm_score') or 0), reverse=True)[:15]:
+        sym, _ = resolve_canonical_screener_symbol(row)
+        if sym and len(sym) >= 2:
+            top_symbols.append(sym)
+
+    imported_at = str(imp.get('imported_at') or '')
+    ist = _now_ist()
+    imported_ist = ''
+    try:
+        if imported_at:
+            imported_ist = _now_ist(datetime.fromisoformat(imported_at.replace('Z', '+00:00'))).strftime('%H:%M')
+    except Exception:
+        imported_ist = ist.strftime('%H:%M')
+
+    record = {
+        'snapshot_id': uuid.uuid4().hex[:16],
+        'import_id': import_id,
+        'session_date': str(imp.get('imported_at') or '')[:10] or _session_date(ist),
+        'imported_at_ist': imported_ist or ist.strftime('%H:%M'),
+        'imported_at': imported_at or ist.replace(microsecond=0).isoformat(),
+        'source_file_name': str(imp.get('filename') or ''),
+        'rows_imported': int(imp.get('row_count') or len(stocks)),
+        'columns_detected': list(imp.get('normalized_columns') or []),
+        'top_symbols': top_symbols,
+        'rejected_rows': max(0, int(imp.get('row_count') or 0) - len(stocks)),
+        'stored_count': len(stocks),
+        'screen_name': str(imp.get('screen_name') or ''),
+        'snapshot_origin': 'backfilled_from_existing_import',
+        'stage_version': STAGE,
+    }
+    _append_jsonl(_screener_snapshots_path(), record)
+    print(
+        f'[SCREENER_IMPORT_SNAPSHOT] backfill import_id={import_id} stored={len(stocks)}',
+        flush=True,
+    )
+    return record
+
+
+def _canonicalize_row(row: dict[str, Any]) -> dict[str, Any]:
+    from backend.trading.screener_memory import resolve_canonical_screener_symbol
+
+    sym, company = resolve_canonical_screener_symbol(row)
+    out = dict(row)
+    if sym:
+        out['symbol'] = sym
+        out['symbol_key'] = sym
+    if company:
+        out['company_name'] = company
+        out['display_name'] = company
+    return out
+
+
+def longterm_history_display_label(record: dict[str, Any]) -> str:
+    """Human-readable label for /longterm history — never one-letter symbols."""
+    from backend.trading.screener_memory import _collapse_spaced_acronym
+
+    company = str(record.get('company_name') or '').strip()
+    sym = _normalize_symbol(record.get('symbol'))
+    if len(sym) <= 1 and company:
+        collapsed = _collapse_spaced_acronym(company)
+        return collapsed if collapsed and len(collapsed) >= 2 else company
+    if company and _collapse_spaced_acronym(company) and sym and len(sym) >= 2:
+        return sym
+    if company and company.upper() != sym:
+        return company
+    if sym and len(sym) >= 2:
+        return sym
+    return company or sym or '—'
+
+
 def _build_recommendation_record(
     row: dict[str, Any],
     *,
@@ -151,9 +257,11 @@ def _build_recommendation_record(
     change_flags: list[str] | None = None,
     change_notes: list[str] | None = None,
 ) -> dict[str, Any]:
-    sym = _normalize_symbol(row.get('symbol') or row.get('symbol_key'))
-    reasons = list(row.get('reasons') or [])
-    risks = list(row.get('risk_flags') or [])
+    canon = _canonicalize_row(row)
+    sym = _normalize_symbol(canon.get('symbol') or canon.get('symbol_key'))
+    company = str(canon.get('company_name') or canon.get('display_name') or sym)
+    reasons = list(canon.get('reasons') or row.get('reasons') or [])
+    risks = list(canon.get('risk_flags') or row.get('risk_flags') or [])
     return {
         'snapshot_id': uuid.uuid4().hex[:16],
         'batch_id': batch_id,
@@ -161,22 +269,22 @@ def _build_recommendation_record(
         'generated_at_ist': generated_at_ist,
         'generated_at': generated_at,
         'symbol': sym,
-        'company_name': str(row.get('company_name') or row.get('display_name') or sym),
+        'company_name': company,
         'rank': rank,
-        'confidence_score': int(row.get('longterm_score') or 0),
+        'confidence_score': int(canon.get('longterm_score') or row.get('longterm_score') or 0),
         'recommendation_reason': ' · '.join(reasons[:4]) or 'screener fundamentals',
-        'screener_score': int(row.get('longterm_score') or 0),
-        'valuation_score': row.get('valuation_score'),
-        'quality_score': row.get('quality_score'),
-        'growth_score': row.get('growth_score'),
-        'debt_score': row.get('debt_score'),
-        'roe': row.get('roe'),
-        'roce': row.get('roce'),
-        'debt_to_equity': row.get('debt_to_equity'),
-        'sales_growth': row.get('sales_growth'),
-        'profit_growth': row.get('profit_growth'),
-        'market_cap': row.get('market_cap'),
-        'promoter_holding': row.get('promoter_holding'),
+        'screener_score': int(canon.get('longterm_score') or row.get('longterm_score') or 0),
+        'valuation_score': canon.get('valuation_score') or row.get('valuation_score'),
+        'quality_score': canon.get('quality_score') or row.get('quality_score'),
+        'growth_score': canon.get('growth_score') or row.get('growth_score'),
+        'debt_score': canon.get('debt_score') or row.get('debt_score'),
+        'roe': canon.get('roe') or row.get('roe'),
+        'roce': canon.get('roce') or row.get('roce'),
+        'debt_to_equity': canon.get('debt_to_equity') or row.get('debt_to_equity'),
+        'sales_growth': canon.get('sales_growth') or row.get('sales_growth'),
+        'profit_growth': canon.get('profit_growth') or row.get('profit_growth'),
+        'market_cap': canon.get('market_cap') or row.get('market_cap'),
+        'promoter_holding': canon.get('promoter_holding') or row.get('promoter_holding'),
         'fii_holding': row.get('fii_holding'),
         'dii_holding': row.get('dii_holding'),
         'news_strength': row.get('news_strength'),
@@ -270,6 +378,8 @@ def capture_longterm_recommendation_snapshots(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """Part B — store /longterm recommendation batch."""
+    if import_id:
+        ensure_screener_snapshot_for_import(import_id)
     ist = _now_ist()
     batch_id = uuid.uuid4().hex[:16]
     generated_at = ist.replace(microsecond=0).isoformat()
@@ -278,14 +388,15 @@ def capture_longterm_recommendation_snapshots(
 
     draft: list[dict[str, Any]] = []
     for idx, row in enumerate(ranked, start=1):
-        sym = _normalize_symbol(row.get('symbol') or row.get('symbol_key'))
-        if not sym:
+        canon = _canonicalize_row(row)
+        sym = _normalize_symbol(canon.get('symbol') or canon.get('symbol_key'))
+        if not sym or len(sym) < 2:
             continue
         draft.append({
-            **row,
+            **canon,
             'symbol': sym,
             'rank': idx,
-            'confidence_score': int(row.get('longterm_score') or 0),
+            'confidence_score': int(canon.get('longterm_score') or 0),
         })
 
     previous = _previous_batch_records(batch_id)
@@ -367,7 +478,8 @@ def recent_longterm_batches(*, limit: int = 5) -> list[dict[str, Any]]:
             'generated_at': first.get('generated_at'),
             'generated_at_ist': first.get('generated_at_ist'),
             'count': len(items),
-            'top_symbols': [_normalize_symbol(r.get('symbol')) for r in items[:5]],
+            'top_symbols': [_normalize_symbol(r.get('symbol')) for r in items[:5] if len(_normalize_symbol(r.get('symbol'))) >= 2],
+            'top_display_labels': [longterm_history_display_label(r) for r in items[:5]],
         })
     batches.sort(key=lambda b: str(b.get('generated_at') or ''), reverse=True)
     return batches[:limit]
@@ -450,8 +562,9 @@ def format_longterm_stock_block(
     memory: dict[str, Any] | None = None,
 ) -> list[str]:
     """Part F — rich /longterm stock block with why/risk/memory."""
-    sym = _normalize_symbol(row.get('symbol') or row.get('symbol_key'))
-    label = str(row.get('display_name') or row.get('company_name') or sym)
+    canon = _canonicalize_row(row)
+    sym = _normalize_symbol(canon.get('symbol') or row.get('symbol') or row.get('symbol_key'))
+    label = str(canon.get('display_name') or canon.get('company_name') or sym)
     conf = int(row.get('longterm_score') or row.get('confidence_score') or 0)
     rank = int((snapshot or {}).get('rank') or row.get('rank') or 0)
     lines = [f'{rank}. <b>{label}</b> — Confidence {conf}' if rank else f'<b>{label}</b> — Confidence {conf}']
@@ -519,10 +632,11 @@ def format_longterm_history_telegram(symbol: str = '', *, limit: int = 5) -> str
         lines.append('No long-term recommendation snapshots yet. Run /longterm after a Screener import.')
         return '\n'.join(lines)
     for batch in batches:
-        syms = ', '.join(batch.get('top_symbols') or []) or '—'
+        labels = batch.get('top_display_labels') or batch.get('top_symbols') or []
+        label_txt = ', '.join(labels) or '—'
         lines.append(
             f'• {batch.get("session_date")} {batch.get("generated_at_ist")} — '
-            f'{batch.get("count")} picks — {syms}'
+            f'{batch.get("count")} picks — {label_txt}'
         )
     return '\n'.join(lines)
 

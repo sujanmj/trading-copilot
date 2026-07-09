@@ -123,12 +123,70 @@ def _looks_like_nse_symbol(value: object) -> bool:
     return len(norm) >= 2 and norm == re.sub(r'[^A-Z0-9&-]', '', text.upper())
 
 
+def _collapse_spaced_acronym(company_name: str) -> str:
+    """Map spaced letter groups like 'I R C T C' to IRCTC."""
+    parts = re.split(r'\s+', str(company_name or '').strip())
+    if len(parts) >= 3 and all(re.fullmatch(r'[A-Za-z]{1,2}', p or '') for p in parts):
+        return _normalize_symbol(''.join(parts))
+    return ''
+
+
+KNOWN_COMPANY_SYMBOL_MAP: dict[str, str] = {
+    'i r c t c': 'IRCTC',
+    'gillette india': 'GILLETTE',
+    'tips music': 'TIPS',
+    'abbott india': 'ABBOTINDIA',
+    'esab india': 'ESABINDIA',
+}
+
+
+def resolve_canonical_screener_symbol(row: dict[str, Any]) -> tuple[str, str]:
+    """
+    Resolve canonical NSE-style symbol + clean company name for long-term memory.
+    Never returns single-letter symbols derived from company names.
+    """
+    company = str(row.get('company_name') or row.get('display_name') or '').strip()
+    sym = _normalize_symbol(row.get('symbol') or row.get('symbol_key'))
+    name_key = _normalize_company_match(company)
+
+    if name_key in KNOWN_COMPANY_SYMBOL_MAP:
+        return KNOWN_COMPANY_SYMBOL_MAP[name_key], company
+
+    collapsed = _collapse_spaced_acronym(company)
+    if collapsed and len(collapsed) >= 3:
+        return collapsed, company
+
+    if sym and len(sym) >= 2:
+        return sym, company
+
+    if company:
+        derived = _derive_symbol_key(company)
+        if len(derived) >= 2:
+            return derived, company
+
+    return (sym if len(sym) >= 2 else ''), company
+
+
 def _derive_symbol_key(company_name: str) -> str:
-    words = re.split(r'\s+', str(company_name or '').strip())
+    name = str(company_name or '').strip()
+    collapsed = _collapse_spaced_acronym(name)
+    if collapsed:
+        return collapsed
+    name_key = _normalize_company_match(name)
+    if name_key in KNOWN_COMPANY_SYMBOL_MAP:
+        return KNOWN_COMPANY_SYMBOL_MAP[name_key]
+    words = re.split(r'\s+', name)
     if not words:
         return ''
     first = re.sub(r'[^A-Za-z0-9&]', '', words[0])
-    return _normalize_symbol(first)
+    key = _normalize_symbol(first)
+    if len(key) >= 2:
+        return key
+    if len(words) >= 2:
+        combo = _normalize_symbol(''.join(w[0] for w in words[:4] if w))
+        if len(combo) >= 2:
+            return combo
+    return ''
 
 
 def _stock_display_name(company_name: str, symbol_key: str, *, has_real_symbol: bool) -> str:
