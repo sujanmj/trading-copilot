@@ -138,8 +138,8 @@ def test_closed_market_empty_board_no_symbol() -> int:
 def test_build_label_51m() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52G':
-        return _fail(f'expected AstraEdge 52G got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52H':
+        return _fail(f'expected AstraEdge 52H got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

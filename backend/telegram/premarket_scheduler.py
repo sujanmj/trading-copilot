@@ -218,6 +218,18 @@ def run_premarket_slot(
                     )
                 except Exception as rollover_exc:
                     print(f'[SESSION_ROLLOVER_PREP] warn={rollover_exc}', flush=True)
+            if slot == 'india_digest':
+                try:
+                    from backend.collectors.news_provider_registry import run_unified_news_refresh
+
+                    news_result = run_unified_news_refresh(send_macro_alerts=False)
+                    print(
+                        f'[UNIFIED_NEWS_REFRESH] time={ts} sources={news_result.get("sources_checked")} '
+                        f'items={news_result.get("items_found")} errors={news_result.get("error_count")}',
+                        flush=True,
+                    )
+                except Exception as news_exc:
+                    print(f'[UNIFIED_NEWS_REFRESH] warn={news_exc}', flush=True)
             build_premarket_conviction_report(persist=True)
             print(f'[SILENT_PREMARKET_BUILD] time={ts} stage={stage} status=ok', flush=True)
             try:

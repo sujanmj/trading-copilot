@@ -209,8 +209,8 @@ def test_regression_pattern_board() -> int:
 def test_build_label_52a() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52G' or ASTRAEDGE_BUILD_STAGE != '52G':
-        return _fail(f'expected AstraEdge 52G got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52H' or ASTRAEDGE_BUILD_STAGE != '52H':
+        return _fail(f'expected AstraEdge 52H got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

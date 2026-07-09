@@ -411,7 +411,18 @@ def verify_claim_against_sources(
         if scored.get('score', 0) <= 0:
             continue
         ranked.append((float(scored['score']), scored, article))
-    ranked.sort(key=lambda row: row[0], reverse=True)
+
+    def _rank_key(row: tuple[float, dict[str, Any], dict[str, Any]]) -> tuple:
+        score, _match, article = row
+        try:
+            from backend.collectors.news_provider_registry import provider_verification_tier
+
+            tier = provider_verification_tier(article)
+        except Exception:
+            tier = 4
+        return (tier, -score)
+
+    ranked.sort(key=_rank_key)
 
     if not ranked:
         return {
@@ -447,6 +458,16 @@ def verify_claim_against_sources(
     ):
         status = VERIFICATION_VERIFIED
         confidence = round(min(0.98, max(best_score, best_match.get('similarity', 0)) + 0.1), 2)
+        try:
+            from backend.collectors.news_provider_registry import provider_verification_tier, TIER_OFFICIAL_EXCHANGE, TIER_REGULATORY_GOV
+
+            tier = provider_verification_tier(_best_article)
+            if tier == TIER_OFFICIAL_EXCHANGE:
+                confidence = min(0.99, confidence + 0.05)
+            elif tier == TIER_REGULATORY_GOV and str(claim.get('feed_type') or '') == 'macro_shock':
+                confidence = min(0.99, confidence + 0.04)
+        except Exception:
+            pass
     elif best_score >= 0.32:
         status = VERIFICATION_PARTIAL
         confidence = round(best_score, 2)

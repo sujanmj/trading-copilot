@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 4B.18G — Feed ticker resolver + fresh news refresh (AstraEdge 52G)."""
+"""Phase 4B.18G — Feed ticker resolver + fresh news refresh (AstraEdge 52H)."""
 
 from __future__ import annotations
 
@@ -209,8 +209,11 @@ def test_news_refresh_command_exists() -> int:
             'symbol': 'SBIN',
             'company': 'State Bank of India',
             'items_found': 2,
+            'new_items': 1,
+            'sources_checked': 11,
+            'error_count': 0,
             'cache_age_minutes': 0,
-            'sources': ['news_feed.json'],
+            'sources': ['Mint RSS / LiveMint', 'ET Markets'],
         },
     ):
         result = run_news_only(refresh=False, args='refresh SBIN')
@@ -225,20 +228,27 @@ def test_news_refresh_command_exists() -> int:
 def test_news_refresh_sbin_only_news_scope() -> int:
     from backend.my_feed.news_refresh import run_news_cache_refresh
 
-    called = {}
+    called = {'unified': False}
 
-    def _fake_scoped(scope, dry_run=False):
-        called['scope'] = scope
-        called['dry_run'] = dry_run
-        return {'ok': True, 'scope': scope, 'news': 'ok', 'prices': 'skipped', 'scanner': 'skipped'}
+    def _fake_unified(**kwargs):
+        called['unified'] = True
+        return {
+            'ok': True,
+            'sources_checked': 11,
+            'items_found': 10,
+            'new_items': 2,
+            'errors': [],
+            'error_count': 0,
+            'sources': ['Mint RSS / LiveMint', 'ET Markets'],
+        }
 
-    with patch('scripts.refresh_local_intelligence.run_refresh_scoped', side_effect=_fake_scoped), patch(
+    with patch('backend.collectors.news_provider_registry.run_unified_news_refresh', side_effect=_fake_unified), patch(
         'backend.my_feed.feed_verification.iter_verification_source_articles',
         return_value=[{'title': 'SBI deposit program', 'tickers': ['SBIN'], 'source': 'Reuters'}],
     ):
         result = run_news_cache_refresh(symbol='SBIN', company='State Bank of India')
-    if called.get('scope') != 'news':
-        return _fail(f'expected news scope only got {called!r}')
+    if not called.get('unified'):
+        return _fail('expected unified news refresh call')
     if result.get('symbol') != 'SBIN':
         return _fail(f'expected symbol SBIN got {result.get("symbol")!r}')
     return 0
@@ -454,11 +464,11 @@ def test_regression_live_confirmation_guard_4b18d() -> int:
     return 0
 
 
-def test_build_label_52g() -> int:
+def test_build_label_52h() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52G' or ASTRAEDGE_BUILD_STAGE != '52G':
-        return _fail(f'expected AstraEdge 52G got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52H' or ASTRAEDGE_BUILD_STAGE != '52H':
+        return _fail(f'expected AstraEdge 52H got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -480,7 +490,7 @@ def main() -> int:
         test_regression_macro_emergency_4b18f,
         test_regression_macro_shock_sentinel_4b18e,
         test_regression_live_confirmation_guard_4b18d,
-        test_build_label_52g,
+        test_build_label_52h,
     ]
     failed = 0
     for test in tests:

@@ -570,6 +570,25 @@ def format_freshness_status_telegram(*, now: datetime | None = None) -> str:
             lines.append(f'{label}: {status}')
         else:
             lines.append(f'{label}: {status} · updated {updated}{age_part}')
+    try:
+        from backend.collectors.news_provider_registry import evaluate_news_provider_freshness
+
+        news_table = evaluate_news_provider_freshness()
+        agg = news_table.get('news_all') or {}
+        lines.extend([
+            '',
+            '<b>NEWS PROVIDERS</b>',
+            f"news_all: {agg.get('freshness_status', FRESHNESS_MISSING)} · items {agg.get('items_found', 0)}",
+        ])
+        for pid in ('mint_rss', 'business_standard', 'nse_rss', 'bse_rss', 'rbi', 'sebi', 'pib'):
+            rec = news_table.get(pid) or {}
+            status = str(rec.get('freshness_status') or FRESHNESS_MISSING)
+            items = rec.get('items_found', 0)
+            err = rec.get('error_count', 0)
+            err_part = f' · errors {err}' if err else ''
+            lines.append(f'{pid}: {status} · items {items}{err_part}')
+    except Exception:
+        pass
     lines.append('<i>Paper/research only</i>')
     return '\n'.join(lines)
 

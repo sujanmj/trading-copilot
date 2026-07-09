@@ -154,8 +154,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /feed verify FEED_ID — re-check saved feed against fresh news
 /feed remove FEED_ID — remove bad feed from active memory
 /feed restore FEED_ID — restore removed feed
-/news refresh — refresh news cache only
-/news refresh SYMBOL — refresh news for one company/ticker
+/news refresh — refresh all trusted news sources
+/news refresh SYMBOL — refresh all trusted news sources for one company/ticker
+/news sources — show enabled news providers and freshness
 /myfeed list — latest saved feed
 /myfeed today — today's feed
 /myfeed scan — tickers/themes impact

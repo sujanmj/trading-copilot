@@ -120,6 +120,10 @@ def run_news_only(*, refresh: bool = True, args: str = '') -> dict[str, Any]:
 
     raw = str(args or '').strip()
     lower = raw.lower()
+    if lower == 'sources':
+        from backend.collectors.news_provider_registry import format_news_sources_telegram
+
+        return _runner_result('news_sources', text=format_news_sources_telegram())
     if lower.startswith('refresh'):
         from backend.my_feed.entity_mapping import resolve_company_ticker
         from backend.my_feed.news_refresh import format_news_refresh_telegram, run_news_cache_refresh
