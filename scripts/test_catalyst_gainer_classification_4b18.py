@@ -318,8 +318,8 @@ def test_no_ai_calls() -> int:
 def test_build_label_51y() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52J' or ASTRAEDGE_BUILD_STAGE != '52J':
-        return _fail(f'expected AstraEdge 52J got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52K' or ASTRAEDGE_BUILD_STAGE != '52K':
+        return _fail(f'expected AstraEdge 52K got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

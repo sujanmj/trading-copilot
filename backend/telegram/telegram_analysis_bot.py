@@ -141,6 +141,11 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /longterm history SYMBOL — long-term history for symbol
 /longterm memory SYMBOL — stored long-term thesis memory
 
+<b>Weekly Conviction:</b>
+/weekly picks — weekly high-conviction research picks
+/weekly history — previous weekly pick snapshots
+/weekly explain SYMBOL — weekly conviction breakdown
+
 <b>Action:</b>
 /action plan — final action plan
 /bootstrap — rebuild cached reports (background)
@@ -365,6 +370,12 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'longterm', raw[len('longterm '):].strip()
     if lower == 'longterm':
         return 'longterm', ''
+    if lower in ('weekly', 'weekly picks', 'weekly top'):
+        return 'weekly', 'picks'
+    if lower == 'weekly history':
+        return 'weekly', 'history'
+    if lower.startswith('weekly explain '):
+        return 'weekly', raw[len('weekly '):].strip()
     if lower.startswith('patterns '):
         return 'patterns', raw[len('patterns '):].strip()
     if lower == 'patterns':
@@ -1021,6 +1032,11 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_longterm_only(args), command='longterm')
         response_text = result.get('text') or 'Long-term watchlist unavailable.'
+    elif cmd == 'weekly':
+        from backend.telegram.lazy_command_runner import run_weekly_only
+
+        result = run_without_ai(lambda: run_weekly_only(args), command='weekly')
+        response_text = result.get('text') or 'Weekly conviction picks unavailable.'
     elif cmd == 'patterns':
         from backend.telegram.lazy_command_runner import run_patterns_only
 

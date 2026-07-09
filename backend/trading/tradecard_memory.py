@@ -262,6 +262,16 @@ def memory_stats() -> dict[str, Any]:
             'longterm_recommendation_snapshots': 0,
             'longterm_symbols_tracked': 0,
         })
+    try:
+        from backend.trading.weekly_conviction_engine import weekly_memory_stats
+
+        stats.update(weekly_memory_stats())
+    except Exception:
+        stats.update({
+            'weekly_pick_runs': 0,
+            'weekly_pick_records': 0,
+            'weekly_symbols_tracked': 0,
+        })
     return stats
 
 

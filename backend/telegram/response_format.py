@@ -2391,6 +2391,11 @@ def format_tradecard_memory_stats_telegram() -> str:
         f'screener_snapshots: {stats.get("screener_snapshots") or 0}',
         f'longterm_recommendation_snapshots: {stats.get("longterm_recommendation_snapshots") or 0}',
         f'longterm_symbols_tracked: {stats.get("longterm_symbols_tracked") or 0}',
+        '',
+        '<b>Weekly conviction memory:</b>',
+        f'weekly_pick_runs: {stats.get("weekly_pick_runs") or 0}',
+        f'weekly_pick_records: {stats.get("weekly_pick_records") or 0}',
+        f'weekly_symbols_tracked: {stats.get("weekly_symbols_tracked") or 0}',
     ]
     return strip_stage_markers('\n'.join(lines))
 

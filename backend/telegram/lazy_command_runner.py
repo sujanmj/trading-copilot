@@ -899,6 +899,26 @@ def run_longterm_only(args: str = '') -> dict[str, Any]:
     return _runner_result('longterm', text=text)
 
 
+def run_weekly_only(args: str = '') -> dict[str, Any]:
+    from backend.trading.weekly_conviction_engine import (
+        format_weekly_explain_telegram,
+        format_weekly_history_telegram,
+        format_weekly_picks_telegram,
+    )
+
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower.startswith('history'):
+        text = format_weekly_history_telegram()
+        return _runner_result('weekly', text=text, mode='history')
+    if lower.startswith('explain '):
+        sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_weekly_explain_telegram(sym)
+        return _runner_result('weekly', text=text, mode='explain')
+    text = format_weekly_picks_telegram()
+    return _runner_result('weekly', text=text, mode='picks')
+
+
 def run_patterns_only(args: str = '') -> dict[str, Any]:
     from backend.telegram.response_format import format_patterns_symbol_guidance
 
