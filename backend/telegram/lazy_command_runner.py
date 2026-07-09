@@ -141,6 +141,18 @@ def run_news_only(*, refresh: bool = True, args: str = '') -> dict[str, Any]:
                 company = 'State Bank of India'
         result = run_news_cache_refresh(symbol=symbol, company=company)
         text = format_news_refresh_telegram(result)
+        try:
+            from backend.trading.weekly_signal_capture import capture_news_signal
+
+            if symbol:
+                capture_news_signal(
+                    symbol=symbol,
+                    company_name=company,
+                    refresh_ok=bool(result.get('ok', True)),
+                    item_count=int(result.get('item_count') or result.get('count') or 0),
+                )
+        except Exception:
+            pass
         return _runner_result('news_refresh', text=text, payload=result, refresh=result.get('refresh'))
 
     refresh_result = None
@@ -974,6 +986,14 @@ def run_catalyst_only(args: str = '') -> dict[str, Any]:
 
     sym = str(args or '').strip()
     text = format_catalyst_symbol_telegram(sym)
+    try:
+        if sym:
+            from backend.intelligence.stock_catalyst_radar import explain_catalyst
+            from backend.trading.weekly_signal_capture import capture_catalyst_signal
+
+            capture_catalyst_signal(sym.upper(), explain_catalyst(sym))
+    except Exception:
+        pass
     return _runner_result('catalyst', text=text, mode='symbol' if sym else 'usage')
 
 
@@ -989,6 +1009,14 @@ def run_catalysts_only(args: str = '') -> dict[str, Any]:
         text = format_catalyst_radar_telegram(today_only=True)
     else:
         text = format_catalyst_radar_telegram(today_only=False)
+    try:
+        from backend.intelligence.stock_catalyst_radar import get_clean_catalyst_radar
+        from backend.trading.weekly_signal_capture import capture_catalyst_radar_batch
+
+        radar = get_clean_catalyst_radar(today_only=lower in ('today',))
+        capture_catalyst_radar_batch(radar)
+    except Exception:
+        pass
     return _runner_result('catalysts', text=text)
 
 

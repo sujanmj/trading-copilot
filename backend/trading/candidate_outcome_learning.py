@@ -850,6 +850,12 @@ def _update_learning_aggregate(outcome_rec: dict[str, Any]) -> None:
         'stage_version': STAGE,
     }
     _append_jsonl(_learning_path(), record)
+    try:
+        from backend.trading.weekly_signal_capture import capture_outcome_learning_signal
+
+        capture_outcome_learning_signal(outcome_rec)
+    except Exception:
+        pass
 
 
 def learning_stats() -> dict[str, Any]:

@@ -268,8 +268,10 @@ def memory_stats() -> dict[str, Any]:
         stats.update(weekly_memory_stats())
     except Exception:
         stats.update({
+            'weekly_signal_events': 0,
             'weekly_pick_runs': 0,
             'weekly_pick_records': 0,
+            'weekly_candidate_evaluations': 0,
             'weekly_symbols_tracked': 0,
         })
     return stats

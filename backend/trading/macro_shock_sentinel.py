@@ -906,6 +906,12 @@ def format_macro_command_telegram(args: str = '') -> str:
     else:
         lines.append('No active macro shock — overnight sentinel armed.')
     lines.append('<i>Paper/research only</i>')
+    try:
+        from backend.trading.weekly_signal_capture import capture_macro_market_signal
+
+        capture_macro_market_signal(active)
+    except Exception:
+        pass
     return '\n'.join(lines)
 
 

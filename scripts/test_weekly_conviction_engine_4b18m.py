@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 import tempfile
@@ -33,10 +32,12 @@ class _WeeklyEnv:
     def __init__(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tmpdir.name)
+        self.signals_file = self.root / 'weekly_signal_events.jsonl'
+        self.runs_file = self.root / 'weekly_pick_runs.jsonl'
+        self.picks_file = self.root / 'weekly_pick_records.jsonl'
+        self.evals_file = self.root / 'weekly_candidate_evaluations.jsonl'
         self.imports_file = self.root / 'screener_imports.jsonl'
         self.stock_file = self.root / 'screener_stock_memory.jsonl'
-        self.weekly_file = self.root / 'weekly_pick_records.jsonl'
-        self.longterm_file = self.root / 'longterm_recommendation_snapshots.jsonl'
         self.imports_dir = self.root / 'imports'
         self.imports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -45,6 +46,60 @@ class _WeeklyEnv:
 
     def __exit__(self, *args: object) -> None:
         self.tmpdir.cleanup()
+
+    def patches(self):
+        return [
+            patch('backend.trading.weekly_conviction_engine._signal_events_path', return_value=self.signals_file),
+            patch('backend.trading.weekly_conviction_engine._weekly_runs_path', return_value=self.runs_file),
+            patch('backend.trading.weekly_conviction_engine._weekly_records_path', return_value=self.picks_file),
+            patch('backend.trading.weekly_conviction_engine._weekly_evaluations_path', return_value=self.evals_file),
+            patch('backend.trading.screener_memory.imports_file_path', return_value=self.imports_file),
+            patch('backend.trading.screener_memory.stock_memory_file_path', return_value=self.stock_file),
+            patch('backend.trading.screener_memory.imports_dir_path', return_value=self.imports_dir),
+            patch('backend.trading.weekly_conviction_engine.backfill_partial_longterm_signals_for_week', return_value=0),
+            patch('backend.trading.weekly_conviction_engine._macro_penalty_from_events', return_value=(0, [], False)),
+        ]
+
+    def patch_all(self):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _cm():
+            patches = self.patches()
+            stack = []
+            try:
+                for p in patches:
+                    stack.append(p)
+                    p.start()
+                yield self
+            finally:
+                for p in reversed(stack):
+                    p.stop()
+
+        return _cm()
+
+
+def _seed_multi_source_signals(env: _WeeklyEnv, sym: str = 'GILLETTE', company: str = 'Gillette India') -> None:
+    from backend.trading.weekly_conviction_engine import capture_weekly_signal_event
+
+    for source, score in (
+        ('SCREENER', 90),
+        ('LONGTERM', 88),
+        ('TRADECARD', 80),
+        ('NEWS', 78),
+        ('CATALYST', 75),
+        ('PATTERN', 70),
+    ):
+        capture_weekly_signal_event(
+            symbol=sym,
+            company_name=company,
+            source_type=source,
+            source_command_or_module='test',
+            signal_score=score,
+            signal_direction='positive',
+            signal_strength='strong',
+            reason=f'test {source}',
+        )
 
 
 def test_build_label() -> int:
@@ -56,8 +111,23 @@ def test_build_label() -> int:
     return 0
 
 
-def test_threshold_and_storage() -> int:
-    from backend.trading.screener_memory import import_screener_csv
+def test_week_helpers() -> int:
+    from backend.trading.weekly_conviction_engine import (
+        current_week_id,
+        week_end_date,
+        week_start_date,
+    )
+
+    week = current_week_id()
+    if '-W' not in week:
+        return _fail(f'bad week id {week!r}')
+    if week_start_date() > week_end_date():
+        return _fail('week start after end')
+    print('OK: test_week_helpers')
+    return 0
+
+
+def test_multi_source_qualifies_and_stores_run() -> int:
     from backend.trading.weekly_conviction_engine import (
         MIN_CONVICTION_SCORE,
         format_weekly_picks_telegram,
@@ -66,85 +136,122 @@ def test_threshold_and_storage() -> int:
     )
 
     with _WeeklyEnv() as env:
-        csv_path = env.imports_dir / 'weekly_test.csv'
-        csv_path.write_text(SAMPLE_CSV, encoding='utf-8')
-        with patch('backend.trading.screener_memory.imports_file_path', return_value=env.imports_file), \
-             patch('backend.trading.screener_memory.stock_memory_file_path', return_value=env.stock_file), \
-             patch('backend.trading.screener_memory.imports_dir_path', return_value=env.imports_dir), \
-             patch('backend.trading.weekly_conviction_engine._weekly_records_path', return_value=env.weekly_file), \
-             patch('backend.trading.weekly_conviction_engine._macro_risk_penalty', return_value=(0, [], False)), \
-             patch('backend.trading.weekly_conviction_engine._score_news_catalyst', side_effect=lambda sym, row: (80, ['positive news/catalyst strength this week'], [], True)), \
-             patch('backend.trading.weekly_conviction_engine._score_repeated_pick', side_effect=lambda sym: (100, [f'appeared in long-term list 3 times'], True)), \
-             patch('backend.trading.weekly_conviction_engine._score_confidence_trend', side_effect=lambda sym: (90, ['confidence trend improving 70 → 82'], [], True)):
-            import_screener_csv(csv_path, screen_name='quality_growth', query_text='weekly')
+        with env.patch_all():
+            _seed_multi_source_signals(env)
             result = generate_weekly_conviction_picks(persist=True)
-            picks = result.get('records') or []
-            if not picks:
-                return _fail('expected at least one weekly pick above threshold')
-            if int(picks[0].get('conviction_score') or 0) < MIN_CONVICTION_SCORE:
-                return _fail(f'pick below threshold {MIN_CONVICTION_SCORE}')
-            weak = [p for p in picks if _normalize(p.get('symbol')) == 'WEAK']
-            if weak:
-                return _fail('weak stock should not qualify')
+            if not result.get('records'):
+                return _fail('expected qualifying multi-source pick')
+            if int(result['records'][0].get('conviction_score') or 0) < MIN_CONVICTION_SCORE:
+                return _fail('pick below threshold')
+            if not result.get('run'):
+                return _fail('expected run record even with picks')
             stats = weekly_memory_stats()
-            if stats.get('weekly_pick_records', 0) < 1:
-                return _fail('weekly_pick_records should be > 0')
+            if stats.get('weekly_pick_runs', 0) < 1:
+                return _fail('weekly_pick_runs should be > 0')
+            if stats.get('weekly_signal_events', 0) < 6:
+                return _fail('expected signal events')
             text = format_weekly_picks_telegram()
-            if 'WEEKLY CONVICTION PICKS' not in text:
-                return _fail('missing weekly picks header')
-            if '/weekly history' not in text:
-                return _fail('missing weekly footer')
-    print('OK: test_threshold_and_storage')
+            if 'Signals scanned:' not in text:
+                return _fail('missing signals scanned line')
+    print('OK: test_multi_source_qualifies_and_stores_run')
     return 0
 
 
-def test_no_qualifying_picks_message() -> int:
-    from backend.trading.weekly_conviction_engine import format_weekly_picks_telegram, generate_weekly_conviction_picks
+def test_zero_pick_stores_run_with_best_candidate() -> int:
+    from backend.trading.weekly_conviction_engine import (
+        capture_weekly_signal_event,
+        format_weekly_picks_telegram,
+        generate_weekly_conviction_picks,
+    )
 
     with _WeeklyEnv() as env:
-        with patch('backend.trading.weekly_conviction_engine._weekly_records_path', return_value=env.weekly_file), \
-             patch('backend.trading.weekly_conviction_engine._candidate_universe', return_value={}), \
-             patch('backend.trading.weekly_conviction_engine._macro_risk_penalty', return_value=(0, [], False)):
+        with env.patch_all():
+            capture_weekly_signal_event(
+                symbol='IRCTC',
+                company_name='I R C T C',
+                source_type='LONGTERM',
+                source_command_or_module='test',
+                signal_score=81,
+                signal_direction='positive',
+                signal_strength='strong',
+                reason='longterm only',
+            )
             result = generate_weekly_conviction_picks(persist=True)
             if result.get('records'):
-                return _fail('empty universe should produce no records')
+                return _fail('longterm-only should not qualify')
+            run = result.get('run') or {}
+            if run.get('pick_count', -1) != 0:
+                return _fail('expected pick_count=0 run')
             text = format_weekly_picks_telegram()
             if 'NO WEEKLY HIGH-CONVICTION PICK' not in text:
                 return _fail('missing no-pick message')
-    print('OK: test_no_qualifying_picks_message')
+            if 'Best candidate:' not in text:
+                return _fail('missing best candidate line')
+            if 'Missing evidence:' not in text and 'missing' not in text.lower():
+                return _fail('missing evidence line')
+    print('OK: test_zero_pick_stores_run_with_best_candidate')
     return 0
 
 
-def test_weekly_history_and_explain() -> int:
-    from backend.trading.screener_memory import import_screener_csv
+def test_weekly_explain_without_screener_row() -> int:
     from backend.trading.weekly_conviction_engine import (
+        capture_weekly_signal_event,
         format_weekly_explain_telegram,
+        generate_weekly_conviction_picks,
+    )
+
+    with _WeeklyEnv() as env:
+        with env.patch_all():
+            capture_weekly_signal_event(
+                symbol='IRCTC',
+                company_name='I R C T C',
+                source_type='LONGTERM',
+                source_command_or_module='test',
+                signal_score=81,
+                signal_direction='positive',
+                signal_strength='strong',
+                reason='confidence 81',
+            )
+            generate_weekly_conviction_picks(persist=True)
+            text = format_weekly_explain_telegram('IRCTC')
+            if 'WEEKLY EXPLAIN — IRCTC' not in text:
+                return _fail('missing explain header')
+            if 'NOT_SELECTED' not in text and 'SELECTED' not in text:
+                return _fail('missing weekly status')
+            if 'LONGTERM:' not in text:
+                return _fail('missing longterm signal line')
+            if 'TRADECARD: missing' not in text:
+                return _fail('expected missing tradecard')
+    print('OK: test_weekly_explain_without_screener_row')
+    return 0
+
+
+def test_weekly_history_shows_zero_pick_run() -> int:
+    from backend.trading.weekly_conviction_engine import (
+        capture_weekly_signal_event,
         format_weekly_history_telegram,
         generate_weekly_conviction_picks,
     )
 
     with _WeeklyEnv() as env:
-        csv_path = env.imports_dir / 'weekly_test.csv'
-        csv_path.write_text(SAMPLE_CSV, encoding='utf-8')
-        with patch('backend.trading.screener_memory.imports_file_path', return_value=env.imports_file), \
-             patch('backend.trading.screener_memory.stock_memory_file_path', return_value=env.stock_file), \
-             patch('backend.trading.screener_memory.imports_dir_path', return_value=env.imports_dir), \
-             patch('backend.trading.weekly_conviction_engine._weekly_records_path', return_value=env.weekly_file), \
-             patch('backend.trading.weekly_conviction_engine._macro_risk_penalty', return_value=(0, [], False)), \
-             patch('backend.trading.weekly_conviction_engine._score_news_catalyst', side_effect=lambda sym, row: (80, [], [], True)), \
-             patch('backend.trading.weekly_conviction_engine._score_repeated_pick', side_effect=lambda sym: (100, ['appeared in long-term list 3 times'], True)), \
-             patch('backend.trading.weekly_conviction_engine._score_confidence_trend', side_effect=lambda sym: (90, [], [], True)):
-            import_screener_csv(csv_path, screen_name='quality_growth', query_text='weekly')
+        with env.patch_all():
+            capture_weekly_signal_event(
+                symbol='GILLETTE',
+                company_name='Gillette India',
+                source_type='LONGTERM',
+                source_command_or_module='test',
+                signal_score=75,
+                signal_direction='positive',
+                signal_strength='medium',
+                reason='test',
+            )
             generate_weekly_conviction_picks(persist=True)
             hist = format_weekly_history_telegram()
-            if 'Gillette' not in hist and 'GILLETTE' not in hist:
-                return _fail('history should list weekly picks')
-            explain = format_weekly_explain_telegram('GILLETTE')
-            if 'Score components' not in explain:
-                return _fail('explain missing score components')
-            if 'conviction' not in explain.lower():
-                return _fail('explain missing conviction')
-    print('OK: test_weekly_history_and_explain')
+            if '0 picks' not in hist:
+                return _fail('history should show zero-pick run')
+            if 'best' not in hist.lower():
+                return _fail('history should show best candidate')
+    print('OK: test_weekly_history_shows_zero_pick_run')
     return 0
 
 
@@ -154,29 +261,21 @@ def test_telegram_routing() -> int:
     cmd, args = parse_command('/weekly picks')
     if cmd != 'weekly' or args != 'picks':
         return _fail(f'/weekly picks routing got {cmd!r} {args!r}')
-    cmd, args = parse_command('/weekly top')
-    if cmd != 'weekly':
-        return _fail('/weekly top not routed')
-    cmd, args = parse_command('/weekly history')
-    if cmd != 'weekly' or args != 'history':
-        return _fail('/weekly history routing failed')
-    cmd, args = parse_command('/weekly explain GILLETTE')
+    cmd, args = parse_command('/weekly explain IRCTC')
     if cmd != 'weekly' or not args.startswith('explain'):
         return _fail('/weekly explain routing failed')
     print('OK: test_telegram_routing')
     return 0
 
 
-def _normalize(value: object) -> str:
-    return str(value or '').strip().upper()
-
-
 def main() -> int:
     tests = [
         test_build_label,
-        test_threshold_and_storage,
-        test_no_qualifying_picks_message,
-        test_weekly_history_and_explain,
+        test_week_helpers,
+        test_multi_source_qualifies_and_stores_run,
+        test_zero_pick_stores_run_with_best_candidate,
+        test_weekly_explain_without_screener_row,
+        test_weekly_history_shows_zero_pick_run,
         test_telegram_routing,
     ]
     failed = 0

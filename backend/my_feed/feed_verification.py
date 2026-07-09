@@ -725,6 +725,18 @@ def reverify_feed_item(feed_id: str, *, data_dir: Path | None = None) -> dict[st
         f'new_status={new_status}',
         f'matched_source={matched or "—"}',
     ]
+    try:
+        from backend.trading.weekly_signal_capture import capture_my_feed_signal
+
+        capture_my_feed_signal(
+            symbol=ticker,
+            company_name=company,
+            verification_status=new_status,
+            feed_id=str(item.get('feed_id') or ''),
+            reason=f'feed verify {old_status} → {new_status}',
+        )
+    except Exception:
+        pass
     return {
         'ok': True,
         'feed_id': item.get('feed_id'),

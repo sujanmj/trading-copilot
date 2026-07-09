@@ -569,6 +569,12 @@ def import_screener_file(
         capture_screener_import_snapshot(result, source_file_name=path.name)
     except Exception:
         pass
+    try:
+        from backend.trading.weekly_signal_capture import capture_screener_import_signals
+
+        capture_screener_import_signals(stored)
+    except Exception:
+        pass
     return result
 
 

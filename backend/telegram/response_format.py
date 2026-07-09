@@ -2393,8 +2393,10 @@ def format_tradecard_memory_stats_telegram() -> str:
         f'longterm_symbols_tracked: {stats.get("longterm_symbols_tracked") or 0}',
         '',
         '<b>Weekly conviction memory:</b>',
+        f'weekly_signal_events: {stats.get("weekly_signal_events") or 0}',
         f'weekly_pick_runs: {stats.get("weekly_pick_runs") or 0}',
         f'weekly_pick_records: {stats.get("weekly_pick_records") or 0}',
+        f'weekly_candidate_evaluations: {stats.get("weekly_candidate_evaluations") or 0}',
         f'weekly_symbols_tracked: {stats.get("weekly_symbols_tracked") or 0}',
     ]
     return strip_stage_markers('\n'.join(lines))
@@ -3693,7 +3695,12 @@ def format_tradecards_telegram(
     if not quality:
         lines.extend(['', *format_no_quality_tradecard_block()])
         return strip_stage_markers('\n'.join(lines))
+    try:
+        from backend.trading.weekly_signal_capture import capture_tradecard_signals
 
+        capture_tradecard_signals(quality)
+    except Exception:
+        pass
     for idx, row in enumerate(quality, start=1):
         sym = str(row.get('ticker') or '?')
         from backend.trading.all_cap_gainers import format_cap_bucket_inline
@@ -3907,6 +3914,12 @@ def format_longterm_telegram(limit: int = 10) -> str:
         snap = snap_by_sym.get(sym)
         mem = symbol_longterm_memory(sym) if sym else {}
         lines.extend(format_longterm_stock_block(row_with_rank, snapshot=snap, memory=mem))
+    try:
+        from backend.trading.weekly_signal_capture import capture_longterm_pick_signals
+
+        capture_longterm_pick_signals(stocks, snapshots)
+    except Exception:
+        pass
     lines.append('/longterm history · /longterm memory SYMBOL')
     return strip_stage_markers('\n'.join(lines))
 
@@ -4034,8 +4047,13 @@ def format_patterns_telegram(symbol: str) -> str:
         f'VWAP: {"confirmed" if best.get("vwap_confirmed") else "not confirmed"}',
     ])
     reasons = best.get('reasons') or []
+    try:
+        from backend.trading.weekly_signal_capture import capture_pattern_signal
+
+        capture_pattern_signal(sym, best, source='/patterns')
+    except Exception:
+        pass
     if reasons:
-        lines.append('')
         lines.append('Reasons:')
         for reason in reasons[:4]:
             lines.append(f'- {reason}')
@@ -4079,6 +4097,12 @@ def format_candles_telegram(symbol: str) -> str:
         lines.append(f'Latest low: {latest_low}')
     lines.append(f'Source quality: {info.get("source_quality") or "none"}')
     lines.append(f'Pattern-ready: {"yes" if info.get("pattern_ready") else "no"}')
+    try:
+        from backend.trading.weekly_signal_capture import capture_candle_signal
+
+        capture_candle_signal(sym, info)
+    except Exception:
+        pass
     reason = str(info.get('reason') or '').strip()
     if reason and not info.get('pattern_ready'):
         lines.append(f'Reason: {reason}')
