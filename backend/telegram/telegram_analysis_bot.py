@@ -138,6 +138,9 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 <b>Refresh:</b>
 /refresh — quick scoped refresh
 /refresh quick — quick scoped refresh
+/refresh scanner — refresh scanner/gainers/intraday market data
+/refresh market — refresh scanner + gainers + radar inputs
+/refresh status — source freshness table
 /refresh full — full canonical cache refresh
 
 <b>AI Hub:</b>
@@ -149,6 +152,8 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 <b>My Feed:</b>
 /feed &lt;market news text&gt; — save text to My Feed
 /feed verify FEED_ID — re-check saved feed against fresh news
+/feed remove FEED_ID — remove bad feed from active memory
+/feed restore FEED_ID — restore removed feed
 /news refresh — refresh news cache only
 /news refresh SYMBOL — refresh news for one company/ticker
 /myfeed list — latest saved feed
@@ -585,6 +590,34 @@ def _handle_refresh(scope: str) -> str:
     scope_norm = (scope or 'quick').strip().lower()
     if scope_norm in ('', 'refresh'):
         scope_norm = 'quick'
+    if scope_norm == 'status':
+        from backend.trading.market_freshness_guard import format_freshness_status_telegram
+
+        return format_freshness_status_telegram()
+    if scope_norm == 'scanner':
+        from backend.trading.market_freshness_guard import refresh_scanner_scopes
+
+        parts = []
+        for sc in refresh_scanner_scopes():
+            result = _scoped_refresh(sc)
+            parts.append(f'{sc}: {"ok" if result.get("ok") else "partial"}')
+        return (
+            '<b>🔄 Refresh (scanner)</b>\n'
+            + '\n'.join(parts)
+            + '\n<i>Scanner/gainers/intraday market data only.</i>'
+        )
+    if scope_norm == 'market':
+        from backend.trading.market_freshness_guard import refresh_market_scopes
+
+        parts = []
+        for sc in refresh_market_scopes():
+            result = _scoped_refresh(sc)
+            parts.append(f'{sc}: {"ok" if result.get("ok") else "partial"}')
+        return (
+            '<b>🔄 Refresh (market)</b>\n'
+            + '\n'.join(parts)
+            + '\n<i>Scanner + prices + runtime radar inputs.</i>'
+        )
     if scope_norm == 'quick':
         result = _scoped_refresh('runtime')
         news = _scoped_refresh('news')
@@ -872,10 +905,10 @@ def handle_analysis_command(
         text_blob = str(args or '').strip()
         if not text_blob:
             response_text = FEED_TEXT_ONLY_USAGE
-        elif text_blob.lower().startswith('verify'):
-            result = run_without_ai(lambda: run_feed_text_only(args), command='feed_verify')
-            response_text = result.get('text') or 'FEED_VERIFY_FAILED'
-            return [send_analysis_message(response_text, command='feed_verify', dry_run=dry_run, parse_mode='')]
+        elif text_blob.lower().startswith(('verify', 'remove', 'delete', 'restore')):
+            result = run_without_ai(lambda: run_feed_text_only(args), command='feed_manage')
+            response_text = result.get('text') or 'FEED_REMOVE_USAGE'
+            return [send_analysis_message(response_text, command='feed_manage', dry_run=dry_run, parse_mode='')]
         else:
             try:
                 result = run_without_ai(lambda: run_feed_text_only(args), command='feed_text')

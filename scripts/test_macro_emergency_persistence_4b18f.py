@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 4B.18F — Persist Emergency Macro into Macro Shock Sentinel (AstraEdge 52E)."""
+"""Phase 4B.18F — Persist Emergency Macro into Macro Shock Sentinel (AstraEdge 52G)."""
 
 from __future__ import annotations
 
@@ -36,28 +36,24 @@ def _fail(msg: str) -> int:
 @contextmanager
 def _isolated_macro_env():
     import sqlite3
-    import uuid
 
     import backend.my_feed.my_feed_db as db_mod
 
-    uri = f'file:macro_emergency_persist_{uuid.uuid4().hex}?mode=memory&cache=shared'
-    boot = sqlite3.connect(uri, uri=True, check_same_thread=False)
-    boot.row_factory = sqlite3.Row
-    boot.executescript(db_mod.SCHEMA)
-    boot.commit()
-    boot.close()
-
-    def _mem_connect() -> sqlite3.Connection:
-        conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        db_path = Path(tmp) / 'my_feed.db'
         state_path = Path(tmp) / 'macro_shock_sentinel_state.json'
         emergency_path = Path(tmp) / 'emergency_macro_dedupe_state.json'
+
+        def _test_connect() -> sqlite3.Connection:
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            return conn
+
         with patch('backend.trading.macro_shock_sentinel.STATE_FILE', state_path), patch(
             'backend.orchestration.alert_quality_filters.EMERGENCY_STATE_FILE', emergency_path
-        ), patch.object(db_mod, '_connect', _mem_connect):
+        ), patch.object(db_mod, '_connect', _test_connect), patch.object(
+            db_mod, 'get_my_feed_db_path', lambda: db_path
+        ):
             db_mod.init_my_feed_db()
             yield state_path
 
@@ -428,8 +424,8 @@ def test_regression_live_confirmation_guard_4b18d() -> int:
 def test_build_label_52d() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52E' or ASTRAEDGE_BUILD_STAGE != '52E':
-        return _fail(f'expected AstraEdge 52E got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52G' or ASTRAEDGE_BUILD_STAGE != '52G':
+        return _fail(f'expected AstraEdge 52G got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

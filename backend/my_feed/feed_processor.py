@@ -855,6 +855,8 @@ def list_feed_items(
             continue
         if not include_archived and filt != 'archived' and row_status == 'archived':
             continue
+        if row_status.upper() == 'removed_by_user':
+            continue
         filtered.append(row)
         if len(filtered) >= limit:
             break
@@ -905,6 +907,18 @@ def scan_feed_summary(*, today_only: bool = False) -> dict[str, Any]:
 
 def archive_feed_item(feed_id: str, *, reason: str = '') -> bool:
     return archive_item(feed_id, reason=reason)
+
+
+def remove_feed_item(feed_id: str) -> dict[str, Any]:
+    from backend.my_feed.feed_remove import remove_feed_item as _remove
+
+    return _remove(feed_id)
+
+
+def restore_feed_item(feed_id: str) -> dict[str, Any]:
+    from backend.my_feed.feed_remove import restore_feed_item as _restore
+
+    return _restore(feed_id)
 
 
 def public_feed_items(limit: int = 20) -> list[dict[str, Any]]:

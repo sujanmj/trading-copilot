@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 4B.18E — Overnight Macro Shock Sentinel (AstraEdge 52E)."""
+"""Phase 4B.18E — Overnight Macro Shock Sentinel (AstraEdge 52G)."""
 
 from __future__ import annotations
 
@@ -21,10 +21,17 @@ os.environ.setdefault('DISABLE_TELEGRAM', '1')
 os.environ.setdefault('DISABLE_TELEGRAM_SENDS', '1')
 
 IST = ZoneInfo('Asia/Kolkata')
-SESSION = '2026-07-08'
-OVERNIGHT = datetime(2026, 7, 8, 6, 30, tzinfo=IST)
-PREOPEN_0900 = datetime(2026, 7, 8, 9, 0, tzinfo=IST)
-CONFIRM_0931 = datetime(2026, 7, 8, 9, 31, tzinfo=IST)
+
+
+def _ist_at(hour: int, minute: int) -> datetime:
+    now = datetime.now(tz=IST)
+    return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+
+SESSION = datetime.now(tz=IST).date().isoformat()
+OVERNIGHT = _ist_at(6, 30)
+PREOPEN_0900 = _ist_at(9, 0)
+CONFIRM_0931 = _ist_at(9, 31)
 
 IRAN_HEADLINE = (
     'Inshorts: Trump said Iran ceasefire is over after missile strike; '
@@ -281,8 +288,8 @@ def test_regression_catalyst_4b18() -> int:
 def test_build_label_52c() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52E' or ASTRAEDGE_BUILD_STAGE != '52E':
-        return _fail(f'expected AstraEdge 52E got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52G' or ASTRAEDGE_BUILD_STAGE != '52G':
+        return _fail(f'expected AstraEdge 52G got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

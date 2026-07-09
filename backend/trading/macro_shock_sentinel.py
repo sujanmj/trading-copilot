@@ -622,6 +622,8 @@ def get_active_macro_shock(*, now: datetime | None = None) -> dict[str, Any] | N
     active = state.get('active')
     if not isinstance(active, dict) or not active:
         return None
+    if active.get('removed') or active.get('inactive'):
+        return None
     session = str(active.get('session_date') or '')[:10]
     if session and session != _session_date(now):
         return None
@@ -629,6 +631,126 @@ def get_active_macro_shock(*, now: datetime | None = None) -> dict[str, Any] | N
     if SEVERITY_RANK.get(severity, 0) < SEVERITY_RANK[SEVERITY_WATCH]:
         return None
     return active
+
+
+def _feed_item_to_assessment(item: dict[str, Any]) -> dict[str, Any]:
+    payload = item.get('payload') if isinstance(item.get('payload'), dict) else {}
+    headline = str(
+        item.get('cleaned_summary')
+        or item.get('raw_market_text')
+        or payload.get('original_headline')
+        or ''
+    ).strip()
+    severity = str(
+        payload.get('macro_severity')
+        or item.get('macro_severity')
+        or SEVERITY_WATCH
+    )
+    return {
+        'severity': severity,
+        'regime': payload.get('macro_regime') or item.get('macro_regime') or REGIME_WATCH,
+        'gap_down_risk': bool(payload.get('gap_down_risk') or item.get('gap_down_risk')),
+        'headline': headline,
+        'trigger': payload.get('macro_trigger') or headline,
+        'impact': payload.get('macro_impact') or 'macro shock from feed memory',
+        'themes': list(item.get('themes') or payload.get('themes') or []),
+        'sources': [str(item.get('source') or item.get('detected_source_app') or '')],
+        'feed_id': str(item.get('feed_id') or ''),
+        'session_date': _session_date(),
+        'detected_at': str(item.get('created_at') or _now_ist().replace(microsecond=0).isoformat()),
+    }
+
+
+def _is_active_macro_feed_row(item: dict[str, Any]) -> bool:
+    if str(item.get('status') or '').upper() == 'REMOVED_BY_USER':
+        return False
+    if str(item.get('event_type') or '') == 'macro_shock':
+        return True
+    if str(item.get('source') or '') in ('macro_shock_sentinel', EMERGENCY_FEED_SOURCE):
+        return True
+    payload = item.get('payload') if isinstance(item.get('payload'), dict) else {}
+    return str(payload.get('feed_type') or '') == 'macro_shock'
+
+
+def recalculate_macro_regime_from_feeds() -> dict[str, Any]:
+    """Rebuild active macro shock from remaining active macro feed rows."""
+    from backend.my_feed.feed_processor import list_feed_items
+
+    rows = list_feed_items(limit=50, today_only=True, status='active')
+    macro_rows = [row for row in rows if _is_active_macro_feed_row(row)]
+    best: dict[str, Any] | None = None
+    best_rank = -1
+    best_feed_id = ''
+    for row in macro_rows:
+        assessment = _feed_item_to_assessment(row)
+        rank = SEVERITY_RANK.get(str(assessment.get('severity') or ''), 0)
+        if rank > best_rank:
+            best = assessment
+            best_rank = rank
+            best_feed_id = str(row.get('feed_id') or '')
+
+    state = _load_state()
+    if best and best_rank >= SEVERITY_RANK[SEVERITY_WATCH]:
+        active = _merge_active_state(best, feed_id=best_feed_id)
+        return {'ok': True, 'recalculated': True, 'active': active}
+    state['active'] = {}
+    _save_state(state)
+    return {'ok': True, 'recalculated': True, 'active': None}
+
+
+def deactivate_macro_shock_for_feed(feed_id: str) -> dict[str, Any]:
+    """Remove linked macro shock when user removes the source feed."""
+    fid = str(feed_id or '').strip()
+    if not fid:
+        return {'ok': False, 'reason': 'empty_feed_id'}
+
+    state = _load_state()
+    active = state.get('active') if isinstance(state.get('active'), dict) else {}
+    removed_this = False
+    if str(active.get('feed_id') or '') == fid:
+        removed = list(state.get('removed_shocks') or [])
+        removed.append({
+            **active,
+            'removed_at': _now_ist().replace(microsecond=0).isoformat(),
+            'removed_reason': 'user_removed',
+            'source_feed_id': fid,
+            'inactive': True,
+        })
+        state['removed_shocks'] = removed[-30:]
+        state['active'] = {}
+        _save_state(state)
+        removed_this = True
+
+    recalc = recalculate_macro_regime_from_feeds()
+    return {
+        'ok': True,
+        'removed_linked_shock': removed_this,
+        'feed_id': fid,
+        'recalc': recalc,
+    }
+
+
+def restore_macro_shock_for_feed(feed_id: str, item: dict[str, Any]) -> dict[str, Any]:
+    """Re-enter macro memory when a macro-relevant feed is restored."""
+    fid = str(feed_id or '').strip()
+    headline = str(
+        item.get('cleaned_summary')
+        or item.get('raw_market_text')
+        or ''
+    ).strip()
+    if not headline:
+        return {'ok': False, 'reason': 'empty_headline'}
+    result = classify_manual_feed_macro(
+        headline,
+        source=str(item.get('source') or 'telegram_text'),
+        item=item,
+        timestamp=str(item.get('created_at') or ''),
+    )
+    return {
+        'ok': bool(result.get('classified')),
+        'feed_id': fid,
+        'result': result,
+    }
 
 
 def macro_shock_active_for_trading(*, now: datetime | None = None) -> bool:
@@ -908,13 +1030,13 @@ def annotate_feed_item_as_macro_shock(
     if not feed_id:
         return False
     try:
-        from backend.my_feed.my_feed_db import update_feed_item_metadata
+        from backend.my_feed.my_feed_db import merge_feed_item_payload, update_feed_item_metadata
 
         themes = list(assessment.get('themes') or [])
         if 'macro policy' not in themes and assessment.get('emergency_theme'):
             themes.append(str(assessment.get('emergency_theme')).replace('_', ' '))
         severity = str(assessment.get('severity') or SEVERITY_WATCH)
-        return bool(update_feed_item_metadata(feed_id, {
+        meta_ok = bool(update_feed_item_metadata(feed_id, {
             'event_type': 'macro_shock',
             'themes': themes,
             'urgency': 'high' if severity in (SEVERITY_HIGH, SEVERITY_CRITICAL) else 'medium',
@@ -925,6 +1047,19 @@ def annotate_feed_item_as_macro_shock(
             ),
             'sentiment': 'bearish',
         }))
+        payload_ok = merge_feed_item_payload(feed_id, {
+            'feed_type': 'macro_shock',
+            'active': True,
+            'source_feed_id': str(feed_id),
+            'macro_severity': severity,
+            'macro_regime': assessment.get('regime'),
+            'macro_trigger': assessment.get('trigger'),
+            'macro_impact': assessment.get('impact'),
+            'gap_down_risk': bool(assessment.get('gap_down_risk')),
+            'catalyst_eligible': False,
+            'macro_regime_only': True,
+        })
+        return meta_ok and payload_ok
     except Exception:
         return False
 

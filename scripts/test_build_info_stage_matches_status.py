@@ -21,8 +21,8 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import format_canonical_status_text
 
     stage = get_astraedge_build_stage()
-    if stage != '52E' or ASTRAEDGE_BUILD_STAGE != '52E':
-        return _fail(f'expected build stage 51Z got {stage!r}')
+    if stage != '52G' or ASTRAEDGE_BUILD_STAGE != '52G':
+        return _fail(f'expected build stage 52G got {stage!r}')
 
     status = format_canonical_status_text()
     if ASTRAEDGE_TELEGRAM_BUILD not in status:

@@ -207,6 +207,17 @@ def run_premarket_slot(
     if slot in SILENT_BUILD_SLOTS:
         stage = SILENT_BUILD_SLOTS[slot]
         try:
+            if slot == 'scanner_build':
+                try:
+                    from backend.trading.market_freshness_guard import prepare_session_rollover_for_opening
+
+                    rollover = prepare_session_rollover_for_opening(now=ist_now)
+                    print(
+                        f'[SESSION_ROLLOVER_PREP] time={ts} actions={",".join(rollover.get("actions") or []) or "none"}',
+                        flush=True,
+                    )
+                except Exception as rollover_exc:
+                    print(f'[SESSION_ROLLOVER_PREP] warn={rollover_exc}', flush=True)
             build_premarket_conviction_report(persist=True)
             print(f'[SILENT_PREMARKET_BUILD] time={ts} stage={stage} status=ok', flush=True)
             try:

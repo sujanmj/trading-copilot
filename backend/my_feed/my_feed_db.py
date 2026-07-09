@@ -16,6 +16,10 @@ from backend.storage.data_paths import get_data_path
 
 MY_FEED_DB_NAME = 'my_feed.db'
 
+STATUS_ACTIVE = 'active'
+STATUS_ARCHIVED = 'archived'
+STATUS_REMOVED_BY_USER = 'REMOVED_BY_USER'
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS feed_items (
     feed_id TEXT PRIMARY KEY,
@@ -192,6 +196,9 @@ def list_items(
         clauses.append("status IN ('active', 'archived')")
     elif include_archived and status == 'archived':
         clauses.append("status = 'archived'")
+    elif status == STATUS_ACTIVE:
+        clauses.append("status = ?")
+        params.append(STATUS_ACTIVE)
     elif status:
         clauses.append('status = ?')
         params.append(status)
@@ -212,6 +219,86 @@ def get_item(feed_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute('SELECT * FROM feed_items WHERE feed_id = ?', (feed_id,)).fetchone()
     return row_to_dict(row) if row else None
+
+
+def remove_item_by_user(feed_id: str, *, reason: str = 'user_removed') -> dict[str, Any] | None:
+    """Soft-remove a feed row — audit trail preserved on disk."""
+    init_my_feed_db()
+    with _connect() as conn:
+        row = conn.execute('SELECT * FROM feed_items WHERE feed_id = ?', (feed_id,)).fetchone()
+        if not row:
+            return None
+        item = row_to_dict(row)
+        old_status = str(item.get('status') or STATUS_ACTIVE)
+        if old_status == STATUS_REMOVED_BY_USER:
+            return {'already_removed': True, 'item': item}
+        payload = _json_load(row['payload']) if row['payload'] else {}
+        if not isinstance(payload, dict):
+            payload = {}
+        verification_before = str(
+            item.get('verification_status')
+            or payload.get('verification_status')
+            or 'UNVERIFIED'
+        ).upper()
+        payload.update({
+            'active': False,
+            'removed_at': _now_iso(),
+            'removed_reason': reason,
+            'status_before_remove': old_status,
+            'verification_status_before_remove': verification_before,
+        })
+        conn.execute(
+            'UPDATE feed_items SET status = ?, payload = ? WHERE feed_id = ?',
+            (STATUS_REMOVED_BY_USER, _json_dump(payload), feed_id),
+        )
+        conn.commit()
+    return {
+        'feed_id': feed_id,
+        'old_status': old_status,
+        'new_status': STATUS_REMOVED_BY_USER,
+        'active': False,
+        'item': get_item(feed_id),
+    }
+
+
+def restore_item_by_user(feed_id: str) -> dict[str, Any] | None:
+    """Restore a user-removed feed row to active memory."""
+    init_my_feed_db()
+    with _connect() as conn:
+        row = conn.execute('SELECT * FROM feed_items WHERE feed_id = ?', (feed_id,)).fetchone()
+        if not row:
+            return None
+        item = row_to_dict(row)
+        current_status = str(item.get('status') or STATUS_ACTIVE)
+        if current_status != STATUS_REMOVED_BY_USER:
+            return {'not_removed': True, 'item': item}
+        payload = _json_load(row['payload']) if row['payload'] else {}
+        if not isinstance(payload, dict):
+            payload = {}
+        restored_verification = str(
+            payload.get('verification_status_before_remove')
+            or item.get('verification_status')
+            or 'UNVERIFIED'
+        ).upper()
+        payload['active'] = True
+        payload['restored_at'] = _now_iso()
+        payload.pop('removed_at', None)
+        payload.pop('removed_reason', None)
+        payload['verification_status'] = restored_verification
+        conn.execute(
+            'UPDATE feed_items SET status = ?, payload = ? WHERE feed_id = ?',
+            (STATUS_ACTIVE, _json_dump(payload), feed_id),
+        )
+        conn.commit()
+    restored = get_item(feed_id)
+    if restored:
+        restored['verification_status'] = restored_verification
+    return {
+        'feed_id': feed_id,
+        'active': True,
+        'status': restored_verification,
+        'item': restored,
+    }
 
 
 def archive_item(feed_id: str, *, reason: str = '') -> bool:
@@ -260,6 +347,27 @@ def update_feed_item_metadata(feed_id: str, fields: dict[str, Any]) -> bool:
         cur = conn.execute(
             f'UPDATE feed_items SET {set_clause} WHERE feed_id = ?',
             params,
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def merge_feed_item_payload(feed_id: str, payload_patch: dict[str, Any]) -> bool:
+    """Merge keys into feed payload JSON without touching status/active views."""
+    if not feed_id or not payload_patch:
+        return False
+    init_my_feed_db()
+    with _connect() as conn:
+        row = conn.execute('SELECT payload FROM feed_items WHERE feed_id = ?', (feed_id,)).fetchone()
+        if not row:
+            return False
+        payload = _json_load(row['payload']) if row['payload'] else {}
+        if not isinstance(payload, dict):
+            payload = {}
+        payload.update(payload_patch)
+        cur = conn.execute(
+            'UPDATE feed_items SET payload = ? WHERE feed_id = ?',
+            (_json_dump(payload), feed_id),
         )
         conn.commit()
         return cur.rowcount > 0

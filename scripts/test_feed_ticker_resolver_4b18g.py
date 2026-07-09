@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 4B.18G — Feed ticker resolver + fresh news refresh (AstraEdge 52E)."""
+"""Phase 4B.18G — Feed ticker resolver + fresh news refresh (AstraEdge 52G)."""
 
 from __future__ import annotations
 
@@ -454,11 +454,11 @@ def test_regression_live_confirmation_guard_4b18d() -> int:
     return 0
 
 
-def test_build_label_52e() -> int:
+def test_build_label_52g() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52E' or ASTRAEDGE_BUILD_STAGE != '52E':
-        return _fail(f'expected AstraEdge 52E got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52G' or ASTRAEDGE_BUILD_STAGE != '52G':
+        return _fail(f'expected AstraEdge 52G got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 
@@ -480,7 +480,7 @@ def main() -> int:
         test_regression_macro_emergency_4b18f,
         test_regression_macro_shock_sentinel_4b18e,
         test_regression_live_confirmation_guard_4b18d,
-        test_build_label_52e,
+        test_build_label_52g,
     ]
     failed = 0
     for test in tests:

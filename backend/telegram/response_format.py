@@ -3253,8 +3253,14 @@ def format_opening_radar_telegram(
         f'<i>Phase: {phase.replace("_", " ").lower()} · paper/research only</i>',
         '',
         *format_session_metadata_block(data),
-        '',
     ]
+    try:
+        from backend.trading.market_freshness_guard import format_data_freshness_block
+
+        lines.extend(['', *format_data_freshness_block(data)])
+    except Exception:
+        pass
+    lines.append('')
     macro = data.get('macro_shock') or {}
     if macro.get('active') and str(macro.get('severity') or '') in ('HIGH', 'CRITICAL'):
         regime = str(data.get('macro_regime') or macro.get('regime') or 'RED MARKET')
@@ -3282,9 +3288,20 @@ def format_opening_radar_telegram(
         score = int(row.get('score') or 0)
         why = ' + '.join(row.get('why') or []) or 'opening watch'
         action = format_opening_radar_action(str(row.get('state') or ''))
+        context_label = ''
+        try:
+            from backend.trading.market_freshness_guard import previous_session_context_label
+
+            context_label = previous_session_context_label(row, data)
+        except Exception:
+            pass
         lines.extend([
             f'{idx}. <b>{sym}</b> — {cap} — {state}',
             f'   Score: {score}',
+        ])
+        if context_label:
+            lines.append(f'   <i>{context_label}</i>')
+        lines.extend([
             f'   {row.get("catalyst_line") or "Catalyst: missing — price-volume only"}',
             f'   Why: {why}',
             f'   Action: {action}',
@@ -3454,6 +3471,22 @@ def format_early_tradecards_scheduled_telegram(
         '<i>Provisional ranks · paper/research only</i>',
         '',
     ]
+    from backend.trading.opening_session_freshness import format_session_metadata_block
+
+    lines.extend(format_session_metadata_block(data))
+    try:
+        from backend.trading.market_freshness_guard import (
+            format_data_freshness_block,
+            premarket_scanner_status_line,
+        )
+
+        premarket_line = premarket_scanner_status_line()
+        if premarket_line:
+            lines.extend(['', premarket_line])
+        lines.extend(['', *format_data_freshness_block(data)])
+    except Exception:
+        pass
+    lines.append('')
     candidates = sort_early_tradecard_candidates([
         r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED'
     ])
@@ -3462,7 +3495,16 @@ def format_early_tradecards_scheduled_telegram(
         label = provisional_label_for_row(row, board=data)
         score = int(row.get('score') or 0)
         why = ' + '.join(row.get('why') or []) or '—'
+        context_label = ''
+        try:
+            from backend.trading.market_freshness_guard import previous_session_context_label
+
+            context_label = previous_session_context_label(row, data)
+        except Exception:
+            pass
         lines.append(f'{idx}. <b>{sym}</b> — {label} — Score {score}')
+        if context_label:
+            lines.append(f'   <i>{context_label}</i>')
         lines.append(f'   {why}')
         if label in ('WAIT LIVE CONFIRM', 'WATCH ONLY'):
             lines.append('   Note: catalyst/theme watch — wait for live scanner confirmation.')
@@ -3593,8 +3635,13 @@ def format_tradecards_telegram(
     lines.extend([
         '',
         *format_session_metadata_block(data),
-        '',
     ])
+    try:
+        from backend.trading.market_freshness_guard import format_data_freshness_block
+
+        lines.extend(['', *format_data_freshness_block(data), ''])
+    except Exception:
+        lines.append('')
     candidates = [r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED']
     if not candidates:
         lines.append('No tradecard candidates on the opening board yet.')

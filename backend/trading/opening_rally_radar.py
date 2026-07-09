@@ -795,6 +795,17 @@ def build_opening_rally_board(
         payload = apply_macro_shock_to_board(payload, now=ist_now)
     except Exception:
         pass
+    try:
+        from backend.trading.market_freshness_guard import apply_market_freshness_to_board
+
+        payload = apply_market_freshness_to_board(
+            payload,
+            scanner_payload=scanner_data,
+            catalyst_payload=catalyst_payload if catalyst_payload is not None else _load_json(CATALYST_FILE),
+            now=ist_now,
+        )
+    except Exception:
+        pass
     return payload
 
 
@@ -1392,6 +1403,19 @@ def run_scheduled_opening_radar_alert(
     """Send scheduled 09:20 opening rally radar when candidates exist (paper only)."""
     ist_now = _now_ist(now)
     board = build_opening_rally_board(now=ist_now)
+    if board.get('scanner_stale') and not board.get('reference_only'):
+        from backend.trading.market_freshness_guard import format_scanner_stale_radar_telegram
+
+        text = format_scanner_stale_radar_telegram(board, scheduled_slot='0920')
+        ts = ist_now.replace(microsecond=0).isoformat()
+        return _send_scheduled_opening_text(
+            alert_key='opening_radar_scheduled',
+            text=text,
+            log_tag='OPENING_RADAR_SCANNER_STALE',
+            log_fields=f'time={ts} scanner_stale=yes',
+            send_fn=send_fn,
+            command='opening_radar_scheduled',
+        )
     candidates = [
         r for r in (board.get('ranked_candidates') or [])
         if r.get('state') != 'REJECTED'
@@ -1435,6 +1459,19 @@ def run_scheduled_early_tradecards_0925(
     """09:25 IST — provisional top tradecard candidates before 09:30."""
     ist_now = _now_ist(now)
     board = build_opening_rally_board(now=ist_now)
+    if board.get('scanner_stale') and not board.get('reference_only'):
+        from backend.trading.market_freshness_guard import format_no_active_tradecard_telegram
+
+        text = format_no_active_tradecard_telegram(board)
+        ts = ist_now.replace(microsecond=0).isoformat()
+        return _send_scheduled_opening_text(
+            alert_key='early_tradecards_0925',
+            text=text,
+            log_tag='EARLY_TRADECARDS_SCANNER_STALE',
+            log_fields=f'time={ts} scanner_stale=yes',
+            send_fn=send_fn,
+            command='early_tradecards_0925',
+        )
     candidates = [
         r for r in (board.get('ranked_candidates') or [])
         if r.get('state') != 'REJECTED'

@@ -8,7 +8,7 @@ Paper/research only — no LLM calls.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -201,6 +201,28 @@ def price_action_invalid(row: dict[str, Any] | None) -> tuple[bool, str]:
     return False, ''
 
 
+def _resolve_evaluation_now(
+    board: dict[str, Any] | None,
+    now: datetime | None,
+) -> datetime:
+    """Prefer explicit now; else derive clock from board session + time_ist."""
+    if now is not None:
+        return _now_ist(now)
+    data = board or {}
+    time_ist = str(data.get('time_ist') or '').strip()
+    session = str(data.get('session_date') or data.get('source_session_date') or '')[:10]
+    if not session:
+        session = session_date_ist()
+    if ':' in time_ist:
+        try:
+            hour_s, minute_s = time_ist.split(':', 1)
+            y, mo, d = (int(p) for p in session.split('-'))
+            return datetime(y, mo, d, int(hour_s), int(minute_s), tzinfo=IST)
+        except (TypeError, ValueError):
+            pass
+    return _now_ist(None)
+
+
 def provisional_label_for_row(
     row: dict[str, Any] | None,
     *,
@@ -208,7 +230,8 @@ def provisional_label_for_row(
     board: dict[str, Any] | None = None,
 ) -> str:
     """09:25 display label for catalyst-only / watch-only names."""
-    verdict = evaluate_live_confirmation(row, now=now, board=board)
+    eval_now = _resolve_evaluation_now(board, now)
+    verdict = evaluate_live_confirmation(row, now=eval_now, board=board)
     state = str(verdict.get('state') or '')
     if state == CONFIRMED:
         return 'TRADECARD CANDIDATE'
@@ -234,7 +257,6 @@ def evaluate_live_confirmation(
     Returns:
       state, reasons, live_scanner, fresh_catalyst, macro_crash, price_invalid
     """
-    ist_now = _now_ist(now)
     data = board or {}
     if not isinstance(row, dict) or not _normalize_ticker(row.get('ticker')):
         return {
@@ -246,6 +268,8 @@ def evaluate_live_confirmation(
             'price_invalid': True,
         }
 
+    ist_now = _resolve_evaluation_now(data, now)
+
     if data.get('session_stale') or data.get('reference_only'):
         return {
             'state': NO_TRADE,
@@ -255,6 +279,18 @@ def evaluate_live_confirmation(
             'macro_crash': False,
             'price_invalid': True,
         }
+
+    # Global scanner gate — only when freshness guard annotated the board.
+    if ist_now.time() >= time(9, 31):
+        if data.get('scanner_stale') or data.get('live_scanner_ready') is False:
+            return {
+                'state': NO_TRADE,
+                'reasons': ['live scanner stale/missing'],
+                'live_scanner': False,
+                'fresh_catalyst': False,
+                'macro_crash': emergency_macro_crash_active(board=data),
+                'price_invalid': True,
+            }
 
     macro_crash = emergency_macro_crash_active(board=data)
     live_scanner = has_live_scanner_row(row, now=ist_now) or has_live_gainer_or_radar(row)

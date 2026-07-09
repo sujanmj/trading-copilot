@@ -169,6 +169,22 @@ def run_news_only(*, refresh: bool = True, args: str = '') -> dict[str, Any]:
 def run_feed_text_only(args: str = '') -> dict[str, Any]:
     text_blob = str(args or '').strip()
     lower = text_blob.lower()
+    if lower.startswith(('remove ', 'delete ', 'restore ')):
+        from backend.my_feed.feed_remove import remove_feed_item, restore_feed_item
+
+        parts = text_blob.split(None, 1)
+        verb = parts[0].lower()
+        feed_id = parts[1].strip() if len(parts) > 1 else ''
+        if verb == 'restore':
+            result = restore_feed_item(feed_id)
+        else:
+            result = remove_feed_item(feed_id)
+        return _runner_result(
+            f'feed_{verb}',
+            text=result.get('text') or 'FEED_REMOVE_USAGE',
+            payload=result,
+            ok=bool(result.get('ok')),
+        )
     if lower.startswith('verify '):
         from backend.my_feed.feed_verification import reverify_feed_item
 
