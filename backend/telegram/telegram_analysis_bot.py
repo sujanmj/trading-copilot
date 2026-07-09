@@ -146,6 +146,11 @@ HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
 /weekly history — previous weekly pick snapshots
 /weekly explain SYMBOL — weekly conviction breakdown
 
+<b>Investor Intelligence:</b>
+/investor SYMBOL — shareholding and investor quality for stock
+/investor weekly — investor signal for weekly candidates
+/investor memory SYMBOL — investor/shareholding history
+
 <b>Action:</b>
 /action plan — final action plan
 /bootstrap — rebuild cached reports (background)
@@ -376,6 +381,14 @@ def parse_command(text: str) -> tuple[str, str]:
         return 'weekly', 'history'
     if lower.startswith('weekly explain '):
         return 'weekly', raw[len('weekly '):].strip()
+    if lower == 'investor weekly':
+        return 'investor', 'weekly'
+    if lower.startswith('investor memory '):
+        return 'investor', raw[len('investor '):].strip()
+    if lower.startswith('investor '):
+        return 'investor', raw[len('investor '):].strip()
+    if lower == 'investor':
+        return 'investor', ''
     if lower.startswith('patterns '):
         return 'patterns', raw[len('patterns '):].strip()
     if lower == 'patterns':
@@ -1032,6 +1045,11 @@ def handle_analysis_command(
 
         result = run_without_ai(lambda: run_longterm_only(args), command='longterm')
         response_text = result.get('text') or 'Long-term watchlist unavailable.'
+    elif cmd == 'investor':
+        from backend.telegram.lazy_command_runner import run_investor_only
+
+        result = run_without_ai(lambda: run_investor_only(args), command='investor')
+        response_text = result.get('text') or 'Investor intelligence unavailable.'
     elif cmd == 'weekly':
         from backend.telegram.lazy_command_runner import run_weekly_only
 

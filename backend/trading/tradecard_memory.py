@@ -274,6 +274,17 @@ def memory_stats() -> dict[str, Any]:
             'weekly_candidate_evaluations': 0,
             'weekly_symbols_tracked': 0,
         })
+    try:
+        from backend.trading.investor_intelligence import investor_memory_stats
+
+        stats.update(investor_memory_stats())
+    except Exception:
+        stats.update({
+            'investor_records': 0,
+            'investor_symbols_tracked': 0,
+            'investor_good_quality_records': 0,
+            'investor_missing_records': 0,
+        })
     return stats
 
 

@@ -2350,6 +2350,13 @@ def format_tradecard_memory_stock_telegram(symbol: str) -> str:
         lines.append('Tradecard memory: none yet.')
     lines.extend(screener_lines)
     lines.extend(pattern_lines)
+    try:
+        from backend.trading.investor_intelligence import format_investor_summary_lines, latest_investor_record
+
+        inv_sym = _normalize_tradecard_ticker(sc.get('symbol_key') or tradecard_sym or raw_query)
+        lines.extend(format_investor_summary_lines(latest_investor_record(inv_sym) if inv_sym else None))
+    except Exception:
+        pass
     return strip_stage_markers('\n'.join(lines))
 
 
@@ -2398,6 +2405,12 @@ def format_tradecard_memory_stats_telegram() -> str:
         f'weekly_pick_records: {stats.get("weekly_pick_records") or 0}',
         f'weekly_candidate_evaluations: {stats.get("weekly_candidate_evaluations") or 0}',
         f'weekly_symbols_tracked: {stats.get("weekly_symbols_tracked") or 0}',
+        '',
+        '<b>Investor memory:</b>',
+        f'investor_records: {stats.get("investor_records") or 0}',
+        f'investor_symbols_tracked: {stats.get("investor_symbols_tracked") or 0}',
+        f'investor_good_quality_records: {stats.get("investor_good_quality_records") or 0}',
+        f'investor_missing_records: {stats.get("investor_missing_records") or 0}',
     ]
     return strip_stage_markers('\n'.join(lines))
 

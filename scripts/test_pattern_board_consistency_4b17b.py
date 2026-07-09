@@ -236,8 +236,8 @@ def test_build_label_51x() -> int:
 
     if STAGE != '4B.17B':
         return _fail(f'expected STAGE 4B.17B got {STAGE!r}')
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52K' or ASTRAEDGE_BUILD_STAGE != '52K':
-        return _fail(f'expected AstraEdge 52K got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52L' or ASTRAEDGE_BUILD_STAGE != '52L':
+        return _fail(f'expected AstraEdge 52L got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

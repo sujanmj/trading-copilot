@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 4B.18M — Weekly conviction engine (AstraEdge 52K)."""
+"""Phase 4B.18M — Weekly conviction engine (AstraEdge 52L)."""
 
 from __future__ import annotations
 
@@ -105,8 +105,8 @@ def _seed_multi_source_signals(env: _WeeklyEnv, sym: str = 'GILLETTE', company: 
 def test_build_label() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52K' or ASTRAEDGE_BUILD_STAGE != '52K':
-        return _fail(f'expected AstraEdge 52K got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52L' or ASTRAEDGE_BUILD_STAGE != '52L':
+        return _fail(f'expected AstraEdge 52L got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     print('OK: test_build_label')
     return 0
 

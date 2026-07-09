@@ -53,8 +53,27 @@ _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         'free cash flow', 'fcf', 'free cash flow crores',
         'fcf prev ann rs.cr.', 'fcf prev ann rs. cr.', 'fcf prev ann rs cr',
     ),
-    'promoter_holding': ('promoter holding', 'promoter holding %'),
-    'pledged_percent': ('pledged percentage', 'pledged %', 'promoter shares pledged'),
+    'promoter_holding': ('promoter holding', 'promoter holding %', 'promoter %', 'promoter'),
+    'pledged_percent': (
+        'pledged percentage', 'pledged %', 'promoter shares pledged',
+        'promoter pledge', 'pledge %', 'promoter pledged %',
+    ),
+    'fii_holding': ('fii holding', 'fii %', 'fii', 'fii holding %'),
+    'dii_holding': ('dii holding', 'dii %', 'dii', 'dii holding %'),
+    'mutual_fund_holding': ('mf holding', 'mutual fund', 'mutual fund holding', 'mf %'),
+    'public_holding': ('public holding', 'public %', 'public holding %'),
+    'retail_holding': ('retail', 'retail holding', 'retail %'),
+    'govt_holding': ('government', 'govt holding', 'govt %'),
+    'insurance_holding': ('insurance', 'insurance holding', 'insurance %'),
+    'number_of_shareholders': (
+        'no. of shareholders', 'number of shareholders', 'shareholders', 'no of shareholders',
+    ),
+    'promoter_holding_change_qoq': (
+        'promoter holding change', 'promoter chg qoq', 'promoter holding change qoq',
+    ),
+    'promoter_pledge_change_qoq': ('promoter pledge change', 'pledge change qoq'),
+    'fii_holding_change_qoq': ('fii change', 'fii holding change', 'fii chg qoq'),
+    'dii_holding_change_qoq': ('dii change', 'dii holding change', 'dii chg qoq'),
     'current_price': ('current price', 'price', 'cmp', 'close', 'cmp rs.', 'cmp rs'),
     'avg_volume': ('average volume', 'avg volume', 'volume', 'traded volume'),
 }
@@ -379,6 +398,18 @@ def _normalize_stock_row(
         'free_cashflow': _row_value(raw, header_map, 'free_cashflow'),
         'promoter_holding': _row_value(raw, header_map, 'promoter_holding'),
         'pledged_percent': _row_value(raw, header_map, 'pledged_percent'),
+        'fii_holding': _row_value(raw, header_map, 'fii_holding'),
+        'dii_holding': _row_value(raw, header_map, 'dii_holding'),
+        'mutual_fund_holding': _row_value(raw, header_map, 'mutual_fund_holding'),
+        'public_holding': _row_value(raw, header_map, 'public_holding'),
+        'retail_holding': _row_value(raw, header_map, 'retail_holding'),
+        'govt_holding': _row_value(raw, header_map, 'govt_holding'),
+        'insurance_holding': _row_value(raw, header_map, 'insurance_holding'),
+        'number_of_shareholders': _row_value(raw, header_map, 'number_of_shareholders'),
+        'promoter_holding_change_qoq': _row_value(raw, header_map, 'promoter_holding_change_qoq'),
+        'promoter_pledge_change_qoq': _row_value(raw, header_map, 'promoter_pledge_change_qoq'),
+        'fii_holding_change_qoq': _row_value(raw, header_map, 'fii_holding_change_qoq'),
+        'dii_holding_change_qoq': _row_value(raw, header_map, 'dii_holding_change_qoq'),
         'current_price': _row_value(raw, header_map, 'current_price'),
         'avg_volume': _row_value(raw, header_map, 'avg_volume'),
         'screen_name': screen_name,
@@ -573,6 +604,16 @@ def import_screener_file(
         from backend.trading.weekly_signal_capture import capture_screener_import_signals
 
         capture_screener_import_signals(stored)
+    except Exception:
+        pass
+    try:
+        from backend.trading.investor_intelligence import capture_investor_from_screener_stocks
+
+        capture_investor_from_screener_stocks(
+            stored,
+            import_id=import_id,
+            imported_at=imported_at,
+        )
     except Exception:
         pass
     return result

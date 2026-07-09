@@ -911,6 +911,26 @@ def run_longterm_only(args: str = '') -> dict[str, Any]:
     return _runner_result('longterm', text=text)
 
 
+def run_investor_only(args: str = '') -> dict[str, Any]:
+    from backend.trading.investor_intelligence import (
+        format_investor_memory_telegram,
+        format_investor_symbol_telegram,
+        format_investor_weekly_telegram,
+    )
+
+    raw = str(args or '').strip()
+    lower = raw.lower()
+    if lower == 'weekly':
+        text = format_investor_weekly_telegram()
+        return _runner_result('investor', text=text, mode='weekly')
+    if lower.startswith('memory '):
+        sym = raw.split(None, 1)[1].strip() if ' ' in raw else ''
+        text = format_investor_memory_telegram(sym)
+        return _runner_result('investor', text=text, mode='memory')
+    text = format_investor_symbol_telegram(raw)
+    return _runner_result('investor', text=text, mode='symbol')
+
+
 def run_weekly_only(args: str = '') -> dict[str, Any]:
     from backend.trading.weekly_conviction_engine import (
         format_weekly_explain_telegram,

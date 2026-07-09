@@ -315,3 +315,33 @@ def capture_catalyst_radar_batch(radar: dict[str, Any], *, limit: int = 12) -> N
         capture_catalyst_signal(sym, row)
         if len(seen) >= limit:
             break
+
+
+def capture_investor_weekly_signal(record: dict[str, Any]) -> None:
+    if str(record.get('data_quality') or '') == 'MISSING':
+        return
+    sym = str(record.get('symbol') or '').upper()
+    if not sym or len(sym) < 2:
+        return
+    score = int(record.get('investor_score') or 50)
+    band = str(record.get('investor_band') or 'NEUTRAL')
+    if band in ('RISKY', 'WEAK') or score <= 35:
+        direction = 'negative'
+    elif band in ('STRONG', 'GOOD') and score >= 65:
+        direction = 'positive'
+    else:
+        direction = 'neutral'
+    _safe_capture(
+        symbol=sym,
+        company_name=str(record.get('company_name') or sym),
+        source_type='INVESTOR',
+        source_command_or_module='investor_intelligence',
+        signal_score=score,
+        signal_direction=direction,
+        signal_strength=_score_strength(score),
+        reason=str(record.get('investor_summary') or f'investor {band}')[:120],
+        reason_tags=list(record.get('investor_reason_tags') or [])[:6],
+        risk_tags=list(record.get('investor_risk_tags') or [])[:4],
+        data_quality=str(record.get('data_quality') or 'LIMITED'),
+        raw_ref_id=str(record.get('record_id') or ''),
+    )

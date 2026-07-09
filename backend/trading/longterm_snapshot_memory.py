@@ -684,6 +684,12 @@ def format_longterm_memory_symbol_telegram(symbol: str) -> str:
     if trend:
         lines.append('')
         lines.append(f'Confidence trend: {" → ".join(str(c) for c in reversed(trend[:5]))}')
+    try:
+        from backend.trading.investor_intelligence import format_investor_summary_lines, latest_investor_record
+
+        lines.extend(format_investor_summary_lines(latest_investor_record(str(mem.get('symbol') or sym))))
+    except Exception:
+        pass
     lines.append('')
     lines.append('<i>Long-term research memory only — not intraday tradecard</i>')
     return '\n'.join(lines)

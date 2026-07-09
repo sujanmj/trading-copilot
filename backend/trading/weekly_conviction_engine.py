@@ -941,11 +941,36 @@ def format_weekly_explain_telegram(symbol: str) -> str:
         ('OUTCOME_LEARNING', 'OUTCOME_LEARNING'),
         ('INVESTOR', 'INVESTOR'),
     ):
+        if src == 'INVESTOR':
+            try:
+                from backend.trading.investor_intelligence import latest_investor_record
+
+                inv = latest_investor_record(sym)
+            except Exception:
+                inv = None
+            if src in by_type:
+                e = by_type[src][-1]
+                band = str((inv or {}).get('investor_band') or '')
+                _signal_line(
+                    label,
+                    f"score {e.get('signal_score')} {band} — {str(e.get('reason') or '')[:50]}",
+                )
+            elif inv and str(inv.get('data_quality') or '') != 'MISSING':
+                _signal_line(
+                    label,
+                    f"score {inv.get('investor_score')} {inv.get('investor_band')} — "
+                    f"{str(inv.get('investor_summary') or '')[:50]}",
+                )
+                for tag in (inv.get('investor_reason_tags') or [])[:2]:
+                    lines.append(f'  · {tag}')
+                for tag in (inv.get('investor_risk_tags') or [])[:2]:
+                    lines.append(f'  · risk: {tag}')
+            else:
+                _signal_line(label, 'missing')
+            continue
         if src in by_type:
             e = by_type[src][-1]
             _signal_line(label, f"{e.get('signal_direction')} {e.get('signal_score')} — {str(e.get('reason') or '')[:60]}")
-        elif src == 'INVESTOR':
-            _signal_line(label, 'not available')
         else:
             _signal_line(label, 'missing')
 
