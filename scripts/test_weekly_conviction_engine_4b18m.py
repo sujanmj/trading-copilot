@@ -112,7 +112,11 @@ def test_build_label() -> int:
 
 
 def test_week_helpers() -> int:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
     from backend.trading.weekly_conviction_engine import (
+        _coverage_label,
         current_week_id,
         week_end_date,
         week_start_date,
@@ -123,6 +127,20 @@ def test_week_helpers() -> int:
         return _fail(f'bad week id {week!r}')
     if week_start_date() > week_end_date():
         return _fail('week start after end')
+
+    ist = ZoneInfo('Asia/Kolkata')
+    thu = datetime(2026, 7, 9, 14, 0, tzinfo=ist)
+    if _coverage_label(thu) != 'Mon–Thu / partial week':
+        return _fail(f'Thu coverage wrong: {_coverage_label(thu)!r}')
+    fri_early = datetime(2026, 7, 10, 1, 53, tzinfo=ist)
+    if _coverage_label(fri_early) != 'Mon–Fri / in progress — Friday session pending':
+        return _fail(f'Fri 01:53 coverage wrong: {_coverage_label(fri_early)!r}')
+    fri_late = datetime(2026, 7, 10, 16, 0, tzinfo=ist)
+    if _coverage_label(fri_late) != 'Mon–Fri / complete week':
+        return _fail(f'Fri 16:00 coverage wrong: {_coverage_label(fri_late)!r}')
+    sat = datetime(2026, 7, 11, 10, 0, tzinfo=ist)
+    if _coverage_label(sat) != 'Mon–Fri / complete week':
+        return _fail(f'Sat coverage wrong: {_coverage_label(sat)!r}')
     print('OK: test_week_helpers')
     return 0
 

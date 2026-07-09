@@ -147,15 +147,21 @@ def _session_in_week(session_date: str, *, week_id: str, now: datetime | None = 
 
 
 def _coverage_label(now: datetime | None = None) -> str:
-    dt = _now_ist(now).date()
-    monday = dt - timedelta(days=dt.weekday())
-    if dt.weekday() >= 5:
+    ist = _now_ist(now)
+    dt = ist.date()
+    weekday = dt.weekday()  # 0=Mon … 4=Fri, 5=Sat, 6=Sun
+
+    if weekday >= 5:
         return 'Mon–Fri / complete week'
-    start_name = DAY_NAMES[0]
-    end_name = DAY_NAMES[min(dt.weekday(), 4)]
-    if dt.weekday() >= 4:
-        return 'Mon–Fri / complete week'
-    return f'{start_name}–{end_name} / partial week'
+
+    if weekday == 4:
+        after_close_review = ist.hour > 15 or (ist.hour == 15 and ist.minute >= 45)
+        if after_close_review:
+            return 'Mon–Fri / complete week'
+        return 'Mon–Fri / in progress — Friday session pending'
+
+    today_name = DAY_NAMES[weekday]
+    return f'Mon–{today_name} / partial week'
 
 
 def capture_weekly_signal_event(
