@@ -742,25 +742,40 @@ def _lookup_symbol_evaluation(sym: str, *, week_id: str | None = None) -> dict[s
 
 def _resolve_symbol_context(raw: str) -> tuple[str, str, dict[str, Any] | None]:
     from backend.trading.longterm_snapshot_memory import symbol_longterm_memory
-    from backend.trading.screener_memory import resolve_screener_query, strip_screener_query
+    from backend.trading.screener_memory import (
+        _looks_like_nse_symbol,
+        resolve_canonical_screener_symbol,
+        resolve_screener_query,
+        resolve_screener_query_exact,
+        strip_screener_query,
+    )
 
     query = strip_screener_query(raw)
-    row = resolve_screener_query(query) if query else None
-    sym = _normalize_symbol(
-        (row or {}).get('symbol')
-        or (row or {}).get('symbol_key')
-        or query
-    )
-    mem = symbol_longterm_memory(sym) if sym else {'count': 0}
-    if not sym and mem.get('count'):
-        sym = _normalize_symbol(mem.get('symbol'))
-    company = str(
-        (row or {}).get('company_name')
-        or (row or {}).get('display_name')
-        or mem.get('company_name')
-        or sym
-    )
-    return sym, company, row
+    if not query:
+        return '', '', None
+
+    if _looks_like_nse_symbol(query):
+        sym = _normalize_symbol(query)
+        row = resolve_screener_query_exact(query)
+        if row:
+            canon_sym, company = resolve_canonical_screener_symbol(row)
+            if canon_sym and len(canon_sym) >= 2:
+                return canon_sym, company, row
+        mem = symbol_longterm_memory(sym) if sym else {'count': 0}
+        if mem.get('count'):
+            return sym, str(mem.get('company_name') or sym), row
+        return sym, sym, row
+
+    row = resolve_screener_query(query)
+    if row:
+        canon_sym, company = resolve_canonical_screener_symbol(row)
+        sym = canon_sym or _normalize_symbol(query)
+        return sym, company or sym, row
+    mem = symbol_longterm_memory(_normalize_symbol(query)) if query else {'count': 0}
+    if mem.get('count'):
+        sym = _normalize_symbol(mem.get('symbol') or query)
+        return sym, str(mem.get('company_name') or sym), None
+    return _normalize_symbol(query), query, None
 
 
 def format_weekly_picks_telegram() -> str:
@@ -869,7 +884,7 @@ def format_weekly_explain_telegram(symbol: str) -> str:
 
     sym, company, screener_row = _resolve_symbol_context(raw)
     if not sym:
-        return f'No weekly or memory context for {raw}.'
+        return f'No weekly memory found for {raw}.\nTry /weekly picks first or import matching Screener data.'
 
     week = current_week_id()
     events = [e for e in get_weekly_signal_events(week) if _normalize_symbol(e.get('symbol')) == sym]
@@ -970,7 +985,14 @@ def format_weekly_explain_telegram(symbol: str) -> str:
             continue
         if src in by_type:
             e = by_type[src][-1]
-            _signal_line(label, f"{e.get('signal_direction')} {e.get('signal_score')} — {str(e.get('reason') or '')[:60]}")
+            detail = f"{e.get('signal_direction')} {e.get('signal_score')} — {str(e.get('reason') or '')[:60]}"
+            if src == 'TRADECARD' and int(e.get('signal_score') or 0) < 60:
+                detail = f'RADAR/WATCH — below tradecard threshold ({detail})'
+            _signal_line(label, detail)
+        elif src == 'TRADECARD' and (
+            by_type.get('CATALYST') or by_type.get('PATTERN') or by_type.get('CANDLE')
+        ):
+            _signal_line(label, 'RADAR/WATCH — reference only, not quality tradecard')
         else:
             _signal_line(label, 'missing')
 

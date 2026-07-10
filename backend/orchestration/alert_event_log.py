@@ -254,6 +254,16 @@ def summarize_opening_workflow_for_date(review_date: str) -> dict:
                     best_by_stage[stage] = sym
     captured = sorted(set().union(*stage_symbols.values())) if stage_symbols else []
     try:
+        from backend.trading.candidate_outcome_learning import eligible_learning_symbols
+
+        eligible = eligible_learning_symbols(review_date)
+        if eligible:
+            captured = eligible
+        else:
+            captured = []
+    except Exception:
+        pass
+    try:
         from backend.trading.opening_workflow_accounting import summarize_opening_workflow_accounting
 
         accounting = summarize_opening_workflow_accounting(review_date)

@@ -8,7 +8,7 @@ Runtime display, /health, /status, help text, and tests should read from here
 from __future__ import annotations
 
 PRODUCT_NAME = 'AstraEdge'
-BUILD_STAGE = '52N'
+BUILD_STAGE = '52O'
 TELEGRAM_BUILD = f'{PRODUCT_NAME} {BUILD_STAGE}'
 RELEASE_CHANNEL = 'production'
 BUILD_DISPLAY = TELEGRAM_BUILD

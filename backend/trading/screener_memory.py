@@ -156,6 +156,9 @@ KNOWN_COMPANY_SYMBOL_MAP: dict[str, str] = {
     'tips music': 'TIPS',
     'abbott india': 'ABBOTINDIA',
     'esab india': 'ESABINDIA',
+    'bel': 'BEL',
+    'bharat electronics': 'BEL',
+    'bharat electronics limited': 'BEL',
 }
 
 
@@ -215,10 +218,42 @@ def _stock_display_name(company_name: str, symbol_key: str, *, has_real_symbol: 
     return symbol_key
 
 
+def resolve_screener_query_exact(query: str) -> dict[str, Any] | None:
+    """Exact symbol or company match only — no substring fallback."""
+    raw = strip_screener_query(query)
+    if not raw:
+        return None
+    rows = _load_jsonl(stock_memory_file_path(), limit=10000)
+    rows.sort(key=lambda r: str(r.get('imported_at') or ''), reverse=True)
+
+    key_norm = _normalize_symbol(raw)
+    name_norm = _normalize_company_match(raw)
+
+    alias = KNOWN_COMPANY_SYMBOL_MAP.get(name_norm) or KNOWN_COMPANY_SYMBOL_MAP.get(key_norm.lower())
+    if alias:
+        for row in rows:
+            if _normalize_symbol(row.get('symbol_key') or row.get('symbol')) == alias:
+                return row
+
+    for row in rows:
+        row_key = _normalize_symbol(row.get('symbol_key') or row.get('symbol'))
+        if row_key and row_key == key_norm:
+            return row
+    for row in rows:
+        if _normalize_company_match(row.get('company_name')) == name_norm:
+            return row
+    return None
+
+
 def resolve_screener_query(query: str) -> dict[str, Any] | None:
     """Resolve Screener memory row by symbol_key, symbol, or company name."""
     raw = strip_screener_query(query)
     if not raw:
+        return None
+    if _looks_like_nse_symbol(raw):
+        exact = resolve_screener_query_exact(raw)
+        if exact:
+            return exact
         return None
     rows = _load_jsonl(stock_memory_file_path(), limit=10000)
     rows.sort(key=lambda r: str(r.get('imported_at') or ''), reverse=True)

@@ -572,8 +572,21 @@ def daily_review_quality_buckets(
     generated = int(tradecard_counts.get('generated') or 0)
     filled = int(tradecard_counts.get('filled') or 0)
     resolved = int(tradecard_counts.get('T1') or 0) + int(tradecard_counts.get('T2') or 0) + int(tradecard_counts.get('SL') or 0)
-    opening_confirmed = int(opening_workflow.get('confirmed') or 0)
-    live_confirmed = max(int(tradecard_counts.get('valid_entry') or 0), opening_confirmed)
+    try:
+        from backend.trading.candidate_outcome_learning import (
+            eligible_learning_symbols,
+            has_eligible_quality_snapshots,
+        )
+
+        today = datetime.now(IST).date().isoformat()
+        eligible_symbols = eligible_learning_symbols(today)
+        has_eligible = has_eligible_quality_snapshots(today)
+    except Exception:
+        eligible_symbols = []
+        has_eligible = False
+        today = datetime.now(IST).date().isoformat()
+    opening_confirmed = int(opening_workflow.get('confirmed') or 0) if has_eligible else 0
+    live_confirmed = len(eligible_symbols) if has_eligible else 0
     if actual_learning_summary is None and not tradecard_counts_provided:
         try:
             from backend.analytics.actual_learning_resolver import load_latest_actual_learning_summary
@@ -626,8 +639,24 @@ def format_daily_review_quality_lines(
         actual_learning_summary=actual_learning_summary,
     )
     opening = b.get('opening_workflow') if isinstance(b.get('opening_workflow'), dict) else {}
-    learning_candidates = opening.get('learning_candidates') if isinstance(opening.get('learning_candidates'), list) else []
-    learning_candidate_text = ', '.join(learning_candidates[:6]) if learning_candidates else '-'
+    try:
+        from backend.trading.candidate_outcome_learning import (
+            eligible_learning_symbols,
+            has_eligible_quality_snapshots,
+        )
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        today = datetime.now(ZoneInfo('Asia/Kolkata')).date().isoformat()
+        has_eligible = has_eligible_quality_snapshots(today)
+        eligible = eligible_learning_symbols(today)
+        learning_candidate_text = (
+            ', '.join(eligible[:6]) if eligible else 'none — no eligible quality tradecards'
+        )
+    except Exception:
+        has_eligible = False
+        learning_candidate_text = 'none — no eligible quality tradecards'
+    confirmed_display = int(opening.get('confirmed') or 0) if has_eligible else 0
     pending_reasons = b.get('pending_reasons') if isinstance(b.get('pending_reasons'), dict) else {}
     reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
     lines = [
@@ -644,7 +673,7 @@ def format_daily_review_quality_lines(
         f"Final confirmation best: {opening.get('final_confirmation_best') or '-'}",
         (
             "Final state: "
-            f"confirmed {int(opening.get('confirmed') or 0)} · "
+            f"confirmed {confirmed_display} · "
             f"rejected {int(opening.get('rejected') or 0)} · "
             f"wait {int(opening.get('wait_pullback') or 0)} · "
             f"pullback {int(opening.get('pullback_only') or 0)}"
@@ -673,4 +702,11 @@ def format_daily_review_quality_lines(
     ]
     if b['tradecards_filled'] <= 0:
         lines.append('No tradecard fills today. Watchlist accuracy only.')
+    try:
+        from backend.trading.candidate_outcome_learning import format_tradecard_outcome_review_block
+
+        lines.append('')
+        lines.extend(format_tradecard_outcome_review_block())
+    except Exception:
+        pass
     return lines

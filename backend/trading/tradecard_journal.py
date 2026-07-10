@@ -800,15 +800,21 @@ def format_tradecard_review_section(
     session_date: str | None = None,
     provisional: bool = False,
 ) -> str:
-    summary = summarize_today_outcomes(session_date=session_date)
-    c = summary.get('counts') or {}
+    from backend.trading.candidate_outcome_learning import (
+        format_tradecard_outcome_review_block,
+        has_eligible_quality_snapshots,
+    )
+
     if provisional:
-        lines = [
+        return '\n'.join([
             '<b>Tradecards: provisional intraday review</b>',
             'Final EOD resolution will run after market close.',
-        ]
-    else:
-        lines = ['<b>Tradecards:</b>']
+        ])
+    if not has_eligible_quality_snapshots(session_date):
+        return '\n'.join(format_tradecard_outcome_review_block(session_date=session_date))
+    summary = summarize_today_outcomes(session_date=session_date)
+    c = summary.get('counts') or {}
+    lines = ['<b>Tradecards:</b>']
     lines.extend([
         f"Generated: {c.get('generated', 0)}",
         f"Filled: {c.get('filled', 0)}",
@@ -874,5 +880,16 @@ def format_tradecard_journal_telegram(*, session_date: str | None = None, limit:
 
 
 def format_tradecard_outcome_telegram(*, session_date: str | None = None) -> str:
+    from backend.trading.candidate_outcome_learning import has_eligible_quality_snapshots
+
+    day = session_date or _today()
+    if not has_eligible_quality_snapshots(day):
+        return '\n'.join([
+            '<b>📘 Tradecard Outcome</b>',
+            '',
+            'No eligible tradecard outcome today.',
+            'Reason: no quality tradecard crossed threshold 60.',
+            'Radar/watch-only candidates are not outcome candidates.',
+        ])
     sample_and_resolve_pending_tradecards(session_date=session_date, refresh=True)
     return format_tradecard_journal_telegram(session_date=session_date)

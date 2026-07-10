@@ -1,8 +1,8 @@
 """
-Candidate outcome learning — Phase 4B.18K / AstraEdge 52I.
+Candidate outcome learning — Phase 4B.18K / AstraEdge 52O.
 
-Primary learning set: 09:20 quality tradecards + 09:31 final confirmation.
-09:00 is premarket context only (excluded from main W/L stats).
+Primary learning set: quality tradecards at 09:20 / 09:25 / 09:31 + manual /tradecards.
+Radar/watch-only and below-threshold candidates are excluded from outcome learning.
 Paper/research only — no trade execution.
 """
 
@@ -29,8 +29,29 @@ LOSS_MAE_PCT = -1.0
 LOSS_CLOSE_PCT = -0.7
 
 AI_EXPLAIN_CAP = 4
-PRIMARY_STAGES = frozenset({'opening_0920', 'final_0931', 'manual_tradecards'})
+PRIMARY_STAGES = frozenset({
+    'opening_0920',
+    'opening_0925',
+    'final_0931',
+    'manual_tradecards',
+})
 EXCLUDED_FROM_MAIN_STATS = frozenset({'premarket_context', 'opening_0900'})
+
+INELIGIBLE_OUTCOME_STATES = frozenset({
+    'RADAR_ARMED',
+    'PULLBACK_ONLY_PLAN',
+    'CHASE_RISK',
+    'MOMENTUM_ONLY_WATCH',
+    'WATCH_ONLY',
+    'LOW_CONFIDENCE',
+    'REJECTED_LOW_SCORE',
+    'BLOCKED_STALE_DATA',
+    'REJECTED',
+    'PREVIOUS_SESSION_CONTEXT',
+    'NO_TRADE',
+    'WAIT_LIVE_CONFIRM',
+    'WAIT_FOR_PULLBACK',
+})
 
 OUTCOME_WIN = 'WIN'
 OUTCOME_LOSS = 'LOSS'
@@ -132,11 +153,55 @@ def _normalize_symbol(value: object) -> str:
     return str(value or '').strip().upper()
 
 
+def _board_scanner_stale(board: dict[str, Any] | None) -> bool:
+    data = board or {}
+    if data.get('reference_only') or data.get('session_stale'):
+        return True
+    if data.get('quality_tradecard_blocked') or data.get('live_confirmation_blocked'):
+        return True
+    if data.get('stale_after_auto_refresh'):
+        return True
+    scanner_status = str(data.get('scanner_freshness_status') or '').upper()
+    if scanner_status and scanner_status not in ('CURRENT', ''):
+        return True
+    macro = data.get('macro_shock') if isinstance(data.get('macro_shock'), dict) else {}
+    if macro.get('active') and str(macro.get('severity') or '').upper() in ('HIGH', 'CRITICAL'):
+        if data.get('quality_tradecard_blocked') or data.get('live_confirmation_blocked'):
+            return True
+    return False
+
+
+def outcome_learning_skip_reason(
+    row: dict[str, Any],
+    *,
+    board: dict[str, Any] | None = None,
+) -> str | None:
+    """Return skip bucket if row is not eligible for outcome learning."""
+    state = str(row.get('state') or '').upper()
+    if state in INELIGIBLE_OUTCOME_STATES:
+        return 'watch_only'
+    if int(row.get('score') or 0) < MIN_QUALITY_SCORE:
+        return 'below_threshold'
+    if _board_scanner_stale(board):
+        return 'stale_scanner'
+    return None
+
+
+def is_outcome_learning_eligible(
+    row: dict[str, Any],
+    *,
+    board: dict[str, Any] | None = None,
+) -> bool:
+    return outcome_learning_skip_reason(row, board=board) is None
+
+
 def filter_quality_candidates(
     candidates: list[dict[str, Any]],
     *,
     min_score: int = MIN_QUALITY_SCORE,
     max_count: int = MAX_QUALITY_CANDIDATES,
+    board: dict[str, Any] | None = None,
+    for_outcome_learning: bool = False,
 ) -> list[dict[str, Any]]:
     """Quality gate for /tradecards and scheduled tradecard lists."""
     kept: list[dict[str, Any]] = []
@@ -148,9 +213,86 @@ def filter_quality_candidates(
         score = int(row.get('score') or 0)
         if score < min_score:
             continue
+        if for_outcome_learning and outcome_learning_skip_reason(row, board=board):
+            continue
         kept.append(row)
     kept.sort(key=lambda r: int(r.get('score') or 0), reverse=True)
     return kept[:max_count]
+
+
+def _load_state() -> dict[str, Any]:
+    try:
+        if _state_path().is_file():
+            data = json.loads(_state_path().read_text(encoding='utf-8'))
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_state(state: dict[str, Any]) -> None:
+    try:
+        _state_path().write_text(json.dumps(state, indent=2), encoding='utf-8')
+    except OSError:
+        pass
+
+
+def record_outcome_learning_skip(reason: str, *, session_date: str | None = None) -> None:
+    day = session_date or _session_date()
+    state = _load_state()
+    if str(state.get('session_date') or '') != day:
+        state = {
+            'session_date': day,
+            'skip_counters': {'watch_only': 0, 'below_threshold': 0, 'stale_scanner': 0},
+        }
+    counters = state.setdefault('skip_counters', {})
+    if not isinstance(counters, dict):
+        counters = {'watch_only': 0, 'below_threshold': 0, 'stale_scanner': 0}
+        state['skip_counters'] = counters
+    key = str(reason or 'watch_only')
+    if key not in counters:
+        counters[key] = 0
+    counters[key] = int(counters.get(key) or 0) + 1
+    state['session_date'] = day
+    state['updated_at'] = _now_ist().isoformat()
+    _save_state(state)
+
+
+def skip_stats_for_session(session_date: str | None = None) -> dict[str, int]:
+    day = session_date or _session_date()
+    state = _load_state()
+    if str(state.get('session_date') or '') != day:
+        return {'watch_only': 0, 'below_threshold': 0, 'stale_scanner': 0}
+    counters = state.get('skip_counters') if isinstance(state.get('skip_counters'), dict) else {}
+    return {
+        'watch_only': int(counters.get('watch_only') or 0),
+        'below_threshold': int(counters.get('below_threshold') or 0),
+        'stale_scanner': int(counters.get('stale_scanner') or 0),
+    }
+
+
+def eligible_snapshots_for_session(session_date: str | None = None) -> list[dict[str, Any]]:
+    day = session_date or _session_date()
+    return [
+        s for s in _load_jsonl(_snapshots_path())
+        if str(s.get('session_date') or '')[:10] == day
+        and str(s.get('stage') or '') in PRIMARY_STAGES
+        and int(s.get('score') or 0) >= MIN_QUALITY_SCORE
+        and str(s.get('state') or '').upper() not in INELIGIBLE_OUTCOME_STATES
+    ]
+
+
+def has_eligible_quality_snapshots(session_date: str | None = None) -> bool:
+    return bool(eligible_snapshots_for_session(session_date))
+
+
+def eligible_learning_symbols(session_date: str | None = None) -> list[str]:
+    symbols = sorted({
+        _normalize_symbol(s.get('symbol'))
+        for s in eligible_snapshots_for_session(session_date)
+        if _normalize_symbol(s.get('symbol'))
+    })
+    return symbols
 
 
 def format_no_quality_tradecard_block() -> list[str]:
@@ -238,17 +380,27 @@ def capture_quality_snapshots(
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Persist quality-gated candidate snapshots for learning."""
+    day = str(board.get('source_session_date') or board.get('session_date') or _session_date(now))[:10]
     if stage in EXCLUDED_FROM_MAIN_STATS:
         return []
     if board.get('reference_only') or board.get('session_stale'):
+        record_outcome_learning_skip('stale_scanner', session_date=day)
         return []
     if board.get('quality_tradecard_blocked') or board.get('live_confirmation_blocked') or board.get('stale_after_auto_refresh'):
         print(f'[CANDIDATE_OUTCOME_LEARNING] stage={stage} skipped=stale_scanner', flush=True)
+        record_outcome_learning_skip('stale_scanner', session_date=day)
         return []
-    quality = filter_quality_candidates(candidates)
+    for row in candidates or []:
+        reason = outcome_learning_skip_reason(row, board=board)
+        if reason:
+            record_outcome_learning_skip(reason, session_date=day)
+    quality = filter_quality_candidates(
+        candidates,
+        board=board,
+        for_outcome_learning=True,
+    )
     if not quality and stage in PRIMARY_STAGES:
         print(f'[CANDIDATE_OUTCOME_LEARNING] stage={stage} quality=0', flush=True)
-    day = str(board.get('source_session_date') or board.get('session_date') or _session_date(now))[:10]
     existing_keys = {
         f"{s.get('session_date')}|{s.get('stage')}|{s.get('symbol')}"
         for s in _load_jsonl(_snapshots_path())
@@ -722,11 +874,7 @@ def resolve_candidate_outcomes(
 ) -> dict[str, Any]:
     """15:45 / close review — resolve primary-stage snapshots against EOD data."""
     day = session_date or _session_date()
-    snapshots = [
-        s for s in _load_jsonl(_snapshots_path())
-        if str(s.get('session_date') or '')[:10] == day
-        and str(s.get('stage') or '') in PRIMARY_STAGES
-    ]
+    snapshots = eligible_snapshots_for_session(day)
     existing = {
         str(o.get('snapshot_id') or ''): o
         for o in _load_jsonl(_outcomes_path())
@@ -865,17 +1013,17 @@ def learning_stats() -> dict[str, Any]:
     snapshots = _load_jsonl(_snapshots_path())
     outcomes = _load_jsonl(_outcomes_path())
     learning = _load_jsonl(_learning_path())
-    state = {}
-    try:
-        if _state_path().is_file():
-            state = json.loads(_state_path().read_text(encoding='utf-8'))
-    except Exception:
-        state = {}
+    state = _load_state()
+    day = _session_date()
+    skips = skip_stats_for_session(day)
     return {
         'candidate_snapshots': len(snapshots),
         'candidate_outcomes': len(outcomes),
         'candidate_learning_records': len(learning),
         'ai_explanations_used_today': int(state.get('ai_explanations_used') or 0),
+        'skipped_watch_only_today': skips.get('watch_only', 0),
+        'skipped_stale_scanner_today': skips.get('stale_scanner', 0),
+        'skipped_below_threshold_today': skips.get('below_threshold', 0),
     }
 
 
@@ -894,35 +1042,86 @@ def _group_outcomes_by_stage(outcomes: list[dict[str, Any]], stage: str) -> dict
     return groups
 
 
+def format_no_quality_snapshots_block(*, session_date: str | None = None) -> list[str]:
+    skips = skip_stats_for_session(session_date)
+    outcomes = [
+        o for o in _load_jsonl(_outcomes_path())
+        if str(o.get('session_date') or '')[:10] == (session_date or _session_date())
+    ]
+    groups = {OUTCOME_WIN: 0, OUTCOME_LOSS: 0, OUTCOME_NEUTRAL: 0, OUTCOME_PENDING: 0}
+    for row in outcomes:
+        bucket = str(row.get('outcome') or OUTCOME_PENDING)
+        if bucket in groups:
+            groups[bucket] += 1
+    return [
+        'No quality tradecard snapshots today.',
+        'Reason:',
+        '- no candidate crossed confidence 60, OR',
+        '- scanner was stale/blocked, OR',
+        '- candidates were radar/watch-only, OR',
+        '- final confirmation did not meet quality threshold.',
+        '',
+        'Outcome learning:',
+        f'won: {groups[OUTCOME_WIN]}',
+        f'lost: {groups[OUTCOME_LOSS]}',
+        f'neutral: {groups[OUTCOME_NEUTRAL]}',
+        f'pending: {groups[OUTCOME_PENDING]}',
+        f'skipped_watch_only: {skips.get("watch_only", 0)}',
+        f'skipped_below_threshold: {skips.get("below_threshold", 0)}',
+        f'skipped_stale_scanner: {skips.get("stale_scanner", 0)}',
+    ]
+
+
+def format_tradecard_outcome_review_block(*, session_date: str | None = None) -> list[str]:
+    lines = ['<b>Tradecard outcome review:</b>']
+    if not has_eligible_quality_snapshots(session_date):
+        lines.extend([
+            'No eligible quality tradecard snapshots today.',
+            'Radar/watchlist candidates were reference-only and not scored as tradecard wins/losses.',
+        ])
+        return lines
+    try:
+        from backend.trading.tradecard_journal import summarize_today_outcomes
+
+        summary = summarize_today_outcomes(session_date=session_date)
+        c = summary.get('counts') or {}
+        lines.extend([
+            f"Generated: {c.get('generated', 0)}",
+            f"Filled: {c.get('filled', 0)}",
+            f"T1: {c.get('T1', 0)} · T2: {c.get('T2', 0)} · SL: {c.get('SL', 0)}",
+            f"No fill: {c.get('no_fill', 0)} · Pending: {c.get('pending', 0)}",
+        ])
+        best = summary.get('best') or []
+        worst = summary.get('worst') or []
+        if best:
+            b = best[0]
+            lines.append(f"Best: {b.get('ticker')} — {b.get('outcome')} ({b.get('pct')}%)")
+        if worst:
+            w = worst[0]
+            lines.append(f"Worst: {w.get('ticker')} — {w.get('outcome')} ({w.get('pct')}%)")
+    except Exception:
+        lines.append('Eligible quality snapshots captured; journal summary unavailable.')
+    return lines
+
+
 def format_candidate_outcome_learning_block(
     *,
     session_date: str | None = None,
 ) -> list[str]:
     day = session_date or _session_date()
+    snapshots = eligible_snapshots_for_session(day)
     outcomes = [
         o for o in _load_jsonl(_outcomes_path())
         if str(o.get('session_date') or '')[:10] == day
     ]
-    if not outcomes:
-        snapshots = [
-            s for s in _load_jsonl(_snapshots_path())
-            if str(s.get('session_date') or '')[:10] == day
-        ]
-        if not snapshots:
-            return [
-                'No quality snapshots today.',
-                'Reason: 52I was not active during 09:20/09:31 capture window OR no candidate scored above 60.',
-                'Next capture: next market session 09:20/09:31.',
-            ]
+    if not snapshots and not outcomes:
+        return format_no_quality_snapshots_block(session_date=day)
+
+    if not outcomes and snapshots:
         return ['Candidate outcome learning: snapshots captured; EOD resolution pending.']
 
     lines = ['', '<b>Candidate Outcome Learning</b>', '']
-    state = {}
-    try:
-        if _state_path().is_file():
-            state = json.loads(_state_path().read_text(encoding='utf-8'))
-    except Exception:
-        pass
+    state = _load_state()
 
     for stage_label, stage_key in (
         ('09:20 Quality Tradecards', 'opening_0920'),
@@ -971,10 +1170,14 @@ def format_candidate_outcome_learning_block(
 def format_learn_today_telegram(*, session_date: str | None = None) -> str:
     """Read-only view — snapshots/resolution auto-run on schedule; no save side effects."""
     day = session_date or _session_date()
-    lines = [f'<b>/learn today — {day}</b>', '<i>Read-only — auto-captured at 09:20/09:31</i>', '']
+    lines = [
+        f'<b>/learn today — {day}</b>',
+        '<i>Read-only — auto-captured only from quality tradecards</i>',
+        '',
+    ]
     lines.extend(format_candidate_outcome_learning_block(session_date=day))
     lines.append('')
-    lines.append('<i>Paper/research only — simulated outcome, not real P&amp;L</i>')
+    lines.append('<i>Paper/research only — no simulated P&amp;L generated.</i>')
     return '\n'.join(lines)
 
 

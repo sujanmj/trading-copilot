@@ -23,6 +23,7 @@ OLD_BUILD_LABELS = (
     'AstraEdge 52K',
     'AstraEdge 52L',
     'AstraEdge 52M',
+    'AstraEdge 52N',
 )
 SMOKE_SCRIPTS = (
     'scripts/test_qa_smoke_isolation_4b18a.py',

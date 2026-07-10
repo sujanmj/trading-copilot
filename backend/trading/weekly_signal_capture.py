@@ -94,9 +94,15 @@ def capture_tradecard_signals(candidates: list[dict[str, Any]], *, board: dict[s
         or board.get('stale_after_auto_refresh')
     ):
         return
+    try:
+        from backend.trading.candidate_outcome_learning import is_outcome_learning_eligible
+    except Exception:
+        is_outcome_learning_eligible = None
     for row in candidates:
         score = int(row.get('score') or 0)
         if score < 60:
+            continue
+        if is_outcome_learning_eligible and not is_outcome_learning_eligible(row, board=board):
             continue
         sym = str(row.get('ticker') or row.get('symbol') or '').upper()
         if not sym:

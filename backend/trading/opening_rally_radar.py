@@ -1519,6 +1519,17 @@ def run_scheduled_early_tradecards_0925(
             candidates=ranked,
             timestamp=ts,
         )
+        try:
+            from backend.trading.candidate_outcome_learning import capture_quality_snapshots
+
+            capture_quality_snapshots(
+                board=board,
+                candidates=ranked,
+                stage='opening_0925',
+                now=ist_now,
+            )
+        except Exception:
+            pass
     return sent
 
 

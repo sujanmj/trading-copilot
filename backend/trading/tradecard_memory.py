@@ -251,6 +251,9 @@ def memory_stats() -> dict[str, Any]:
             'candidate_outcomes': 0,
             'candidate_learning_records': 0,
             'ai_explanations_used_today': 0,
+            'skipped_watch_only_today': 0,
+            'skipped_stale_scanner_today': 0,
+            'skipped_below_threshold_today': 0,
         })
     try:
         from backend.trading.longterm_snapshot_memory import longterm_memory_stats

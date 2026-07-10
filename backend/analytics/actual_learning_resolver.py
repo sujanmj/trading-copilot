@@ -1799,7 +1799,19 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
     explanation = data.get('explanation') or {}
     pending_reasons = data.get('pending_reasons') if isinstance(data.get('pending_reasons'), dict) else {}
     reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
-    return [
+    try:
+        from backend.trading.candidate_outcome_learning import (
+            format_tradecard_outcome_review_block,
+            has_eligible_quality_snapshots,
+        )
+    except Exception:
+        format_tradecard_outcome_review_block = None
+        has_eligible_quality_snapshots = lambda **_: False
+    lines: list[str] = []
+    if format_tradecard_outcome_review_block:
+        lines.extend(format_tradecard_outcome_review_block())
+        lines.append('')
+    lines.extend([
         f"Actual learning sample updated: {int(data.get('sample_updated') or 0)}",
         (
             'Watchlist resolved: '
@@ -1811,12 +1823,18 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
         ),
         f"Pending data: {int(data.get('pending_data') or 0)}",
         f"Pending data reasons: {reason_text}",
-        (
+    ])
+    if has_eligible_quality_snapshots():
+        lines.append(
             'Tradecard resolved/no-fill: '
             f"{int(tradecard.get('resolved') or 0)}/{int(tradecard.get('no_fill') or 0)}"
-        ),
-        f"Best signal today: {explanation.get('best_signal_today') or 'No resolved signal yet.'}",
-        f"Worst signal today: {explanation.get('worst_signal_today') or 'No resolved loss signal yet.'}",
+        )
+    lines.extend([
+        '',
+        '<b>Watchlist accuracy only:</b>',
+        f"Best watchlist signal: {explanation.get('best_signal_today') or 'No resolved signal yet.'}",
+        f"Worst watchlist signal: {explanation.get('worst_signal_today') or 'No resolved loss signal yet.'}",
         f"What to trust tomorrow: {explanation.get('trust_tomorrow') or 'Fresh price + volume confirmation.'}",
         f"What to reduce tomorrow: {explanation.get('reduce_tomorrow') or 'Stale or unresolved setups.'}",
-    ]
+    ])
+    return lines
