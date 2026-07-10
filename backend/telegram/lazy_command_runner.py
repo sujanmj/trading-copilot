@@ -443,6 +443,12 @@ def run_memory_only(args: str = '') -> dict[str, Any]:
 
     calib_mode = get_calibration_mode()
     sq_metrics = canonical
+    try:
+        from backend.trading.candidate_outcome_learning import format_market_memory_latest_outcomes_header
+
+        latest_outcomes_header = format_market_memory_latest_outcomes_header()
+    except Exception:
+        latest_outcomes_header = ['<b>Latest outcomes:</b>']
     lines = ['<b>🧠 Market memory</b>']
     if calib_mode == 'unresolved':
         from backend.analytics.unified_decision_engine import memory_outcome_status_lines, memory_outcome_warning
@@ -463,7 +469,7 @@ def run_memory_only(args: str = '') -> dict[str, Any]:
             'Source: cloud/runtime cache',
             f'Cache age: {cache_age_txt}',
             '',
-            '<b>Latest outcomes:</b>',
+            *latest_outcomes_header,
             '• None resolved yet — memory is tracking predictions for the next session.',
         ])
         lines.extend(block)
@@ -477,7 +483,7 @@ def run_memory_only(args: str = '') -> dict[str, Any]:
             'Hit rate: early sample only, do not trust yet.',
             f'Source: {source} · cache age: {cache_age_txt}',
             '',
-            '<b>Latest outcomes:</b>',
+            *latest_outcomes_header,
         ])
         if latest_outcomes:
             for row in latest_outcomes[:3]:
@@ -509,7 +515,7 @@ def run_memory_only(args: str = '') -> dict[str, Any]:
             f'Last resolved: {last_resolved}',
             f'Source: {source} · cache age: {cache_age_txt}',
             '',
-            '<b>Latest outcomes:</b>',
+            *latest_outcomes_header,
         ])
         if latest_outcomes:
             for row in latest_outcomes[:3]:

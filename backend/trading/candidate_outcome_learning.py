@@ -1085,6 +1085,29 @@ def format_legacy_tradecard_journal_lines(counts: dict[str, Any] | None = None) 
     ]
 
 
+def candidate_outcomes_count_for_session(session_date: str | None = None) -> int:
+    day = session_date or _session_date()
+    return sum(
+        1
+        for o in _load_jsonl(_outcomes_path())
+        if str(o.get('session_date') or '')[:10] == day
+    )
+
+
+def format_market_memory_latest_outcomes_header(*, session_date: str | None = None) -> list[str]:
+    """Label market-memory outcome rows so they are not confused with quality tradecard learning."""
+    day = session_date or _session_date()
+    outcome_count = candidate_outcomes_count_for_session(day)
+    if has_eligible_quality_snapshots(day) and outcome_count > 0:
+        return ['<b>Latest tradecard outcomes:</b>']
+    if not has_eligible_quality_snapshots(day):
+        return [
+            '<b>Latest reference outcomes:</b>',
+            'not used for candidate outcome learning',
+        ]
+    return ['<b>Latest outcomes:</b>']
+
+
 def format_tradecard_outcome_review_block(*, session_date: str | None = None) -> list[str]:
     lines = ['<b>Tradecard outcome review:</b>']
     if not has_eligible_quality_snapshots(session_date):

@@ -58,7 +58,7 @@ def main() -> int:
             return _fail('/memory missing percent hit/win rate')
         if 'Resolved outcomes:' not in memory_text or 'Pending outcomes:' not in memory_text:
             return _fail('/memory ready sample missing resolved/pending counts')
-    if 'Latest outcomes:' not in memory_text:
+    if not re.search(r'Latest (outcomes|reference outcomes|tradecard outcomes):', memory_text):
         return _fail('/memory missing latest outcomes section')
     if '—' in memory_text and 'TEXRAIL' not in memory_text and 'LOSS' not in memory_text:
         if 'No recent outcomes' not in memory_text:
