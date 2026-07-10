@@ -689,7 +689,15 @@ def build_close_brief_text() -> str:
         lines.append(format_tradecard_review_section(provisional=provisional))
         if not provisional:
             counts = summarize_today_outcomes().get('counts') or {}
-            lines.append(_tradecard_resolution_line(counts))
+            from backend.trading.candidate_outcome_learning import (
+                format_legacy_tradecard_journal_lines,
+                has_eligible_quality_snapshots,
+            )
+
+            if has_eligible_quality_snapshots():
+                lines.append(_tradecard_resolution_line(counts))
+            else:
+                lines.extend(format_legacy_tradecard_journal_lines(counts))
         lines.append('')
     except Exception:
         pass

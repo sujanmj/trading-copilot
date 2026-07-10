@@ -131,7 +131,8 @@ def test_close_runs_postmarket_catchup_and_resolves_no_fill() -> int:
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8], patches[9], patches[10], \
              patch.object(tcj, '_today', return_value='2026-06-29'), \
              patch.object(tcj, '_now_iso', return_value='2026-06-29T15:55:00+05:30'), \
-             patch.object(tcj, '_load_market_data_with_optional_refresh', return_value=market_data):
+             patch.object(tcj, '_load_market_data_with_optional_refresh', return_value=market_data), \
+             patch('backend.trading.candidate_outcome_learning.has_eligible_quality_snapshots', return_value=False):
             text = build_close_brief_text()
 
         if catchup_calls != ['called']:
@@ -146,11 +147,18 @@ def test_close_runs_postmarket_catchup_and_resolves_no_fill() -> int:
             return _fail('/close fresh top pack must not contain stale internal Market payload')
         if 'Market payload' not in text or 'Mode: <code>' not in text:
             return _fail('/close should include fresh post-market Market payload source')
-        for marker in ('Generated: 1', 'Filled: 0', 'No fill: 1', 'Pending: 0'):
-            if marker not in text:
-                return _fail(f'missing tradecard EOD marker: {marker}')
-        if 'Tradecard resolution: no fill 1 / pending 0 / resolved 0' not in text:
-            return _fail('tradecard resolution summary missing no-fill result')
+        if 'Tradecard outcome review:' not in text:
+            return _fail('missing tradecard outcome review block for no-eligible day')
+        if text.count('Tradecard outcome review:') != 1:
+            return _fail('tradecard outcome review must appear only once in /close')
+        if 'Legacy/reference tradecard journal:' not in text:
+            return _fail('missing legacy/reference tradecard journal block')
+        if 'No-fill/reference records: 1' not in text:
+            return _fail('missing no-fill/reference record count')
+        if 'Not used for candidate outcome learning.' not in text:
+            return _fail('missing not-used-for-outcome-learning label')
+        if 'Tradecard resolution: no fill 1 / pending 0 / resolved 0' in text:
+            return _fail('must not show tradecard resolution summary on no-eligible day')
 
         summary = tcj.summarize_today_outcomes(session_date='2026-06-29')
         counts = summary.get('counts') or {}

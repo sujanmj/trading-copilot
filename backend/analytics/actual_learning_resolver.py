@@ -1800,18 +1800,10 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
     pending_reasons = data.get('pending_reasons') if isinstance(data.get('pending_reasons'), dict) else {}
     reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
     try:
-        from backend.trading.candidate_outcome_learning import (
-            format_tradecard_outcome_review_block,
-            has_eligible_quality_snapshots,
-        )
+        from backend.trading.candidate_outcome_learning import has_eligible_quality_snapshots
     except Exception:
-        format_tradecard_outcome_review_block = None
         has_eligible_quality_snapshots = lambda **_: False
-    lines: list[str] = []
-    if format_tradecard_outcome_review_block:
-        lines.extend(format_tradecard_outcome_review_block())
-        lines.append('')
-    lines.extend([
+    lines: list[str] = [
         f"Actual learning sample updated: {int(data.get('sample_updated') or 0)}",
         (
             'Watchlist resolved: '
@@ -1823,7 +1815,7 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
         ),
         f"Pending data: {int(data.get('pending_data') or 0)}",
         f"Pending data reasons: {reason_text}",
-    ])
+    ]
     if has_eligible_quality_snapshots():
         lines.append(
             'Tradecard resolved/no-fill: '

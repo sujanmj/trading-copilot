@@ -1072,6 +1072,19 @@ def format_no_quality_snapshots_block(*, session_date: str | None = None) -> lis
     ]
 
 
+def format_legacy_tradecard_journal_lines(counts: dict[str, Any] | None = None) -> list[str]:
+    """Journal rows that are not eligible quality tradecard outcome learning."""
+    c = counts or {}
+    reference_records = int(c.get('no_fill') or 0) + int(c.get('pending') or 0)
+    if reference_records <= 0:
+        return []
+    return [
+        '<b>Legacy/reference tradecard journal:</b>',
+        f'No-fill/reference records: {reference_records}',
+        'Not used for candidate outcome learning.',
+    ]
+
+
 def format_tradecard_outcome_review_block(*, session_date: str | None = None) -> list[str]:
     lines = ['<b>Tradecard outcome review:</b>']
     if not has_eligible_quality_snapshots(session_date):

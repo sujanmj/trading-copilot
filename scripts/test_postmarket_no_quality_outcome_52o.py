@@ -284,8 +284,8 @@ def test_close_lines_separate_watchlist() -> int:
     ):
         lines = format_actual_learning_close_lines(summary)
     text = '\n'.join(lines)
-    if 'Tradecard outcome review:' not in text:
-        return _fail('close must include tradecard outcome review block')
+    if 'Tradecard outcome review:' in text:
+        return _fail('actual learning close lines must not duplicate tradecard outcome review')
     if 'Watchlist accuracy only:' not in text:
         return _fail('close must label watchlist accuracy only')
     if 'Best watchlist signal:' not in text:
