@@ -32,8 +32,8 @@ def _help_texts(command: str) -> list[str]:
 
 
 def test_default_help_compact() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.help_text import format_help_index
+    from scripts.test_build_helpers import assert_canonical_build, expected_help_build_line
 
     texts = _help_texts('/help')
     if len(texts) != 1:
@@ -49,12 +49,13 @@ def test_default_help_compact() -> int:
         '/help investor',
         '/help weekly',
         '/help patterns',
-        'Build: AstraEdge 52M',
+        expected_help_build_line(),
     ):
         if marker not in text:
             return _fail(f'compact /help missing {marker!r}')
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52M':
-        return _fail(f'expected build 52M, got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
     return 0
 
 

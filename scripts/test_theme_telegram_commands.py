@@ -75,13 +75,15 @@ def main() -> int:
             if 'Theme Scan' not in scan_text:
                 return _fail('/theme scan infra missing title')
 
+            from scripts.test_build_helpers import expected_build_label
+
             health = handle_analysis_command('/health', 'test', dry_run=True)
-            if 'AstraEdge 50C' not in _text(health):
-                return _fail('/health missing AstraEdge 50C')
+            if expected_build_label() not in _text(health):
+                return _fail(f'/health missing {expected_build_label()!r}')
 
             status = handle_analysis_command('/status', 'test', dry_run=True)
-            if 'AstraEdge 50C' not in _text(status):
-                return _fail('/status missing AstraEdge 50C build line')
+            if expected_build_label() not in _text(status):
+                return _fail(f'/status missing {expected_build_label()!r} build line')
         finally:
             tb.BASKETS_FILE = orig_baskets
             tb.CATALYST_LOG_FILE = orig_log

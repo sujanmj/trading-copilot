@@ -20,11 +20,12 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, handle_analysis_command, parse_command
+    from scripts.test_build_helpers import assert_canonical_build
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50C':
-        return _fail(f'expected AstraEdge 50C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
 
     for forbidden in ('/feed news', '/myfeed add', '/myfeed news', '/ feed'):
         if forbidden in HELP_TEXT:

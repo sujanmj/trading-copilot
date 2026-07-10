@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+from backend.config.build_info import TELEGRAM_BUILD
 from backend.qa.smoke_mode import QA_SMOKE_ENV
 from backend.utils.config import DATA_DIR, PROJECT_ROOT
 
@@ -302,7 +302,7 @@ def run_qa_full() -> dict[str, Any]:
 def get_qa_status() -> str:
     lines = [
         'QA — AstraEdge',
-        f'Build: {ASTRAEDGE_TELEGRAM_BUILD}',
+        f'Build: {TELEGRAM_BUILD}',
         'Commands:',
         '/qa smoke — fast safe checks',
         '/qa full — safe regression suite',

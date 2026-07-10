@@ -192,10 +192,11 @@ def test_0925_no_quality_does_not_force_0931_confirmation() -> int:
 
 
 def test_build_label_52l() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
+    from scripts.test_build_helpers import assert_canonical_build
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52M' or ASTRAEDGE_BUILD_STAGE != '52M':
-        return _fail(f'expected AstraEdge 52M got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
     return 0
 
 

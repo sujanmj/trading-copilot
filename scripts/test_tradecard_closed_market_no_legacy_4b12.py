@@ -136,10 +136,11 @@ def test_closed_market_empty_board_no_symbol() -> int:
 
 
 def test_build_label_51m() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+    from scripts.test_build_helpers import assert_canonical_build
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52H':
-        return _fail(f'expected AstraEdge 52H got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
     return 0
 
 

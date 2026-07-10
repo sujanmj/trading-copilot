@@ -14,13 +14,17 @@ import os
 
 STAGE_MARKER = 'LOCAL_STAGE_46C_SAFE_RAILWAY_CONTROL'
 RAILWAY_TELEGRAM_HANDLER_STAGE = 'RAILWAY_STAGE_46E_MONOLITH_TELEGRAM'
-ASTRAEDGE_TELEGRAM_BUILD = 'AstraEdge 52M'
-ASTRAEDGE_BUILD_STAGE = '52M'
 
-
-def get_astraedge_build_stage() -> str:
-    """Short deployment stage id shared by /status, build-info, and smoke checks."""
-    return ASTRAEDGE_BUILD_STAGE
+from backend.config.build_info import (
+    BUILD_DISPLAY,
+    BUILD_STAGE as ASTRAEDGE_BUILD_STAGE,
+    BUILD_STAGE,
+    PRODUCT_NAME,
+    RELEASE_CHANNEL,
+    TELEGRAM_BUILD as ASTRAEDGE_TELEGRAM_BUILD,
+    TELEGRAM_BUILD,
+    get_build_stage as get_astraedge_build_stage,
+)
 
 LOCAL_SAFE_DEFAULTS: dict[str, str] = {
     'DISABLE_TELEGRAM': '1',

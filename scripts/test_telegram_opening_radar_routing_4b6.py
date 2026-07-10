@@ -24,7 +24,6 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.lazy_command_runner import format_canonical_health_text
     from backend.telegram.premarket_scheduler import format_schedule_text
     from backend.telegram.help_text import format_help_section
@@ -38,9 +37,11 @@ def main() -> int:
         REMOVED_OPENING_ALIAS_MESSAGE,
         normalize_parsed_command,
     )
+    from scripts.test_build_helpers import assert_canonical_build, expected_build_label
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51O':
-        return _fail(f'expected AstraEdge 51O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
     if REMOVED_OPENING_ALIAS_MESSAGE != REDIRECT:
         return _fail('redirect message mismatch')
 
@@ -98,8 +99,8 @@ def main() -> int:
         return _fail('/schedule must mention /gainers')
 
     health_text = format_canonical_health_text()
-    if 'AstraEdge 51O' not in health_text:
-        return _fail('/health must show AstraEdge 51O')
+    if expected_build_label() not in health_text:
+        return _fail(f'/health must show {expected_build_label()!r}')
 
     cmd_names = {row.get('command') for row in TELEGRAM_BOT_COMMANDS}
     if 'opening' in cmd_names:

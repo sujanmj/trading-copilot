@@ -1095,7 +1095,7 @@ def run_myfeed_only(args: str = '') -> dict[str, Any]:
 def format_canonical_status_text() -> str:
     """Canonical /status — same path as telegram_listener._cmd_status_body."""
     try:
-        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+        from backend.config.build_info import TELEGRAM_BUILD
         from backend.runtime.runtime_state import get_runtime_state
         from backend.telegram.formatting.telegram_formatter import format_for_command, format_status
         from backend.trading.ist_clock import format_clock_status_lines
@@ -1103,9 +1103,9 @@ def format_canonical_status_text() -> str:
         rs = get_runtime_state(force_refresh=True)
         msg = format_for_command(format_status(rs), 'status')
         clock_block = '\n'.join(format_clock_status_lines())
-        return f'{msg}\n\n<b>Clock</b>\n{clock_block}\nTelegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>'
+        return f'{msg}\n\n<b>Clock</b>\n{clock_block}\nTelegram build: <code>{TELEGRAM_BUILD}</code>'
     except Exception as exc:
-        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+        from backend.config.build_info import TELEGRAM_BUILD
         from backend.trading.ist_clock import format_clock_status_lines
 
         clock_block = '\n'.join(format_clock_status_lines())
@@ -1113,7 +1113,7 @@ def format_canonical_status_text() -> str:
             '<b>📡 System Status</b>\n'
             f'<i>Runtime state unavailable ({str(exc)[:80]})</i>\n\n'
             f'<b>Clock</b>\n{clock_block}\n'
-            f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>'
+            f'Telegram build: <code>{TELEGRAM_BUILD}</code>'
         )
 
 
@@ -1180,7 +1180,7 @@ def run_canonical_full_refresh(*, timeout_sec: int | None = None) -> dict[str, A
 
 def format_canonical_health_text() -> str:
     """Canonical /health for production analysis bot."""
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+    from backend.config.build_info import TELEGRAM_BUILD
     from backend.trading.ist_clock import format_clock_status_lines
 
     lines = [
@@ -1196,7 +1196,7 @@ def format_canonical_health_text() -> str:
         lines.append(f"Data preserved: {'yes' if data_preserved() else 'check'}")
     except Exception as exc:
         lines.append(f'Status: degraded ({str(exc)[:80]})')
-    lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
+    lines.append(f'Telegram build: <code>{TELEGRAM_BUILD}</code>')
     lines.extend(['', '<b>Clock</b>'])
     lines.extend(format_clock_status_lines())
     return '\n'.join(lines)

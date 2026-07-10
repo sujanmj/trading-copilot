@@ -30,16 +30,17 @@ def _run(script: str, token: str) -> int | None:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_EXCLUDED, FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.response_format import format_status_text, strip_stage_markers
+    from scripts.test_build_helpers import assert_canonical_build, expected_health_build_line
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50C':
-        return _fail(f'expected AstraEdge 50C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
 
     status = strip_stage_markers(format_status_text())
-    if 'Telegram build: <code>AstraEdge 50C</code>' not in status:
-        return _fail('/status missing AstraEdge 50C build label')
+    if expected_health_build_line() not in status:
+        return _fail(f'/status missing {expected_health_build_line()!r} build label')
     for needle in FORBIDDEN:
         if needle in status:
             return _fail(f'/status contains forbidden stale wording: {needle!r}')

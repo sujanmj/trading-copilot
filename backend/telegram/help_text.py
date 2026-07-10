@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+from backend.config.build_info import TELEGRAM_BUILD
 
 HELP_HEADER = '<b>🤖 AstraEdge Telegram</b>'
 
@@ -207,7 +207,7 @@ Use section help to avoid Telegram truncation.
 <b>Full:</b>
 /help full — send complete help in multiple safe parts
 
-Build: {ASTRAEDGE_TELEGRAM_BUILD}"""
+Build: {TELEGRAM_BUILD}"""
 
 
 def format_help_section(section: str) -> str:
@@ -221,7 +221,7 @@ def format_help_section(section: str) -> str:
         )
     label = SECTION_LABELS.get(key, key.title())
     body = '\n\n'.join(HELP_BLOCKS[block_key] for block_key in block_keys)
-    return f'<b>🤖 AstraEdge Help — {label}</b>\n\n{body}\n\nBuild: {ASTRAEDGE_TELEGRAM_BUILD}'
+    return f'<b>🤖 AstraEdge Help — {label}</b>\n\n{body}\n\nBuild: {TELEGRAM_BUILD}'
 
 
 def _pack_sections(sections: list[str], max_chars: int) -> list[str]:
@@ -257,7 +257,7 @@ def format_help_full_parts(*, max_chars: int = HELP_MAX_PART_CHARS) -> list[str]
             header = f'{HELP_HEADER}\n\n{header}'
         text = header + body
         if index == total:
-            text += f'\n\nBuild: {ASTRAEDGE_TELEGRAM_BUILD}'
+            text += f'\n\nBuild: {TELEGRAM_BUILD}'
         parts.append(text)
     return parts
 

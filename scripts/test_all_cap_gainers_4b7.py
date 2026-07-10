@@ -431,12 +431,13 @@ def test_format_opening_radar_action_gainer_states() -> int:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.trading.all_cap_gainers import STAGE as GAINER_STAGE
     from backend.trading.opening_rally_radar import STAGE as RADAR_STAGE
+    from scripts.test_build_helpers import assert_canonical_build
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51O':
-        return _fail(f'expected AstraEdge 51O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
     if GAINER_STAGE != '4B.12' or RADAR_STAGE != '4B.12':
         return _fail(f'expected stage 4B.12 got gainer={GAINER_STAGE!r} radar={RADAR_STAGE!r}')
 

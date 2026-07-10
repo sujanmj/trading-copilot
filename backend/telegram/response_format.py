@@ -1828,13 +1828,13 @@ def format_status_text() -> str:
     lines = ['<b>📡 Status</b>']
     telegram_enabled = False
     try:
-        from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+        from backend.config.build_info import TELEGRAM_BUILD
         from backend.utils.config import IS_LOCAL_DEV, LOCAL_ONLY
         from backend.utils.telegram_guard import is_telegram_listener_enabled, is_telegram_send_enabled
 
         mode = 'local' if (LOCAL_ONLY or IS_LOCAL_DEV) else 'railway/production'
         lines.append(f'Mode: <code>{mode}</code>')
-        lines.append(f'Telegram build: <code>{ASTRAEDGE_TELEGRAM_BUILD}</code>')
+        lines.append(f'Telegram build: <code>{TELEGRAM_BUILD}</code>')
         listener_on = is_telegram_listener_enabled()
         sends_on = is_telegram_send_enabled()
         telegram_enabled = listener_on and sends_on

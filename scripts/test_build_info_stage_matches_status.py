@@ -17,15 +17,17 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
+    from backend.config.local_safe_mode import get_astraedge_build_stage
     from backend.telegram.lazy_command_runner import format_canonical_status_text
+    from scripts.test_build_helpers import assert_canonical_build, expected_build_label
+
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
 
     stage = get_astraedge_build_stage()
-    if stage != '52M' or ASTRAEDGE_BUILD_STAGE != '52M':
-        return _fail(f'expected build stage 52M got {stage!r}')
-
     status = format_canonical_status_text()
-    if ASTRAEDGE_TELEGRAM_BUILD not in status:
+    if expected_build_label() not in status:
         return _fail('/status missing Telegram build label')
 
     try:

@@ -29,12 +29,13 @@ def _run(script: str, token: str) -> int | None:
 
 
 def main() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.response_format import format_aihub_full, strip_stage_markers
+    from scripts.test_build_helpers import assert_canonical_build
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 50C':
-        return _fail(f'expected AstraEdge 50C got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
     if len(FULL_SNAPSHOT_SEQUENCE) != 32:
         return _fail(f'/full must stay 32 steps, got {len(FULL_SNAPSHOT_SEQUENCE)}')
 

@@ -191,10 +191,11 @@ def test_multi_day_stale_still_blocked() -> int:
 
 
 def test_build_label_51l() -> int:
-    from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
+    from scripts.test_build_helpers import assert_canonical_build
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 51O':
-        return _fail(f'expected AstraEdge 51O got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    err = assert_canonical_build(_fail)
+    if err:
+        return err
     return 0
 
 
