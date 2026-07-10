@@ -259,18 +259,22 @@ def test_tradecard_pattern_section_hidden_when_absent() -> int:
 
 def test_tradecards_reason_includes_pattern_phrase() -> int:
     from backend.telegram.response_format import format_tradecards_telegram
+    from scripts.test_board_fixtures import apply_live_board_overlay, quality_ranked_candidate
 
-    board = {
-        'ranked_candidates': [{
-            'ticker': 'WIPRO',
-            'score': 74,
-            'state': 'TRADECARD_CANDIDATE',
-            'why': ['ascending triangle near breakout', 'above VWAP'],
-            'gainer_bucket': 'large cap',
-        }],
+    board = apply_live_board_overlay({
+        'ranked_candidates': [
+            quality_ranked_candidate(
+                ticker='WIPRO',
+                score=74,
+                state='TRADECARD_CANDIDATE',
+                why=['ascending triangle near breakout', 'above VWAP'],
+                gainer_bucket='large cap',
+            ),
+        ],
         'session_date': '2026-07-04',
         'generated_at': '2026-07-04T09:30:00+05:30',
-    }
+        'time_ist': '09:30',
+    })
     with patch('backend.telegram.response_format._persist_tradecards_decision_memory'):
         text = format_tradecards_telegram(board=board)
     if 'ascending triangle' not in text.lower():

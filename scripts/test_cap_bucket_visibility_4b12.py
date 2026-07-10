@@ -55,19 +55,24 @@ def _row(ticker: str, chg: float, vol: float = 1.0, **extra) -> dict:
     return base
 
 
-def _build_board(now: datetime, scanner: dict) -> dict:
+def _build_board(now: datetime, scanner: dict, *, live: bool = False) -> dict:
     from backend.trading.opening_rally_radar import build_opening_rally_board
 
     with patch('backend.trading.opening_rally_radar._live_registry', return_value={}), \
          patch('backend.trading.opening_rally_radar._previous_session_movers', return_value=set()), \
          patch('backend.trading.opening_rally_radar._theme_matches_for_ticker', return_value=[]), \
          patch('backend.trading.opening_rally_radar._load_json', return_value={}):
-        return build_opening_rally_board(
+        board = build_opening_rally_board(
             now=now,
             catalyst_payload={},
             scanner_payload=scanner,
             premarket_payload={},
         )
+    if live:
+        from scripts.test_board_fixtures import apply_live_board_overlay
+
+        return apply_live_board_overlay(board)
+    return board
 
 
 def test_tradecards_show_cap_bucket_inline() -> int:
@@ -78,7 +83,7 @@ def test_tradecards_show_cap_bucket_inline() -> int:
         _row('SONACOMS', 5.0, 0.9, price=650),
         _row('COFORGE', 4.5, 1.1, price=5200),
     )
-    board = _build_board(_dt(9, 25), scanner)
+    board = _build_board(_dt(9, 25), scanner, live=True)
     text = format_tradecards_telegram(board=board)
     if 'TOP CANDIDATES' not in text:
         return _fail('/tradecards must show live TOP CANDIDATES header')
@@ -98,6 +103,7 @@ def test_tradecard_shows_cap_bucket_header() -> int:
     board = _build_board(
         _dt(9, 25),
         _scanner(_row('PERSISTENT', 3.8, 1.0, price=4800), _row('COFORGE', 4.2, 1.1, price=5200)),
+        live=True,
     )
     sync = {
         'selected': 'PERSISTENT',
@@ -142,7 +148,7 @@ def test_tradecard_shows_cap_bucket_header() -> int:
 def test_radar_shows_cap_bucket_inline() -> int:
     from backend.telegram.response_format import format_opening_radar_telegram
 
-    board = _build_board(_dt(9, 20), _scanner(_row('COFORGE', 4.5, 1.0, price=5200)))
+    board = _build_board(_dt(9, 20), _scanner(_row('COFORGE', 4.5, 1.0, price=5200)), live=True)
     text = format_opening_radar_telegram(board=board)
     if 'COFORGE' not in text:
         return _fail('/radar must list COFORGE')
@@ -154,21 +160,23 @@ def test_radar_shows_cap_bucket_inline() -> int:
 def test_unknown_cap_bucket_no_crash() -> int:
     from backend.telegram.response_format import format_tradecards_telegram
     from backend.trading.all_cap_gainers import format_cap_bucket_header, format_cap_bucket_inline
+    from scripts.test_board_fixtures import apply_live_board_overlay, quality_ranked_candidate
 
-    board = {
+    board = apply_live_board_overlay({
         'ranked_candidates': [
-            {
-                'ticker': 'MYSTERY',
-                'state': 'RADAR_ARMED',
-                'score': 40,
-                'why': ['theme watch'],
-            },
+            quality_ranked_candidate(
+                ticker='MYSTERY',
+                score=62,
+                state='RADAR_ARMED',
+                why=['theme watch'],
+            ),
         ],
         'time_ist': '09:20',
         'phase': 'OPEN',
-        'data_status': 'live',
-    }
-    with patch('backend.trading.all_cap_gainers._screener_cap_bucket_exact', return_value=''):
+        'session_date': '2026-07-01',
+    })
+    with patch('backend.trading.all_cap_gainers._screener_cap_bucket_exact', return_value=''), \
+         patch('backend.telegram.response_format._persist_tradecards_decision_memory'):
         text = format_tradecards_telegram(board=board)
     if 'Unknown cap' not in text:
         return _fail('missing gainer_bucket must render Unknown cap inline')
@@ -185,9 +193,9 @@ def test_mixed_top10_not_grouped() -> int:
     scanner = _scanner(
         _row('PERSISTENT', 3.8, 1.0, price=4800),
         _row('SONACOMS', 5.0, 0.9, price=650),
-        _row('RAILTEL', 4.0, 1.0, price=320),
+        _row('COFORGE', 4.5, 1.1, price=5200),
     )
-    board = _build_board(_dt(9, 25), scanner)
+    board = _build_board(_dt(9, 25), scanner, live=True)
     text = format_tradecards_telegram(board=board)
     lines = [ln for ln in text.splitlines() if ln.strip()[:1].isdigit() and '. <b>' in ln]
     if len(lines) < 2:
@@ -210,6 +218,7 @@ def test_mixed_top10_not_grouped() -> int:
 
 def test_ranking_unchanged() -> int:
     from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
+    from scripts.test_board_fixtures import apply_live_board_overlay
 
     scanner = _scanner(
         _row('COFORGE', 4.5, 1.1, price=5200),
@@ -217,8 +226,11 @@ def test_ranking_unchanged() -> int:
     )
     with patch('backend.trading.opening_rally_radar._live_registry', return_value={}), \
          patch('backend.trading.opening_rally_radar._previous_session_movers', return_value=set()), \
-         patch('backend.trading.opening_rally_radar._theme_matches_for_ticker', return_value=[]):
-        board = build_opening_rally_board(now=_dt(9, 25), catalyst_payload={}, scanner_payload=scanner)
+         patch('backend.trading.opening_rally_radar._theme_matches_for_ticker', return_value=[]), \
+         patch('backend.trading.opening_rally_radar._load_json', return_value={}):
+        board = apply_live_board_overlay(
+            build_opening_rally_board(now=_dt(9, 25), catalyst_payload={}, scanner_payload=scanner),
+        )
     best, score, _ = pick_best_opening_tradecard(board)
     ranked = [r.get('ticker') for r in board.get('ranked_candidates') or [] if r.get('state') != 'REJECTED']
     if not best or score <= 0:
