@@ -25,6 +25,11 @@ FRESHNESS_PREVIOUS_SESSION = 'PREVIOUS_SESSION'
 FRESHNESS_STALE = 'STALE'
 FRESHNESS_MISSING = 'MISSING'
 
+TRADECARDS_WAITING_SCANNER = 'WAITING LIVE SCANNER'
+TRADECARDS_AFTER_HOURS = 'NEXT-SESSION WATCH / reference only'
+TRADECARDS_READY_NO_QUALITY = 'CURRENT · no quality candidate above 60'
+TRADECARDS_READY = 'CURRENT'
+
 LIVE_SCANNER_MAX_AGE_MINUTES = 10
 LIVE_SCANNER_MIN_IST = time(9, 15)
 OPENING_RADAR_IST = time(9, 20)
@@ -97,6 +102,67 @@ def _source_record(
         'freshness_status': freshness_status,
         'detail': detail,
     }
+
+
+def _evaluate_tradecards_freshness_status(
+    scanner_record: dict[str, Any],
+    *,
+    board: dict[str, Any] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Tradecards readiness for /refresh status — derived from scanner + lifecycle."""
+    from backend.trading.opening_session_freshness import resolve_market_lifecycle
+
+    ist = _now_ist(now)
+    lifecycle = str(resolve_market_lifecycle(ist) or '')
+    scanner_status = str(scanner_record.get('freshness_status') or FRESHNESS_MISSING)
+    data = board or {}
+
+    if lifecycle in ('AFTER_HOURS', 'POST_MARKET', 'WEEKEND'):
+        return _source_record(
+            freshness_status=TRADECARDS_AFTER_HOURS,
+            market_session_date=_session_date(ist),
+            detail='after-hours reference watch only',
+        )
+
+    if scanner_status in (FRESHNESS_STALE, FRESHNESS_MISSING):
+        return _source_record(
+            freshness_status=TRADECARDS_WAITING_SCANNER,
+            market_session_date=_session_date(ist),
+            detail=f'scanner {scanner_status.lower()}',
+        )
+
+    live_ready = scanner_status == FRESHNESS_CURRENT or bool(data.get('live_scanner_ready'))
+    if not live_ready or data.get('scanner_stale') or data.get('quality_tradecard_blocked'):
+        return _source_record(
+            freshness_status=TRADECARDS_WAITING_SCANNER,
+            market_session_date=_session_date(ist),
+            detail='scanner not ready for quality tradecards',
+        )
+
+    if data.get('ranked_candidates'):
+        try:
+            from backend.trading.candidate_outcome_learning import filter_quality_candidates
+
+            candidates = [
+                r for r in (data.get('ranked_candidates') or [])
+                if str(r.get('state') or '').upper() != 'REJECTED'
+            ]
+            if filter_quality_candidates(candidates):
+                return _source_record(
+                    freshness_status=TRADECARDS_READY,
+                    last_updated=_parse_ts(data.get('generated_at')),
+                    market_session_date=_session_date(ist),
+                    detail='quality candidates available',
+                )
+        except Exception:
+            pass
+
+    return _source_record(
+        freshness_status=TRADECARDS_READY_NO_QUALITY,
+        market_session_date=_session_date(ist),
+        detail='scanner current; no score >= 60 candidate',
+    )
 
 
 def _evaluate_scanner_freshness(
@@ -374,14 +440,7 @@ def evaluate_all_source_freshness(
             ),
             market_session_date=_session_date(now),
         ),
-        'tradecards': _source_record(
-            freshness_status=(
-                FRESHNESS_CURRENT
-                if (board or {}).get('live_scanner_ready')
-                else 'WAITING LIVE SCANNER'
-            ),
-            market_session_date=_session_date(now),
-        ),
+        'tradecards': _evaluate_tradecards_freshness_status(scanner, board=board, now=now),
     }
     return table
 
@@ -566,7 +625,11 @@ def format_freshness_status_telegram(*, now: datetime | None = None) -> str:
         updated = str(rec.get('last_updated_ist') or '—')
         age = rec.get('age_minutes')
         age_part = f' · age {age}m' if age is not None else ''
-        if status == 'WAITING LIVE SCANNER':
+        if key == 'tradecards' or status in (
+            TRADECARDS_WAITING_SCANNER,
+            TRADECARDS_AFTER_HOURS,
+            TRADECARDS_READY_NO_QUALITY,
+        ) or '·' in status:
             lines.append(f'{label}: {status}')
         else:
             lines.append(f'{label}: {status} · updated {updated}{age_part}')

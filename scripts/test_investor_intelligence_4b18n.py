@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 4B.18N — Investor / shareholding intelligence (AstraEdge 52L)."""
+"""Phase 4B.18N — Investor / shareholding intelligence (AstraEdge 52M)."""
 
 from __future__ import annotations
 
@@ -39,8 +39,8 @@ class _InvestorEnv:
 def test_build_label() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52L' or ASTRAEDGE_BUILD_STAGE != '52L':
-        return _fail(f'expected AstraEdge 52L got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52M' or ASTRAEDGE_BUILD_STAGE != '52M':
+        return _fail(f'expected AstraEdge 52M got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     print('OK: test_build_label')
     return 0
 
