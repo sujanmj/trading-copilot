@@ -76,16 +76,16 @@ def test_gainers_command() -> int:
 
 def test_help_and_schedule() -> int:
     from backend.telegram.premarket_scheduler import format_schedule_text
+    from backend.telegram.help_text import format_help_section
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, handle_analysis_command
 
     help_results = handle_analysis_command('/help', 'test', dry_run=True)
     help_text = str(help_results[0].get('text', ''))
-    if help_text != HELP_TEXT:
-        return _fail('/help must return HELP_TEXT')
-    if '/gainers' not in help_text:
-        return _fail('/help must include /gainers')
+    trade_help = format_help_section('trade')
+    if '/gainers' not in trade_help:
+        return _fail('/help trade must include /gainers')
     if '/opening' in help_text.lower():
-        return _fail('/help must not include /opening')
+        return _fail('/help index must not include /opening')
 
     schedule_results = handle_analysis_command('/schedule', 'test', dry_run=True)
     schedule_text = str(schedule_results[0].get('text', ''))

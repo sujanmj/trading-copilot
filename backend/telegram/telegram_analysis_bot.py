@@ -62,6 +62,7 @@ from backend.telegram.response_format import (
     format_why_ticker,
     strip_stage_markers,
 )
+from backend.telegram.help_text import HELP_TEXT, resolve_help_messages
 from backend.utils.config import CONFIG_DIR, DATA_DIR
 
 load_dotenv(CONFIG_DIR / 'keys.env', override=False)
@@ -99,140 +100,6 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'learn', 'description': 'Candidate outcome learning'},
     {'command': 'help', 'description': 'Command list'},
 ]
-
-HELP_TEXT = """<b>🤖 AstraEdge Telegram</b>
-
-<b>Core:</b>
-/status — system status
-/health — runtime health
-/clock — runtime UTC / IST clock
-/schedule — premarket + brief schedule
-/broker — broker intelligence
-/missed — missed-entry opportunities logged today
-
-<b>QA:</b>
-/qa — QA help and status
-/qa smoke — fast safe checks
-/qa full — safe regression suite
-/qa last — last QA result
-/qa explain — what QA covers
-
-<b>Trade Memory:</b>
-/memory — market memory dashboard
-/memory stock SYMBOL — tradecard + Screener memory for symbol
-/memory latest — latest tradecard memory records
-/memory stats — tradecard memory counts
-
-<b>AI:</b>
-/api — AI/API provider status with masked keys and usage health
-
-<b>Outcome Learning:</b>
-/learn today — 09:20 + 09:31 candidate outcome resolution
-/learn symbol SYMBOL — symbol outcome memory
-/learn patterns — best/worst reason tags
-
-<b>Screener / Long-term:</b>
-/screener status — latest Screener import status
-/screener latest — latest import summary + top long-term picks
-/screener import longterm — upload CSV/XLSX or import from data/imports
-/longterm — top long-term watchlist from Screener memory
-/longterm explain SYMBOL — long-term ratios + tradecard memory
-/longterm history — recent long-term recommendation snapshots
-/longterm history SYMBOL — long-term history for symbol
-/longterm memory SYMBOL — stored long-term thesis memory
-
-<b>Weekly Conviction:</b>
-/weekly picks — weekly high-conviction research picks
-/weekly history — previous weekly pick snapshots
-/weekly explain SYMBOL — weekly conviction breakdown
-
-<b>Investor Intelligence:</b>
-/investor SYMBOL — shareholding and investor quality for stock
-/investor weekly — investor signal for weekly candidates
-/investor memory SYMBOL — investor/shareholding history
-
-<b>Action:</b>
-/action plan — final action plan
-/bootstrap — rebuild cached reports (background)
-/today — today confluence pick
-/tomorrow — tomorrow confluence pick
-/why &lt;ticker&gt; — reason/risk/confirmation
-/premarket — premarket top setups
-/premarket full — full premarket brief
-
-<b>Refresh:</b>
-/refresh — quick scoped refresh
-/refresh quick — quick scoped refresh
-/refresh scanner — refresh scanner/gainers/intraday market data
-/refresh market — refresh scanner + gainers + radar inputs
-/refresh status — source freshness table
-/refresh full — full canonical cache refresh
-
-<b>AI Hub:</b>
-/aihub — tab menu
-/aihub full — full AI Hub summary
-/aihub brain · govt · scan · market · global · news · tv · calib · journal
-/aihub brain full — full brain details
-
-<b>My Feed:</b>
-/feed &lt;market news text&gt; — save text to My Feed
-/feed verify FEED_ID — re-check saved feed against fresh news
-/feed remove FEED_ID — remove bad feed from active memory
-/feed restore FEED_ID — restore removed feed
-/news refresh — refresh all trusted news sources
-/news refresh SYMBOL — refresh all trusted news sources for one company/ticker
-/news sources — show enabled news providers and freshness
-/myfeed list — latest saved feed
-/myfeed today — today's feed
-/myfeed scan — tickers/themes impact
-/myfeed clean-old — archive dirty image/OCR rows (admin)
-
-<b>Macro Shock:</b>
-/macro — current macro regime + trading guard
-/macro today — today's macro shock memory
-/macro explain — macro shock trigger + impact detail
-
-<b>Catalyst Radar:</b>
-/catalyst SYMBOL — catalyst state for one ticker
-/catalysts — stock-specific catalyst radar
-/catalysts today — today's catalyst priority list
-/catalysts explain &lt;ticker&gt; — catalyst reason for ticker
-
-<b>Opening Rally:</b>
-/radar — opening rally radar (manual)
-/gainers — all-cap top gainers discovery
-/tradecards — quality tradecards (score ≥60, max 10)
-
-<b>Trade Card:</b>
-/tradecard — one-stock paper trade card
-/tradecard today — today's trade card
-/tradecard explain — full trade card plan notes
-/tradecard journal — today's tradecard journal
-/tradecard outcome — tradecard outcome summary
-
-<b>Chart Patterns:</b>
-/patterns — scan chart patterns for /tradecards top 10
-/pattern — best chart-pattern candidate from /tradecards top 10
-/pattern SYMBOL — check chart pattern for one stock
-/candles SYMBOL — debug candle snapshots and pattern readiness
-
-<b>Briefs:</b>
-/news — news only
-/morning — pre-market brief
-/close — market close summary
-
-<b>Snapshot:</b>
-/full — run all read-only AstraEdge commands one by one
-
-<b>Theme Wishlist:</b>
-/theme — overview · list · search · category
-/theme &lt;basket&gt; · news · scan · budget · refresh
-
-<b>Budget Impact:</b>
-/budget — overview · theme &lt;basket&gt; · analyze &lt;text&gt;
-
-<b>AI:</b>
-/ask ai &lt;question&gt;"""
 
 
 def safe_print(text: str) -> None:
@@ -858,7 +725,8 @@ def handle_analysis_command(
 
     response_text = ''
     if cmd in ('start', 'help', 'h', 'commands'):
-        response_text = HELP_TEXT
+        help_parts = resolve_help_messages(args)
+        return [send_analysis_message(part, command='help', dry_run=dry_run) for part in help_parts]
     elif cmd == 'status':
         result = run_without_ai(lambda: {'text': format_canonical_status_text()}, command='status')
         response_text = result.get('text') or format_canonical_status_text()

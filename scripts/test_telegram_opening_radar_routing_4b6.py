@@ -27,6 +27,7 @@ def main() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD
     from backend.telegram.lazy_command_runner import format_canonical_health_text
     from backend.telegram.premarket_scheduler import format_schedule_text
+    from backend.telegram.help_text import format_help_section
     from backend.telegram.telegram_analysis_bot import (
         HELP_TEXT,
         TELEGRAM_BOT_COMMANDS,
@@ -77,14 +78,13 @@ def main() -> int:
 
     help_results = handle_analysis_command('/help', 'test', dry_run=True)
     help_text = str(help_results[0].get('text', ''))
-    if help_text != HELP_TEXT:
-        return _fail('/help must return HELP_TEXT')
+    trade_help = format_help_section('trade')
     if '/opening' in help_text.lower() and 'same as /radar' in help_text.lower():
-        return _fail('/help must not list /opening alias')
-    if '/gainers' not in help_text:
-        return _fail('/help must list /gainers')
-    if '/radar' not in help_text:
-        return _fail('/help must list /radar')
+        return _fail('/help index must not list /opening alias')
+    if '/gainers' not in trade_help:
+        return _fail('/help trade must list /gainers')
+    if '/radar' not in trade_help:
+        return _fail('/help trade must list /radar')
 
     schedule_results = handle_analysis_command('/schedule', 'test', dry_run=True)
     schedule_text = str(schedule_results[0].get('text', ''))

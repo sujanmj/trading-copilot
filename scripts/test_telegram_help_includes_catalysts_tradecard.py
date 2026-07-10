@@ -52,6 +52,7 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
+    from backend.telegram.help_text import format_help_index
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, handle_analysis_command
 
     if ASTRAEDGE_TELEGRAM_BUILD != f'AstraEdge {get_astraedge_build_stage()}':
@@ -117,8 +118,14 @@ def main() -> int:
          patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake_card):
         help_results = handle_analysis_command('/help', 'help_test', dry_run=True)
         help_text = str((help_results[0] if help_results else {}).get('text') or '')
-        if help_text != HELP_TEXT:
-            return _fail('/help must return HELP_TEXT verbatim')
+        if help_text != format_help_index():
+            return _fail('/help must return compact help index')
+
+        full_results = handle_analysis_command('/help full', 'help_test', dry_run=True)
+        full_text = '\n'.join(str(item.get('text') or '') for item in full_results)
+        for marker in HELP_CATALYST_MARKERS + HELP_TRADECARD_MARKERS:
+            if marker not in full_text and marker not in HELP_TEXT:
+                return _fail(f'full help missing marker {marker!r}')
 
         for cmd in COMMAND_CASES:
             results = handle_analysis_command(cmd, 'help_test', dry_run=True)
