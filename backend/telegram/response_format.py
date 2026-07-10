@@ -3582,8 +3582,10 @@ def format_final_opening_confirmation_telegram(
     watch_sym: str = '',
     reason: str = '',
     no_trade: bool = False,
+    macro_guard: bool = False,
 ) -> str:
     """Scheduled 09:31 — final opening confirmation under live gate."""
+    from backend.trading.live_confirmation_guard import emergency_macro_crash_active
     from backend.trading.opening_rally_radar import build_opening_rally_board
 
     data = board or build_opening_rally_board()
@@ -3593,29 +3595,32 @@ def format_final_opening_confirmation_telegram(
     state = str(confirm_state or 'NO_TRADE').upper().replace(' ', '_')
     row = best_row or {}
     why = str(reason or '').strip() or (' + '.join(row.get('why') or []) or 'opening board review')
+    weak_states = {'WATCH_ONLY', 'LOW_CONFIDENCE', 'REJECTED_LOW_SCORE', 'WAIT_LIVE_CONFIRM', 'NO_TRADE'}
+    show_watch = bool(no_trade or state in weak_states or (not sym and watch))
+    display_sym = watch if show_watch and not sym else (sym or watch or '—')
+    macro_active = bool(macro_guard or emergency_macro_crash_active(board=data))
     lines = [
         _scheduled_alert_title('0931', time_ist),
         '<i>Paper/research only — no blind entry</i>',
         '',
     ]
-    if no_trade or (state in ('NO_TRADE', 'NO_CLEAN_ENTRY') and not sym):
+    if show_watch and state in ('NO_TRADE', 'NO_CLEAN_ENTRY') and not watch and not sym:
         lines.extend([
             '<b>Final Opening Confirmation — NO TRADE</b>',
             f'Reason: {why or "no candidate passed live confirmation gate"}',
-        ])
-        if watch:
-            lines.append(f'Best watch: {watch}')
-        lines.extend([
             '',
             'Action: wait for next scanner update / no blind entry',
         ])
+        if macro_active:
+            lines.append('Macro guard: RED MARKET — stronger confirmation required.')
         return strip_stage_markers('\n'.join(lines))
 
+    label = 'Best watch' if show_watch else 'Best pick'
     lines.extend([
-        f'<b>Best pick:</b> {sym or watch or "—"}',
+        f'<b>{label}:</b> {display_sym}',
         f'<b>State:</b> {state.replace("_", " ")}',
         f'Score: {int(best_score or row.get("score") or 0)}',
-        f'Why: {why}',
+        f'Reason: {why}',
         '',
     ])
     if state == 'CONFIRMED':
@@ -3623,6 +3628,8 @@ def format_final_opening_confirmation_telegram(
     elif state == 'PULLBACK_ONLY_PLAN':
         lines.append('Action: no chase; paper entry only on VWAP/retest/opening-range hold.')
         lines.append('Plan: strongest candidate but extended; no market chase.')
+    elif state in ('WATCH_ONLY', 'LOW_CONFIDENCE', 'REJECTED_LOW_SCORE'):
+        lines.append('Action: no confirmed setup; wait for /tradecard quality candidate.')
     elif state == 'WAIT_LIVE_CONFIRM':
         lines.append('Action: wait for live scanner confirmation — no blind entry on stale catalyst.')
         if watch and watch != sym:
@@ -3638,6 +3645,8 @@ def format_final_opening_confirmation_telegram(
         lines.append('Action: wait for next scanner update / no blind entry')
     else:
         lines.append('Action: no clean entry — watch /radar or /tradecards for next setup.')
+    if macro_active:
+        lines.append('Macro guard: RED MARKET — stronger confirmation required.')
     return strip_stage_markers('\n'.join(lines))
 
 

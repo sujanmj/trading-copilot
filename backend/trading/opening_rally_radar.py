@@ -1158,7 +1158,11 @@ def resolve_final_confirmation_state(
         )
         return 'PULLBACK_ONLY_PLAN'
     if state == 'WATCH_ONLY':
-        return 'WAIT_LIVE_CONFIRM'
+        return 'WATCH_ONLY'
+    if state == 'LOW_CONFIDENCE':
+        return 'LOW_CONFIDENCE'
+    if state == 'REJECTED_LOW_SCORE':
+        return 'REJECTED_LOW_SCORE'
     if state == 'CONFIRMED':
         return 'CONFIRMED'
     if state == 'WAIT_LIVE_CONFIRM':
@@ -1572,6 +1576,7 @@ def run_scheduled_final_confirmation_0931(
         watch_sym=watch_sym,
         reason=reason,
         no_trade=bool(pick.get('no_trade')),
+        macro_guard=bool(pick.get('macro_guard')),
     )
     if not _gate_scheduled_alert('final_opening_confirmation_0931', text):
         print(

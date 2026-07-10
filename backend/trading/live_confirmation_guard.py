@@ -2,7 +2,7 @@
 Live confirmation guard — Phase 4B.18D / AstraEdge 52B.
 
 Ensures scheduled 09:31 Final Opening Confirmation uses the same safety gate
-as /tradecard: no CONFIRMED without live scanner/price support.
+as /tradecard: no CONFIRMED without live scanner/price support and score >= 60.
 Paper/research only — no LLM calls.
 """
 
@@ -20,6 +20,12 @@ WAIT_LIVE_CONFIRM = 'WAIT_LIVE_CONFIRM'
 NO_TRADE = 'NO_TRADE'
 PULLBACK_ONLY = 'PULLBACK_ONLY'
 WATCH_ONLY = 'WATCH_ONLY'
+LOW_CONFIDENCE = 'LOW_CONFIDENCE'
+REJECTED_LOW_SCORE = 'REJECTED_LOW_SCORE'
+
+QUALITY_CONFIRM_THRESHOLD = 60
+MACRO_RED_CONFIRM_THRESHOLD = 65
+LOW_SCORE_REJECT_THRESHOLD = 20
 
 NEGATIVE_MOVE_PCT = -1.0
 SHARP_NEGATIVE_PCT = -2.0
@@ -122,6 +128,80 @@ def emergency_macro_crash_active(*, board: dict[str, Any] | None = None) -> bool
     except Exception:
         pass
     return False
+
+
+def quality_threshold_met(score: int, *, threshold: int = QUALITY_CONFIRM_THRESHOLD) -> bool:
+    return int(score or 0) >= threshold
+
+
+def low_score_state(score: int, *, live_scanner: bool) -> str:
+    """Map sub-threshold scores to watch/reject states (never CONFIRMED)."""
+    value = int(score or 0)
+    if live_scanner:
+        return WATCH_ONLY
+    if value < LOW_SCORE_REJECT_THRESHOLD:
+        return REJECTED_LOW_SCORE
+    return LOW_CONFIDENCE
+
+
+def low_score_reason(*, live_scanner: bool, score: int) -> str:
+    if live_scanner:
+        return (
+            f'live scanner/price reaction present but score below quality threshold '
+            f'{QUALITY_CONFIRM_THRESHOLD}'
+        )
+    return f'score {score} below quality threshold {QUALITY_CONFIRM_THRESHOLD}'
+
+
+def has_relative_strength_evidence(
+    row: dict[str, Any] | None,
+    *,
+    live_scanner: bool,
+    fresh_catalyst: bool,
+) -> bool:
+    """Stronger evidence required under red macro: RS + volume + catalyst."""
+    if not isinstance(row, dict) or not live_scanner:
+        return False
+    scanner = row.get('scanner_row') if isinstance(row.get('scanner_row'), dict) else row
+    change = _safe_float((scanner or {}).get('change_percent') or row.get('change_percent'))
+    volume = _safe_float((scanner or {}).get('volume_ratio') or row.get('volume_ratio'))
+    return change > 0 and volume >= 1.2 and fresh_catalyst
+
+
+def passes_macro_red_confirmation_gate(
+    row: dict[str, Any] | None,
+    *,
+    score: int,
+    live_scanner: bool,
+    fresh_catalyst: bool,
+    macro_crash: bool,
+) -> bool:
+    if not macro_crash:
+        return True
+    if quality_threshold_met(score, threshold=MACRO_RED_CONFIRM_THRESHOLD):
+        return True
+    return has_relative_strength_evidence(
+        row,
+        live_scanner=live_scanner,
+        fresh_catalyst=fresh_catalyst,
+    )
+
+
+def board_had_quality_at_0925(board: dict[str, Any] | None) -> bool:
+    """True when 09:25 quality gate had at least one score >= 60 candidate."""
+    data = board or {}
+    if data.get('early_tradecards_had_quality') is not None:
+        return bool(data.get('early_tradecards_had_quality'))
+    try:
+        from backend.trading.candidate_outcome_learning import filter_quality_candidates
+
+        candidates = [
+            r for r in (data.get('ranked_candidates') or [])
+            if str(r.get('state') or '').upper() != 'REJECTED'
+        ]
+        return bool(filter_quality_candidates(candidates))
+    except Exception:
+        return False
 
 
 def has_live_scanner_row(row: dict[str, Any] | None, *, now: datetime | None = None) -> bool:
@@ -378,7 +458,38 @@ def evaluate_live_confirmation(
         }
 
     # Live evidence present.
-    if extended and score >= 55:
+    if not quality_threshold_met(score):
+        low_state = low_score_state(score, live_scanner=live_scanner)
+        reasons.append(low_score_reason(live_scanner=live_scanner, score=score))
+        return {
+            'state': low_state,
+            'reasons': reasons,
+            'live_scanner': live_scanner,
+            'fresh_catalyst': fresh_catalyst,
+            'macro_crash': macro_crash,
+            'price_invalid': False,
+            'quality_blocked': True,
+        }
+
+    if not passes_macro_red_confirmation_gate(
+        row,
+        score=score,
+        live_scanner=live_scanner,
+        fresh_catalyst=fresh_catalyst,
+        macro_crash=macro_crash,
+    ):
+        reasons.append('macro risk active; stronger confirmation required')
+        return {
+            'state': WATCH_ONLY,
+            'reasons': reasons,
+            'live_scanner': live_scanner,
+            'fresh_catalyst': fresh_catalyst,
+            'macro_crash': macro_crash,
+            'price_invalid': False,
+            'macro_guard': True,
+        }
+
+    if extended and score >= QUALITY_CONFIRM_THRESHOLD:
         reasons.append('extended/chase risk with live evidence')
         return {
             'state': PULLBACK_ONLY,
@@ -468,17 +579,19 @@ def select_final_confirmation_pick(
     for row in ranked:
         verdict = evaluate_live_confirmation(row, now=ist_now, board=data)
         state = str(verdict.get('state') or '')
-        if state in (CONFIRMED, PULLBACK_ONLY):
+        row_score = int(row.get('score') or 0)
+        if state in (CONFIRMED, PULLBACK_ONLY) and quality_threshold_met(row_score):
             sym = _normalize_ticker(row.get('ticker'))
             return {
                 'confirm_state': state if state != PULLBACK_ONLY else 'PULLBACK_ONLY_PLAN',
                 'best_sym': sym,
                 'best_row': row,
-                'best_score': int(row.get('score') or 0),
+                'best_score': row_score,
                 'watch_sym': watch_sym,
                 'reason': ' + '.join(verdict.get('reasons') or []) or 'live confirmation passed',
                 'verdict': verdict,
                 'no_trade': False,
+                'macro_guard': bool(verdict.get('macro_guard')),
             }
 
     # No candidate passed confirm/pullback gate — pick best watch for message.
@@ -495,16 +608,18 @@ def select_final_confirmation_pick(
         downgrade = WAIT_LIVE_CONFIRM
     if downgrade == PULLBACK_ONLY:
         downgrade = 'PULLBACK_ONLY_PLAN'
-    if downgrade == WATCH_ONLY:
-        downgrade = WAIT_LIVE_CONFIRM
     reason = ' + '.join(watch_verdict.get('reasons') or []) or 'no candidate passed live confirmation gate'
+    watch_score = int((watch_row or {}).get('score') or 0)
+    no_trade = downgrade in (NO_TRADE, WAIT_LIVE_CONFIRM, WATCH_ONLY, LOW_CONFIDENCE, REJECTED_LOW_SCORE)
+    display_sym = watch_sym if no_trade and not _normalize_ticker((watch_row or {}).get('ticker')) else watch_sym
     return {
-        'confirm_state': NO_TRADE if downgrade == NO_TRADE else downgrade,
-        'best_sym': '',
+        'confirm_state': downgrade,
+        'best_sym': '' if no_trade else _normalize_ticker((watch_row or {}).get('ticker')),
         'best_row': watch_row or {},
-        'best_score': int((watch_row or {}).get('score') or 0),
-        'watch_sym': watch_sym,
+        'best_score': watch_score,
+        'watch_sym': watch_sym or display_sym,
         'reason': reason,
         'verdict': watch_verdict,
-        'no_trade': True,
+        'no_trade': no_trade,
+        'macro_guard': bool(watch_verdict.get('macro_guard')),
     }

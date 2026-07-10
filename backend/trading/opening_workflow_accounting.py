@@ -124,8 +124,10 @@ def _confirmation_bucket(confirm_state: str) -> str:
         return 'confirmed'
     if token in ('NO_CLEAN_ENTRY', 'REJECTED', 'NO_TRADE'):
         return 'rejected'
-    if token in ('WAIT_FOR_PULLBACK', 'WAIT_LIVE_CONFIRM', 'WATCH_ONLY'):
+    if token in ('WAIT_FOR_PULLBACK', 'WAIT_LIVE_CONFIRM', 'WATCH_ONLY', 'LOW_CONFIDENCE'):
         return 'wait_pullback'
+    if token in ('REJECTED_LOW_SCORE',):
+        return 'rejected'
     if token in ('PULLBACK_ONLY_PLAN', 'PULLBACK_ONLY'):
         return 'pullback_only'
     if token in ('CHASE_RISK',):
