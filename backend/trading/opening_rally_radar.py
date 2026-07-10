@@ -1145,7 +1145,7 @@ def resolve_final_confirmation_state(
     board: dict[str, Any] | None = None,
 ) -> str:
     """Map opening-board row to final confirmation state at ~09:31 (live gate)."""
-    from backend.trading.live_confirmation_guard import evaluate_live_confirmation
+    from backend.trading.live_confirmation_guard import BLOCKED_STALE_DATA, evaluate_live_confirmation
 
     if not row:
         return 'NO_TRADE'
@@ -1163,6 +1163,8 @@ def resolve_final_confirmation_state(
         return 'LOW_CONFIDENCE'
     if state == 'REJECTED_LOW_SCORE':
         return 'REJECTED_LOW_SCORE'
+    if state == BLOCKED_STALE_DATA:
+        return BLOCKED_STALE_DATA
     if state == 'CONFIRMED':
         return 'CONFIRMED'
     if state == 'WAIT_LIVE_CONFIRM':
@@ -1407,19 +1409,6 @@ def run_scheduled_opening_radar_alert(
     """Send scheduled 09:20 opening rally radar when candidates exist (paper only)."""
     ist_now = _now_ist(now)
     board = build_opening_rally_board(now=ist_now)
-    if board.get('scanner_stale') and not board.get('reference_only'):
-        from backend.trading.market_freshness_guard import format_scanner_stale_radar_telegram
-
-        text = format_scanner_stale_radar_telegram(board, scheduled_slot='0920')
-        ts = ist_now.replace(microsecond=0).isoformat()
-        return _send_scheduled_opening_text(
-            alert_key='opening_radar_scheduled',
-            text=text,
-            log_tag='OPENING_RADAR_SCANNER_STALE',
-            log_fields=f'time={ts} scanner_stale=yes',
-            send_fn=send_fn,
-            command='opening_radar_scheduled',
-        )
     candidates = [
         r for r in (board.get('ranked_candidates') or [])
         if r.get('state') != 'REJECTED'
@@ -1474,19 +1463,6 @@ def run_scheduled_early_tradecards_0925(
     """09:25 IST — provisional top tradecard candidates before 09:30."""
     ist_now = _now_ist(now)
     board = build_opening_rally_board(now=ist_now)
-    if board.get('scanner_stale') and not board.get('reference_only'):
-        from backend.trading.market_freshness_guard import format_no_active_tradecard_telegram
-
-        text = format_no_active_tradecard_telegram(board)
-        ts = ist_now.replace(microsecond=0).isoformat()
-        return _send_scheduled_opening_text(
-            alert_key='early_tradecards_0925',
-            text=text,
-            log_tag='EARLY_TRADECARDS_SCANNER_STALE',
-            log_fields=f'time={ts} scanner_stale=yes',
-            send_fn=send_fn,
-            command='early_tradecards_0925',
-        )
     candidates = [
         r for r in (board.get('ranked_candidates') or [])
         if r.get('state') != 'REJECTED'
@@ -1553,9 +1529,10 @@ def run_scheduled_final_confirmation_0931(
 ) -> bool:
     """09:31 IST — final opening confirmation under live confirmation gate."""
     from backend.trading.live_confirmation_guard import select_final_confirmation_pick
+    from backend.trading.live_scanner_autorefresh_guard import prepare_board_for_live_command
 
     ist_now = _now_ist(now)
-    board = build_opening_rally_board(now=ist_now)
+    board = prepare_board_for_live_command('final_opening_confirmation_0931', now=ist_now)
     pick = select_final_confirmation_pick(board, now=ist_now)
     confirm_state = str(pick.get('confirm_state') or 'NO_TRADE')
     best_sym = str(pick.get('best_sym') or '')

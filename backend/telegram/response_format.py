@@ -3232,17 +3232,23 @@ def _format_candidate_risk_line(row: dict[str, Any]) -> str:
     return ''
 
 
-def _opening_board_for_display(board: dict[str, Any] | None) -> dict[str, Any]:
-    from backend.trading.opening_rally_radar import build_opening_rally_board, rerank_opening_candidates
+def _opening_board_for_display(
+    board: dict[str, Any] | None,
+    *,
+    command: str = 'radar',
+) -> dict[str, Any]:
+    from backend.trading.live_scanner_autorefresh_guard import prepare_board_for_live_command
 
-    data = board or build_opening_rally_board()
-    if data.get('reference_only') or data.get('session_stale'):
+    if board and board.get('live_freshness_policy'):
+        data = dict(board)
+        if not data.get('reference_only') and not data.get('session_stale'):
+            from backend.trading.opening_rally_radar import rerank_opening_candidates
+
+            data['ranked_candidates'] = rerank_opening_candidates(
+                list(data.get('ranked_candidates') or []),
+            )
         return data
-    updated = dict(data)
-    updated['ranked_candidates'] = rerank_opening_candidates(
-        list(data.get('ranked_candidates') or []),
-    )
-    return updated
+    return prepare_board_for_live_command(command, board=board)
 
 
 def _scheduled_alert_title(slot: str, time_ist: str) -> str:
@@ -3257,12 +3263,12 @@ def format_opening_radar_telegram(
 ) -> str:
     """Format manual /radar or scheduled Opening Rally Radar alert."""
     from backend.trading.opening_rally_radar import (
-        build_opening_rally_board,
         format_opening_radar_action,
         opening_radar_time_phase,
     )
 
-    data = _opening_board_for_display(board)
+    command = 'opening_radar_0920' if scheduled_slot else 'radar'
+    data = _opening_board_for_display(board, command=command)
     if data.get('reference_only'):
         from backend.trading.opening_session_freshness import (
             format_reference_radar_telegram,
@@ -3278,20 +3284,34 @@ def format_opening_radar_telegram(
         f'<b>Opening Rally Radar — {time_ist} IST</b>'
     )
     from backend.trading.opening_session_freshness import format_session_metadata_block
+    from backend.trading.live_scanner_autorefresh_guard import (
+        format_auto_refresh_block,
+        format_stale_radar_reference_block,
+    )
 
     lines = [
         title,
         f'<i>Phase: {phase.replace("_", " ").lower()} · paper/research only</i>',
         '',
-        *format_session_metadata_block(data),
     ]
+    auto_lines = format_auto_refresh_block(data)
+    if auto_lines:
+        lines.extend(auto_lines)
+        lines.append('')
+    lines.extend(format_session_metadata_block(data))
     try:
         from backend.trading.market_freshness_guard import format_data_freshness_block
 
         lines.extend(['', *format_data_freshness_block(data)])
     except Exception:
         pass
-    lines.append('')
+    if data.get('live_confirmation_blocked') or data.get('quality_tradecard_blocked'):
+        lines.extend(['', *format_stale_radar_reference_block(), ''])
+        policy = data.get('live_freshness_policy') if isinstance(data.get('live_freshness_policy'), dict) else {}
+        if policy.get('premarket_watch_only'):
+            lines.append('Premarket — watch/prep only; no live confirmation.')
+        elif policy.get('after_hours_reference'):
+            lines.append('After-hours — next-session watch/reference only.')
     macro = data.get('macro_shock') or {}
     if macro.get('active') and str(macro.get('severity') or '') in ('HIGH', 'CRITICAL'):
         regime = str(data.get('macro_regime') or macro.get('regime') or 'RED MARKET')
@@ -3489,13 +3509,14 @@ def format_early_tradecards_scheduled_telegram(
 ) -> str:
     """Scheduled 09:25 — provisional tradecard board with live-confirm labels."""
     from backend.trading.live_confirmation_guard import provisional_label_for_row
-    from backend.trading.opening_rally_radar import (
-        build_opening_rally_board,
-        pick_best_opening_tradecard,
+    from backend.trading.live_scanner_autorefresh_guard import (
+        format_auto_refresh_block,
+        format_stale_scanner_no_quality_block,
     )
+    from backend.trading.opening_rally_radar import pick_best_opening_tradecard
     from backend.trading.opening_workflow_accounting import sort_early_tradecard_candidates
 
-    data = board or build_opening_rally_board()
+    data = _opening_board_for_display(board, command='early_tradecards_0925')
     time_ist = str(data.get('time_ist') or '09:25')
     lines = [
         _scheduled_alert_title('0925', time_ist),
@@ -3505,6 +3526,9 @@ def format_early_tradecards_scheduled_telegram(
     from backend.trading.opening_session_freshness import format_session_metadata_block
 
     lines.extend(format_session_metadata_block(data))
+    auto_lines = format_auto_refresh_block(data)
+    if auto_lines:
+        lines.extend(['', *auto_lines])
     try:
         from backend.trading.market_freshness_guard import (
             format_data_freshness_block,
@@ -3526,6 +3550,9 @@ def format_early_tradecards_scheduled_telegram(
     candidates = sort_early_tradecard_candidates([
         r for r in (data.get('ranked_candidates') or []) if r.get('state') != 'REJECTED'
     ])
+    if data.get('quality_tradecard_blocked') or data.get('stale_after_auto_refresh'):
+        lines.extend(['', *format_stale_scanner_no_quality_block()])
+        return strip_stage_markers('\n'.join(lines))
     quality = filter_quality_candidates(candidates)
     if not quality:
         lines.extend(['', *format_no_quality_tradecard_block()])
@@ -3630,6 +3657,8 @@ def format_final_opening_confirmation_telegram(
         lines.append('Plan: strongest candidate but extended; no market chase.')
     elif state in ('WATCH_ONLY', 'LOW_CONFIDENCE', 'REJECTED_LOW_SCORE'):
         lines.append('Action: no confirmed setup; wait for /tradecard quality candidate.')
+    elif state == 'BLOCKED_STALE_DATA':
+        lines.append('Action: no confirmed setup; refresh scanner and re-check.')
     elif state == 'WAIT_LIVE_CONFIRM':
         lines.append('Action: wait for live scanner confirmation — no blind entry on stale catalyst.')
         if watch and watch != sym:
@@ -3655,10 +3684,15 @@ def format_tradecards_telegram(
     board: dict[str, Any] | None = None,
 ) -> str:
     """Format /tradecards — top multi-candidate tradecard board."""
-    from backend.trading.opening_rally_radar import build_opening_rally_board, pick_best_opening_tradecard
+    from backend.trading.opening_rally_radar import pick_best_opening_tradecard
+    from backend.trading.live_scanner_autorefresh_guard import (
+        format_auto_refresh_block,
+        format_stale_scanner_no_quality_block,
+    )
 
-    data = _opening_board_for_display(board)
-    _persist_tradecards_decision_memory(data)
+    data = _opening_board_for_display(board, command='tradecards')
+    if not (data.get('quality_tradecard_blocked') or data.get('live_confirmation_blocked')):
+        _persist_tradecards_decision_memory(data)
     from backend.trading.opening_session_freshness import (
         format_reference_tradecards_telegram,
         format_stale_tradecards_telegram,
@@ -3685,6 +3719,9 @@ def format_tradecards_telegram(
         '',
         *format_session_metadata_block(data),
     ])
+    auto_lines = format_auto_refresh_block(data)
+    if auto_lines:
+        lines.extend(['', *auto_lines])
     try:
         from backend.trading.market_freshness_guard import format_data_freshness_block
 
@@ -3702,10 +3739,14 @@ def format_tradecards_telegram(
         lines.append('No tradecard candidates on the opening board yet.')
         return strip_stage_markers('\n'.join(lines))
 
+    if data.get('quality_tradecard_blocked') or data.get('stale_after_auto_refresh'):
+        lines.extend(['', *format_stale_scanner_no_quality_block()])
+        return strip_stage_markers('\n'.join(lines))
+
     quality = filter_quality_candidates(candidates)
     scanner_current = str(data.get('scanner_freshness_status') or '').upper() == 'CURRENT'
     market_active = not data.get('reference_only') and not data.get('session_stale')
-    if market_active and scanner_current and quality:
+    if market_active and scanner_current and quality and not data.get('live_confirmation_blocked'):
         try:
             capture_quality_snapshots(
                 board=data,
@@ -3720,7 +3761,7 @@ def format_tradecards_telegram(
     try:
         from backend.trading.weekly_signal_capture import capture_tradecard_signals
 
-        capture_tradecard_signals(quality)
+        capture_tradecard_signals(quality, board=data)
     except Exception:
         pass
     for idx, row in enumerate(quality, start=1):

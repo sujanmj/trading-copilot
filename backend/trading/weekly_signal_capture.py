@@ -87,7 +87,13 @@ def capture_screener_import_signals(stocks: list[dict[str, Any]], *, limit: int 
         )
 
 
-def capture_tradecard_signals(candidates: list[dict[str, Any]]) -> None:
+def capture_tradecard_signals(candidates: list[dict[str, Any]], *, board: dict[str, Any] | None = None) -> None:
+    if isinstance(board, dict) and (
+        board.get('quality_tradecard_blocked')
+        or board.get('live_confirmation_blocked')
+        or board.get('stale_after_auto_refresh')
+    ):
+        return
     for row in candidates:
         score = int(row.get('score') or 0)
         if score < 60:

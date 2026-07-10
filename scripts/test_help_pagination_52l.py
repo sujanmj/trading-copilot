@@ -49,12 +49,12 @@ def test_default_help_compact() -> int:
         '/help investor',
         '/help weekly',
         '/help patterns',
-        'Build: AstraEdge 52L',
+        'Build: AstraEdge 52M',
     ):
         if marker not in text:
             return _fail(f'compact /help missing {marker!r}')
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52L':
-        return _fail(f'expected build 52L, got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52M':
+        return _fail(f'expected build 52M, got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

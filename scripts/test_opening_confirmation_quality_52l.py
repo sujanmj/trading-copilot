@@ -194,8 +194,8 @@ def test_0925_no_quality_does_not_force_0931_confirmation() -> int:
 def test_build_label_52l() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_BUILD_STAGE, ASTRAEDGE_TELEGRAM_BUILD
 
-    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52L' or ASTRAEDGE_BUILD_STAGE != '52L':
-        return _fail(f'expected AstraEdge 52L got {ASTRAEDGE_TELEGRAM_BUILD!r}')
+    if ASTRAEDGE_TELEGRAM_BUILD != 'AstraEdge 52M' or ASTRAEDGE_BUILD_STAGE != '52M':
+        return _fail(f'expected AstraEdge 52M got {ASTRAEDGE_TELEGRAM_BUILD!r}')
     return 0
 
 

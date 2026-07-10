@@ -242,6 +242,9 @@ def capture_quality_snapshots(
         return []
     if board.get('reference_only') or board.get('session_stale'):
         return []
+    if board.get('quality_tradecard_blocked') or board.get('live_confirmation_blocked') or board.get('stale_after_auto_refresh'):
+        print(f'[CANDIDATE_OUTCOME_LEARNING] stage={stage} skipped=stale_scanner', flush=True)
+        return []
     quality = filter_quality_candidates(candidates)
     if not quality and stage in PRIMARY_STAGES:
         print(f'[CANDIDATE_OUTCOME_LEARNING] stage={stage} quality=0', flush=True)

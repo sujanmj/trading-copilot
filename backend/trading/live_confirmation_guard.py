@@ -15,6 +15,8 @@ from zoneinfo import ZoneInfo
 IST = ZoneInfo('Asia/Kolkata')
 STAGE = '4B.18D'
 
+BLOCKED_STALE_DATA = 'BLOCKED_STALE_DATA'
+
 CONFIRMED = 'CONFIRMED'
 WAIT_LIVE_CONFIRM = 'WAIT_LIVE_CONFIRM'
 NO_TRADE = 'NO_TRADE'
@@ -362,10 +364,12 @@ def evaluate_live_confirmation(
 
     # Global scanner gate — only when freshness guard annotated the board.
     if ist_now.time() >= time(9, 31):
-        if data.get('scanner_stale') or data.get('live_scanner_ready') is False:
+        if data.get('scanner_stale') or data.get('live_scanner_ready') is False or data.get('live_confirmation_blocked'):
+            blocked_state = BLOCKED_STALE_DATA if data.get('scanner_stale') or data.get('stale_after_auto_refresh') else NO_TRADE
+            reason = 'live scanner stale after refresh attempt' if data.get('stale_after_auto_refresh') else 'live scanner stale/missing'
             return {
-                'state': NO_TRADE,
-                'reasons': ['live scanner stale/missing'],
+                'state': blocked_state,
+                'reasons': [reason],
                 'live_scanner': False,
                 'fresh_catalyst': False,
                 'macro_crash': emergency_macro_crash_active(board=data),
@@ -610,7 +614,7 @@ def select_final_confirmation_pick(
         downgrade = 'PULLBACK_ONLY_PLAN'
     reason = ' + '.join(watch_verdict.get('reasons') or []) or 'no candidate passed live confirmation gate'
     watch_score = int((watch_row or {}).get('score') or 0)
-    no_trade = downgrade in (NO_TRADE, WAIT_LIVE_CONFIRM, WATCH_ONLY, LOW_CONFIDENCE, REJECTED_LOW_SCORE)
+    no_trade = downgrade in (NO_TRADE, WAIT_LIVE_CONFIRM, WATCH_ONLY, LOW_CONFIDENCE, REJECTED_LOW_SCORE, BLOCKED_STALE_DATA)
     display_sym = watch_sym if no_trade and not _normalize_ticker((watch_row or {}).get('ticker')) else watch_sym
     return {
         'confirm_state': downgrade,
