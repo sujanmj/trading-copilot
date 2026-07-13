@@ -627,6 +627,44 @@ def daily_review_quality_buckets(
     }
 
 
+def _opening_best_annotation(
+    ticker: str,
+    *,
+    opening: dict[str, Any],
+    stage: str,
+) -> str:
+    """Human label for early/final opening bests when no quality tradecard was produced."""
+    sym = str(ticker or '').strip().upper()
+    if not sym or sym == '-':
+        return '-'
+    early_rows = [
+        row for row in (opening.get('early_candidates') or [])
+        if isinstance(row, dict) and str(row.get('ticker') or '').upper() == sym
+    ]
+    score = int(early_rows[0].get('score') or 0) if early_rows else 0
+    state = str(early_rows[0].get('state') or '').upper() if early_rows else ''
+    if stage == 'final':
+        score = int(opening.get('final_best_score') or score or 0)
+        state = str(opening.get('final_confirmation_state') or state or '').upper().replace(' ', '_')
+        if score and score < 60:
+            return f'{sym} — watch only / below threshold'
+        if state in (
+            'WATCH_ONLY', 'LOW_CONFIDENCE', 'WAIT_FOR_PULLBACK', 'WAIT_LIVE_CONFIRM',
+            'PULLBACK_ONLY_PLAN', 'PULLBACK_ONLY', 'MOMENTUM_ONLY_WATCH', 'CHASE_RISK',
+            'REJECTED_LOW_SCORE',
+        ):
+            return f'{sym} — watch only / below threshold'
+        return sym
+    if score and score < 60:
+        return f'{sym} — below quality threshold'
+    if state in (
+        'WATCH_ONLY', 'LOW_CONFIDENCE', 'RADAR_ARMED', 'PULLBACK_ONLY_PLAN',
+        'MOMENTUM_ONLY_WATCH', 'REJECTED_LOW_SCORE',
+    ):
+        return f'{sym} — below quality threshold'
+    return sym
+
+
 def format_daily_review_quality_lines(
     *,
     alert_summary: dict[str, Any] | None = None,
@@ -642,6 +680,8 @@ def format_daily_review_quality_lines(
     try:
         from backend.trading.candidate_outcome_learning import (
             eligible_learning_symbols,
+            format_daily_review_tradecard_outcome_section,
+            format_legacy_tradecard_journal_lines,
             has_eligible_quality_snapshots,
         )
         from datetime import datetime
@@ -656,9 +696,21 @@ def format_daily_review_quality_lines(
     except Exception:
         has_eligible = False
         learning_candidate_text = 'none — no eligible quality tradecards'
+        format_daily_review_tradecard_outcome_section = None
+        format_legacy_tradecard_journal_lines = None
     confirmed_display = int(opening.get('confirmed') or 0) if has_eligible else 0
     pending_reasons = b.get('pending_reasons') if isinstance(b.get('pending_reasons'), dict) else {}
     reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
+    early_best = _opening_best_annotation(
+        str(opening.get('early_tradecard_best') or '-'),
+        opening=opening,
+        stage='early',
+    )
+    final_best = _opening_best_annotation(
+        str(opening.get('final_confirmation_best') or '-'),
+        opening=opening,
+        stage='final',
+    )
     lines = [
         f"Research watchlist sent: {b['research_watchlist_sent']}",
         f"Live confirmed setups: {b['live_confirmed_setups']}",
@@ -667,10 +719,10 @@ def format_daily_review_quality_lines(
         "Opening workflow:",
         f"Radar armed: {int(opening.get('radar_armed') or 0)}",
         f"Opening radar: {int(opening.get('opening_radar') or 0)}",
-        f"Early tradecards generated: {int(opening.get('early_tradecards_generated') or 0)}",
-        f"Final confirmation generated: {int(opening.get('final_confirmation_generated') or 0)}",
-        f"Early tradecard best: {opening.get('early_tradecard_best') or '-'}",
-        f"Final confirmation best: {opening.get('final_confirmation_best') or '-'}",
+        f"Early tradecard checks run: {int(opening.get('early_tradecards_generated') or 0)}",
+        f"Final confirmation checks run: {int(opening.get('final_confirmation_generated') or 0)}",
+        f"Early tradecard best: {early_best}",
+        f"Final confirmation best: {final_best}",
         (
             "Final state: "
             f"confirmed {confirmed_display} · "
@@ -678,7 +730,10 @@ def format_daily_review_quality_lines(
             f"wait {int(opening.get('wait_pullback') or 0)} · "
             f"pullback {int(opening.get('pullback_only') or 0)}"
         ),
-        f"Learning candidate captured: {learning_candidate_text}",
+    ]
+    if has_eligible:
+        lines.append(f"Learning candidate captured: {learning_candidate_text}")
+    lines.extend([
         (
             "Tradecards generated/filled/resolved W/L/N/P: "
             f"{b['tradecards_generated']}/{b['tradecards_filled']}/{b['tradecards_resolved']} "
@@ -694,19 +749,23 @@ def format_daily_review_quality_lines(
         ),
         f"Pending data: {b['pending_data']}",
         f"Pending data reasons: {reason_text}",
-        (
+    ])
+    if has_eligible:
+        lines.append(
             'Tradecard resolved/no-fill: '
             f"{b['tradecard_actual_resolved']}/{b['tradecard_actual_no_fill']}"
-        ),
-        f"Actual learning sample updated: {b['learning_sample_updated']}",
-    ]
+        )
+    elif format_legacy_tradecard_journal_lines:
+        legacy = format_legacy_tradecard_journal_lines({
+            'no_fill': b.get('tradecard_actual_no_fill') or 0,
+            'pending': b.get('tradecard_pending') or 0,
+        })
+        if legacy:
+            lines.extend(legacy)
+    lines.append(f"Actual learning sample updated: {b['learning_sample_updated']}")
     if b['tradecards_filled'] <= 0:
         lines.append('No tradecard fills today. Watchlist accuracy only.')
-    try:
-        from backend.trading.candidate_outcome_learning import format_tradecard_outcome_review_block
-
+    if format_daily_review_tradecard_outcome_section:
         lines.append('')
-        lines.extend(format_tradecard_outcome_review_block())
-    except Exception:
-        pass
+        lines.extend(format_daily_review_tradecard_outcome_section(opening_workflow=opening))
     return lines

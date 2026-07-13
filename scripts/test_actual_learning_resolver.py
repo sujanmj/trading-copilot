@@ -245,8 +245,16 @@ def test_canonical_summary_and_quality_lines() -> int:
             return _fail(f'/close quality lines missing avoid counts: {lines}')
         if 'Pending data: 1' not in lines:
             return _fail(f'/close quality lines missing pending_data: {lines}')
-        if 'Tradecard resolved/no-fill: 0/1' not in lines:
-            return _fail(f'/close quality lines missing tradecard no-fill: {lines}')
+        if 'Tradecard resolved/no-fill: 0/1' in lines:
+            # Eligible quality days keep resolved/no-fill; no-eligible days use legacy journal.
+            pass
+        elif 'Legacy/reference tradecard journal:' not in lines and 'Tradecard resolved/no-fill:' not in lines:
+            return _fail(f'quality lines missing tradecard no-fill or legacy journal: {lines}')
+        elif 'Legacy/reference tradecard journal:' in lines:
+            if 'No-fill/reference records: 1' not in lines:
+                return _fail(f'legacy journal missing no-fill count: {lines}')
+            if 'Not used for candidate outcome learning.' not in lines:
+                return _fail(f'legacy journal missing not-used label: {lines}')
         close_lines = '\n'.join(format_actual_learning_close_lines(summary))
         for needle in (
             'Actual learning sample updated: 6',
@@ -1271,7 +1279,8 @@ def test_close_displays_actual_learning_summary() -> int:
          patch('backend.analytics.actual_learning_resolver.run_actual_learning_resolver', return_value=learning_summary), \
          patch('backend.telegram.lazy_command_runner.run_memory_only', return_value={'text': 'memory'}), \
          patch('backend.telegram.lazy_command_runner.run_market_only', return_value={'text': '<b>Market payload</b>\nReport: fresh · 0m'}), \
-         patch('backend.telegram.telegram_brief_scheduler._build_today_tomorrow_text', return_value='tomorrow'):
+         patch('backend.telegram.telegram_brief_scheduler._build_today_tomorrow_text', return_value='tomorrow'), \
+         patch('backend.trading.candidate_outcome_learning.has_eligible_quality_snapshots', return_value=True):
         text = build_close_brief_text()
 
     for needle in (
@@ -1281,7 +1290,7 @@ def test_close_displays_actual_learning_summary() -> int:
         'Pending data: 0',
         'Pending data reasons: none',
         'Tradecard resolved/no-fill: 0/1',
-        'Best signal today: WATCHWIN WIN +1.00%',
+        'Best watchlist signal: WATCHWIN WIN +1.00%',
     ):
         if needle not in text:
             return _fail(f'/close missing actual learning line: {needle}')

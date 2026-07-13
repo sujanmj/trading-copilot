@@ -279,6 +279,7 @@ def record_scheduled_final_confirmation(
     summary['final_confirmation_generated'] = int(summary.get('final_confirmation_generated') or 0) + 1
     summary['final_best_pick'] = sym
     summary['final_confirmation_state'] = state
+    summary['final_best_score'] = int(row.get('score') or 0)
     bucket = _confirmation_bucket(state)
     for key in ('confirmed', 'rejected', 'wait_pullback', 'pullback_only', 'chase_risk'):
         summary.setdefault(key, 0)
@@ -315,6 +316,7 @@ def summarize_opening_workflow_accounting(review_date: str) -> dict[str, Any]:
             summary.get('final_best_pick') or captured.get('final_confirmation_best') or ''
         ),
         'final_confirmation_state': str(summary.get('final_confirmation_state') or ''),
+        'final_best_score': int(summary.get('final_best_score') or 0),
         'confirmed': int(summary.get('confirmed') or 0),
         'rejected': int(summary.get('rejected') or 0),
         'wait_pullback': int(summary.get('wait_pullback') or 0),

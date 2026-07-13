@@ -1042,17 +1042,116 @@ def _group_outcomes_by_stage(outcomes: list[dict[str, Any]], stage: str) -> dict
     return groups
 
 
-def format_no_quality_snapshots_block(*, session_date: str | None = None) -> list[str]:
-    skips = skip_stats_for_session(session_date)
-    outcomes = [
-        o for o in _load_jsonl(_outcomes_path())
-        if str(o.get('session_date') or '')[:10] == (session_date or _session_date())
-    ]
+def _outcome_learning_group_counts(*, session_date: str | None = None) -> dict[str, int]:
+    day = session_date or _session_date()
     groups = {OUTCOME_WIN: 0, OUTCOME_LOSS: 0, OUTCOME_NEUTRAL: 0, OUTCOME_PENDING: 0}
-    for row in outcomes:
+    for row in _load_jsonl(_outcomes_path()):
+        if str(row.get('session_date') or '')[:10] != day:
+            continue
         bucket = str(row.get('outcome') or OUTCOME_PENDING)
         if bucket in groups:
             groups[bucket] += 1
+    return groups
+
+
+def _skip_counts_from_opening_workflow(opening: dict[str, Any] | None) -> dict[str, int]:
+    """Best-effort skip counts from opening workflow when snapshot skip state is empty."""
+    data = opening if isinstance(opening, dict) else {}
+    watch_only = 0
+    below_threshold = 0
+    stale_scanner = 0
+    for row in data.get('early_candidates') or []:
+        if not isinstance(row, dict):
+            continue
+        state = str(row.get('state') or '').upper()
+        score = int(row.get('score') or 0)
+        if state in INELIGIBLE_OUTCOME_STATES or state in ('RADAR_ARMED', 'WATCH_ONLY', 'PULLBACK_ONLY_PLAN'):
+            watch_only += 1
+        if score < MIN_QUALITY_SCORE:
+            below_threshold += 1
+        if state in ('BLOCKED_STALE_DATA',):
+            stale_scanner += 1
+    final_state = str(data.get('final_confirmation_state') or '').upper().replace(' ', '_')
+    if final_state in INELIGIBLE_OUTCOME_STATES or final_state in (
+        'WATCH_ONLY', 'LOW_CONFIDENCE', 'WAIT_FOR_PULLBACK', 'WAIT_LIVE_CONFIRM', 'PULLBACK_ONLY_PLAN',
+    ):
+        watch_only = max(watch_only, 1)
+    final_score = int(data.get('final_best_score') or 0)
+    if final_state in ('REJECTED_LOW_SCORE', 'LOW_CONFIDENCE') or (
+        final_score and final_score < MIN_QUALITY_SCORE
+    ):
+        below_threshold = max(below_threshold, 1)
+    if final_state in ('BLOCKED_STALE_DATA',):
+        stale_scanner = max(stale_scanner, 1)
+    # Final best with low score recorded via early candidates matching final pick
+    final_best = _normalize_symbol(data.get('final_confirmation_best') or data.get('final_best_pick'))
+    if final_best:
+        for row in data.get('early_candidates') or []:
+            if not isinstance(row, dict):
+                continue
+            if _normalize_symbol(row.get('ticker')) != final_best:
+                continue
+            if int(row.get('score') or 0) < MIN_QUALITY_SCORE:
+                below_threshold = max(below_threshold, 1)
+            break
+    watch_only = max(watch_only, int(data.get('radar_armed') or 0))
+    return {
+        'watch_only': watch_only,
+        'below_threshold': below_threshold,
+        'stale_scanner': stale_scanner,
+    }
+
+
+def format_skip_counter_lines(
+    *,
+    session_date: str | None = None,
+    opening_workflow: dict[str, Any] | None = None,
+) -> list[str]:
+    """Skip counters for daily review — avoid misleading all-zero when skips are known."""
+    skips = skip_stats_for_session(session_date)
+    if not any(int(v or 0) for v in skips.values()):
+        derived = _skip_counts_from_opening_workflow(opening_workflow)
+        if any(derived.values()):
+            skips = derived
+    if any(int(v or 0) for v in skips.values()):
+        return [
+            f'skipped_watch_only: {skips.get("watch_only", 0)}',
+            f'skipped_below_threshold: {skips.get("below_threshold", 0)}',
+            f'skipped_stale_scanner: {skips.get("stale_scanner", 0)}',
+        ]
+    opening = opening_workflow if isinstance(opening_workflow, dict) else {}
+    had_watch_or_below = (
+        int(opening.get('radar_armed') or 0) > 0
+        or int(opening.get('wait_pullback') or 0) > 0
+        or int(opening.get('pullback_only') or 0) > 0
+        or int(opening.get('early_tradecards_generated') or 0) > 0
+        or int(opening.get('final_confirmation_generated') or 0) > 0
+        or bool(opening.get('early_candidates'))
+        or bool(opening.get('final_confirmation_state'))
+    )
+    if had_watch_or_below and not has_eligible_quality_snapshots(session_date):
+        return [
+            'skipped_watch_only: available in daily review only',
+            'skipped_below_threshold: available in daily review only',
+            'skipped_stale_scanner: available in daily review only',
+        ]
+    return [
+        f'skipped_watch_only: {skips.get("watch_only", 0)}',
+        f'skipped_below_threshold: {skips.get("below_threshold", 0)}',
+        f'skipped_stale_scanner: {skips.get("stale_scanner", 0)}',
+    ]
+
+
+def format_no_quality_snapshots_block(
+    *,
+    session_date: str | None = None,
+    opening_workflow: dict[str, Any] | None = None,
+) -> list[str]:
+    groups = _outcome_learning_group_counts(session_date=session_date)
+    skip_lines = format_skip_counter_lines(
+        session_date=session_date,
+        opening_workflow=opening_workflow,
+    )
     return [
         'No quality tradecard snapshots today.',
         'Reason:',
@@ -1066,9 +1165,35 @@ def format_no_quality_snapshots_block(*, session_date: str | None = None) -> lis
         f'lost: {groups[OUTCOME_LOSS]}',
         f'neutral: {groups[OUTCOME_NEUTRAL]}',
         f'pending: {groups[OUTCOME_PENDING]}',
-        f'skipped_watch_only: {skips.get("watch_only", 0)}',
-        f'skipped_below_threshold: {skips.get("below_threshold", 0)}',
-        f'skipped_stale_scanner: {skips.get("stale_scanner", 0)}',
+        *skip_lines,
+    ]
+
+
+def format_daily_review_tradecard_outcome_section(
+    *,
+    session_date: str | None = None,
+    opening_workflow: dict[str, Any] | None = None,
+) -> list[str]:
+    """Single unified Tradecard outcome review for scheduled DAILY REVIEW (no-eligible days)."""
+    day = session_date or _session_date()
+    if has_eligible_quality_snapshots(day):
+        return format_tradecard_outcome_review_block(session_date=day)
+    groups = _outcome_learning_group_counts(session_date=day)
+    skip_lines = format_skip_counter_lines(
+        session_date=day,
+        opening_workflow=opening_workflow,
+    )
+    return [
+        '<b>Tradecard outcome review:</b>',
+        'No eligible quality tradecard snapshots today.',
+        'Radar/watchlist/intraday pullback candidates were reference-only and not scored as tradecard wins/losses.',
+        '',
+        'Outcome learning:',
+        f'won: {groups[OUTCOME_WIN]}',
+        f'lost: {groups[OUTCOME_LOSS]}',
+        f'neutral: {groups[OUTCOME_NEUTRAL]}',
+        f'pending: {groups[OUTCOME_PENDING]}',
+        *skip_lines,
     ]
 
 

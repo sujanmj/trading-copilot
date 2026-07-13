@@ -826,9 +826,13 @@ def test_final_best_capture_and_daily_review_lines() -> int:
                     actual_learning_summary={'sample_updated': 0, 'watchlist': {}, 'avoid': {}, 'pending_data': 0},
                 )
             text = '\n'.join(lines)
-            for needle in ('Opening workflow:', 'Final confirmation best: INFY', 'Learning candidate captured: INFY'):
+            for needle in ('Opening workflow:', 'Final confirmation best: INFY'):
                 if needle not in text:
                     return _fail(f'daily review missing {needle!r}: {text}')
+            if 'Learning candidate captured: INFY' in text:
+                return _fail('pullback-only INFY must not be shown as learning candidate captured')
+            if 'Final confirmation checks run:' not in text and 'Final confirmation generated:' not in text:
+                return _fail(f'daily review missing final confirmation check count: {text}')
             if 'PULLBACK ONLY PLAN' not in sent[0] or 'no chase' not in sent[0].lower():
                 return _fail(f'final confirmation should be pullback-only: {sent[0]}')
             if '[OPENING_PULLBACK_ONLY_PLAN]' not in buf.getvalue():

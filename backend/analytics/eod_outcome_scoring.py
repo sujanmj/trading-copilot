@@ -431,11 +431,16 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
 
 def _candidate_outcome_learning_block(summary: dict) -> str:
     try:
-        from backend.trading.candidate_outcome_learning import format_candidate_outcome_learning_block
-
-        lines = format_candidate_outcome_learning_block(
-            session_date=str(summary.get('date') or _today()),
+        from backend.trading.candidate_outcome_learning import (
+            format_candidate_outcome_learning_block,
+            has_eligible_quality_snapshots,
         )
+
+        day = str(summary.get('date') or _today())
+        # No-eligible day: unified section already printed in quality_lines — avoid duplicate.
+        if not has_eligible_quality_snapshots(day):
+            return ''
+        lines = format_candidate_outcome_learning_block(session_date=day)
         if not lines:
             return ''
         return '\n'.join(lines) + '\n\n'
@@ -445,9 +450,14 @@ def _candidate_outcome_learning_block(summary: dict) -> str:
 
 def _tradecard_review_block(summary: dict) -> str:
     try:
+        from backend.trading.candidate_outcome_learning import has_eligible_quality_snapshots
         from backend.trading.tradecard_journal import format_tradecard_review_section
 
-        return format_tradecard_review_section(session_date=str(summary.get('date') or _today()))
+        day = str(summary.get('date') or _today())
+        # No-eligible day: Tradecard outcome review already in quality_lines — avoid duplicate.
+        if not has_eligible_quality_snapshots(day):
+            return ''
+        return format_tradecard_review_section(session_date=day)
     except Exception:
         return '<b>Tradecards:</b>\nGenerated: 0'
 

@@ -49,15 +49,31 @@ def main() -> int:
         apply_path_to_journal_record(sut_row, sl_path)
         persist_tradecard_generation(sample_valid_card(status='NO_TRADE', ticker='KPIL'))
 
-        section = format_tradecard_review_section(session_date='2026-06-19')
+        with patch(
+            'backend.trading.candidate_outcome_learning.has_eligible_quality_snapshots',
+            return_value=True,
+        ):
+            section = format_tradecard_review_section(session_date='2026-06-19')
         for marker in ('<b>Tradecards:</b>', 'Generated:', 'Filled:', 'T1:', 'T2:', 'SL:'):
             if marker not in section:
                 return _fail(f'review section missing {marker!r}')
 
         summary = {'date': '2026-06-19'}
-        block = _tradecard_review_block(summary)
+        with patch(
+            'backend.trading.candidate_outcome_learning.has_eligible_quality_snapshots',
+            return_value=True,
+        ):
+            block = _tradecard_review_block(summary)
         if 'Generated:' not in block or 'SL:' not in block:
             return _fail('EOD review block must include tradecard counts')
+
+        with patch(
+            'backend.trading.candidate_outcome_learning.has_eligible_quality_snapshots',
+            return_value=False,
+        ):
+            empty = _tradecard_review_block(summary)
+        if empty:
+            return _fail('no-eligible day must suppress duplicate tradecard review block at EOD footer')
 
     with isolated_tradecard_journal(), \
          patch('backend.trading.tradecard_journal._today', return_value='2026-06-19'):
