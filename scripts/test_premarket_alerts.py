@@ -22,6 +22,13 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
+    from scripts._test_runtime_isolation import isolated_ai_usage_log, isolated_premarket_report
+
+    with isolated_ai_usage_log(), isolated_premarket_report():
+        return _run()
+
+
+def _run() -> int:
     from backend.analytics.premarket_conviction import (
         _apply_conflict_guard,
         _apply_volume_caps,
@@ -32,7 +39,8 @@ def main() -> int:
     from backend.telegram.premarket_scheduler import PREMARKET_SLOTS, SCHEDULE_DISPLAY
     from backend.telegram.telegram_analysis_bot import HELP_TEXT, handle_analysis_command
 
-    report = build_premarket_conviction_report(persist=True)
+    # persist=False: keep regression runs from writing under data/
+    report = build_premarket_conviction_report(persist=False)
     if report.get('top_setups') is None:
         return _fail('report missing top_setups')
     if not report.get('stage'):

@@ -58,6 +58,9 @@ def main() -> int:
     meta = {'quote_refreshed_now': True, 'scanner_refreshed_now': True, 'refresh_failed': False}
     chat_id = 'explain-latest-card'
 
+    from scripts._test_runtime_isolation import synced_tradecard_stub
+
+    amber_sync = synced_tradecard_stub('AMBER')
     with isolated_tradecard_latest():
         with patch('backend.trading.tradecard_refresh.refresh_tradecard_market_data', return_value=meta), \
              patch('backend.trading.trade_card_engine.get_trade_card', return_value=amber), \
@@ -66,7 +69,8 @@ def main() -> int:
              patch('backend.telegram.response_format._tradecard_postmarket_line', return_value=''), \
              patch('backend.trading.tradecard_refresh.is_tradecard_data_stale', return_value=False), \
              patch('backend.trading.tradecard_journal.get_active_valid_entry', return_value=None), \
-             patch('backend.trading.tradecard_journal.persist_tradecard_generation', return_value={'id': 'x'}):
+             patch('backend.trading.tradecard_journal.persist_tradecard_generation', return_value={'id': 'x'}), \
+             patch('backend.trading.opening_rally_radar.select_synced_tradecard', return_value=amber_sync):
             first = run_tradecard_only('', chat_id=chat_id)
 
         if 'AMBER' not in (first.get('text') or ''):

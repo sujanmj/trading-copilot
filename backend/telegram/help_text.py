@@ -184,7 +184,12 @@ HELP_TEXT = f'{HELP_HEADER}\n\n' + '\n\n'.join(HELP_BLOCKS[key] for key in FULL_
 
 
 def format_help_index() -> str:
-    """Compact /help index — short enough to avoid Telegram truncation."""
+    """Compact /help index — short enough to avoid Telegram truncation.
+
+    Includes essential Feed / Catalyst / Trade Card command markers so bare
+    `/help` remains discoverable, while full section bodies stay on
+    `/help feed`, `/help catalyst`, `/help trade`, and `/help full`.
+    """
     return f"""<b>🤖 AstraEdge Help</b>
 Use section help to avoid Telegram truncation.
 
@@ -203,6 +208,22 @@ Use section help to avoid Telegram truncation.
 /help patterns — chart patterns and candles
 /help briefs — news, morning, close, full
 /help themes — theme wishlist and budget
+
+<b>My Feed:</b>
+/feed &lt;market news text&gt; — save text to My Feed
+/myfeed list — latest saved feed
+/myfeed today — today's feed
+/myfeed scan — tickers/themes impact
+
+<b>Catalyst Radar:</b>
+/catalysts — stock-specific catalyst radar
+/catalysts today — today's catalyst priority list
+/catalysts explain &lt;ticker&gt; — catalyst reason for ticker
+
+<b>Trade Card:</b>
+/tradecard — one-stock paper trade card
+/tradecard today — today's trade card
+/tradecard explain — full trade card plan notes
 
 <b>Full:</b>
 /help full — send complete help in multiple safe parts

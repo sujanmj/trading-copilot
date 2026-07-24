@@ -44,13 +44,17 @@ def main() -> int:
     }
     chat_id = 'latest-no-active-entry'
 
+    from scripts._test_runtime_isolation import synced_tradecard_stub
+
+    sync = synced_tradecard_stub('SCHAEFFLER', state='NO_ACTIVE_ENTRY', status_override='NO_ACTIVE_ENTRY')
     with isolated_tradecard_latest(), isolated_tradecard_journal():
         with patch('backend.trading.tradecard_refresh.refresh_tradecard_market_data', return_value=meta), \
              patch('backend.trading.trade_card_engine.get_trade_card', return_value=card), \
              patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
              patch('backend.trading.tradecard_refresh.is_tradecard_data_stale', return_value=False), \
              patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('SCHAEFFLER', 'NO_ACTIVE_ENTRY')), \
-             patch('backend.telegram.response_format._tradecard_postmarket_line', return_value=''):
+             patch('backend.telegram.response_format._tradecard_postmarket_line', return_value=''), \
+             patch('backend.trading.opening_rally_radar.select_synced_tradecard', return_value=sync):
             plain = run_tradecard_only('', chat_id=chat_id)
 
         plain_text = plain.get('text') or ''
@@ -70,7 +74,8 @@ def main() -> int:
         with patch('backend.trading.tradecard_refresh.refresh_tradecard_market_data', return_value=meta), \
              patch('backend.trading.trade_card_engine.get_trade_card', return_value={**card, 'ticker': 'OTHER'}), \
              patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
-             patch('backend.trading.tradecard_refresh.is_tradecard_data_stale', return_value=False):
+             patch('backend.trading.tradecard_refresh.is_tradecard_data_stale', return_value=False), \
+             patch('backend.trading.opening_rally_radar.select_synced_tradecard', return_value=sync):
             explain = run_tradecard_only('explain', chat_id=chat_id)
 
     text = explain.get('text') or ''

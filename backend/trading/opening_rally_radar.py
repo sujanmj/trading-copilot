@@ -806,6 +806,12 @@ def build_opening_rally_board(
         )
     except Exception:
         pass
+    try:
+        from backend.trading.candidate_decision_trace import apply_decision_traces_to_board
+
+        payload = apply_decision_traces_to_board(payload)
+    except Exception:
+        pass
     return payload
 
 

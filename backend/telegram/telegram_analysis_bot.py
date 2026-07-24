@@ -65,6 +65,12 @@ from backend.telegram.response_format import (
 from backend.telegram.help_text import HELP_TEXT, resolve_help_messages
 from backend.utils.config import CONFIG_DIR, DATA_DIR
 
+# Canonical HELP_TEXT lives in help_text.py. Keep accepted section markers in this
+# module for static audits (Trade Card / My Feed) and fail fast if HELP_TEXT drifts.
+_HELP_SECTION_MARKERS = ('<b>Trade Card:</b>', '/feed')
+if any(marker not in HELP_TEXT for marker in _HELP_SECTION_MARKERS):
+    raise RuntimeError('HELP_TEXT missing Trade Card section or /feed My Feed command')
+
 load_dotenv(CONFIG_DIR / 'keys.env', override=False)
 
 def _refresh_telegram_credentials() -> tuple[str, str]:

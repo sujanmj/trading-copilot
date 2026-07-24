@@ -369,6 +369,7 @@ def build_candidate_snapshot(
         'previous_mover': bool(row.get('previous_mover') or row.get('previous_session_mover')),
         'has_catalyst': bool(row.get('has_catalyst') or row.get('catalyst_line')),
         'stage_version': STAGE,
+        'decision_trace': row.get('decision_trace') if isinstance(row.get('decision_trace'), dict) else None,
     }
 
 

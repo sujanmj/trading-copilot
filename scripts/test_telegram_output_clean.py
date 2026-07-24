@@ -83,6 +83,7 @@ def main() -> int:
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
     from backend.telegram.lazy_command_runner import FULL_SNAPSHOT_SEQUENCE
     from backend.telegram.telegram_analysis_bot import handle_analysis_command
+    from scripts._test_runtime_isolation import isolated_ai_usage_log, isolated_aihub_tab_cache
 
     if ASTRAEDGE_TELEGRAM_BUILD != f'AstraEdge {get_astraedge_build_stage()}':
         return _fail(f'expected {ASTRAEDGE_TELEGRAM_BUILD!r} got build mismatch')
@@ -94,7 +95,9 @@ def main() -> int:
     def _no_refresh(*args, **kwargs):
         return {'ok': True}
 
-    with patch('scripts.refresh_local_intelligence.run_refresh_scoped', side_effect=_no_refresh):
+    with isolated_ai_usage_log(), \
+         isolated_aihub_tab_cache(), \
+         patch('scripts.refresh_local_intelligence.run_refresh_scoped', side_effect=_no_refresh):
         for cmd in COMMANDS:
             results = handle_analysis_command(cmd, 'clean_test', dry_run=True)
             if not results:

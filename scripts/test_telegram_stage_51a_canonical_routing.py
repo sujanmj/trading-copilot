@@ -23,6 +23,13 @@ def _fail(msg: str) -> int:
 
 
 def main() -> int:
+    from scripts._test_runtime_isolation import isolated_ai_usage_log
+
+    with isolated_ai_usage_log():
+        return _run()
+
+
+def _run() -> int:
     from backend.analytics.budget_impact import CACHE_FILE as BUDGET_CACHE_FILE, refresh_budget_intel
     from backend.config.local_safe_mode import ASTRAEDGE_TELEGRAM_BUILD, get_astraedge_build_stage
     from backend.intelligence.stock_catalyst_radar import CACHE_FILE as CATALYST_CACHE_FILE, build_catalyst_radar

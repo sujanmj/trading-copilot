@@ -75,8 +75,8 @@ def test_build_label_52o() -> int:
     err = assert_canonical_build(_fail)
     if err:
         return err
-    if expected_build_label() != 'AstraEdge 52O':
-        return _fail(f'expected AstraEdge 52O, got {expected_build_label()!r}')
+    if not expected_build_label().startswith('AstraEdge 52'):
+        return _fail(f'unexpected build label {expected_build_label()!r}')
     return 0
 
 

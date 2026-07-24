@@ -42,7 +42,13 @@ def main() -> int:
     from backend.telegram.lazy_command_runner import run_tradecard_only
     from backend.telegram.response_format import format_tradecard_telegram
     from backend.telegram.telegram_analysis_bot import handle_analysis_command
+    from scripts._test_runtime_isolation import isolated_ai_usage_log
 
+    with isolated_ai_usage_log():
+        return _main_isolated(run_tradecard_only, format_tradecard_telegram, handle_analysis_command)
+
+
+def _main_isolated(run_tradecard_only, format_tradecard_telegram, handle_analysis_command) -> int:
     fake_card = {
         'ok': True,
         'ticker': 'IXIGO',

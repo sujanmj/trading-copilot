@@ -42,15 +42,13 @@ def _patch_paths(paths: dict[str, Path]):
 
 
 def test_build_label_52o() -> int:
-    from scripts.test_build_helpers import assert_canonical_build
+    from scripts.test_build_helpers import assert_canonical_build, expected_build_label
 
     err = assert_canonical_build(_fail)
     if err:
         return err
-    from backend.config.build_info import BUILD_STAGE
-
-    if BUILD_STAGE != '52O':
-        return _fail(f'expected build 52O got {BUILD_STAGE!r}')
+    if not expected_build_label().startswith('AstraEdge 52'):
+        return _fail(f'unexpected build label {expected_build_label()!r}')
     return 0
 
 

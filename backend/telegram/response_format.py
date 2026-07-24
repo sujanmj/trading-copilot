@@ -2544,6 +2544,32 @@ def format_tradecard_evidence_explain_telegram(
         card={'ticker': sym, 'status': 'NO_ACTIVE_ENTRY'},
         freshness_meta=freshness_meta,
     )
+    try:
+        from backend.trading.candidate_decision_trace import (
+            extract_decision_trace,
+            format_candidate_decision_trace_telegram,
+        )
+        from backend.trading.opening_rally_radar import opening_board_context_for_ticker
+
+        opening_ctx = opening_board_context_for_ticker(sym)
+        board_row = None
+        if isinstance(opening_ctx, dict):
+            board_row = opening_ctx.get('board_row') if isinstance(opening_ctx.get('board_row'), dict) else None
+        trace = extract_decision_trace(board_row, symbol=sym)
+        if trace is None and board_row is None:
+            lines.extend(format_candidate_decision_trace_telegram({'ok': False, 'unavailable': True}))
+        else:
+            if trace is None and isinstance(board_row, dict):
+                from backend.trading.candidate_decision_trace import build_candidate_decision_trace
+
+                trace = build_candidate_decision_trace(board_row)
+            lines.extend(format_candidate_decision_trace_telegram(trace))
+    except Exception:
+        lines.extend([
+            '',
+            '<b>Candidate Decision Trace</b>',
+            'Trace unavailable for this candidate.',
+        ])
     return strip_stage_markers('\n'.join(lines))
 
 

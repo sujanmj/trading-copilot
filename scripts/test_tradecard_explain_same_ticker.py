@@ -19,6 +19,7 @@ def _fail(msg: str) -> int:
 
 def main() -> int:
     from backend.telegram.response_format import format_tradecard_telegram
+    from scripts._test_runtime_isolation import synced_tradecard_stub
 
     fake = {
         'ok': True,
@@ -39,9 +40,11 @@ def main() -> int:
         'session_date': '2026-05-27',
         'generated_at': '2026-05-27T10:00:00+05:30',
     }
+    sync = synced_tradecard_stub('IXIGO')
     with patch('backend.trading.trade_card_engine.get_trade_card', return_value=fake), \
          patch('backend.trading.trade_card_engine.is_trade_card_stale', return_value=False), \
-         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('IXIGO', 'VALID_ENTRY')):
+         patch('backend.telegram.response_format._tradecard_unified_today_top', return_value=('IXIGO', 'VALID_ENTRY')), \
+         patch('backend.trading.opening_rally_radar.select_synced_tradecard', return_value=sync):
         normal = format_tradecard_telegram(explain=False)
         explain = format_tradecard_telegram(explain=True)
 
