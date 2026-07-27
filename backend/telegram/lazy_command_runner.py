@@ -788,7 +788,7 @@ def run_budget_only(args: str = '') -> dict[str, Any]:
 
 
 def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[str, Any]:
-    from backend.telegram.response_format import format_tradecard_evidence_explain_telegram, format_tradecard_telegram
+    from backend.telegram.response_format import format_tradecard_telegram
     from backend.trading.tradecard_journal import format_tradecard_journal_telegram, format_tradecard_outcome_telegram
     from backend.trading.tradecard_latest import (
         NO_LATEST_MESSAGE,
@@ -811,36 +811,72 @@ def run_tradecard_only(args: str = '', *, chat_id: str | None = None) -> dict[st
         text = format_tradecard_outcome_telegram()
         return _runner_result('tradecard_outcome', text=text)
     if explain:
+        # 52P hotfix: explain is read-mostly and must never hang on full scanner refresh.
+        from backend.trading.tradecard_explain import (
+            format_explain_fallback,
+            freshness_meta_for_explain,
+            run_tradecard_explain_safe,
+            REASON_UNKNOWN,
+        )
+
         if explain_ticker:
-            freshness = refresh_tradecard_market_data(
-                effective_chat_id,
-                force=force,
-                skip_card_rebuild=True,
-            )
-            text = format_tradecard_evidence_explain_telegram(
-                explain_ticker,
-                freshness_meta=freshness,
-            )
+            try:
+                explained = run_tradecard_explain_safe(
+                    explain_ticker,
+                    chat_id=effective_chat_id,
+                    force=force,
+                )
+            except Exception:
+                text = format_explain_fallback(explain_ticker, reason_code=REASON_UNKNOWN)
+                explained = {
+                    'ok': False,
+                    'text': text,
+                    'texts': [text],
+                    'reason': REASON_UNKNOWN,
+                    'ticker': explain_ticker,
+                }
+            texts = list(explained.get('texts') or [])
+            text = str(explained.get('text') or (texts[0] if texts else '') or '').strip()
+            if not text:
+                text = format_explain_fallback(explain_ticker, reason_code=REASON_UNKNOWN)
+                texts = [text]
             return _runner_result(
                 'tradecard',
                 text=text,
-                payload={'freshness': freshness, 'ticker': explain_ticker},
+                payload={
+                    'freshness': explained.get('freshness') or {},
+                    'ticker': explain_ticker,
+                    'explain_reason': explained.get('reason'),
+                    'lookup': explained.get('lookup') or {},
+                },
                 mode='explain',
+                texts=texts,
             )
         latest = load_latest_tradecard(effective_chat_id)
         if not latest or is_latest_tradecard_expired(latest):
             return _runner_result('tradecard', text=NO_LATEST_MESSAGE, mode='explain')
-        freshness = refresh_tradecard_market_data(
-            effective_chat_id,
-            force=force,
-            skip_card_rebuild=True,
+        # Pinned latest explain: freshness from cache ages only (no scanner rebuild).
+        freshness = freshness_meta_for_explain(force=False, chat_id=effective_chat_id)
+        try:
+            text = format_tradecard_telegram(
+                explain=True,
+                freshness_meta=freshness,
+                pinned_latest=latest,
+            )
+        except Exception:
+            ticker = str((latest or {}).get('ticker') or 'UNKNOWN')
+            text = format_explain_fallback(
+                ticker,
+                reason_code=REASON_UNKNOWN,
+                latest_state=str((latest or {}).get('status') or ''),
+            )
+        return _runner_result(
+            'tradecard',
+            text=text,
+            payload={'freshness': freshness},
+            mode='explain',
+            texts=[text],
         )
-        text = format_tradecard_telegram(
-            explain=True,
-            freshness_meta=freshness,
-            pinned_latest=latest,
-        )
-        return _runner_result('tradecard', text=text, payload={'freshness': freshness}, mode='explain')
     freshness = refresh_tradecard_market_data(effective_chat_id, force=force)
     text = format_tradecard_telegram(
         explain=False,

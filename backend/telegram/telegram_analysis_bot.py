@@ -190,6 +190,49 @@ def send_analysis_message(
             timeout=10,
         )
         ok = response.status_code == 200
+        if not ok and parse_mode:
+            # Genuine plain-text fallback — strip Telegram HTML tags/entities.
+            from backend.telegram.formatting.telegram_formatter import (
+                enforce_char_limit,
+                telegram_html_to_plain,
+            )
+
+            plain = enforce_char_limit(telegram_html_to_plain(message), max_chars=4000)
+            if not plain:
+                plain = 'Tradecard Explain\nExplanation temporarily unavailable.\nPaper only.'
+            try:
+                retry = requests.post(
+                    f"{API_URL}/sendMessage",
+                    json={
+                        'chat_id': CHAT_ID,
+                        'text': plain,
+                        'disable_web_page_preview': True,
+                    },
+                    timeout=10,
+                )
+                ok = retry.status_code == 200
+                if not ok:
+                    safe_print(
+                        f'[TG_ANALYSIS] plain fallback send failed cmd={command} '
+                        f'status={retry.status_code}',
+                    )
+                return {
+                    'ok': ok,
+                    'sent': ok,
+                    'text': plain,
+                    'plain_fallback': True,
+                    'reason': None if ok else 'plain_fallback_send_failed',
+                }
+            except Exception as plain_exc:
+                safe_print(f'[TG_ANALYSIS] plain fallback error cmd={command}: {plain_exc}')
+                return {
+                    'ok': False,
+                    'sent': False,
+                    'text': plain,
+                    'plain_fallback': True,
+                    'reason': 'plain_fallback_exception',
+                    'error': str(plain_exc)[:120],
+                }
         if not ok:
             safe_print(f'[TG_ANALYSIS] send failed cmd={command} status={response.status_code}')
         return {'ok': ok, 'sent': ok, 'text': message}
@@ -889,11 +932,40 @@ def handle_analysis_command(
         from backend.telegram.lazy_command_runner import run_tradecard_only
 
         tradecard_chat_id = chat_id or from_user or 'default'
-        result = run_without_ai(
-            lambda: run_tradecard_only(args, chat_id=tradecard_chat_id),
-            command='tradecard',
-        )
-        response_text = result.get('text') or 'Trade card unavailable.'
+        try:
+            result = run_without_ai(
+                lambda: run_tradecard_only(args, chat_id=tradecard_chat_id),
+                command='tradecard',
+            )
+        except Exception:
+            result = {}
+        response_text = str(result.get('text') or '').strip()
+        explain_parts = [
+            str(part).strip()
+            for part in (result.get('texts') or [])
+            if str(part or '').strip()
+        ]
+        if not response_text and not explain_parts:
+            # Never-silent guarantee for /tradecard explain — even on total handler failure.
+            arg_l = str(args or '').strip().lower()
+            if 'explain' in arg_l:
+                from backend.trading.tradecard_explain import (
+                    REASON_UNKNOWN,
+                    format_explain_fallback,
+                )
+                from backend.trading.tradecard_refresh import parse_tradecard_explain_ticker
+
+                sym = parse_tradecard_explain_ticker(args) or 'UNKNOWN'
+                response_text = format_explain_fallback(sym, reason_code=REASON_UNKNOWN)
+                explain_parts = [response_text]
+            else:
+                response_text = 'Trade card unavailable.'
+        if explain_parts:
+            return [
+                send_analysis_message(part, command=cmd, dry_run=dry_run)
+                for part in explain_parts
+            ]
+        response_text = response_text or 'Trade card unavailable.'
     elif cmd == 'radar':
         from backend.telegram.lazy_command_runner import run_radar_only
 

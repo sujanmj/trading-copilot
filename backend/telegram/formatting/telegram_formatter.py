@@ -71,6 +71,27 @@ def sanitize_telegram_text(text: str) -> str:
     return body.strip()
 
 
+def telegram_html_to_plain(text: str) -> str:
+    """Convert Telegram HTML message body to plain text for parse_mode-less retries.
+
+    Strips supported Telegram HTML tags, unescapes entities, and preserves
+    readable content. Does not invent replacement markup.
+    """
+    from html import unescape
+
+    body = str(text or '')
+    # Normalize common break tags before stripping.
+    body = re.sub(r'(?i)<br\s*/?>', '\n', body)
+    body = re.sub(r'(?i)</p\s*>', '\n', body)
+    body = re.sub(r'(?i)</div\s*>', '\n', body)
+    body = re.sub(r'<[^>]+>', '', body)
+    body = unescape(body)
+    body = re.sub(r'[ \t]+\n', '\n', body)
+    body = re.sub(r'\n{3,}', '\n\n', body)
+    body = re.sub(r'[ \t]{2,}', ' ', body)
+    return body.strip()
+
+
 def format_for_command(text: str, command: str) -> str:
     cmd = str(command or 'brain').lower().strip().lstrip('/')
     max_lines = COMMAND_LINE_LIMITS.get(cmd, DEFAULT_MAX_LINES)

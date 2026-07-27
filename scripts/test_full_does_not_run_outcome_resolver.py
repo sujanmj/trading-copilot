@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Unit tests — /full must not run outcome resolver (Stage 49A)."""
+"""Unit tests — /full must not run outcome resolver (Stage 49A).
+
+FULL_SNAPSHOT_SEQUENCE is the accepted 12-step opening workflow
+(/status … /close). Older tests that asserted 32 steps were stale after the
+opening-workflow reduction; this file tracks the live sequence length while
+retaining the core invariant that /full never invokes outcome resolution.
+"""
 
 from __future__ import annotations
 
@@ -31,8 +37,10 @@ def main() -> int:
     if err:
         return err
 
-    if len(FULL_SNAPSHOT_SEQUENCE) != 32:
-        return _fail(f'/full must remain 32 steps got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    if len(FULL_SNAPSHOT_SEQUENCE) != 12:
+        return _fail(f'/full must remain 12 opening-workflow steps got {len(FULL_SNAPSHOT_SEQUENCE)}')
+    if any('resolve' in step.lower() and 'outcome' in step.lower() for step in FULL_SNAPSHOT_SEQUENCE):
+        return _fail('/full sequence must not include outcome resolver steps')
 
     resolver_calls: list[int] = []
 

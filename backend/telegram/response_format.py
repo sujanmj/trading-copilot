@@ -2528,49 +2528,153 @@ def format_tradecard_evidence_explain_telegram(
     ticker: object,
     *,
     freshness_meta: dict[str, Any] | None = None,
+    board: dict[str, Any] | None = None,
+    board_row: dict[str, Any] | None = None,
+    lookup: dict[str, Any] | None = None,
 ) -> str:
-    """Full evidence matrix for `/tradecard explain <ticker>`."""
+    """Full evidence matrix for `/tradecard explain <ticker>` — never raises."""
     sym = _normalize_tradecard_ticker(ticker)
     if not sym:
         return strip_stage_markers('No ticker supplied for tradecard evidence explain.')
+
     lines = [
         '<b>Tradecard Explain</b>',
         f'Ticker: <b>{sym}</b>',
     ]
-    _append_tradecard_evidence(
-        lines,
-        sym,
-        compact=False,
-        card={'ticker': sym, 'status': 'NO_ACTIVE_ENTRY'},
-        freshness_meta=freshness_meta,
-    )
+
+    card: dict[str, Any] = {'ticker': sym, 'status': 'NO_ACTIVE_ENTRY'}
+    row = board_row if isinstance(board_row, dict) else None
+    lookup_info = lookup if isinstance(lookup, dict) else {}
+    if row:
+        state = str(row.get('state') or row.get('status') or '').strip()
+        if state:
+            card['status'] = state
+            lines.append(f'State: <code>{state}</code>')
+        try:
+            score = int(row.get('score') or 0)
+        except (TypeError, ValueError):
+            score = 0
+        if score:
+            lines.append(f'Score: {score}')
+        source = str(lookup_info.get('source') or 'opening_board')
+        if source:
+            lines.append(f'Source: current-session {source.replace("_", " ")}')
+        card['_opening_radar_context'] = {
+            'board_row': row,
+            'ticker': sym,
+            'state': state,
+            'score': score,
+            'from_board': True,
+        }
+    elif lookup_info.get('historical') and isinstance(lookup_info.get('historical'), dict):
+        hist = lookup_info['historical']
+        hist_state = str(hist.get('status') or hist.get('state') or '').strip()
+        if hist_state:
+            card['status'] = hist_state
+            lines.append(f'Latest known state: <code>{hist_state}</code>')
+        lines.append('Source: historical journal (no current-session board row)')
+    elif lookup_info.get('session_stale') or lookup_info.get('reference_only'):
+        lines.append('Board: reference/stale session — explain uses cached evidence only')
+
+    evidence_ok = True
+    try:
+        _append_tradecard_evidence(
+            lines,
+            sym,
+            compact=False,
+            card=card,
+            freshness_meta=freshness_meta,
+        )
+    except Exception:
+        evidence_ok = False
+        try:
+            from backend.trading.tradecard_explain import REASON_EVIDENCE_FAILURE, log_explain_reason
+
+            log_explain_reason(REASON_EVIDENCE_FAILURE, ticker=sym)
+        except Exception:
+            pass
+        lines.extend([
+            '',
+            'Evidence matrix temporarily unavailable.',
+            'No new decision or outcome was created.',
+        ])
+
     try:
         from backend.trading.candidate_decision_trace import (
+            build_candidate_decision_trace,
             extract_decision_trace,
             format_candidate_decision_trace_telegram,
         )
         from backend.trading.opening_rally_radar import opening_board_context_for_ticker
 
-        opening_ctx = opening_board_context_for_ticker(sym)
-        board_row = None
-        if isinstance(opening_ctx, dict):
-            board_row = opening_ctx.get('board_row') if isinstance(opening_ctx.get('board_row'), dict) else None
-        trace = extract_decision_trace(board_row, symbol=sym)
-        if trace is None and board_row is None:
+        resolved_row = row
+        if resolved_row is None and board is not None:
+            # Prefer caller-supplied board without a second board rebuild.
+            try:
+                opening_ctx = opening_board_context_for_ticker(sym, board=board)
+            except Exception:
+                opening_ctx = None
+            if isinstance(opening_ctx, dict):
+                resolved_row = (
+                    opening_ctx.get('board_row')
+                    if isinstance(opening_ctx.get('board_row'), dict)
+                    else None
+                )
+        elif resolved_row is None:
+            try:
+                opening_ctx = opening_board_context_for_ticker(sym, board=board)
+            except Exception:
+                opening_ctx = None
+            if isinstance(opening_ctx, dict):
+                resolved_row = (
+                    opening_ctx.get('board_row')
+                    if isinstance(opening_ctx.get('board_row'), dict)
+                    else None
+                )
+
+        trace = extract_decision_trace(resolved_row, symbol=sym)
+        if trace is None and resolved_row is None:
             lines.extend(format_candidate_decision_trace_telegram({'ok': False, 'unavailable': True}))
         else:
-            if trace is None and isinstance(board_row, dict):
-                from backend.trading.candidate_decision_trace import build_candidate_decision_trace
-
-                trace = build_candidate_decision_trace(board_row)
-            lines.extend(format_candidate_decision_trace_telegram(trace))
+            if trace is None and isinstance(resolved_row, dict):
+                # Only rebuild from a live board row — never invent from incomplete history.
+                try:
+                    trace = build_candidate_decision_trace(resolved_row)
+                except Exception:
+                    trace = {'ok': False, 'unavailable': True}
+            try:
+                lines.extend(format_candidate_decision_trace_telegram(trace))
+            except Exception:
+                lines.extend([
+                    '',
+                    '<b>Candidate Decision Trace</b>',
+                    'Trace unavailable for this candidate.',
+                ])
     except Exception:
+        try:
+            from backend.trading.tradecard_explain import REASON_TRACE_FAILURE, log_explain_reason
+
+            log_explain_reason(REASON_TRACE_FAILURE, ticker=sym)
+        except Exception:
+            pass
         lines.extend([
             '',
             '<b>Candidate Decision Trace</b>',
             'Trace unavailable for this candidate.',
         ])
-    return strip_stage_markers('\n'.join(lines))
+
+    if not evidence_ok and len(lines) < 4:
+        lines.append('Paper only.')
+
+    try:
+        from backend.trading.tradecard_explain import truncate_explain_text
+
+        return strip_stage_markers(truncate_explain_text('\n'.join(str(x) for x in lines if x is not None)))
+    except Exception:
+        body = '\n'.join(str(x) for x in lines if x is not None)
+        if len(body) > 3900:
+            body = body[:3880] + '\n… (truncated)'
+        return strip_stage_markers(body)
 
 
 def _format_tradecard_premarket_watch(
