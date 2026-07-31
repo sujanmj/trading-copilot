@@ -79,7 +79,26 @@ def _load_state() -> dict[str, Any]:
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
-        return float(value)
+        num = float(value)
+    except (TypeError, ValueError):
+        return default
+    if num != num or num in (float('inf'), float('-inf')):
+        return default
+    return num
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    if value is None or isinstance(value, (list, dict, set, tuple, bool)):
+        return default
+    try:
+        if isinstance(value, float):
+            if value != value or value in (float('inf'), float('-inf')):
+                return default
+            return int(value)
+        text = str(value).strip()
+        if not text or text.lower() in ('nan', 'inf', '-inf', '+inf', 'infinity', '-infinity'):
+            return default
+        return int(float(text))
     except (TypeError, ValueError):
         return default
 
@@ -569,9 +588,13 @@ def daily_review_quality_buckets(
             tradecard_counts = (summarize_today_outcomes().get('counts') or {})
         except Exception:
             tradecard_counts = {}
-    generated = int(tradecard_counts.get('generated') or 0)
-    filled = int(tradecard_counts.get('filled') or 0)
-    resolved = int(tradecard_counts.get('T1') or 0) + int(tradecard_counts.get('T2') or 0) + int(tradecard_counts.get('SL') or 0)
+    generated = _safe_int(tradecard_counts.get('generated') or 0)
+    filled = _safe_int(tradecard_counts.get('filled') or 0)
+    resolved = (
+        _safe_int(tradecard_counts.get('T1') or 0)
+        + _safe_int(tradecard_counts.get('T2') or 0)
+        + _safe_int(tradecard_counts.get('SL') or 0)
+    )
     try:
         from backend.trading.candidate_outcome_learning import (
             eligible_learning_symbols,
@@ -585,7 +608,7 @@ def daily_review_quality_buckets(
         eligible_symbols = []
         has_eligible = False
         today = datetime.now(IST).date().isoformat()
-    opening_confirmed = int(opening_workflow.get('confirmed') or 0) if has_eligible else 0
+    opening_confirmed = _safe_int(opening_workflow.get('confirmed') or 0) if has_eligible else 0
     live_confirmed = len(eligible_symbols) if has_eligible else 0
     if actual_learning_summary is None and not tradecard_counts_provided:
         try:
@@ -598,29 +621,29 @@ def daily_review_quality_buckets(
     watch = actual.get('watchlist') if isinstance(actual.get('watchlist'), dict) else {}
     avoid = actual.get('avoid') if isinstance(actual.get('avoid'), dict) else {}
     tradecard_actual = actual.get('tradecard') if isinstance(actual.get('tradecard'), dict) else {}
-    learning_sample_updated = int(actual.get('sample_updated') or resolved)
-    pending_data = int(actual.get('pending_data') or 0)
+    learning_sample_updated = _safe_int(actual.get('sample_updated') or 0)
+    pending_data = _safe_int(actual.get('pending_data') or 0)
     pending_reasons = actual.get('pending_reasons') if isinstance(actual.get('pending_reasons'), dict) else {}
     return {
         'research_watchlist_sent': research_watchlist,
         'live_confirmed_setups': live_confirmed,
         'rejected_setups': 0,
-        'missed_opportunities': int(missed),
+        'missed_opportunities': _safe_int(missed),
         'tradecards_generated': generated,
         'tradecards_filled': filled,
         'tradecards_resolved': resolved,
-        'tradecard_wins': int(tradecard_counts.get('T1') or 0) + int(tradecard_counts.get('T2') or 0),
-        'tradecard_losses': int(tradecard_counts.get('SL') or 0),
-        'tradecard_neutral': int(tradecard_counts.get('no_fill') or 0),
-        'tradecard_pending': int(tradecard_counts.get('pending') or 0),
+        'tradecard_wins': _safe_int(tradecard_counts.get('T1') or 0) + _safe_int(tradecard_counts.get('T2') or 0),
+        'tradecard_losses': _safe_int(tradecard_counts.get('SL') or 0),
+        'tradecard_neutral': _safe_int(tradecard_counts.get('no_fill') or 0),
+        'tradecard_pending': _safe_int(tradecard_counts.get('pending') or 0),
         'learning_sample_updated': learning_sample_updated,
-        'watchlist_win': int(watch.get('win') or 0),
-        'watchlist_loss': int(watch.get('loss') or 0),
-        'watchlist_neutral': int(watch.get('neutral') or 0),
-        'avoid_success': int(avoid.get('success') or 0),
-        'avoid_fail': int(avoid.get('fail') or 0),
-        'tradecard_actual_resolved': int(tradecard_actual.get('resolved') or resolved),
-        'tradecard_actual_no_fill': int(tradecard_actual.get('no_fill') or tradecard_counts.get('no_fill') or 0),
+        'watchlist_win': _safe_int(watch.get('win') or 0),
+        'watchlist_loss': _safe_int(watch.get('loss') or 0),
+        'watchlist_neutral': _safe_int(watch.get('neutral') or 0),
+        'avoid_success': _safe_int(avoid.get('success') or 0),
+        'avoid_fail': _safe_int(avoid.get('fail') or 0),
+        'tradecard_actual_resolved': _safe_int(tradecard_actual.get('resolved') or resolved),
+        'tradecard_actual_no_fill': _safe_int(tradecard_actual.get('no_fill') or tradecard_counts.get('no_fill') or 0),
         'pending_data': pending_data,
         'pending_reasons': pending_reasons,
         'opening_workflow': opening_workflow,
@@ -698,7 +721,7 @@ def format_daily_review_quality_lines(
         learning_candidate_text = 'none — no eligible quality tradecards'
         format_daily_review_tradecard_outcome_section = None
         format_legacy_tradecard_journal_lines = None
-    confirmed_display = int(opening.get('confirmed') or 0) if has_eligible else 0
+    confirmed_display = _safe_int(opening.get('confirmed') or 0) if has_eligible else 0
     pending_reasons = b.get('pending_reasons') if isinstance(b.get('pending_reasons'), dict) else {}
     reason_text = ', '.join(f'{k} {v}' for k, v in sorted(pending_reasons.items())) or 'none'
     early_best = _opening_best_annotation(
@@ -717,18 +740,18 @@ def format_daily_review_quality_lines(
         f"Rejected setups: {b['rejected_setups']}",
         f"Missed opportunities: {b['missed_opportunities']}",
         "Opening workflow:",
-        f"Radar armed: {int(opening.get('radar_armed') or 0)}",
-        f"Opening radar: {int(opening.get('opening_radar') or 0)}",
-        f"Early tradecard checks run: {int(opening.get('early_tradecards_generated') or 0)}",
-        f"Final confirmation checks run: {int(opening.get('final_confirmation_generated') or 0)}",
+        f"Radar armed: {_safe_int(opening.get('radar_armed') or 0)}",
+        f"Opening radar: {_safe_int(opening.get('opening_radar') or 0)}",
+        f"Early tradecard checks run: {_safe_int(opening.get('early_tradecards_generated') or 0)}",
+        f"Final confirmation checks run: {_safe_int(opening.get('final_confirmation_generated') or 0)}",
         f"Early tradecard best: {early_best}",
         f"Final confirmation best: {final_best}",
         (
             "Final state: "
             f"confirmed {confirmed_display} · "
-            f"rejected {int(opening.get('rejected') or 0)} · "
-            f"wait {int(opening.get('wait_pullback') or 0)} · "
-            f"pullback {int(opening.get('pullback_only') or 0)}"
+            f"rejected {_safe_int(opening.get('rejected') or 0)} · "
+            f"wait {_safe_int(opening.get('wait_pullback') or 0)} · "
+            f"pullback {_safe_int(opening.get('pullback_only') or 0)}"
         ),
     ]
     if has_eligible:
@@ -762,7 +785,41 @@ def format_daily_review_quality_lines(
         })
         if legacy:
             lines.extend(legacy)
-    lines.append(f"Actual learning sample updated: {b['learning_sample_updated']}")
+    try:
+        from backend.trading.daily_learning_truth import (
+            format_daily_learning_truth_lines,
+            format_learning_sample_count_lines,
+            reconcile_daily_learning_truth,
+        )
+
+        injected = None
+        report_day = None
+        if isinstance(actual_learning_summary, dict):
+            injected = actual_learning_summary.get('daily_learning_truth')
+            report_day = str(actual_learning_summary.get('session_date') or '')[:10] or None
+        if isinstance(injected, dict):
+            truth = injected
+        else:
+            truth = reconcile_daily_learning_truth(session_date=report_day)
+        lines.extend(format_learning_sample_count_lines(truth))
+        reason_lines = format_daily_learning_truth_lines(truth, include_reason_sections=True)
+        for line in reason_lines:
+            if line.startswith('Eligible learning samples added today:'):
+                continue
+            if line.startswith('Total eligible historical samples:'):
+                continue
+            if line == '<b>Daily learning truth</b>':
+                continue
+            lines.append(line)
+    except Exception:
+        lines.extend([
+            'Eligible learning samples added today: unavailable',
+            'Total eligible historical samples: unavailable',
+            'Candidate qualification reasons:',
+            '• unavailable',
+            'Winner reasons:',
+            '• unavailable',
+        ])
     if b['tradecards_filled'] <= 0:
         lines.append('No tradecard fills today. Watchlist accuracy only.')
     if format_daily_review_tradecard_outcome_section:

@@ -70,8 +70,9 @@ def test_build_label_52p() -> int:
     err = assert_canonical_build(_fail)
     if err:
         return err
-    if expected_build_label() != 'AstraEdge 52P':
-        return _fail(f'expected AstraEdge 52P, got {expected_build_label()!r}')
+    # Trace schema remains 52P; product build may be 52Q successor.
+    if expected_build_label() not in ('AstraEdge 52P', 'AstraEdge 52Q'):
+        return _fail(f'expected AstraEdge 52P/52Q, got {expected_build_label()!r}')
     return 0
 
 

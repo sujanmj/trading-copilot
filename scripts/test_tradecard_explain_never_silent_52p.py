@@ -72,8 +72,11 @@ def _board_with(*rows: dict, session_stale: bool = False) -> dict:
 def test_build_still_52p() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if BUILD_STAGE != '52P' or TELEGRAM_BUILD != 'AstraEdge 52P':
-        return _fail(f'expected build 52P, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    # 52P hotfix remains valid on successor build 52Q.
+    if BUILD_STAGE not in ('52P', '52Q'):
+        return _fail(f'expected build 52P/52Q, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if TELEGRAM_BUILD not in ('AstraEdge 52P', 'AstraEdge 52Q'):
+        return _fail(f'unexpected Telegram build {TELEGRAM_BUILD!r}')
     return 0
 
 

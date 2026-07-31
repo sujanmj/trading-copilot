@@ -237,8 +237,12 @@ def test_canonical_summary_and_quality_lines() -> int:
         if not memory.get('last_resolved_timestamp'):
             return _fail(f'resolver summary missing last_resolved_timestamp: {memory!r}')
         lines = '\n'.join(format_daily_review_quality_lines(actual_learning_summary=summary))
-        if 'Actual learning sample updated: 6' not in lines:
-            return _fail(f'/close quality lines missing learning update: {lines}')
+        if 'Actual learning sample updated:' in lines:
+            return _fail('ambiguous Actual learning sample updated wording must be removed')
+        if 'Eligible learning samples added today:' not in lines:
+            return _fail(f'/close quality lines missing daily-added learning field: {lines}')
+        if 'Total eligible historical samples:' not in lines:
+            return _fail(f'/close quality lines missing historical learning total: {lines}')
         if 'Watchlist resolved: 2/1/1' not in lines:
             return _fail(f'/close quality lines missing watchlist W/L/N: {lines}')
         if 'Avoid resolved: success 1 / fail 1' not in lines:
@@ -257,13 +261,16 @@ def test_canonical_summary_and_quality_lines() -> int:
                 return _fail(f'legacy journal missing not-used label: {lines}')
         close_lines = '\n'.join(format_actual_learning_close_lines(summary))
         for needle in (
-            'Actual learning sample updated: 6',
+            'Eligible learning samples added today:',
+            'Total eligible historical samples:',
             'Watchlist resolved: 2/1/1',
             'Avoid resolved: success 1 / fail 1',
             'Pending data: 1',
         ):
             if needle not in close_lines or needle not in lines:
                 return _fail(f'daily review and /close learning counts diverged for {needle!r}')
+        if 'Actual learning sample updated:' in close_lines:
+            return _fail('close lines must not use ambiguous Actual learning sample updated wording')
     return 0
 
 
@@ -1284,7 +1291,8 @@ def test_close_displays_actual_learning_summary() -> int:
         text = build_close_brief_text()
 
     for needle in (
-        'Actual learning sample updated: 2',
+        'Eligible learning samples added today:',
+        'Total eligible historical samples:',
         'Watchlist resolved: 1/0/1',
         'Avoid resolved: success 1 / fail 0',
         'Pending data: 0',
@@ -1294,6 +1302,8 @@ def test_close_displays_actual_learning_summary() -> int:
     ):
         if needle not in text:
             return _fail(f'/close missing actual learning line: {needle}')
+    if 'Actual learning sample updated:' in text:
+        return _fail('/close must not use ambiguous Actual learning sample updated wording')
     return 0
 
 

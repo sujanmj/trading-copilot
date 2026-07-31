@@ -708,7 +708,10 @@ def build_close_brief_text() -> str:
             lines.extend(format_actual_learning_close_lines(learning_summary))
             lines.append('')
         except Exception:
-            lines.append('Actual learning sample updated: 0')
+            lines.extend([
+                'Eligible learning samples added today: unavailable',
+                'Total eligible historical samples: unavailable',
+            ])
             lines.append('')
     memory_res = run_memory_only()
     market_kwargs: dict[str, Any] = {}

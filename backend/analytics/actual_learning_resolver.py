@@ -88,9 +88,28 @@ def _safe_float(value: Any) -> float | None:
     try:
         if value in (None, ''):
             return None
-        return float(value)
+        num = float(value)
+        if num != num or num in (float('inf'), float('-inf')):
+            return None
+        return num
     except (TypeError, ValueError):
         return None
+
+
+def _safe_display_int(value: Any, default: int = 0) -> int:
+    if value is None or isinstance(value, (list, dict, set, tuple, bool)):
+        return default
+    try:
+        if isinstance(value, float):
+            if value != value or value in (float('inf'), float('-inf')):
+                return default
+            return int(value)
+        text = str(value).strip()
+        if not text or text.lower() in ('nan', 'inf', '-inf', '+inf', 'infinity', '-infinity'):
+            return default
+        return int(float(text))
+    except (TypeError, ValueError):
+        return default
 
 
 def _ticker(row: dict[str, Any]) -> str:
@@ -1792,7 +1811,15 @@ def run_actual_learning_resolver(
 def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) -> list[str]:
     data = summary if isinstance(summary, dict) else load_latest_actual_learning_summary()
     if not data:
-        return ['Actual learning sample updated: 0']
+        try:
+            from backend.trading.daily_learning_truth import format_learning_sample_count_lines
+
+            return format_learning_sample_count_lines()
+        except Exception:
+            return [
+                'Eligible learning samples added today: unavailable',
+                'Total eligible historical samples: unavailable',
+            ]
     watch = data.get('watchlist') or {}
     avoid = data.get('avoid') or {}
     tradecard = data.get('tradecard') or {}
@@ -1803,23 +1830,40 @@ def format_actual_learning_close_lines(summary: dict[str, Any] | None = None) ->
         from backend.trading.candidate_outcome_learning import has_eligible_quality_snapshots
     except Exception:
         has_eligible_quality_snapshots = lambda **_: False
+    try:
+        from backend.trading.daily_learning_truth import (
+            format_learning_sample_count_lines,
+            reconcile_daily_learning_truth,
+        )
+
+        injected = data.get('daily_learning_truth') if isinstance(data.get('daily_learning_truth'), dict) else None
+        report_day = str(data.get('session_date') or '')[:10] or None
+        truth = injected if injected is not None else reconcile_daily_learning_truth(
+            session_date=report_day,
+        )
+        count_lines = format_learning_sample_count_lines(truth)
+    except Exception:
+        count_lines = [
+            'Eligible learning samples added today: unavailable',
+            'Total eligible historical samples: unavailable',
+        ]
     lines: list[str] = [
-        f"Actual learning sample updated: {int(data.get('sample_updated') or 0)}",
+        *count_lines,
         (
             'Watchlist resolved: '
-            f"{int(watch.get('win') or 0)}/{int(watch.get('loss') or 0)}/{int(watch.get('neutral') or 0)}"
+            f"{_safe_display_int(watch.get('win'))}/{_safe_display_int(watch.get('loss'))}/{_safe_display_int(watch.get('neutral'))}"
         ),
         (
             'Avoid resolved: '
-            f"success {int(avoid.get('success') or 0)} / fail {int(avoid.get('fail') or 0)}"
+            f"success {_safe_display_int(avoid.get('success'))} / fail {_safe_display_int(avoid.get('fail'))}"
         ),
-        f"Pending data: {int(data.get('pending_data') or 0)}",
+        f"Pending data: {_safe_display_int(data.get('pending_data'))}",
         f"Pending data reasons: {reason_text}",
     ]
     if has_eligible_quality_snapshots():
         lines.append(
             'Tradecard resolved/no-fill: '
-            f"{int(tradecard.get('resolved') or 0)}/{int(tradecard.get('no_fill') or 0)}"
+            f"{_safe_display_int(tradecard.get('resolved'))}/{_safe_display_int(tradecard.get('no_fill'))}"
         )
     lines.extend([
         '',

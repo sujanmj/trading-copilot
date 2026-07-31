@@ -22,8 +22,8 @@ def _fail(msg: str) -> int:
 def main() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if BUILD_STAGE != '52P' or TELEGRAM_BUILD != 'AstraEdge 52P':
-        return _fail(f'canonical build must remain 52P, got {BUILD_STAGE!r}')
+    if BUILD_STAGE not in ('52P', '52Q') or TELEGRAM_BUILD not in ('AstraEdge 52P', 'AstraEdge 52Q'):
+        return _fail(f'canonical build must remain 52P/52Q, got {BUILD_STAGE!r}')
 
     explain_src = (PROJECT_ROOT / 'backend/trading/tradecard_explain.py').read_text(encoding='utf-8')
     runner_src = (PROJECT_ROOT / 'backend/telegram/lazy_command_runner.py').read_text(encoding='utf-8')

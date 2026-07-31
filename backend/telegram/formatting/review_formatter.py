@@ -384,7 +384,12 @@ def _format_system_calibration(snap: MarketSnapshot, ctx: dict) -> str:
             "Rejected setups: 0",
             "Missed opportunities: 0",
             f"Tradecards generated/filled/resolved W/L/N/P: 0/0/{resolved_today} {wins_today}/{losses_today}/0/{pending}",
-            "Actual learning sample updated: 0",
+            "Eligible learning samples added today: unavailable",
+            "Total eligible historical samples: unavailable",
+            "Candidate qualification reasons:",
+            "• unavailable",
+            "Winner reasons:",
+            "• unavailable",
             "No tradecard fills today. Watchlist accuracy only.",
         ]
     last_suppression = alert.get('last_suppression_reason') or ''

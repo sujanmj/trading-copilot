@@ -176,8 +176,10 @@ def test_close_runs_postmarket_catchup_and_resolves_no_fill() -> int:
         from backend.orchestration.alert_quality_engine import format_daily_review_quality_lines
 
         quality = '\n'.join(format_daily_review_quality_lines(tradecard_counts=counts))
-        if 'Actual learning sample updated: 0' not in quality:
-            return _fail('NO_FILL should not update actual learning sample')
+        if 'Actual learning sample updated:' in quality:
+            return _fail('ambiguous Actual learning sample updated wording must be removed')
+        if 'Eligible learning samples added today:' not in quality:
+            return _fail('NO_FILL daily review must show truthful daily-added learning field')
         if 'No tradecard fills today. Watchlist accuracy only.' not in quality:
             return _fail('daily review should avoid W/L framing when no cards filled')
     return 0
@@ -371,7 +373,12 @@ def test_repeated_after_hours_close_does_not_double_count_no_fill() -> int:
             return _fail(f'repeated /close should not double count no-fill outcomes: {counts!r}')
         if int(counts.get('pending') or 0) != 0:
             return _fail(f'repeated /close should leave pending cleared: {counts!r}')
-        if 'No fill: 1' not in first or 'No fill: 1' not in second:
+        # 52O+ close uses legacy journal wording when no eligible quality snapshots.
+        stable_nofill = (
+            ('No fill: 1' in first or 'No-fill/reference records: 1' in first)
+            and ('No fill: 1' in second or 'No-fill/reference records: 1' in second)
+        )
+        if not stable_nofill:
             return _fail('both repeated close outputs should show stable no-fill count')
     return 0
 
@@ -405,8 +412,10 @@ def test_close_runs_learning_before_pack_output() -> int:
         text = build_close_brief_text()
     if order != ['learning']:
         return _fail(f'learning resolver should run exactly once before output: {order!r}')
-    if 'Actual learning sample updated: 0' not in text:
+    if 'Eligible learning samples added today:' not in text:
         return _fail('/close should include current learning section')
+    if 'Actual learning sample updated:' in text:
+        return _fail('/close must not use ambiguous Actual learning sample updated wording')
     return 0
 
 

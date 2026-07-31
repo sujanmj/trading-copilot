@@ -875,6 +875,7 @@ def resolve_candidate_outcomes(
 ) -> dict[str, Any]:
     """15:45 / close review — resolve primary-stage snapshots against EOD data."""
     day = session_date or _session_date()
+    resolve_id = uuid.uuid4().hex
     snapshots = eligible_snapshots_for_session(day)
     existing = {
         str(o.get('snapshot_id') or ''): o
@@ -884,6 +885,9 @@ def resolve_candidate_outcomes(
     resolved: list[dict[str, Any]] = []
     ai_used = 0
     ai_skipped = 0
+    learning_inserted = 0
+    learning_deduped = 0
+    learning_sample_ids: list[str] = []
     for snap in snapshots:
         sid = str(snap.get('snapshot_id') or '')
         if sid in existing:
@@ -946,14 +950,34 @@ def resolve_candidate_outcomes(
             if outcome_rec.get('ai_explain_needed'):
                 ai_skipped += 1
         _append_jsonl(_outcomes_path(), outcome_rec)
-        _update_learning_aggregate(outcome_rec)
+        mut = _update_learning_aggregate(outcome_rec)
+        if mut.get('inserted'):
+            learning_inserted += 1
+            learning_sample_ids.append(str(mut.get('sample_id') or ''))
+        elif mut.get('deduplicated'):
+            learning_deduped += 1
         resolved.append(outcome_rec)
+
+    try:
+        from backend.trading.daily_learning_truth import record_learning_resolve_provenance
+
+        record_learning_resolve_provenance(
+            session_date=day,
+            inserted=learning_inserted,
+            deduplicated=learning_deduped,
+            sample_ids=[s for s in learning_sample_ids if s],
+            resolve_id=resolve_id,
+        )
+    except Exception:
+        pass
 
     state = {
         'session_date': day,
         'resolved_count': len(resolved),
         'ai_explanations_used': ai_used,
         'ai_explanations_skipped': ai_skipped,
+        'learning_samples_inserted': learning_inserted,
+        'learning_samples_deduplicated': learning_deduped,
         'updated_at': _now_ist().isoformat(),
     }
     try:
@@ -962,7 +986,8 @@ def resolve_candidate_outcomes(
         pass
     print(
         f'[CANDIDATE_OUTCOME_RESOLVE] date={day} resolved={len(resolved)} '
-        f'ai_used={ai_used} ai_skipped={ai_skipped}',
+        f'ai_used={ai_used} ai_skipped={ai_skipped} '
+        f'learning_inserted={learning_inserted} learning_deduped={learning_deduped}',
         flush=True,
     )
     return {
@@ -970,10 +995,18 @@ def resolve_candidate_outcomes(
         'resolved': resolved,
         'ai_used': ai_used,
         'ai_skipped': ai_skipped,
+        'learning_samples_inserted': learning_inserted,
+        'learning_samples_deduplicated': learning_deduped,
     }
 
 
-def _update_learning_aggregate(outcome_rec: dict[str, Any]) -> None:
+def _update_learning_aggregate(outcome_rec: dict[str, Any]) -> dict[str, Any]:
+    """Persist an eligible learning sample with mutation provenance. Idempotent per dedupe key."""
+    from backend.trading.daily_learning_truth import (
+        learning_record_dedupe_key,
+        record_learning_sample_mutation,
+    )
+
     key = '|'.join([
         str(outcome_rec.get('symbol') or ''),
         str(outcome_rec.get('catalyst_status') or ''),
@@ -983,8 +1016,12 @@ def _update_learning_aggregate(outcome_rec: dict[str, Any]) -> None:
     ])
     vol = _safe_float(outcome_rec.get('volume_participation')) or 0.0
     vol_bucket = '5x+' if vol >= 5 else '2x+' if vol >= 2 else 'low'
+    day = str(outcome_rec.get('session_date') or _session_date())[:10]
+    recorded_at = _now_ist().replace(microsecond=0).isoformat()
+    sample_id = str(outcome_rec.get('snapshot_id') or uuid.uuid4().hex[:16])
     record = {
         'aggregate_key': key,
+        'sample_id': sample_id,
         'symbol': outcome_rec.get('symbol'),
         'catalyst_type': outcome_rec.get('catalyst_status'),
         'verification_status': outcome_rec.get('verification_status'),
@@ -997,17 +1034,46 @@ def _update_learning_aggregate(outcome_rec: dict[str, Any]) -> None:
         'mfe_pct': outcome_rec.get('max_favorable_excursion_pct'),
         'mae_pct': outcome_rec.get('max_adverse_excursion_pct'),
         'reason_tags': outcome_rec.get('reason_tags') or [],
-        'session_date': outcome_rec.get('session_date'),
-        'recorded_at': _now_ist().isoformat(),
+        'session_date': day,
+        'stage': outcome_rec.get('stage'),
+        'state': outcome_rec.get('state'),
+        'score': outcome_rec.get('score'),
+        'snapshot_id': outcome_rec.get('snapshot_id'),
+        'recorded_at': recorded_at,
         'stage_version': STAGE,
     }
+    dedupe_key = learning_record_dedupe_key(record)
+    existing = {
+        learning_record_dedupe_key(r)
+        for r in _load_jsonl(_learning_path())
+        if isinstance(r, dict)
+    }
+    if dedupe_key in existing:
+        record_learning_sample_mutation(
+            action='deduplicated',
+            sample_id=sample_id,
+            symbol=str(record.get('symbol') or ''),
+            session_date=day,
+            dedupe_key=dedupe_key,
+            recorded_at=recorded_at,
+        )
+        return {'inserted': False, 'deduplicated': True, 'sample_id': sample_id, 'dedupe_key': dedupe_key}
     _append_jsonl(_learning_path(), record)
+    record_learning_sample_mutation(
+        action='inserted',
+        sample_id=sample_id,
+        symbol=str(record.get('symbol') or ''),
+        session_date=day,
+        dedupe_key=dedupe_key,
+        recorded_at=recorded_at,
+    )
     try:
         from backend.trading.weekly_signal_capture import capture_outcome_learning_signal
 
         capture_outcome_learning_signal(outcome_rec)
     except Exception:
         pass
+    return {'inserted': True, 'deduplicated': False, 'sample_id': sample_id, 'dedupe_key': dedupe_key}
 
 
 def learning_stats() -> dict[str, Any]:
@@ -1299,16 +1365,33 @@ def format_candidate_outcome_learning_block(
         lines.append(f'Pending data: {len(groups[OUTCOME_PENDING])} — {", ".join(groups[OUTCOME_PENDING][:6]) or "—"}')
         lines.append('')
 
-    winners = [o for o in outcomes if o.get('outcome') == OUTCOME_WIN][:4]
-    losers = [o for o in outcomes if o.get('outcome') == OUTCOME_LOSS][:4]
-    if winners:
-        lines.append('<b>Winner reasons:</b>')
-        for row in winners:
-            sym = row.get('symbol')
-            summary = row.get('ai_reason_summary') or row.get('reason_summary') or '—'
-            tags = ', '.join(row.get('reason_tags') or []) or '—'
-            lines.append(f'- {sym}: {summary} [{tags}]')
+    try:
+        from backend.trading.daily_learning_truth import (
+            format_daily_learning_truth_lines,
+            reconcile_daily_learning_truth,
+        )
+
+        truth = reconcile_daily_learning_truth(session_date=day)
+        lines.extend(format_daily_learning_truth_lines(truth, include_reason_sections=True))
         lines.append('')
+    except Exception:
+        try:
+            from backend.trading.daily_learning_truth import unavailable_learning_truth_fallback_lines
+
+            lines.extend(unavailable_learning_truth_fallback_lines())
+        except Exception:
+            lines.extend([
+                '<b>Daily learning truth</b>',
+                'Eligible learning samples added today: unavailable',
+                'Total eligible historical samples: unavailable',
+                'Candidate qualification reasons:',
+                '• unavailable',
+                'Winner reasons:',
+                '• unavailable',
+            ])
+        lines.append('')
+
+    losers = [o for o in outcomes if o.get('outcome') == OUTCOME_LOSS][:4]
     if losers:
         lines.append('<b>Loser reasons:</b>')
         for row in losers:
