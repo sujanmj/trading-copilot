@@ -72,11 +72,34 @@ def _board_with(*rows: dict, session_stale: bool = False) -> dict:
 def test_build_still_52p() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    # 52P hotfix remains valid on successor build 52Q.
-    if BUILD_STAGE not in ('52P', '52Q'):
-        return _fail(f'expected build 52P/52Q, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
-    if TELEGRAM_BUILD not in ('AstraEdge 52P', 'AstraEdge 52Q'):
-        return _fail(f'unexpected Telegram build {TELEGRAM_BUILD!r}')
+    # Exact identity pairs only — mismatched stage/Telegram combinations must fail.
+    allowed_build_pairs = {
+        ('52P', 'AstraEdge 52P'),
+        ('52Q', 'AstraEdge 52Q'),
+        ('52R-A1', 'AstraEdge 52R-A1'),
+    }
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed_build_pairs:
+        return _fail(
+            f'expected exact 52P-compatible build pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
+    return 0
+
+
+def test_build_pair_mismatches_rejected_52p() -> int:
+    """Mismatched stage/Telegram pairs must never be accepted by 52P allowlist."""
+    allowed_build_pairs = {
+        ('52P', 'AstraEdge 52P'),
+        ('52Q', 'AstraEdge 52Q'),
+        ('52R-A1', 'AstraEdge 52R-A1'),
+    }
+    mismatches = (
+        ('52Q', 'AstraEdge 52R-A1'),
+        ('52R-A1', 'AstraEdge 52Q'),
+        ('52P', 'AstraEdge 52Q'),
+    )
+    for stage, telegram in mismatches:
+        if (stage, telegram) in allowed_build_pairs:
+            return _fail(f'mismatch pair must be rejected: {stage!r} / {telegram!r}')
     return 0
 
 
@@ -597,6 +620,7 @@ def test_no_repo_data_mutation_from_focused_explain() -> int:
 def main() -> int:
     checks = (
         test_build_still_52p,
+        test_build_pair_mismatches_rejected_52p,
         test_current_pvrinox_returns_explanation,
         test_current_preferred_over_historical,
         test_existing_trace_renders,

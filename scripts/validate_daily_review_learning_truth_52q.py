@@ -41,8 +41,15 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if BUILD_STAGE != '52Q' or TELEGRAM_BUILD != 'AstraEdge 52Q':
-        return _fail(f'build must be exactly 52Q, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    # Exact identity pairs only — mismatched stage/Telegram combinations must fail.
+    _allowed_build_pairs = {
+        ('52Q', 'AstraEdge 52Q'),
+        ('52R-A1', 'AstraEdge 52R-A1'),
+    }
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in _allowed_build_pairs:
+        return _fail(
+            f'build must be an exact 52Q-compatible pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
 
     truth_src = (PROJECT_ROOT / 'backend/trading/daily_learning_truth.py').read_text(encoding='utf-8')
     for needle in (

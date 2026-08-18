@@ -110,8 +110,33 @@ def _insert_event(*, sample_id: str, symbol: str, dedupe_key: str, session_date:
 def test_build_is_exactly_52q() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if BUILD_STAGE != '52Q' or TELEGRAM_BUILD != 'AstraEdge 52Q':
-        return _fail(f'expected exact AstraEdge 52Q, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    # Exact identity pairs only — mismatched stage/Telegram combinations must fail.
+    allowed_build_pairs = {
+        ('52Q', 'AstraEdge 52Q'),
+        ('52R-A1', 'AstraEdge 52R-A1'),
+    }
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed_build_pairs:
+        return _fail(
+            f'expected AstraEdge 52Q or compatible exact successor pair, '
+            f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
+    return 0
+
+
+def test_build_pair_mismatches_rejected_52q() -> int:
+    """Mismatched stage/Telegram pairs must never be accepted by 52Q allowlist."""
+    allowed_build_pairs = {
+        ('52Q', 'AstraEdge 52Q'),
+        ('52R-A1', 'AstraEdge 52R-A1'),
+    }
+    mismatches = (
+        ('52Q', 'AstraEdge 52R-A1'),
+        ('52R-A1', 'AstraEdge 52Q'),
+        ('52P', 'AstraEdge 52Q'),
+    )
+    for stage, telegram in mismatches:
+        if (stage, telegram) in allowed_build_pairs:
+            return _fail(f'mismatch pair must be rejected: {stage!r} / {telegram!r}')
     return 0
 
 
@@ -2434,6 +2459,7 @@ def test_same_session_malformed_recorded_at_zero_marker_unavailable() -> int:
 def main() -> int:
     checks = (
         test_build_is_exactly_52q,
+        test_build_pair_mismatches_rejected_52q,
         test_nilkamal_captured_only_not_winner,
         test_outcome_only_win_without_persisted_snapshot_rejected,
         test_snapshot_outcome_ticker_mismatch_rejected,
