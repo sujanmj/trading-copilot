@@ -18,7 +18,7 @@ def run_live_news_tracker():
     print(f'Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     print('=' * 60)
 
-    result = run_unified_news_refresh(send_macro_alerts=False)
+    result = run_unified_news_refresh(send_macro_alerts=False, ingest_discovery=True)
     print(f"Sources checked: {result.get('sources_checked')}")
     print(f"Items found: {result.get('items_found')}")
     print(f"New items: {result.get('new_items')}")

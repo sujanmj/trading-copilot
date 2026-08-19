@@ -87,8 +87,15 @@ def _base_sighting(**extra):
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-A1', 'AstraEdge 52R-A1'):
-        return _fail(f'expected exact pair 52R-A1 / AstraEdge 52R-A1, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    allowed = {
+        ('52R-A1', 'AstraEdge 52R-A1'),
+        ('52R-A2', 'AstraEdge 52R-A2'),
+    }
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
+        return _fail(
+            f'expected exact pair 52R-A1 / AstraEdge 52R-A1 or successor '
+            f'52R-A2 / AstraEdge 52R-A2, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
     _pass('BROKER_DISCOVERY_BUILD_OK')
     return 0
 
@@ -98,21 +105,25 @@ def test_exact_build_pair_allowlists() -> int:
     daily_pairs = {
         ('52Q', 'AstraEdge 52Q'),
         ('52R-A1', 'AstraEdge 52R-A1'),
+        ('52R-A2', 'AstraEdge 52R-A2'),
     }
     tradecard_pairs = {
         ('52P', 'AstraEdge 52P'),
         ('52Q', 'AstraEdge 52Q'),
         ('52R-A1', 'AstraEdge 52R-A1'),
+        ('52R-A2', 'AstraEdge 52R-A2'),
     }
     # Positive current pair.
-    if ('52R-A1', 'AstraEdge 52R-A1') not in daily_pairs:
+    if ('52R-A2', 'AstraEdge 52R-A2') not in daily_pairs:
         return _fail('current pair missing from daily-review allowlist')
-    if ('52R-A1', 'AstraEdge 52R-A1') not in tradecard_pairs:
+    if ('52R-A2', 'AstraEdge 52R-A2') not in tradecard_pairs:
         return _fail('current pair missing from tradecard allowlist')
     mismatches = (
         ('52Q', 'AstraEdge 52R-A1'),
         ('52R-A1', 'AstraEdge 52Q'),
         ('52P', 'AstraEdge 52Q'),
+        ('52R-A2', 'AstraEdge 52R-A1'),
+        ('52R-A1', 'AstraEdge 52R-A2'),
     )
     for stage, telegram in mismatches:
         if (stage, telegram) in daily_pairs:

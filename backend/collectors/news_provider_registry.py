@@ -451,10 +451,13 @@ def run_unified_news_refresh(
     hours_back: int = 48,
     send_macro_alerts: bool = False,
     session: requests.Session | None = None,
+    ingest_discovery: bool = False,
 ) -> dict[str, Any]:
     """
     Refresh all enabled news providers into news_feed.json + live_news_feed.json.
     Partial success: one provider failure does not abort others.
+
+    ingest_discovery defaults False. Only live_news_tracker opts in for 52R-A2.
     """
     providers = get_enabled_providers()
     all_articles: list[dict[str, Any]] = []
@@ -531,6 +534,24 @@ def run_unified_news_refresh(
     if not source_labels:
         source_labels = [str(p.get('source_name') or '') for p in providers[:6]]
 
+    discovery_stats: dict[str, Any] | None = None
+    if ingest_discovery:
+        try:
+            from backend.news.rss_discovery_adapter import ingest_registry_articles
+
+            discovery_stats = ingest_registry_articles(deduped)
+        except Exception as exc:
+            print(
+                f'[RSS_DISCOVERY] ingest isolated failure: {type(exc).__name__}: {exc}',
+                flush=True,
+            )
+            discovery_stats = {
+                'ok': False,
+                'error_type': type(exc).__name__,
+                'error': str(exc)[:200],
+                'lock_contended': False,
+            }
+
     return {
         'ok': ok_count > 0 or len(deduped) > 0,
         'partial': bool(errors) and len(deduped) > 0,
@@ -542,6 +563,7 @@ def run_unified_news_refresh(
         'sources': source_labels,
         'provider_status': provider_status,
         'output': output,
+        'discovery': discovery_stats,
     }
 
 

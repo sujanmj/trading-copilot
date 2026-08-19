@@ -93,10 +93,14 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if BUILD_STAGE != '52R-A1' or TELEGRAM_BUILD != 'AstraEdge 52R-A1':
-        return _fail(f'build must be exactly 52R-A1, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-A1', 'AstraEdge 52R-A1'):
-        return _fail(f'build pair mismatch: {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    allowed = {
+        ('52R-A1', 'AstraEdge 52R-A1'),
+        ('52R-A2', 'AstraEdge 52R-A2'),
+    }
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
+        return _fail(
+            f'build must be an exact 52R-A1 or 52R-A2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
 
     foundation = PROJECT_ROOT / 'backend/news/broker_discovery_foundation.py'
     if not foundation.is_file():
