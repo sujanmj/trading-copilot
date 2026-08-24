@@ -96,10 +96,11 @@ def main() -> int:
     allowed = {
         ('52R-A1', 'AstraEdge 52R-A1'),
         ('52R-A2', 'AstraEdge 52R-A2'),
+        ('52R-B1', 'AstraEdge 52R-B1'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
-            f'build must be an exact 52R-A1 or 52R-A2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'build must be an exact 52R-A1, 52R-A2, or 52R-B1 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 
     foundation = PROJECT_ROOT / 'backend/news/broker_discovery_foundation.py'

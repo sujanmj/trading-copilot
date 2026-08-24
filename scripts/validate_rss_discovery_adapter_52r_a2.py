@@ -95,13 +95,21 @@ ALLOWED_A2_TESTS = {
     'scripts/validate_rss_discovery_adapter_52r_a2.py',
 }
 
+ALLOWED_SUCCESSOR_B1 = {
+    'backend/news/primary_source_verifier.py',
+    'scripts/test_primary_source_verifier_52r_b1.py',
+    'scripts/validate_primary_source_verifier_52r_b1.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_a2_architecture_audit.txt',
     'phase52r_a2_validation.txt',
     'phase52r_a2_diff.txt',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS
+ALLOWED_CHANGED_SOURCE = (
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS | ALLOWED_SUCCESSOR_B1
+)
 
 
 def _fail(msg: str) -> int:
@@ -204,8 +212,15 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-A2', 'AstraEdge 52R-A2'):
-        return _fail(f'build must be exact 52R-A2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    allowed = {
+        ('52R-A2', 'AstraEdge 52R-A2'),
+        ('52R-B1', 'AstraEdge 52R-B1'),
+    }
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
+        return _fail(
+            f'build must be exact 52R-A2 / AstraEdge 52R-A2 or successor '
+            f'52R-B1 / AstraEdge 52R-B1, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
 
     adapter = PROJECT_ROOT / 'backend/news/rss_discovery_adapter.py'
     if not adapter.is_file():
@@ -263,6 +278,8 @@ def main() -> int:
         'backend/news/rss_discovery_adapter.py',
         'backend/collectors/news_provider_registry.py',
         'backend/collectors/live_news_tracker.py',
+        # B1 reuses the A2 discovery-store lock primitive; it must not ingest.
+        'backend/news/primary_source_verifier.py',
     }
     unexpected = [p for p in backend_hits if p not in allowed_hits]
     if unexpected:

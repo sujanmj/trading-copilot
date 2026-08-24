@@ -182,15 +182,23 @@ def _isolated_discovery():
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-A2', 'AstraEdge 52R-A2')}
+    allowed = {
+        ('52R-A2', 'AstraEdge 52R-A2'),
+        ('52R-B1', 'AstraEdge 52R-B1'),
+    }
     mismatches = (
         ('52R-A2', 'AstraEdge 52R-A1'),
         ('52R-A1', 'AstraEdge 52R-A2'),
         ('52Q', 'AstraEdge 52R-A2'),
         ('52R-A2', 'AstraEdge 52Q'),
+        ('52R-B1', 'AstraEdge 52R-A2'),
+        ('52R-A2', 'AstraEdge 52R-B1'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
-        return _fail(f'expected exact pair 52R-A2 / AstraEdge 52R-A2, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(
+            f'expected exact pair 52R-A2 / AstraEdge 52R-A2 or successor '
+            f'52R-B1 / AstraEdge 52R-B1, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
     for stage, telegram in mismatches:
         if (stage, telegram) in allowed:
             return _fail(f'mismatch pair must be rejected: {stage!r} / {telegram!r}')
