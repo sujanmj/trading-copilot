@@ -13,8 +13,10 @@ Horizontal multi-replica serialization is out of scope.
 
 from __future__ import annotations
 
+import html
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -62,8 +64,19 @@ _SKIP_UNSUPPORTED_KIND = 'unsupported_source_kind'
 _SKIP_MISSING_HEADLINE = 'skip_missing_headline'
 _SKIP_MISSING_SOURCE_NAME = 'skip_missing_source_name'
 _SKIP_MISSING_TIMESTAMP = 'skip_missing_timestamp'
+_SKIP_MISSING_DISCOVERY_HEADLINE = 'skip_missing_discovery_headline'
 _SKIP_MALFORMED = 'skip_malformed'
 _SKIP_NOT_DICT = 'skip_not_dict'
+
+NSE_ANNOUNCEMENTS_PROVIDER_ID = 'nse_rss'
+MAX_NSE_FILING_SUBJECT_LENGTH = 200
+NSE_DISCOVERY_HEADLINE_SEP = ' — '
+_NSE_SUBJECT_MARKER_RE = re.compile(
+    r'(?i)(?:^|[\s|/;,])SUBJECT\s*:\s*(.+)$',
+    flags=re.DOTALL,
+)
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
+_WS_RE = re.compile(r'\s+')
 
 
 def _empty_stats(**overrides: Any) -> dict[str, Any]:
@@ -80,6 +93,7 @@ def _empty_stats(**overrides: Any) -> dict[str, Any]:
         'skipped_missing_headline': 0,
         'skipped_missing_source_name': 0,
         'skipped_missing_timestamp': 0,
+        'skipped_missing_discovery_headline': 0,
         'skipped_malformed': 0,
         'store_health': None,
         'store_unhealthy': False,
@@ -182,6 +196,119 @@ class _BatchLock:
                 pass
 
 
+def _strip_simple_html(text: str) -> str:
+    return _HTML_TAG_RE.sub(' ', text)
+
+
+def _collapse_ws(text: str) -> str:
+    return _WS_RE.sub(' ', text).strip()
+
+
+def extract_nse_filing_subject(raw_summary: Any) -> Optional[str]:
+    """Deterministic SUBJECT: extractor for already-fetched NSE RSS summaries."""
+    if raw_summary is None or isinstance(raw_summary, bool):
+        return None
+    if isinstance(raw_summary, (dict, list, set, tuple, bytes, bytearray, int, float)):
+        return None
+    if not isinstance(raw_summary, str):
+        return None
+    text = _collapse_ws(_strip_simple_html(html.unescape(raw_summary)))
+    if not text:
+        return None
+    match = _NSE_SUBJECT_MARKER_RE.search(text)
+    if match is None:
+        match = re.search(r'(?i)\bSUBJECT\s*:\s*(.+)$', text, flags=re.DOTALL)
+    if match is None:
+        return None
+    subject = _collapse_ws(match.group(1).split('\n', 1)[0])
+    if not subject:
+        return None
+    if '://' in subject or subject.casefold().startswith('www.'):
+        return None
+    if len(subject) > MAX_NSE_FILING_SUBJECT_LENGTH:
+        subject = subject[:MAX_NSE_FILING_SUBJECT_LENGTH].rstrip()
+    if not subject:
+        return None
+    return subject
+
+
+def _normalized_company_title(company_title: Any) -> Optional[str]:
+    if not isinstance(company_title, str):
+        return None
+    company = _collapse_ws(_strip_simple_html(html.unescape(company_title)))
+    return company or None
+
+
+def _subject_is_safe(subject: str, *, company: str) -> bool:
+    if not subject:
+        return False
+    if '://' in subject or subject.casefold().startswith('www.'):
+        return False
+    if len(subject) > MAX_NSE_FILING_SUBJECT_LENGTH:
+        return False
+    try:
+        if normalize_headline(subject) == normalize_headline(company):
+            return False
+    except BrokerDiscoveryError:
+        return False
+    return True
+
+
+def build_nse_discovery_headline(company_title: Any, raw_summary: Any) -> Optional[str]:
+    """Compose issuer + filing subject. None when the subject is missing/unsafe."""
+    company = _normalized_company_title(company_title)
+    if company is None:
+        return None
+    subject = extract_nse_filing_subject(raw_summary)
+    if subject is None or not _subject_is_safe(subject, company=company):
+        return None
+    return f'{company}{NSE_DISCOVERY_HEADLINE_SEP}{subject}'
+
+
+def validate_nse_discovery_headline(company_title: Any, discovery_headline: Any) -> Optional[str]:
+    """
+    Accept only a canonical issuer + filing-subject headline.
+
+    Explicit None/empty/non-string is terminal. Truncated description/summary
+    is never consulted. Arbitrary non-canonical strings are rejected.
+    """
+    if not isinstance(discovery_headline, str):
+        return None
+    composed = _collapse_ws(_strip_simple_html(html.unescape(discovery_headline)))
+    if not composed:
+        return None
+    company = _normalized_company_title(company_title)
+    if company is None:
+        return None
+    try:
+        if normalize_headline(composed) == normalize_headline(company):
+            return None
+    except BrokerDiscoveryError:
+        return None
+    prefix = f'{company}{NSE_DISCOVERY_HEADLINE_SEP}'
+    if not composed.startswith(prefix):
+        return None
+    subject = composed[len(prefix):].strip()
+    if not _subject_is_safe(subject, company=company):
+        return None
+    expected = f'{company}{NSE_DISCOVERY_HEADLINE_SEP}{subject}'
+    if composed != expected:
+        return None
+    return expected
+
+
+def resolve_nse_discovery_headline(article: dict[str, Any]) -> Optional[str]:
+    """
+    Production nse_rss identity uses the explicit registry field only.
+
+    fetch_provider_rss evaluates the FULL raw summary into discovery_headline.
+    An explicit None/missing/invalid value is a terminal fail-closed decision
+    and must not be reconstructed from truncated description/summary.
+    """
+    company = article.get('title') or article.get('headline') or ''
+    return validate_nse_discovery_headline(company, article.get('discovery_headline'))
+
+
 def _provider_id(article: dict[str, Any]) -> str:
     return str(article.get('provider_id') or article.get('source_id') or '').strip().lower()
 
@@ -242,6 +369,16 @@ def evaluate_registry_article(article: Any) -> tuple[Optional[str], Optional[dic
         normalize_headline(headline)
     except BrokerDiscoveryError:
         return _SKIP_MALFORMED, None
+
+    if _provider_id(article) == NSE_ANNOUNCEMENTS_PROVIDER_ID:
+        discovery_headline = resolve_nse_discovery_headline(article)
+        if discovery_headline is None:
+            return _SKIP_MISSING_DISCOVERY_HEADLINE, None
+        try:
+            normalize_headline(discovery_headline)
+        except BrokerDiscoveryError:
+            return _SKIP_MISSING_DISCOVERY_HEADLINE, None
+        headline = discovery_headline
 
     published = article.get('published_at')
     if published in (None, ''):
@@ -321,6 +458,8 @@ def _apply_skip(stats: dict[str, Any], reason: str) -> None:
         stats['skipped_missing_source_name'] = int(stats['skipped_missing_source_name']) + 1
     elif reason == _SKIP_MISSING_TIMESTAMP:
         stats['skipped_missing_timestamp'] = int(stats['skipped_missing_timestamp']) + 1
+    elif reason == _SKIP_MISSING_DISCOVERY_HEADLINE:
+        stats['skipped_missing_discovery_headline'] = int(stats['skipped_missing_discovery_headline']) + 1
     elif reason in (_SKIP_MALFORMED, _SKIP_NOT_DICT):
         stats['skipped_malformed'] = int(stats['skipped_malformed']) + 1
         stats['errors'] = int(stats['errors']) + 1

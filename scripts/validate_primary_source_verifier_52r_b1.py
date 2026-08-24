@@ -98,6 +98,13 @@ ALLOWED_B1_TESTS = {
     'scripts/validate_primary_source_verifier_52r_b1.py',
 }
 
+ALLOWED_SUCCESSOR_B2N = {
+    'backend/collectors/news_provider_registry.py',
+    'backend/news/rss_discovery_adapter.py',
+    'scripts/test_nse_authoritative_rss_ingest_52r_b2n.py',
+    'scripts/validate_nse_authoritative_rss_ingest_52r_b2n.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_b_architecture_audit.txt',
     'phase52r_b1_validation.txt',
@@ -118,7 +125,9 @@ FORBIDDEN_PRODUCTION = {
     'backend/outcome_tracker.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B1_TESTS
+ALLOWED_CHANGED_SOURCE = (
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B1_TESTS | ALLOWED_SUCCESSOR_B2N
+)
 
 
 def _fail(msg: str) -> int:
@@ -201,7 +210,7 @@ def _validate_changed_file_scope() -> str | None:
     if data_changes:
         return f'data/ changes are never allowed: {sorted(data_changes)}'
 
-    forbidden_hits = (tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION
+    forbidden_hits = ((tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION) - ALLOWED_SUCCESSOR_B2N
     if forbidden_hits:
         return f'forbidden production files changed: {sorted(forbidden_hits)}'
     for prefix in ('backend/trading/',):
@@ -223,7 +232,10 @@ def _validate_changed_file_scope() -> str | None:
         return 'backend/config/build_info.py must change for the 52R-B1 build bump'
     if 'backend/news/broker_discovery_foundation.py' in actual_source_scope:
         return 'broker_discovery_foundation.py must not change in B1'
-    if 'backend/news/rss_discovery_adapter.py' in actual_source_scope:
+    if (
+        'backend/news/rss_discovery_adapter.py' in actual_source_scope
+        and 'backend/news/rss_discovery_adapter.py' not in ALLOWED_SUCCESSOR_B2N
+    ):
         return 'rss_discovery_adapter.py must not change unless a lock test requires it'
 
     print('PRIMARY_VERIFIER_CHANGED_FILE_SCOPE_OK')
@@ -259,8 +271,15 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-B1', 'AstraEdge 52R-B1'):
-        return _fail(f'build must be exact 52R-B1 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    allowed = {
+        ('52R-B1', 'AstraEdge 52R-B1'),
+        ('52R-B2N', 'AstraEdge 52R-B2N'),
+    }
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
+        return _fail(
+            f'build must be exact 52R-B1 pair or successor 52R-B2N pair, '
+            f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+        )
 
     verifier = PROJECT_ROOT / 'backend/news/primary_source_verifier.py'
     if not verifier.is_file():

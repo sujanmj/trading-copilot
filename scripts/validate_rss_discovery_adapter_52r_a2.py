@@ -101,6 +101,11 @@ ALLOWED_SUCCESSOR_B1 = {
     'scripts/validate_primary_source_verifier_52r_b1.py',
 }
 
+ALLOWED_SUCCESSOR_B2N = {
+    'scripts/test_nse_authoritative_rss_ingest_52r_b2n.py',
+    'scripts/validate_nse_authoritative_rss_ingest_52r_b2n.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_a2_architecture_audit.txt',
     'phase52r_a2_validation.txt',
@@ -108,7 +113,7 @@ ALLOWED_REPORTS = {
 }
 
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS | ALLOWED_SUCCESSOR_B1
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS | ALLOWED_SUCCESSOR_B1 | ALLOWED_SUCCESSOR_B2N
 )
 
 
@@ -215,11 +220,13 @@ def main() -> int:
     allowed = {
         ('52R-A2', 'AstraEdge 52R-A2'),
         ('52R-B1', 'AstraEdge 52R-B1'),
+        ('52R-B2N', 'AstraEdge 52R-B2N'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'build must be exact 52R-A2 / AstraEdge 52R-A2 or successor '
-            f'52R-B1 / AstraEdge 52R-B1, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'52R-B1 / AstraEdge 52R-B1 or 52R-B2N / AstraEdge 52R-B2N, '
+            f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 
     adapter = PROJECT_ROOT / 'backend/news/rss_discovery_adapter.py'

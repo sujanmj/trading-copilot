@@ -97,7 +97,7 @@ PROVIDER_DEFS: list[dict[str, Any]] = [
         'categories': ['company', 'official'],
         'enabled': True,
         'verification_tier': TIER_OFFICIAL_EXCHANGE,
-        'feeds': [('https://www.nseindia.com/rss-feed', 'corporate')],
+        'feeds': [('https://nsearchives.nseindia.com/content/RSS/Online_announcements.xml', 'corporate')],
         'fallback_collector': 'nse_announcements',
     },
     {
@@ -314,11 +314,12 @@ def fetch_provider_rss(
                 title = str(entry.get('title') or '').strip()
                 if not title:
                     continue
-                desc = _strip_html(entry.get('summary') or entry.get('description') or '')[:300]
+                raw_summary = entry.get('summary') or entry.get('description') or ''
+                desc = _strip_html(raw_summary)[:300]
                 link = str(entry.get('link') or '').strip()
                 feed_type = classify_news_feed_type(title, desc, provider_id=pid)
                 tickers = _resolve_article_tickers(title, desc)
-                articles.append({
+                article_row: dict[str, Any] = {
                     'source': pname,
                     'source_name': pname,
                     'provider_id': pid,
@@ -343,7 +344,12 @@ def fetch_provider_rss(
                         else 'trusted_media'
                     ),
                     'sentiment_label': 'neutral',
-                })
+                }
+                if pid == 'nse_rss':
+                    from backend.news.rss_discovery_adapter import build_nse_discovery_headline
+
+                    article_row['discovery_headline'] = build_nse_discovery_headline(title, raw_summary)
+                articles.append(article_row)
         except Exception as exc:
             errors.append(f'{category}:{str(exc)[:80]}')
 

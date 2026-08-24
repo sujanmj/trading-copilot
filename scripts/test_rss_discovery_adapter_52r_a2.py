@@ -185,6 +185,7 @@ def test_build_identity() -> int:
     allowed = {
         ('52R-A2', 'AstraEdge 52R-A2'),
         ('52R-B1', 'AstraEdge 52R-B1'),
+        ('52R-B2N', 'AstraEdge 52R-B2N'),
     }
     mismatches = (
         ('52R-A2', 'AstraEdge 52R-A1'),
@@ -193,11 +194,16 @@ def test_build_identity() -> int:
         ('52R-A2', 'AstraEdge 52Q'),
         ('52R-B1', 'AstraEdge 52R-A2'),
         ('52R-A2', 'AstraEdge 52R-B1'),
+        ('52R-B2N', 'AstraEdge 52R-B1'),
+        ('52R-B1', 'AstraEdge 52R-B2N'),
+        ('52R-B2N', 'AstraEdge 52R-A2'),
+        ('52R-A2', 'AstraEdge 52R-B2N'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'expected exact pair 52R-A2 / AstraEdge 52R-A2 or successor '
-            f'52R-B1 / AstraEdge 52R-B1, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'52R-B1 / AstraEdge 52R-B1 or 52R-B2N / AstraEdge 52R-B2N, '
+            f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     for stage, telegram in mismatches:
         if (stage, telegram) in allowed:
@@ -369,6 +375,8 @@ def test_exchange_discovery_only(ctx: dict) -> int:
         source_name='NSE Corporate Information',
         url='https://nsearchives.nseindia.com/corporate/INFY1.xml',
         title='NSE exchange announcement INFY',
+        description='NSE exchange announcement INFY |SUBJECT: Exchange Filing',
+        discovery_headline='NSE exchange announcement INFY — Exchange Filing',
         symbols=['INFY'],
     )
     bse = _article(
