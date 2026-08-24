@@ -126,16 +126,19 @@ def _nse_article(**extra):
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-B2N', 'AstraEdge 52R-B2N')}
+    allowed = {('52R-B2N', 'AstraEdge 52R-B2N'), ('52R-B2', 'AstraEdge 52R-B2')}
     mismatches = (
         ('52R-B2N', 'AstraEdge 52R-B1'),
         ('52R-B1', 'AstraEdge 52R-B2N'),
         ('52R-B2N', 'AstraEdge 52R-A2'),
         ('52R-A2', 'AstraEdge 52R-B2N'),
+        ('52R-B2', 'AstraEdge 52R-B2N'),
+        ('52R-B2N', 'AstraEdge 52R-B2'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
-            f'expected exact pair 52R-B2N / AstraEdge 52R-B2N, '
+            f'expected exact pair 52R-B2N / AstraEdge 52R-B2N or successor '
+            f'52R-B2 / AstraEdge 52R-B2, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     for stage, telegram in mismatches:
@@ -682,9 +685,10 @@ def test_primary_promotion_dormant(ctx: dict) -> int:
         text = path.read_text(encoding='utf-8')
         if 'verify_linked_primary_sighting' in text:
             hits.append(str(path.relative_to(PROJECT_ROOT)).replace('\\', '/'))
-    if hits:
+    allowed_successor = ['backend/news/automatic_primary_verification.py']
+    if hits != allowed_successor:
         return _fail(f'unexpected production callers of B1 verifier: {hits}')
-    print('B2N_PRODUCTION_B1_CALLERS none')
+    print('B2N_PRODUCTION_B1_CALLERS successor=backend/news/automatic_primary_verification.py')
     _pass('B2N_PRIMARY_PROMOTION_DORMANT_OK')
     return 0
 

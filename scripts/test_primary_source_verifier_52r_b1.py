@@ -210,7 +210,7 @@ def _reset(ctx: dict) -> None:
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-B1', 'AstraEdge 52R-B1'), ('52R-B2N', 'AstraEdge 52R-B2N')}
+    allowed = {('52R-B1', 'AstraEdge 52R-B1'), ('52R-B2N', 'AstraEdge 52R-B2N'), ('52R-B2', 'AstraEdge 52R-B2')}
     mismatches = (
         ('52R-B1', 'AstraEdge 52R-A2'),
         ('52R-A2', 'AstraEdge 52R-B1'),
@@ -218,11 +218,13 @@ def test_build_identity() -> int:
         ('52R-A1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B1'),
         ('52R-B1', 'AstraEdge 52R-B2N'),
+        ('52R-B2', 'AstraEdge 52R-B2N'),
+        ('52R-B2N', 'AstraEdge 52R-B2'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'expected exact pair 52R-B1 / AstraEdge 52R-B1 or successor '
-            f'52R-B2N / AstraEdge 52R-B2N, '
+            f'52R-B2N / AstraEdge 52R-B2N or 52R-B2 / AstraEdge 52R-B2, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     for stage, telegram in mismatches:
@@ -281,13 +283,16 @@ def test_dormant_production() -> int:
         text = path.read_text(encoding='utf-8')
         if 'primary_source_verifier' in text or 'verify_linked_primary_sighting' in text:
             hits.append(str(path.relative_to(PROJECT_ROOT)).replace('\\', '/'))
-    if hits:
+    allowed_successor = ['backend/news/automatic_primary_verification.py']
+    if hits != allowed_successor:
         return _fail(f'production callers of governed verifier: {hits}')
     tracker = (PROJECT_ROOT / 'backend/collectors/live_news_tracker.py').read_text(encoding='utf-8')
     registry = (PROJECT_ROOT / 'backend/collectors/news_provider_registry.py').read_text(encoding='utf-8')
-    if 'verify_primary' in tracker or 'verify_primary' in registry:
-        return _fail('live tracker/registry must not opt into primary verification')
-    print('PRODUCTION_CALLERS none')
+    if 'verify_linked_primary_sighting' in tracker or 'verify_linked_primary_sighting' in registry:
+        return _fail('live tracker/registry must not call B1 directly')
+    if 'verify_primary' in registry:
+        return _fail('registry must not opt into primary verification')
+    print('PRODUCTION_CALLERS successor=backend/news/automatic_primary_verification.py')
     _pass('PRIMARY_VERIFIER_DORMANT_PRODUCTION_OK')
     return 0
 

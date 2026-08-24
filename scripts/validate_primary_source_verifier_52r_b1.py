@@ -105,6 +105,13 @@ ALLOWED_SUCCESSOR_B2N = {
     'scripts/validate_nse_authoritative_rss_ingest_52r_b2n.py',
 }
 
+ALLOWED_SUCCESSOR_B2 = {
+    'backend/news/automatic_primary_verification.py',
+    'backend/collectors/live_news_tracker.py',
+    'scripts/test_automatic_primary_verification_52r_b2.py',
+    'scripts/validate_automatic_primary_verification_52r_b2.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_b_architecture_audit.txt',
     'phase52r_b1_validation.txt',
@@ -126,7 +133,7 @@ FORBIDDEN_PRODUCTION = {
 }
 
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B1_TESTS | ALLOWED_SUCCESSOR_B2N
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B1_TESTS | ALLOWED_SUCCESSOR_B2N | ALLOWED_SUCCESSOR_B2
 )
 
 
@@ -210,7 +217,7 @@ def _validate_changed_file_scope() -> str | None:
     if data_changes:
         return f'data/ changes are never allowed: {sorted(data_changes)}'
 
-    forbidden_hits = ((tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION) - ALLOWED_SUCCESSOR_B2N
+    forbidden_hits = ((tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION) - ALLOWED_SUCCESSOR_B2N - ALLOWED_SUCCESSOR_B2
     if forbidden_hits:
         return f'forbidden production files changed: {sorted(forbidden_hits)}'
     for prefix in ('backend/trading/',):
@@ -274,10 +281,11 @@ def main() -> int:
     allowed = {
         ('52R-B1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B2N'),
+        ('52R-B2', 'AstraEdge 52R-B2'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
-            f'build must be exact 52R-B1 pair or successor 52R-B2N pair, '
+            f'build must be exact 52R-B1 pair or successor 52R-B2N/52R-B2 pair, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 
@@ -341,15 +349,19 @@ def main() -> int:
         return _fail('verifier must reuse the existing A2 discovery store lock')
 
     backend_hits = []
+    allowed_callers = {'backend/news/automatic_primary_verification.py'}
     for path in (PROJECT_ROOT / 'backend').rglob('*.py'):
         if path.resolve() == verifier.resolve():
             continue
         text = path.read_text(encoding='utf-8')
         if 'primary_source_verifier' in text or 'verify_linked_primary_sighting' in text:
             backend_hits.append(_rel(path))
-    if backend_hits:
-        return _fail(f'unexpected production callers: {backend_hits}')
-    print('PRODUCTION_CALLERS none')
+    unexpected_hits = [h for h in backend_hits if h not in allowed_callers]
+    if unexpected_hits:
+        return _fail(f'unexpected production callers: {unexpected_hits}')
+    if 'backend/news/automatic_primary_verification.py' not in backend_hits:
+        return _fail('successor B2 orchestrator must be the B1 production caller')
+    print('PRODUCTION_CALLERS successor=backend/news/automatic_primary_verification.py')
     print('PRIMARY_VERIFIER_DORMANT_PRODUCTION_OK')
 
     for extra in (

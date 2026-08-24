@@ -69,11 +69,20 @@ ALLOWED_B2N_TESTS = {
     'scripts/validate_nse_authoritative_rss_ingest_52r_b2n.py',
 }
 
+ALLOWED_SUCCESSOR_B2 = {
+    'backend/news/automatic_primary_verification.py',
+    'backend/collectors/live_news_tracker.py',
+    'scripts/test_automatic_primary_verification_52r_b2.py',
+    'scripts/validate_automatic_primary_verification_52r_b2.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_b2_architecture_audit.txt',
     'phase52r_b2_source_contract_probe.txt',
     'phase52r_b2n_validation.txt',
     'phase52r_b2n_diff.txt',
+    'phase52r_b2_validation.txt',
+    'phase52r_b2_diff.txt',
     'phase52r_b_architecture_audit.txt',
     'phase52r_b1_validation.txt',
     'phase52r_b1_diff.txt',
@@ -89,7 +98,9 @@ FORBIDDEN_PRODUCTION = {
     'backend/collectors/live_news_tracker.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS
+ALLOWED_CHANGED_SOURCE = (
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS | ALLOWED_SUCCESSOR_B2
+)
 
 FORBIDDEN_IMPORT_NEEDLES = (
     'selenium',
@@ -179,7 +190,7 @@ def _validate_changed_file_scope() -> str | None:
     if data_changes:
         return f'data/ changes are never allowed: {sorted(data_changes)}'
 
-    forbidden_hits = (tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION
+    forbidden_hits = ((tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION) - ALLOWED_SUCCESSOR_B2
     if forbidden_hits:
         return f'forbidden production files changed: {sorted(forbidden_hits)}'
 
@@ -237,8 +248,11 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-B2N', 'AstraEdge 52R-B2N'):
-        return _fail(f'build must be exact 52R-B2N pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('52R-B2N', 'AstraEdge 52R-B2N'),
+        ('52R-B2', 'AstraEdge 52R-B2'),
+    }:
+        return _fail(f'build must be exact 52R-B2N pair or successor 52R-B2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 
     from backend.collectors.news_provider_registry import PROVIDER_DEFS
 
@@ -333,14 +347,17 @@ def main() -> int:
         return _fail('B1 verifier, foundation, or legacy NSE collector missing')
 
     backend_hits = []
+    allowed_callers = {'backend/news/automatic_primary_verification.py'}
+    b2_module = PROJECT_ROOT / 'backend/news/automatic_primary_verification.py'
     for path in (PROJECT_ROOT / 'backend').rglob('*.py'):
         if path.resolve() == verifier.resolve():
             continue
         text = path.read_text(encoding='utf-8')
         if 'verify_linked_primary_sighting' in text:
             backend_hits.append(_rel(path))
-    if backend_hits:
-        return _fail(f'unexpected production callers of B1 verifier: {backend_hits}')
+    unexpected_hits = [h for h in backend_hits if h not in allowed_callers]
+    if unexpected_hits:
+        return _fail(f'unexpected production callers of B1 verifier: {unexpected_hits}')
 
     validator_src = Path(__file__).read_text(encoding='utf-8')
     promote_needle = 'def ' + '_promote_build'

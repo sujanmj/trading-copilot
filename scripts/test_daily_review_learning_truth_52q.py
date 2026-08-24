@@ -117,6 +117,7 @@ def test_build_is_exactly_52q() -> int:
         ('52R-A2', 'AstraEdge 52R-A2'),
         ('52R-B1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B2N'),
+        ('52R-B2', 'AstraEdge 52R-B2'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed_build_pairs:
         return _fail(
@@ -134,6 +135,7 @@ def test_build_pair_mismatches_rejected_52q() -> int:
         ('52R-A2', 'AstraEdge 52R-A2'),
         ('52R-B1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B2N'),
+        ('52R-B2', 'AstraEdge 52R-B2'),
     }
     mismatches = (
         ('52Q', 'AstraEdge 52R-A1'),
@@ -145,6 +147,8 @@ def test_build_pair_mismatches_rejected_52q() -> int:
         ('52R-A2', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B1'),
         ('52R-B1', 'AstraEdge 52R-B2N'),
+        ('52R-B2', 'AstraEdge 52R-B2N'),
+        ('52R-B2N', 'AstraEdge 52R-B2'),
     )
     for stage, telegram in mismatches:
         if (stage, telegram) in allowed_build_pairs:

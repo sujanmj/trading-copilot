@@ -26,6 +26,32 @@ def run_live_news_tracker():
     if result.get('errors'):
         for err in (result.get('errors') or [])[:5]:
             print(f'  [WARN] {err}')
+
+    try:
+        from backend.news.automatic_primary_verification import run_automatic_primary_verification
+
+        verification = run_automatic_primary_verification()
+    except Exception as exc:
+        print(
+            f'[PRIMARY_VERIFICATION] isolated failure: {type(exc).__name__}',
+            flush=True,
+        )
+        verification = {
+            'ok': False,
+            'error_type': type(exc).__name__,
+            'attempted': 0,
+            'verified': 0,
+            'failed': 1,
+        }
+    result['primary_verification'] = verification
+    print(
+        'Primary verification: '
+        f"scanned={verification.get('scanned')} "
+        f"attempted={verification.get('attempted')} "
+        f"verified={verification.get('verified')} "
+        f"skipped={verification.get('skipped')} "
+        f"failed={verification.get('failed')}"
+    )
     print('=' * 60)
     return result
 
