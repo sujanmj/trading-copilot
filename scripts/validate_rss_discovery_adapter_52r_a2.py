@@ -118,6 +118,13 @@ ALLOWED_SUCCESSOR_C1A = {
     'scripts/validate_verified_intelligence_store_52r_c1a.py',
 }
 
+ALLOWED_SUCCESSOR_C1B = {
+    'backend/news/verified_intelligence_classifier.py',
+    'backend/collectors/live_news_tracker.py',
+    'scripts/test_verified_intelligence_classifier_52r_c1b.py',
+    'scripts/validate_verified_intelligence_classifier_52r_c1b.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_a2_architecture_audit.txt',
     'phase52r_a2_validation.txt',
@@ -125,7 +132,7 @@ ALLOWED_REPORTS = {
 }
 
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS | ALLOWED_SUCCESSOR_B1 | ALLOWED_SUCCESSOR_B2N | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS | ALLOWED_SUCCESSOR_B1 | ALLOWED_SUCCESSOR_B2N | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B
 )
 
 
@@ -235,12 +242,14 @@ def main() -> int:
         ('52R-B2N', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2'),
         ('52R-C1A', 'AstraEdge 52R-C1A'),
+        ('52R-C1B', 'AstraEdge 52R-C1B'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'build must be exact 52R-A2 / AstraEdge 52R-A2 or successor '
             f'52R-B1 / AstraEdge 52R-B1 or 52R-B2N / AstraEdge 52R-B2N or '
-            f'52R-B2 / AstraEdge 52R-B2 or 52R-C1A / AstraEdge 52R-C1A, '
+            f'52R-B2 / AstraEdge 52R-B2 or 52R-C1A / AstraEdge 52R-C1A or '
+            f'52R-C1B / AstraEdge 52R-C1B, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 

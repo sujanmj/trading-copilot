@@ -122,16 +122,19 @@ def _isolated():
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-C1A', 'AstraEdge 52R-C1A')}
+    allowed = {('52R-C1A', 'AstraEdge 52R-C1A'), ('52R-C1B', 'AstraEdge 52R-C1B')}
     mismatches = (
         ('52R-C1A', 'AstraEdge 52R-B2'),
         ('52R-B2', 'AstraEdge 52R-C1A'),
         ('52R-C1A', 'AstraEdge 52R-B2N'),
         ('52R-B2N', 'AstraEdge 52R-C1A'),
+        ('52R-C1A', 'AstraEdge 52R-C1B'),
+        ('52R-C1B', 'AstraEdge 52R-C1A'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
-            f'expected exact pair 52R-C1A / AstraEdge 52R-C1A, '
+            f'expected exact pair 52R-C1A / AstraEdge 52R-C1A or successor '
+            f'52R-C1B / AstraEdge 52R-C1B, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     for stage, telegram in mismatches:
@@ -601,8 +604,17 @@ def test_safety_boundaries() -> int:
         text = path.read_text(encoding='utf-8')
         if 'upsert_verified_intelligence_record' in text or 'verified_intelligence_store' in text:
             caller_hits.append(rel)
-    if caller_hits:
+    from backend.config.build_info import BUILD_STAGE as _stage
+    authorized = set()
+    if _stage == '52R-C1B':
+        authorized = {'backend/news/verified_intelligence_classifier.py'}
+    unexpected_callers = [hit for hit in caller_hits if hit not in authorized]
+    if unexpected_callers:
+        return _fail(f'production C1A callers exist: {unexpected_callers}')
+    if _stage == '52R-C1A' and caller_hits:
         return _fail(f'production C1A callers exist: {caller_hits}')
+    if _stage == '52R-C1B' and set(caller_hits) != authorized:
+        return _fail(f'C1B must be the only authorized C1A store consumer, got {caller_hits}')
     if 'verified_intelligence_store' in TRACKER_PATH.read_text(encoding='utf-8'):
         return _fail('live_news_tracker must not import C1A')
     if SCHEDULER_PATH.is_file() and 'verified_intelligence_store' in SCHEDULER_PATH.read_text(encoding='utf-8'):

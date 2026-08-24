@@ -14,7 +14,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_COMMIT = '2aaae59ccf5680b305b2f64be169eb84726de9b2'
 CANONICAL_HEAD = 'e6565b0988184ca3473b54a2a19818da9a7b2667'
-ALLOWED_HEADS = frozenset({BASELINE_COMMIT, CANONICAL_HEAD})
+C1A_HEAD = '21c32dcf5a3a2280ccf90536e2ec238aa54b02e5'
+ALLOWED_HEADS = frozenset({BASELINE_COMMIT, CANONICAL_HEAD, C1A_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -73,6 +74,13 @@ ALLOWED_SUCCESSOR_C1A = {
     'scripts/validate_verified_intelligence_store_52r_c1a.py',
 }
 
+ALLOWED_SUCCESSOR_C1B = {
+    'backend/news/verified_intelligence_classifier.py',
+    'backend/collectors/live_news_tracker.py',
+    'scripts/test_verified_intelligence_classifier_52r_c1b.py',
+    'scripts/validate_verified_intelligence_classifier_52r_c1b.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_b2_validation.txt',
     'phase52r_b2_diff.txt',
@@ -86,6 +94,9 @@ ALLOWED_REPORTS = {
     'phase52r_c_architecture_audit.txt',
     'phase52r_c1a_validation.txt',
     'phase52r_c1a_diff.txt',
+    'phase52r_c1b_integration_audit.txt',
+    'phase52r_c1b_validation.txt',
+    'phase52r_c1b_diff.txt',
 }
 
 FORBIDDEN_PRODUCTION = {
@@ -96,7 +107,7 @@ FORBIDDEN_PRODUCTION = {
     'backend/collectors/nse_announcements.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2_TESTS | ALLOWED_SUCCESSOR_C1A
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2_TESTS | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright',
@@ -188,14 +199,15 @@ def _validate_changed_file_scope() -> str | None:
     unrelated_head = '0000000000000000000000000000000000000000'
     if unrelated_head in ALLOWED_HEADS:
         return 'unrelated HEAD must never be permitted by the B2 HEAD allowlist'
-    if ALLOWED_HEADS != frozenset({BASELINE_COMMIT, CANONICAL_HEAD}):
-        return 'B2 HEAD allowlist must remain exactly the original B2 baseline and committed B2 successor'
-    if len(ALLOWED_HEADS) != 2:
-        return 'B2 HEAD allowlist must remain a bounded two-commit set'
+    if ALLOWED_HEADS != frozenset({BASELINE_COMMIT, CANONICAL_HEAD, C1A_HEAD}):
+        return 'B2 HEAD allowlist must remain exactly the original B2 baseline, committed B2 successor, and committed C1A HEAD'
+    if len(ALLOWED_HEADS) != 3:
+        return 'B2 HEAD allowlist must remain a bounded three-commit set'
     if actual_head not in ALLOWED_HEADS:
         return (
-            f'HEAD must be the original B2 implementation baseline {BASELINE_COMMIT} '
-            f'or the committed B2 successor {CANONICAL_HEAD}, got {actual_head}'
+            f'HEAD must be the original B2 implementation baseline {BASELINE_COMMIT}, '
+            f'the committed B2 successor {CANONICAL_HEAD}, '
+            f'or the committed C1A HEAD {C1A_HEAD}, got {actual_head}'
         )
 
     tracked_changed = _git_paths(
@@ -274,8 +286,9 @@ def main() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('52R-B2', 'AstraEdge 52R-B2'),
         ('52R-C1A', 'AstraEdge 52R-C1A'),
+        ('52R-C1B', 'AstraEdge 52R-C1B'),
     }:
-        return _fail(f'build must be exact 52R-B2 pair or successor 52R-C1A pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'build must be exact 52R-B2 pair or successor 52R-C1A/52R-C1B pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 
     b2_path = PROJECT_ROOT / 'backend/news/automatic_primary_verification.py'
     b2_src = b2_path.read_text(encoding='utf-8')

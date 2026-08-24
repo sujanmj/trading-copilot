@@ -12,7 +12,10 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-BASELINE_COMMIT = 'e6565b0988184ca3473b54a2a19818da9a7b2667'
+ORIGINAL_IMPL_BASELINE = 'e6565b0988184ca3473b54a2a19818da9a7b2667'
+COMMITTED_C1A_HEAD = '21c32dcf5a3a2280ccf90536e2ec238aa54b02e5'
+BASELINE_COMMIT = ORIGINAL_IMPL_BASELINE
+ALLOWED_HEADS = frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -76,6 +79,9 @@ MUST_REMAIN_UNCHANGED = (
     'backend/news/primary_source_verifier.py',
     'backend/news/automatic_primary_verification.py',
     'backend/news/rss_discovery_adapter.py',
+)
+
+MUST_REMAIN_UNCHANGED_EXCEPT_C1B_SUCCESSOR = (
     'backend/collectors/live_news_tracker.py',
 )
 
@@ -106,13 +112,23 @@ ALLOWED_HISTORICAL_REGRESSIONS = {
     'scripts/validate_tradecard_explain_never_silent_52p.py',
 }
 
+ALLOWED_SUCCESSOR_C1B = {
+    'backend/news/verified_intelligence_classifier.py',
+    'backend/collectors/live_news_tracker.py',
+    'scripts/test_verified_intelligence_classifier_52r_c1b.py',
+    'scripts/validate_verified_intelligence_classifier_52r_c1b.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_c_architecture_audit.txt',
     'phase52r_c1a_validation.txt',
     'phase52r_c1a_diff.txt',
+    'phase52r_c1b_integration_audit.txt',
+    'phase52r_c1b_validation.txt',
+    'phase52r_c1b_diff.txt',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_C1A_TESTS | ALLOWED_HISTORICAL_REGRESSIONS
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_C1A_TESTS | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_C1B
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -197,8 +213,17 @@ def _validate_changed_file_scope() -> str | None:
         text=True,
         check=False,
     )
-    if (head.stdout or '').strip() != BASELINE_COMMIT:
-        return f'HEAD must remain canonical baseline {BASELINE_COMMIT}'
+    actual_head = (head.stdout or '').strip()
+    unrelated_head = '0000000000000000000000000000000000000000'
+    if unrelated_head in ALLOWED_HEADS:
+        return 'unrelated HEAD must never be permitted by the C1A HEAD allowlist'
+    if ALLOWED_HEADS != frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD}):
+        return 'C1A HEAD allowlist must remain the original C1A implementation baseline and committed C1A HEAD'
+    if actual_head not in ALLOWED_HEADS:
+        return (
+            f'HEAD must be the original C1A implementation baseline {ORIGINAL_IMPL_BASELINE} '
+            f'or the committed C1A HEAD {COMMITTED_C1A_HEAD}, got {actual_head}'
+        )
 
     tracked_changed = _git_paths(
         'diff',
@@ -239,10 +264,26 @@ def _validate_changed_file_scope() -> str | None:
     for required in MUST_REMAIN_UNCHANGED:
         if required in actual_source_scope:
             return f'{required} must remain unchanged from baseline'
+    for required in MUST_REMAIN_UNCHANGED_EXCEPT_C1B_SUCCESSOR:
+        if required in actual_source_scope and actual_head == ORIGINAL_IMPL_BASELINE:
+            return f'{required} must remain unchanged from the C1A implementation baseline'
+        if required in actual_source_scope and required not in ALLOWED_SUCCESSOR_C1B:
+            return f'{required} is not in the bounded C1B successor allowlist'
 
     unexpected = actual_source_scope - ALLOWED_CHANGED_SOURCE
     if unexpected:
         return f'unexpected changed source/test/validator files: {sorted(unexpected)}'
+
+    if actual_head == COMMITTED_C1A_HEAD:
+        store_vs_c1a = subprocess.run(
+            ['git', 'diff', '--name-only', COMMITTED_C1A_HEAD, '--', 'backend/news/verified_intelligence_store.py'],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if (store_vs_c1a.stdout or '').strip():
+            return 'C1A store source must remain unchanged from the committed C1A HEAD'
 
     if 'backend/news/verified_intelligence_store.py' not in actual_source_scope:
         return 'missing new production file backend/news/verified_intelligence_store.py'
@@ -275,9 +316,13 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-C1A', 'AstraEdge 52R-C1A'):
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('52R-C1A', 'AstraEdge 52R-C1A'),
+        ('52R-C1B', 'AstraEdge 52R-C1B'),
+    }:
         return _fail(
-            f'build must be exact 52R-C1A / AstraEdge 52R-C1A, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'build must be exact 52R-C1A / AstraEdge 52R-C1A or successor '
+            f'52R-C1B / AstraEdge 52R-C1B, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 
     module_path = PROJECT_ROOT / 'backend/news/verified_intelligence_store.py'
@@ -329,7 +374,13 @@ def main() -> int:
         text = path.read_text(encoding='utf-8')
         if 'upsert_verified_intelligence_record' in text or 'verified_intelligence_store' in text:
             caller_hits.append(rel)
-    if caller_hits:
+    authorized_callers = set()
+    if BUILD_STAGE == '52R-C1B':
+        authorized_callers = {'backend/news/verified_intelligence_classifier.py'}
+    unexpected_callers = [hit for hit in caller_hits if hit not in authorized_callers]
+    if unexpected_callers:
+        return _fail(f'C1A production callers exist: {unexpected_callers}')
+    if BUILD_STAGE == '52R-C1A' and caller_hits:
         return _fail(f'C1A production callers exist: {caller_hits}')
     print('C1A_DORMANT_PRODUCTION_OK')
 
@@ -344,6 +395,8 @@ def main() -> int:
         return _fail('B2 validator must retain original BASELINE_COMMIT')
     if successor_b2_head not in b2_validator:
         return _fail('B2 validator must accept the committed B2 successor HEAD')
+    if COMMITTED_C1A_HEAD not in b2_validator:
+        return _fail('B2 validator must accept the committed C1A HEAD')
     if 'unrelated HEAD must never be permitted' not in b2_validator:
         return _fail('B2 validator must reject an unrelated HEAD')
     print('C1A_REPAIR1_HISTORICAL_B2_HEAD_CONTRACT_OK')

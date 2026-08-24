@@ -52,6 +52,46 @@ def run_live_news_tracker():
         f"skipped={verification.get('skipped')} "
         f"failed={verification.get('failed')}"
     )
+
+    try:
+        from backend.news.verified_intelligence_classifier import (
+            run_verified_intelligence_classification,
+        )
+
+        classification = run_verified_intelligence_classification()
+    except Exception as exc:
+        print(
+            f'[VERIFIED_INTELLIGENCE] isolated failure: {type(exc).__name__}',
+            flush=True,
+        )
+        classification = {
+            'ok': False,
+            'error_type': type(exc).__name__,
+            'eligible_seen': 0,
+            'attempted': 0,
+            'inserted': 0,
+            'idempotent': 0,
+            'skipped': 0,
+            'version_conflicts': 0,
+            'lock_contended': 0,
+            'failed': 1,
+            'bounded': False,
+            'store_health': None,
+        }
+    result['verified_intelligence'] = classification
+    print(
+        '[VERIFIED_INTELLIGENCE] '
+        f"eligible={classification.get('eligible_seen')} "
+        f"attempted={classification.get('attempted')} "
+        f"inserted={classification.get('inserted')} "
+        f"idempotent={classification.get('idempotent')} "
+        f"skipped={classification.get('skipped')} "
+        f"conflicts={classification.get('version_conflicts')} "
+        f"failed={classification.get('failed')} "
+        f"bounded={classification.get('bounded')} "
+        f"store_health={classification.get('store_health')}",
+        flush=True,
+    )
     print('=' * 60)
     return result
 
