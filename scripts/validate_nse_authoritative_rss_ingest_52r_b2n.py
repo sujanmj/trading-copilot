@@ -76,6 +76,12 @@ ALLOWED_SUCCESSOR_B2 = {
     'scripts/validate_automatic_primary_verification_52r_b2.py',
 }
 
+ALLOWED_SUCCESSOR_C1A = {
+    'backend/news/verified_intelligence_store.py',
+    'scripts/test_verified_intelligence_store_52r_c1a.py',
+    'scripts/validate_verified_intelligence_store_52r_c1a.py',
+}
+
 ALLOWED_REPORTS = {
     'phase52r_b2_architecture_audit.txt',
     'phase52r_b2_source_contract_probe.txt',
@@ -99,7 +105,7 @@ FORBIDDEN_PRODUCTION = {
 }
 
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS | ALLOWED_SUCCESSOR_B2
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A
 )
 
 FORBIDDEN_IMPORT_NEEDLES = (
@@ -251,8 +257,9 @@ def main() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('52R-B2N', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2'),
+        ('52R-C1A', 'AstraEdge 52R-C1A'),
     }:
-        return _fail(f'build must be exact 52R-B2N pair or successor 52R-B2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'build must be exact 52R-B2N pair or successor 52R-B2/52R-C1A pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 
     from backend.collectors.news_provider_registry import PROVIDER_DEFS
 

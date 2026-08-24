@@ -187,6 +187,7 @@ def test_build_identity() -> int:
         ('52R-B1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2'),
+        ('52R-C1A', 'AstraEdge 52R-C1A'),
     }
     mismatches = (
         ('52R-A2', 'AstraEdge 52R-A1'),
@@ -201,12 +202,14 @@ def test_build_identity() -> int:
         ('52R-A2', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2N'),
         ('52R-B2N', 'AstraEdge 52R-B2'),
+        ('52R-C1A', 'AstraEdge 52R-B2'),
+        ('52R-B2', 'AstraEdge 52R-C1A'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'expected exact pair 52R-A2 / AstraEdge 52R-A2 or successor '
             f'52R-B1 / AstraEdge 52R-B1 or 52R-B2N / AstraEdge 52R-B2N or '
-            f'52R-B2 / AstraEdge 52R-B2, '
+            f'52R-B2 / AstraEdge 52R-B2 or 52R-C1A / AstraEdge 52R-C1A, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     for stage, telegram in mismatches:

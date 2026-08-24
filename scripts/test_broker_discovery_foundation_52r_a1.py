@@ -93,12 +93,14 @@ def test_build_identity() -> int:
         ('52R-B1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2'),
+        ('52R-C1A', 'AstraEdge 52R-C1A'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'expected exact pair 52R-A1 / AstraEdge 52R-A1 or successor '
             f'52R-A2 / AstraEdge 52R-A2 or 52R-B1 / AstraEdge 52R-B1 or '
-            f'52R-B2N / AstraEdge 52R-B2N or 52R-B2 / AstraEdge 52R-B2, '
+            f'52R-B2N / AstraEdge 52R-B2N or 52R-B2 / AstraEdge 52R-B2 or '
+            f'52R-C1A / AstraEdge 52R-C1A, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     _pass('BROKER_DISCOVERY_BUILD_OK')
@@ -114,6 +116,7 @@ def test_exact_build_pair_allowlists() -> int:
         ('52R-B1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2'),
+        ('52R-C1A', 'AstraEdge 52R-C1A'),
     }
     tradecard_pairs = {
         ('52P', 'AstraEdge 52P'),
@@ -123,11 +126,12 @@ def test_exact_build_pair_allowlists() -> int:
         ('52R-B1', 'AstraEdge 52R-B1'),
         ('52R-B2N', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2'),
+        ('52R-C1A', 'AstraEdge 52R-C1A'),
     }
     # Positive current pair.
-    if ('52R-B2', 'AstraEdge 52R-B2') not in daily_pairs:
+    if ('52R-C1A', 'AstraEdge 52R-C1A') not in daily_pairs:
         return _fail('current pair missing from daily-review allowlist')
-    if ('52R-B2', 'AstraEdge 52R-B2') not in tradecard_pairs:
+    if ('52R-C1A', 'AstraEdge 52R-C1A') not in tradecard_pairs:
         return _fail('current pair missing from tradecard allowlist')
     mismatches = (
         ('52Q', 'AstraEdge 52R-A1'),
@@ -141,6 +145,8 @@ def test_exact_build_pair_allowlists() -> int:
         ('52R-B1', 'AstraEdge 52R-B2N'),
         ('52R-B2', 'AstraEdge 52R-B2N'),
         ('52R-B2N', 'AstraEdge 52R-B2'),
+        ('52R-C1A', 'AstraEdge 52R-B2'),
+        ('52R-B2', 'AstraEdge 52R-C1A'),
     )
     for stage, telegram in mismatches:
         if (stage, telegram) in daily_pairs:
