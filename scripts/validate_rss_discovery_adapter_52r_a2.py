@@ -131,8 +131,16 @@ ALLOWED_REPORTS = {
     'phase52r_a2_diff.txt',
 }
 
+ALLOWED_SUCCESSOR_D = {
+    'backend/news/news_pipeline_reliability.py',
+    'backend/collectors/live_news_tracker.py',
+    'backend/config/build_info.py',
+    'scripts/test_news_pipeline_reliability_52r_d.py',
+    'scripts/validate_news_pipeline_reliability_52r_d.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS | ALLOWED_SUCCESSOR_B1 | ALLOWED_SUCCESSOR_B2N | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_A2_TESTS | ALLOWED_SUCCESSOR_B1 | ALLOWED_SUCCESSOR_B2N | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D
 )
 
 
@@ -243,13 +251,14 @@ def main() -> int:
         ('52R-B2', 'AstraEdge 52R-B2'),
         ('52R-C1A', 'AstraEdge 52R-C1A'),
         ('52R-C1B', 'AstraEdge 52R-C1B'),
+        ('52R-D', 'AstraEdge 52R-D'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'build must be exact 52R-A2 / AstraEdge 52R-A2 or successor '
             f'52R-B1 / AstraEdge 52R-B1 or 52R-B2N / AstraEdge 52R-B2N or '
             f'52R-B2 / AstraEdge 52R-B2 or 52R-C1A / AstraEdge 52R-C1A or '
-            f'52R-C1B / AstraEdge 52R-C1B, '
+            f'52R-C1B / AstraEdge 52R-C1B or 52R-D / AstraEdge 52R-D, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 

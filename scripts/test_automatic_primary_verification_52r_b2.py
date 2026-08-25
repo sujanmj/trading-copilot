@@ -134,7 +134,7 @@ def _reset(ctx: dict) -> None:
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-B2', 'AstraEdge 52R-B2'), ('52R-C1A', 'AstraEdge 52R-C1A'), ('52R-C1B', 'AstraEdge 52R-C1B')}
+    allowed = {('52R-B2', 'AstraEdge 52R-B2'), ('52R-C1A', 'AstraEdge 52R-C1A'), ('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D')}
     mismatches = (
         ('52R-B2', 'AstraEdge 52R-B2N'),
         ('52R-B2N', 'AstraEdge 52R-B2'),
@@ -144,11 +144,14 @@ def test_build_identity() -> int:
         ('52R-B2', 'AstraEdge 52R-C1A'),
         ('52R-C1A', 'AstraEdge 52R-C1B'),
         ('52R-C1B', 'AstraEdge 52R-C1A'),
+        ('52R-C1B', 'AstraEdge 52R-D'),
+        ('52R-D', 'AstraEdge 52R-C1B'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
             f'expected exact pair 52R-B2 / AstraEdge 52R-B2 or successor '
-            f'52R-C1A / AstraEdge 52R-C1A or 52R-C1B / AstraEdge 52R-C1B, '
+            f'52R-C1A / AstraEdge 52R-C1A or 52R-C1B / AstraEdge 52R-C1B or '
+            f'52R-D / AstraEdge 52R-D, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     for stage, telegram in mismatches:
@@ -561,14 +564,24 @@ def test_single_production_owner() -> int:
         b2_calls.append('b2')
         return {'scanned': 0, 'attempted': 0, 'verified': 0, 'skipped': 0, 'failed': 0}
 
-    with patch('backend.collectors.live_news_tracker.run_unified_news_refresh', side_effect=_refresh), patch(
-        'backend.news.automatic_primary_verification.run_automatic_primary_verification',
-        side_effect=_b2,
-    ), patch(
-        'backend.news.verified_intelligence_classifier.run_verified_intelligence_classification',
-        return_value={'ok': True, 'attempted': 0, 'inserted': 0, 'failed': 0},
-    ):
-        result = run_live_news_tracker()
+    with tempfile.TemporaryDirectory() as td:
+        sidecar = Path(td) / 'news_pipeline_reliability.json'
+        lock = Path(td) / 'news_pipeline_reliability.lock'
+        with patch('backend.collectors.live_news_tracker.run_unified_news_refresh', side_effect=_refresh), patch(
+            'backend.news.automatic_primary_verification.run_automatic_primary_verification',
+            side_effect=_b2,
+        ), patch(
+            'backend.news.verified_intelligence_classifier.run_verified_intelligence_classification',
+            return_value={'ok': True, 'attempted': 0, 'inserted': 0, 'failed': 0},
+        ), patch.dict(
+            os.environ,
+            {
+                'NEWS_PIPELINE_RELIABILITY_PATH': str(sidecar),
+                'NEWS_PIPELINE_RELIABILITY_LOCK_PATH': str(lock),
+            },
+            clear=False,
+        ):
+            result = run_live_news_tracker()
     if b2_calls != ['b2']:
         return _fail(f'live owner did not invoke B2 exactly once, got {b2_calls}')
     if 'primary_verification' not in result:

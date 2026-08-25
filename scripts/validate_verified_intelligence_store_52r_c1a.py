@@ -15,7 +15,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ORIGINAL_IMPL_BASELINE = 'e6565b0988184ca3473b54a2a19818da9a7b2667'
 COMMITTED_C1A_HEAD = '21c32dcf5a3a2280ccf90536e2ec238aa54b02e5'
 BASELINE_COMMIT = ORIGINAL_IMPL_BASELINE
-ALLOWED_HEADS = frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD})
+COMMITTED_C1B_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
+ALLOWED_HEADS = frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD, COMMITTED_C1B_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -128,7 +129,15 @@ ALLOWED_REPORTS = {
     'phase52r_c1b_diff.txt',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_C1A_TESTS | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_C1B
+ALLOWED_SUCCESSOR_D = {
+    'backend/news/news_pipeline_reliability.py',
+    'backend/collectors/live_news_tracker.py',
+    'backend/config/build_info.py',
+    'scripts/test_news_pipeline_reliability_52r_d.py',
+    'scripts/validate_news_pipeline_reliability_52r_d.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_C1A_TESTS | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -217,12 +226,13 @@ def _validate_changed_file_scope() -> str | None:
     unrelated_head = '0000000000000000000000000000000000000000'
     if unrelated_head in ALLOWED_HEADS:
         return 'unrelated HEAD must never be permitted by the C1A HEAD allowlist'
-    if ALLOWED_HEADS != frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD}):
-        return 'C1A HEAD allowlist must remain the original C1A implementation baseline and committed C1A HEAD'
+    if ALLOWED_HEADS != frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD, COMMITTED_C1B_HEAD}):
+        return 'C1A HEAD allowlist must remain the original C1A implementation baseline, committed C1A HEAD, and committed C1B HEAD'
     if actual_head not in ALLOWED_HEADS:
         return (
             f'HEAD must be the original C1A implementation baseline {ORIGINAL_IMPL_BASELINE} '
-            f'or the committed C1A HEAD {COMMITTED_C1A_HEAD}, got {actual_head}'
+            f'or the committed C1A HEAD {COMMITTED_C1A_HEAD} '
+            f'or the committed C1B HEAD {COMMITTED_C1B_HEAD}, got {actual_head}'
         )
 
     tracked_changed = _git_paths(
@@ -274,7 +284,7 @@ def _validate_changed_file_scope() -> str | None:
     if unexpected:
         return f'unexpected changed source/test/validator files: {sorted(unexpected)}'
 
-    if actual_head == COMMITTED_C1A_HEAD:
+    if actual_head in {COMMITTED_C1A_HEAD, COMMITTED_C1B_HEAD}:
         store_vs_c1a = subprocess.run(
             ['git', 'diff', '--name-only', COMMITTED_C1A_HEAD, '--', 'backend/news/verified_intelligence_store.py'],
             cwd=str(PROJECT_ROOT),
@@ -319,10 +329,11 @@ def main() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('52R-C1A', 'AstraEdge 52R-C1A'),
         ('52R-C1B', 'AstraEdge 52R-C1B'),
+        ('52R-D', 'AstraEdge 52R-D'),
     }:
         return _fail(
             f'build must be exact 52R-C1A / AstraEdge 52R-C1A or successor '
-            f'52R-C1B / AstraEdge 52R-C1B, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'52R-C1B / AstraEdge 52R-C1B or 52R-D / AstraEdge 52R-D, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 
     module_path = PROJECT_ROOT / 'backend/news/verified_intelligence_store.py'
@@ -375,7 +386,7 @@ def main() -> int:
         if 'upsert_verified_intelligence_record' in text or 'verified_intelligence_store' in text:
             caller_hits.append(rel)
     authorized_callers = set()
-    if BUILD_STAGE == '52R-C1B':
+    if BUILD_STAGE in {'52R-C1B', '52R-D'}:
         authorized_callers = {'backend/news/verified_intelligence_classifier.py'}
     unexpected_callers = [hit for hit in caller_hits if hit not in authorized_callers]
     if unexpected_callers:

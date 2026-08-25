@@ -13,6 +13,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_COMMIT = '21c32dcf5a3a2280ccf90536e2ec238aa54b02e5'
+COMMITTED_C1B_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
+ALLOWED_HEADS = frozenset({BASELINE_COMMIT, COMMITTED_C1B_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -70,6 +72,14 @@ NEW_UNTRACKED_SOURCE = {
     'scripts/validate_verified_intelligence_classifier_52r_c1b.py',
 }
 
+ALLOWED_SUCCESSOR_D = {
+    'backend/news/news_pipeline_reliability.py',
+    'backend/collectors/live_news_tracker.py',
+    'backend/config/build_info.py',
+    'scripts/test_news_pipeline_reliability_52r_d.py',
+    'scripts/validate_news_pipeline_reliability_52r_d.py',
+}
+
 ALLOWED_HISTORICAL_REGRESSIONS = {
     'scripts/test_broker_discovery_foundation_52r_a1.py',
     'scripts/validate_broker_discovery_foundation_52r_a1.py',
@@ -95,7 +105,7 @@ ALLOWED_REPORTS = {
     'phase52r_c1b_diff.txt',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE | ALLOWED_SUCCESSOR_D
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -181,8 +191,12 @@ def _validate_changed_file_scope() -> str | None:
         text=True,
         check=False,
     )
-    if (head.stdout or '').strip() != BASELINE_COMMIT:
-        return f'HEAD must remain canonical baseline {BASELINE_COMMIT}'
+    actual_head = (head.stdout or '').strip()
+    if actual_head not in ALLOWED_HEADS:
+        return (
+            f'HEAD must remain canonical C1B baseline {BASELINE_COMMIT} '
+            f'or committed C1B HEAD {COMMITTED_C1B_HEAD}, got {actual_head}'
+        )
 
     tracked_changed = _git_paths(
         'diff',
@@ -243,8 +257,11 @@ def _validate_changed_file_scope() -> str | None:
     if 'backend/collectors/live_news_tracker.py' not in tracked_changed:
         return 'backend/collectors/live_news_tracker.py must contain the authorized C1B caller'
     for required in NEW_UNTRACKED_SOURCE:
-        if required not in relevant_untracked:
-            return f'missing required untracked C1B file {required}'
+        if actual_head == BASELINE_COMMIT:
+            if required not in relevant_untracked:
+                return f'missing required untracked C1B file {required}'
+        elif required not in tracked_now and required not in relevant_untracked:
+            return f'missing required C1B file {required}'
 
     print('C1B_CHANGED_FILE_SCOPE_OK')
     return None
@@ -272,9 +289,13 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-C1B', 'AstraEdge 52R-C1B'):
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('52R-C1B', 'AstraEdge 52R-C1B'),
+        ('52R-D', 'AstraEdge 52R-D'),
+    }:
         return _fail(
-            f'build must be exact 52R-C1B / AstraEdge 52R-C1B, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'build must be exact 52R-C1B / AstraEdge 52R-C1B or successor '
+            f'52R-D / AstraEdge 52R-D, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
 
     module_path = PROJECT_ROOT / 'backend/news/verified_intelligence_classifier.py'

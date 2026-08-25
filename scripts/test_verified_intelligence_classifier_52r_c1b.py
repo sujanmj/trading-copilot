@@ -196,16 +196,19 @@ def _run_with_events(events: list[dict], *, upsert_spy=None):
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-C1B', 'AstraEdge 52R-C1B')}
+    allowed = {('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D')}
     mismatches = (
         ('52R-C1B', 'AstraEdge 52R-C1A'),
         ('52R-C1A', 'AstraEdge 52R-C1B'),
         ('52R-C1A', 'AstraEdge 52R-C1A'),
         ('52R-B2', 'AstraEdge 52R-C1B'),
+        ('52R-C1B', 'AstraEdge 52R-D'),
+        ('52R-D', 'AstraEdge 52R-C1B'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
-            f'expected exact pair 52R-C1B / AstraEdge 52R-C1B, '
+            f'expected exact pair 52R-C1B / AstraEdge 52R-C1B or successor '
+            f'52R-D / AstraEdge 52R-D, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     for stage, telegram in mismatches:
@@ -675,14 +678,24 @@ def test_production_caller() -> int:
             'store_health': 'MISSING',
         }
 
-    with patch('backend.collectors.live_news_tracker.run_unified_news_refresh', side_effect=_refresh), patch(
-        'backend.news.automatic_primary_verification.run_automatic_primary_verification',
-        side_effect=_b2,
-    ), patch(
-        'backend.news.verified_intelligence_classifier.run_verified_intelligence_classification',
-        side_effect=_c1b,
-    ):
-        result = run_live_news_tracker()
+    with tempfile.TemporaryDirectory() as td:
+        sidecar = Path(td) / 'news_pipeline_reliability.json'
+        lock = Path(td) / 'news_pipeline_reliability.lock'
+        with patch('backend.collectors.live_news_tracker.run_unified_news_refresh', side_effect=_refresh), patch(
+            'backend.news.automatic_primary_verification.run_automatic_primary_verification',
+            side_effect=_b2,
+        ), patch(
+            'backend.news.verified_intelligence_classifier.run_verified_intelligence_classification',
+            side_effect=_c1b,
+        ), patch.dict(
+            os.environ,
+            {
+                'NEWS_PIPELINE_RELIABILITY_PATH': str(sidecar),
+                'NEWS_PIPELINE_RELIABILITY_LOCK_PATH': str(lock),
+            },
+            clear=False,
+        ):
+            result = run_live_news_tracker()
     if order != ['refresh', 'b2', 'c1b']:
         return _fail(f'call order must be refresh/B2/C1B, got {order}')
     if 'verified_intelligence' not in result:

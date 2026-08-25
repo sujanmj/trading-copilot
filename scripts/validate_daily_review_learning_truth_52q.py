@@ -51,6 +51,7 @@ def main() -> int:
         ('52R-B2', 'AstraEdge 52R-B2'),
         ('52R-C1A', 'AstraEdge 52R-C1A'),
         ('52R-C1B', 'AstraEdge 52R-C1B'),
+        ('52R-D', 'AstraEdge 52R-D'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in _allowed_build_pairs:
         return _fail(
