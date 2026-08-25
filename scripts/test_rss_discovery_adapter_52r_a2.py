@@ -125,6 +125,7 @@ def _article(**extra):
         'url': 'https://economictimes.example.com/infosys-other-event',
         'title': 'Infosys reports other event',
         'published_at': PUB.isoformat(),
+        'source_time_basis': 'PUBLISHED_PARSED',
         'description': 'Bounded excerpt for Infosys.',
         'symbols': ['INFY'],
     }
@@ -165,7 +166,15 @@ def _isolated_discovery():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 return path
 
-            with patch.dict(os.environ, {'RSS_DISCOVERY_LOCK_PATH': str(lock_path)}, clear=False), patch(
+            with patch.dict(
+                os.environ,
+                {
+                    'RSS_DISCOVERY_LOCK_PATH': str(lock_path),
+                    'NEWS_SOURCE_TIME_PROVENANCE_PATH': str(iso['temp_root'] / 'news_source_time_provenance.json'),
+                    'NEWS_SOURCE_TIME_PROVENANCE_LOCK_PATH': str(iso['temp_root'] / 'news_source_time_provenance.lock'),
+                },
+                clear=False,
+            ), patch(
                 'backend.news.broker_discovery_foundation.get_data_path',
                 side_effect=_temp_data_path,
             ), patch(
@@ -190,6 +199,7 @@ def test_build_identity() -> int:
         ('52R-C1A', 'AstraEdge 52R-C1A'),
         ('52R-C1B', 'AstraEdge 52R-C1B'),
         ('52R-D', 'AstraEdge 52R-D'),
+        ('52R-D2P', 'AstraEdge 52R-D2P'),
     }
     mismatches = (
         ('52R-A2', 'AstraEdge 52R-A1'),
@@ -210,6 +220,8 @@ def test_build_identity() -> int:
         ('52R-C1B', 'AstraEdge 52R-C1A'),
         ('52R-C1B', 'AstraEdge 52R-D'),
         ('52R-D', 'AstraEdge 52R-C1B'),
+        ('52R-D2P', 'AstraEdge 52R-D'),
+        ('52R-D', 'AstraEdge 52R-D2P'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(

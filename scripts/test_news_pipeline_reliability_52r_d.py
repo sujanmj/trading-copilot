@@ -207,6 +207,8 @@ def _isolated():
             {
                 'NEWS_PIPELINE_RELIABILITY_PATH': str(sidecar),
                 'NEWS_PIPELINE_RELIABILITY_LOCK_PATH': str(lock),
+                'NEWS_SOURCE_TIME_PROVENANCE_PATH': str(root / 'news_source_time_provenance.json'),
+                'NEWS_SOURCE_TIME_PROVENANCE_LOCK_PATH': str(root / 'news_source_time_provenance.lock'),
             },
             clear=False,
         ):
@@ -228,8 +230,11 @@ def _bytes(ctx: dict) -> bytes:
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-D', 'AstraEdge 52R-D'):
-        return _fail(f'expected 52R-D / AstraEdge 52R-D, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('52R-D', 'AstraEdge 52R-D'),
+        ('52R-D2P', 'AstraEdge 52R-D2P'),
+    }:
+        return _fail(f'expected 52R-D / AstraEdge 52R-D or successor 52R-D2P / AstraEdge 52R-D2P, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('52R_D_BUILD_PAIR_OK')
     return 0
 

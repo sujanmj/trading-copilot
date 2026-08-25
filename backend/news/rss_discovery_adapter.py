@@ -31,12 +31,28 @@ from backend.news.broker_discovery_foundation import (
     SOURCE_KIND_NEWS_PUBLISHER,
     BrokerDiscoveryError,
     bound_excerpt,
+    build_source_sighting,
+    get_sighting,
     get_store_health,
     normalize_aware_datetime,
     normalize_headline,
     normalize_symbols,
     normalize_url,
     upsert_sighting,
+)
+from backend.news.source_time_provenance import (
+    ALLOWED_BASIS,
+    HEALTH_MALFORMED as PROVENANCE_MALFORMED,
+    HEALTH_UNREADABLE as PROVENANCE_UNREADABLE,
+    LOOKUP_PRESENT,
+    STATUS_CONFLICT,
+    STATUS_FAILED,
+    STATUS_IDEMPOTENT,
+    STATUS_INSERTED,
+    STATUS_LOCK_CONTENDED,
+    STATUS_STORE_UNHEALTHY,
+    lookup_source_time_provenance,
+    record_source_time_provenance,
 )
 from backend.storage.data_paths import get_data_path
 
@@ -99,6 +115,10 @@ def _empty_stats(**overrides: Any) -> dict[str, Any]:
         'store_unhealthy': False,
         'lock_contended': False,
         'lock_stale_cleared': False,
+        'provenance_inserted': 0,
+        'provenance_idempotent': 0,
+        'provenance_conflict': 0,
+        'provenance_blocked': 0,
     }
     stats.update(overrides)
     return stats
@@ -383,6 +403,7 @@ def evaluate_registry_article(article: Any) -> tuple[Optional[str], Optional[dic
     published = article.get('published_at')
     if published in (None, ''):
         published = article.get('published')
+    # ingested_at is feed-display only and is never read as source publication time.
     if published in (None, '', False, True) or isinstance(published, (dict, list, set, tuple, bytes, bytearray)):
         return _SKIP_MISSING_TIMESTAMP, None
     try:
@@ -465,6 +486,169 @@ def _apply_skip(stats: dict[str, Any], reason: str) -> None:
         stats['errors'] = int(stats['errors']) + 1
 
 
+def _article_source_time_basis(article: dict[str, Any]) -> Optional[str]:
+    basis = article.get('source_time_basis')
+    if basis in ALLOWED_BASIS:
+        return str(basis)
+    return None
+
+
+def _block_provenance(stats: dict[str, Any]) -> None:
+    stats['skipped'] = int(stats['skipped']) + 1
+    stats['provenance_blocked'] = int(stats['provenance_blocked']) + 1
+
+
+def _apply_upsert_result(stats: dict[str, Any], result: dict[str, Any]) -> None:
+    if result.get('inserted'):
+        stats['inserted'] = int(stats['inserted']) + 1
+    elif result.get('deduplicated'):
+        stats['deduplicated'] = int(stats['deduplicated']) + 1
+
+
+def _ingest_eligible_article(
+    article: dict[str, Any],
+    payload: dict[str, Any],
+    stats: dict[str, Any],
+) -> None:
+    """Prebuild canonical sighting, bind D2P provenance, then maybe A1 upsert."""
+    try:
+        built = build_source_sighting(
+            source_name=payload.get('source_name'),
+            source_kind=payload.get('source_kind'),
+            source_url=payload.get('source_url'),
+            source_headline=payload.get('source_headline'),
+            source_published_at=payload.get('source_published_at'),
+            original_publisher=payload.get('original_publisher'),
+            attribution=payload.get('attribution'),
+            bounded_excerpt=payload.get('bounded_excerpt'),
+            event_id='',
+        )
+    except (BrokerDiscoveryError, TypeError, ValueError, UnicodeError, OverflowError):
+        stats['errors'] = int(stats['errors']) + 1
+        stats['skipped'] = int(stats['skipped']) + 1
+        stats['skipped_malformed'] = int(stats['skipped_malformed']) + 1
+        return
+
+    sighting_id = str(built.get('sighting_id') or '')
+    canonical_ts = built.get('source_published_at')
+    basis = _article_source_time_basis(article)
+    try:
+        existing = get_sighting(sighting_id)
+    except BrokerDiscoveryError:
+        stats['errors'] = int(stats['errors']) + 1
+        stats['skipped'] = int(stats['skipped']) + 1
+        stats['skipped_malformed'] = int(stats['skipped_malformed']) + 1
+        return
+
+    lookup = lookup_source_time_provenance(sighting_id)
+    lookup_health = str(lookup.get('health') or '')
+    sidecar_unhealthy = lookup_health in (PROVENANCE_UNREADABLE, PROVENANCE_MALFORMED)
+    sidecar_present = lookup.get('lookup') == LOOKUP_PRESENT and isinstance(lookup.get('entry'), dict)
+    entry = lookup.get('entry') if sidecar_present else None
+    bound_value = str((entry or {}).get('source_time_value') or '')
+    bound_basis = str((entry or {}).get('source_time_basis') or '')
+    existing_ts = str((existing or {}).get('source_published_at') or '') if existing else ''
+
+    upsert_payload = dict(payload)
+    allow_upsert = False
+
+    if existing is None:
+        if sidecar_unhealthy:
+            _block_provenance(stats)
+            return
+        if basis is None or not isinstance(canonical_ts, str):
+            _block_provenance(stats)
+            return
+        recorded = record_source_time_provenance(
+            sighting_id=sighting_id,
+            source_time_value=canonical_ts,
+            source_time_basis=basis,
+        )
+        status = str(recorded.get('status') or '')
+        if status == STATUS_INSERTED:
+            stats['provenance_inserted'] = int(stats['provenance_inserted']) + 1
+            upsert_payload['source_published_at'] = canonical_ts
+            allow_upsert = True
+        elif status == STATUS_IDEMPOTENT:
+            stats['provenance_idempotent'] = int(stats['provenance_idempotent']) + 1
+            bound = str((recorded.get('entry') or {}).get('source_time_value') or canonical_ts)
+            rec_basis = str((recorded.get('entry') or {}).get('source_time_basis') or '')
+            if bound != canonical_ts or rec_basis != basis:
+                stats['provenance_conflict'] = int(stats['provenance_conflict']) + 1
+                _block_provenance(stats)
+                return
+            upsert_payload['source_published_at'] = bound
+            allow_upsert = True
+        elif status == STATUS_CONFLICT:
+            stats['provenance_conflict'] = int(stats['provenance_conflict']) + 1
+            _block_provenance(stats)
+            return
+        elif status in (STATUS_LOCK_CONTENDED, STATUS_STORE_UNHEALTHY, STATUS_FAILED):
+            _block_provenance(stats)
+            return
+        else:
+            _block_provenance(stats)
+            return
+    else:
+        # Existing A1 sighting.
+        if sidecar_unhealthy:
+            upsert_payload['source_published_at'] = existing_ts
+            allow_upsert = True
+        elif sidecar_present:
+            if existing_ts != bound_value:
+                # Do not widen or repair an A1/sidecar mismatch.
+                _block_provenance(stats)
+                return
+            upsert_payload['source_published_at'] = bound_value
+            incoming_matches = (
+                isinstance(canonical_ts, str)
+                and canonical_ts == bound_value
+                and basis == bound_basis
+            )
+            if incoming_matches:
+                recorded = record_source_time_provenance(
+                    sighting_id=sighting_id,
+                    source_time_value=bound_value,
+                    source_time_basis=bound_basis,
+                )
+                status = str(recorded.get('status') or '')
+                if status == STATUS_IDEMPOTENT:
+                    stats['provenance_idempotent'] = int(stats['provenance_idempotent']) + 1
+                    allow_upsert = True
+                elif status == STATUS_CONFLICT:
+                    stats['provenance_conflict'] = int(stats['provenance_conflict']) + 1
+                    allow_upsert = True
+                elif status in (STATUS_LOCK_CONTENDED, STATUS_STORE_UNHEALTHY, STATUS_FAILED):
+                    upsert_payload['source_published_at'] = existing_ts
+                    allow_upsert = True
+                else:
+                    allow_upsert = True
+            else:
+                stats['provenance_conflict'] = int(stats['provenance_conflict']) + 1
+                allow_upsert = True
+        else:
+            # Historical: A1 exists, sidecar missing. Never create a sidecar row.
+            allow_upsert = True
+
+    if not allow_upsert:
+        _block_provenance(stats)
+        return
+
+    try:
+        result = upsert_sighting(upsert_payload)
+    except BrokerDiscoveryError:
+        stats['errors'] = int(stats['errors']) + 1
+        stats['skipped'] = int(stats['skipped']) + 1
+        stats['skipped_malformed'] = int(stats['skipped_malformed']) + 1
+        return
+    except (TypeError, ValueError, UnicodeError, OverflowError):
+        stats['errors'] = int(stats['errors']) + 1
+        stats['skipped'] = int(stats['skipped']) + 1
+        stats['skipped_malformed'] = int(stats['skipped_malformed']) + 1
+        return
+    _apply_upsert_result(stats, result)
+
+
 def ingest_registry_articles(articles: Optional[list[dict]]) -> dict[str, Any]:
     """
     Persist eligible registry articles as DISCOVERY_ONLY sightings.
@@ -478,7 +662,7 @@ def ingest_registry_articles(articles: Optional[list[dict]]) -> dict[str, Any]:
         return _empty_stats(received=0, skipped=1, skipped_malformed=1, errors=1)
 
     stats = _empty_stats(received=len(articles))
-    eligible: list[dict[str, Any]] = []
+    eligible: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for article in articles:
         try:
             reason, payload = evaluate_registry_article(article)
@@ -488,7 +672,10 @@ def ingest_registry_articles(articles: Optional[list[dict]]) -> dict[str, Any]:
         if reason is not None:
             _apply_skip(stats, reason)
             continue
-        eligible.append(payload)  # type: ignore[arg-type]
+        if not isinstance(article, dict) or payload is None:
+            _apply_skip(stats, _SKIP_MALFORMED)
+            continue
+        eligible.append((article, payload))
 
     stats['eligible'] = len(eligible)
     if not eligible:
@@ -514,23 +701,8 @@ def ingest_registry_articles(articles: Optional[list[dict]]) -> dict[str, Any]:
             stats['store_unhealthy'] = True
             return stats
 
-        for payload in eligible:
-            try:
-                result = upsert_sighting(payload)
-            except BrokerDiscoveryError:
-                stats['errors'] = int(stats['errors']) + 1
-                stats['skipped'] = int(stats['skipped']) + 1
-                stats['skipped_malformed'] = int(stats['skipped_malformed']) + 1
-                continue
-            except (TypeError, ValueError, UnicodeError, OverflowError):
-                stats['errors'] = int(stats['errors']) + 1
-                stats['skipped'] = int(stats['skipped']) + 1
-                stats['skipped_malformed'] = int(stats['skipped_malformed']) + 1
-                continue
-            if result.get('inserted'):
-                stats['inserted'] = int(stats['inserted']) + 1
-            elif result.get('deduplicated'):
-                stats['deduplicated'] = int(stats['deduplicated']) + 1
+        for article, payload in eligible:
+            _ingest_eligible_article(article, payload, stats)
         return stats
     finally:
         if acquired:

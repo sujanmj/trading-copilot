@@ -14,7 +14,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_COMMIT = '21c32dcf5a3a2280ccf90536e2ec238aa54b02e5'
 COMMITTED_C1B_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
-ALLOWED_HEADS = frozenset({BASELINE_COMMIT, COMMITTED_C1B_HEAD})
+COMMITTED_D_HEAD = '5063f488878b548e2e2aad6b8fa5a705a94b5ddb'
+ALLOWED_HEADS = frozenset({BASELINE_COMMIT, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -105,7 +106,16 @@ ALLOWED_REPORTS = {
     'phase52r_c1b_diff.txt',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE | ALLOWED_SUCCESSOR_D
+ALLOWED_SUCCESSOR_D2P = {
+    'backend/news/source_time_provenance.py',
+    'backend/collectors/news_provider_registry.py',
+    'backend/news/rss_discovery_adapter.py',
+    'backend/config/build_info.py',
+    'scripts/test_source_time_provenance_52r_d2p.py',
+    'scripts/validate_source_time_provenance_52r_d2p.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -195,7 +205,8 @@ def _validate_changed_file_scope() -> str | None:
     if actual_head not in ALLOWED_HEADS:
         return (
             f'HEAD must remain canonical C1B baseline {BASELINE_COMMIT} '
-            f'or committed C1B HEAD {COMMITTED_C1B_HEAD}, got {actual_head}'
+            f'or committed C1B HEAD {COMMITTED_C1B_HEAD} '
+            f'or committed D HEAD {COMMITTED_D_HEAD}, got {actual_head}'
         )
 
     tracked_changed = _git_paths(
@@ -234,10 +245,12 @@ def _validate_changed_file_scope() -> str | None:
     if data_changes:
         return f'data/ changes are never allowed: {sorted(data_changes)}'
 
-    protected_hits = tracked_changed & PROTECTED_PRODUCTION
+    protected_hits = (tracked_changed & PROTECTED_PRODUCTION) - ALLOWED_SUCCESSOR_D2P
     if protected_hits:
         return f'protected production files changed: {sorted(protected_hits)}'
     for required in PROTECTED_PRODUCTION:
+        if required in ALLOWED_SUCCESSOR_D2P:
+            continue
         diff = subprocess.run(
             ['git', 'diff', '--name-only', BASELINE_COMMIT, '--', required],
             cwd=str(PROJECT_ROOT),
@@ -292,6 +305,7 @@ def main() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('52R-C1B', 'AstraEdge 52R-C1B'),
         ('52R-D', 'AstraEdge 52R-D'),
+        ('52R-D2P', 'AstraEdge 52R-D2P'),
     }:
         return _fail(
             f'build must be exact 52R-C1B / AstraEdge 52R-C1B or successor '

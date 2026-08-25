@@ -14,6 +14,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CANONICAL_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
 CANONICAL_TREE = 'ddf8abbda417adfdc99ef237a950a51558e836d3'
+COMMITTED_D1_HEAD = '5063f488878b548e2e2aad6b8fa5a705a94b5ddb'
+COMMITTED_D1_TREE = '4baf34a1eb7da14bcd9ba62cb034b594819b56da'
+ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_D1_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -78,9 +81,22 @@ ALLOWED_REPORTS = {
     'phase52r_d1_diff.txt',
     'phase52r_d1_integration_audit.txt',
     'phase52r_d1_validation.txt',
+    'phase52r_d2_event_age_freshness_audit.txt',
+    'phase52r_d2p_diff.txt',
+    'phase52r_d2p_integration_audit.txt',
+    'phase52r_d2p_validation.txt',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS
+ALLOWED_SUCCESSOR_D2P = {
+    'backend/news/source_time_provenance.py',
+    'backend/collectors/news_provider_registry.py',
+    'backend/news/rss_discovery_adapter.py',
+    'backend/config/build_info.py',
+    'scripts/test_source_time_provenance_52r_d2p.py',
+    'scripts/validate_source_time_provenance_52r_d2p.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_D2P
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -234,10 +250,15 @@ def _validate_changed_file_scope() -> str | None:
     )
     actual_head = (head.stdout or '').strip()
     actual_tree = (tree.stdout or '').strip()
-    if actual_head != CANONICAL_HEAD:
-        return f'HEAD must remain canonical implementation baseline {CANONICAL_HEAD}'
-    if actual_tree != CANONICAL_TREE:
+    if actual_head not in ALLOWED_HEADS:
+        return (
+            f'HEAD must remain canonical D1 baseline {CANONICAL_HEAD} '
+            f'or committed D1 HEAD {COMMITTED_D1_HEAD}, got {actual_head}'
+        )
+    if actual_head == CANONICAL_HEAD and actual_tree != CANONICAL_TREE:
         return f'HEAD tree must remain {CANONICAL_TREE}'
+    if actual_head == COMMITTED_D1_HEAD and actual_tree != COMMITTED_D1_TREE:
+        return f'committed D1 HEAD tree must remain {COMMITTED_D1_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -269,10 +290,12 @@ def _validate_changed_file_scope() -> str | None:
     if data_changes:
         return f'data/ changes are never allowed: {sorted(data_changes)}'
 
-    protected_hits = tracked_changed & PROTECTED_PRODUCTION
+    protected_hits = (tracked_changed & PROTECTED_PRODUCTION) - ALLOWED_SUCCESSOR_D2P
     if protected_hits:
         return f'protected production files changed: {sorted(protected_hits)}'
     for required in PROTECTED_PRODUCTION:
+        if required in ALLOWED_SUCCESSOR_D2P:
+            continue
         diff = subprocess.run(
             ['git', 'diff', '--name-only', 'HEAD', '--', required],
             cwd=str(PROJECT_ROOT),
@@ -287,12 +310,12 @@ def _validate_changed_file_scope() -> str | None:
     if unexpected:
         return f'unexpected changed source/test/validator files: {sorted(unexpected)}'
 
-    if 'backend/config/build_info.py' not in tracked_changed:
+    if actual_head == CANONICAL_HEAD and 'backend/config/build_info.py' not in tracked_changed:
         return 'backend/config/build_info.py must change for the 52R-D build bump'
-    if 'backend/collectors/live_news_tracker.py' not in tracked_changed:
+    if actual_head == CANONICAL_HEAD and 'backend/collectors/live_news_tracker.py' not in tracked_changed:
         return 'backend/collectors/live_news_tracker.py must contain control-flow B'
     for required in NEW_SOURCE:
-        if required not in relevant_untracked and required not in tracked_changed:
+        if required not in relevant_untracked and required not in tracked_changed and required not in tracked_now:
             return f'missing required D1 file {required}'
 
     print('D1_CHANGED_FILE_SCOPE_OK')
@@ -321,13 +344,19 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-D', 'AstraEdge 52R-D'):
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('52R-D', 'AstraEdge 52R-D'),
+        ('52R-D2P', 'AstraEdge 52R-D2P'),
+    }:
         return _fail(
-            f'build must be exact 52R-D / AstraEdge 52R-D, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'build must be exact 52R-D / AstraEdge 52R-D or successor '
+            f'52R-D2P / AstraEdge 52R-D2P, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     print('V1_BUILD_IDENTITY_OK')
 
     for rel in PROTECTED_PRODUCTION:
+        if rel in ALLOWED_SUCCESSOR_D2P:
+            continue
         diff = subprocess.run(
             ['git', 'diff', '--name-only', 'HEAD', '--', rel],
             cwd=str(PROJECT_ROOT),

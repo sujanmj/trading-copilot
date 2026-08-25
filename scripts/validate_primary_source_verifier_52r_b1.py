@@ -153,8 +153,17 @@ ALLOWED_SUCCESSOR_D = {
     'scripts/validate_news_pipeline_reliability_52r_d.py',
 }
 
+ALLOWED_SUCCESSOR_D2P = {
+    'backend/news/source_time_provenance.py',
+    'backend/collectors/news_provider_registry.py',
+    'backend/news/rss_discovery_adapter.py',
+    'backend/config/build_info.py',
+    'scripts/test_source_time_provenance_52r_d2p.py',
+    'scripts/validate_source_time_provenance_52r_d2p.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B1_TESTS | ALLOWED_SUCCESSOR_B2N | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B1_TESTS | ALLOWED_SUCCESSOR_B2N | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P
 )
 
 
@@ -238,7 +247,7 @@ def _validate_changed_file_scope() -> str | None:
     if data_changes:
         return f'data/ changes are never allowed: {sorted(data_changes)}'
 
-    forbidden_hits = ((tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION) - ALLOWED_SUCCESSOR_B2N - ALLOWED_SUCCESSOR_B2 - ALLOWED_SUCCESSOR_C1B - ALLOWED_SUCCESSOR_D
+    forbidden_hits = ((tracked_changed | relevant_untracked) & FORBIDDEN_PRODUCTION) - ALLOWED_SUCCESSOR_B2N - ALLOWED_SUCCESSOR_B2 - ALLOWED_SUCCESSOR_C1B - ALLOWED_SUCCESSOR_D - ALLOWED_SUCCESSOR_D2P
     if forbidden_hits:
         return f'forbidden production files changed: {sorted(forbidden_hits)}'
     for prefix in ('backend/trading/',):
@@ -306,6 +315,7 @@ def main() -> int:
         ('52R-C1A', 'AstraEdge 52R-C1A'),
         ('52R-C1B', 'AstraEdge 52R-C1B'),
         ('52R-D', 'AstraEdge 52R-D'),
+        ('52R-D2P', 'AstraEdge 52R-D2P'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(

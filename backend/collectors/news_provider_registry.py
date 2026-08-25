@@ -260,18 +260,24 @@ def _resolve_article_tickers(title: str, description: str) -> list[str]:
         return list(dict.fromkeys(tickers))
 
 
-def _parse_entry_date(entry: Any) -> datetime | None:
+def _parse_entry_date(entry: Any) -> tuple[datetime | None, str | None]:
+    """Return (aware UTC datetime, source_time_basis) or (None, None).
+
+    published_parsed is a candidate publication time.
+    updated_parsed is a candidate update/modification time, not publication.
+    Missing/malformed yields no synthetic now-fallback.
+    """
     if hasattr(entry, 'published_parsed') and entry.published_parsed:
         try:
-            return datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+            return datetime(*entry.published_parsed[:6], tzinfo=timezone.utc), 'PUBLISHED_PARSED'
         except (TypeError, ValueError):
             pass
     if hasattr(entry, 'updated_parsed') and entry.updated_parsed:
         try:
-            return datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
+            return datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc), 'UPDATED_PARSED'
         except (TypeError, ValueError):
             pass
-    return None
+    return None, None
 
 
 def fetch_provider_rss(
@@ -308,7 +314,7 @@ def fetch_provider_rss(
                 continue
             feed = feedparser.parse(resp.content)
             for entry in (feed.entries or [])[:max_per_feed]:
-                pub = _parse_entry_date(entry)
+                pub, source_time_basis = _parse_entry_date(entry)
                 if pub and pub < cutoff:
                     continue
                 title = str(entry.get('title') or '').strip()
@@ -319,6 +325,7 @@ def fetch_provider_rss(
                 link = str(entry.get('link') or '').strip()
                 feed_type = classify_news_feed_type(title, desc, provider_id=pid)
                 tickers = _resolve_article_tickers(title, desc)
+                ingested_at = datetime.now(timezone.utc).isoformat()
                 article_row: dict[str, Any] = {
                     'source': pname,
                     'source_name': pname,
@@ -332,8 +339,7 @@ def fetch_provider_rss(
                     'summary': desc,
                     'link': link,
                     'url': link,
-                    'published': (pub or datetime.now(timezone.utc)).isoformat(),
-                    'published_at': (pub or datetime.now(timezone.utc)).isoformat(),
+                    'ingested_at': ingested_at,
                     'feed_type': feed_type,
                     'tickers': tickers,
                     'symbols': tickers,
@@ -345,6 +351,11 @@ def fetch_provider_rss(
                     ),
                     'sentiment_label': 'neutral',
                 }
+                if pub is not None and source_time_basis:
+                    pub_iso = pub.isoformat()
+                    article_row['published'] = pub_iso
+                    article_row['published_at'] = pub_iso
+                    article_row['source_time_basis'] = source_time_basis
                 if pid == 'nse_rss':
                     from backend.news.rss_discovery_adapter import build_nse_discovery_headline
 
@@ -381,8 +392,7 @@ def fetch_provider_rss(
                             'description': str(item.get('description') or item.get('desc') or '')[:300],
                             'link': str(item.get('link') or item.get('url') or ''),
                             'url': str(item.get('link') or item.get('url') or ''),
-                            'published': datetime.now(timezone.utc).isoformat(),
-                            'published_at': datetime.now(timezone.utc).isoformat(),
+                            'ingested_at': datetime.now(timezone.utc).isoformat(),
                             'feed_type': 'company',
                             'tickers': [sym] if sym else [],
                             'symbols': [sym] if sym else [],

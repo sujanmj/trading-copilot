@@ -75,7 +75,15 @@ def _isolated_discovery():
                 path.parent.mkdir(parents=True, exist_ok=True)
                 return path
 
-            with patch.dict(os.environ, {'RSS_DISCOVERY_LOCK_PATH': str(lock_path)}, clear=False), patch(
+            with patch.dict(
+                os.environ,
+                {
+                    'RSS_DISCOVERY_LOCK_PATH': str(lock_path),
+                    'NEWS_SOURCE_TIME_PROVENANCE_PATH': str(iso['temp_root'] / 'news_source_time_provenance.json'),
+                    'NEWS_SOURCE_TIME_PROVENANCE_LOCK_PATH': str(iso['temp_root'] / 'news_source_time_provenance.lock'),
+                },
+                clear=False,
+            ), patch(
                 'backend.news.broker_discovery_foundation.get_data_path',
                 side_effect=_temp_data_path,
             ), patch(
@@ -110,6 +118,7 @@ def _nse_article(**extra):
         'description': 'Corporate announcement |SUBJECT: Board Meeting Intimation',
         'summary': 'Corporate announcement |SUBJECT: Board Meeting Intimation',
         'published_at': PUB.isoformat(),
+        'source_time_basis': 'PUBLISHED_PARSED',
         'symbols': ['EXAMP'],
     }
     row.update(extra)
@@ -126,7 +135,7 @@ def _nse_article(**extra):
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-B2N', 'AstraEdge 52R-B2N'), ('52R-B2', 'AstraEdge 52R-B2'), ('52R-C1A', 'AstraEdge 52R-C1A'), ('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D')}
+    allowed = {('52R-B2N', 'AstraEdge 52R-B2N'), ('52R-B2', 'AstraEdge 52R-B2'), ('52R-C1A', 'AstraEdge 52R-C1A'), ('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D'), ('52R-D2P', 'AstraEdge 52R-D2P')}
     mismatches = (
         ('52R-B2N', 'AstraEdge 52R-B1'),
         ('52R-B1', 'AstraEdge 52R-B2N'),
@@ -140,6 +149,8 @@ def test_build_identity() -> int:
         ('52R-C1B', 'AstraEdge 52R-C1A'),
         ('52R-C1B', 'AstraEdge 52R-D'),
         ('52R-D', 'AstraEdge 52R-C1B'),
+        ('52R-D2P', 'AstraEdge 52R-D'),
+        ('52R-D', 'AstraEdge 52R-D2P'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(

@@ -196,7 +196,7 @@ def _run_with_events(events: list[dict], *, upsert_spy=None):
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D')}
+    allowed = {('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D'), ('52R-D2P', 'AstraEdge 52R-D2P')}
     mismatches = (
         ('52R-C1B', 'AstraEdge 52R-C1A'),
         ('52R-C1A', 'AstraEdge 52R-C1B'),
@@ -204,6 +204,8 @@ def test_build_identity() -> int:
         ('52R-B2', 'AstraEdge 52R-C1B'),
         ('52R-C1B', 'AstraEdge 52R-D'),
         ('52R-D', 'AstraEdge 52R-C1B'),
+        ('52R-D2P', 'AstraEdge 52R-D'),
+        ('52R-D', 'AstraEdge 52R-D2P'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
