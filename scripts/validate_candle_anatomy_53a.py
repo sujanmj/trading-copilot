@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validator — AstraEdge 52R-D2 read-time event freshness projection (read-only)."""
+"""Validator — AstraEdge 53A deterministic candle anatomy (read-only)."""
 
 from __future__ import annotations
 
@@ -12,20 +12,17 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CANONICAL_HEAD = '8e526eb374a01d07bc3bab4fb00e620b238793c6'
-CANONICAL_TREE = '44d7b3109a64bf7c36e93b863c47a1258a8453a3'
-COMMITTED_D2_HEAD = '1e47967bbdf9cd1338d525c008b9ea376943a18a'
-COMMITTED_D2_TREE = 'cbf045ab4a99a2537cba9097a6354c0c1256b4d3'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_D2_HEAD})
+CANONICAL_HEAD = '1e47967bbdf9cd1338d525c008b9ea376943a18a'
+CANONICAL_TREE = 'cbf045ab4a99a2537cba9097a6354c0c1256b4d3'
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
 WATCHED_PATHS = (
     PROJECT_ROOT / 'backend' / 'config' / 'build_info.py',
-    PROJECT_ROOT / 'backend' / 'news' / 'event_freshness_projection.py',
-    PROJECT_ROOT / 'scripts' / 'test_event_age_freshness_52r_d2.py',
-    PROJECT_ROOT / 'scripts' / 'validate_event_age_freshness_52r_d2.py',
+    PROJECT_ROOT / 'backend' / 'analysis' / 'candle_anatomy.py',
+    PROJECT_ROOT / 'scripts' / 'test_candle_anatomy_53a.py',
+    PROJECT_ROOT / 'scripts' / 'validate_candle_anatomy_53a.py',
 )
 
 PROTECTED_PRODUCTION = {
@@ -36,8 +33,9 @@ PROTECTED_PRODUCTION = {
     'backend/news/primary_source_verifier.py',
     'backend/news/automatic_primary_verification.py',
     'backend/news/news_pipeline_reliability.py',
-    'backend/collectors/news_provider_registry.py',
+    'backend/news/event_freshness_projection.py',
     'backend/news/rss_discovery_adapter.py',
+    'backend/collectors/news_provider_registry.py',
     'backend/collectors/live_news_tracker.py',
     'backend/trading/market_freshness_guard.py',
     'backend/trading/opening_session_freshness.py',
@@ -47,13 +45,15 @@ PROTECTED_PRODUCTION = {
 
 INTENDED_PRODUCTION = {
     'backend/config/build_info.py',
-    'backend/news/event_freshness_projection.py',
+    'backend/analysis/__init__.py',
+    'backend/analysis/candle_anatomy.py',
 }
 
 NEW_SOURCE = {
-    'backend/news/event_freshness_projection.py',
-    'scripts/test_event_age_freshness_52r_d2.py',
-    'scripts/validate_event_age_freshness_52r_d2.py',
+    'backend/analysis/__init__.py',
+    'backend/analysis/candle_anatomy.py',
+    'scripts/test_candle_anatomy_53a.py',
+    'scripts/validate_candle_anatomy_53a.py',
 }
 
 ALLOWED_HISTORICAL_REGRESSIONS = {
@@ -75,6 +75,8 @@ ALLOWED_HISTORICAL_REGRESSIONS = {
     'scripts/validate_news_pipeline_reliability_52r_d.py',
     'scripts/test_source_time_provenance_52r_d2p.py',
     'scripts/validate_source_time_provenance_52r_d2p.py',
+    'scripts/test_event_age_freshness_52r_d2.py',
+    'scripts/validate_event_age_freshness_52r_d2.py',
     'scripts/test_daily_review_learning_truth_52q.py',
     'scripts/validate_daily_review_learning_truth_52q.py',
     'scripts/test_tradecard_explain_never_silent_52p.py',
@@ -82,53 +84,46 @@ ALLOWED_HISTORICAL_REGRESSIONS = {
 }
 
 ALLOWED_REPORTS = {
-    'phase52r_d2_event_age_freshness_audit.txt',
+    'phase53a_review.txt',
+    'phase53a_diff.txt',
     'phase52r_d2_diff.txt',
     'phase52r_d2_integration_audit.txt',
     'phase52r_d2_validation.txt',
-    'phase52r_d2p_diff.txt',
-    'phase52r_d2p_integration_audit.txt',
-    'phase52r_d2p_validation.txt',
-    'phase52r_d2p_prod_repair1.txt',
-    'phase53a_review.txt',
-    'phase53a_diff.txt',
 }
 
-ALLOWED_SUCCESSOR_53A = {
-    'backend/analysis/__init__.py',
-    'backend/analysis/candle_anatomy.py',
-    'backend/config/build_info.py',
-    'scripts/test_candle_anatomy_53a.py',
-    'scripts/validate_candle_anatomy_53a.py',
-}
-
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_53A
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
 })
 AI_NEEDLES = ('openai', 'anthropic', 'groq', 'ai_router', 'google.generativeai')
-WRITE_NEEDLES = (
-    'atomic_write',
-    'record_source_time_provenance',
-    'upsert_sighting',
-    'upsert_event',
-    '_atomic_save',
-    'write_text',
-    'write_bytes',
+WRITE_NEEDLES = ('atomic_write', 'write_text', 'write_bytes')
+REQUIRED_TEST_MARKERS = tuple(f'T{i}' for i in range(1, 46)) + ('CANDLE_ANATOMY_53A_PASS',)
+THRESHOLD_NAMES = (
+    'DOJI_BODY_RATIO_MAX',
+    'STRONG_BODY_RATIO_MIN',
+    'LONG_WICK_RATIO_MIN',
+    'REJECTION_WICK_RATIO_MIN',
+    'REJECTION_BODY_RATIO_MAX',
+    'MARUBOZU_BODY_RATIO_MIN',
+    'MARUBOZU_WICK_RATIO_MAX',
+    'HAMMER_WICK_TO_BODY_MIN',
+    'HAMMER_OPPOSITE_WICK_TO_BODY_MAX',
 )
-STORE_SCAN_NEEDLES = (
-    'list_event_sightings',
-    'get_sighting',
-    'get_event',
-    'load_store',
-    'find_events_by_symbol',
+FORBIDDEN_OUTPUT = (
+    'buy',
+    'sell',
+    'entry',
+    'stop',
+    'target',
+    'probability',
+    'confidence',
+    'signal',
 )
-REQUIRED_TEST_MARKERS = tuple(f'T{i}' for i in range(1, 56)) + ('EVENT_AGE_FRESHNESS_52R_D2_PASS',)
 
 
 def _fail(msg: str) -> int:
-    print(f'ASTRAEDGE_PHASE_52R_D2_EVENT_FRESHNESS_FAIL: {msg}', file=sys.stderr)
+    print(f'ASTRAEDGE_PHASE_53A_CANDLE_ANATOMY_FAIL: {msg}', file=sys.stderr)
     return 1
 
 
@@ -202,15 +197,10 @@ def _validate_changed_file_scope() -> str | None:
     )
     actual_head = (head.stdout or '').strip()
     actual_tree = (tree.stdout or '').strip()
-    if actual_head not in ALLOWED_HEADS:
-        return (
-            f'HEAD must remain canonical D2 implementation baseline {CANONICAL_HEAD} '
-            f'or committed D2 HEAD {COMMITTED_D2_HEAD}, got {actual_head}'
-        )
-    if actual_head == CANONICAL_HEAD and actual_tree != CANONICAL_TREE:
+    if actual_head != CANONICAL_HEAD:
+        return f'HEAD must remain canonical 53A baseline {CANONICAL_HEAD}'
+    if actual_tree != CANONICAL_TREE:
         return f'HEAD tree must remain {CANONICAL_TREE}'
-    if actual_head == COMMITTED_D2_HEAD and actual_tree != COMMITTED_D2_TREE:
-        return f'committed D2 HEAD tree must remain {COMMITTED_D2_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -220,7 +210,7 @@ def _validate_changed_file_scope() -> str | None:
     actual_source_scope = tracked_changed | relevant_untracked
 
     print(
-        'D2_CHANGED_FILE_SCOPE '
+        'A53_CHANGED_FILE_SCOPE '
         f'head={actual_head} '
         f'tracked={sorted(tracked_changed)} '
         f'untracked_relevant={sorted(relevant_untracked)} '
@@ -260,18 +250,13 @@ def _validate_changed_file_scope() -> str | None:
     if unexpected:
         return f'unexpected changed source/test/validator files: {sorted(unexpected)}'
 
-    if actual_head == CANONICAL_HEAD:
-        if 'backend/config/build_info.py' not in tracked_changed:
-            return 'backend/config/build_info.py must change for the 52R-D2 build bump'
-        for required in NEW_SOURCE:
-            if required not in relevant_untracked and required not in tracked_changed:
-                return f'missing required D2 file {required}'
-    else:
-        for required in NEW_SOURCE:
-            if required not in tracked_now:
-                return f'missing required D2 file {required}'
+    if 'backend/config/build_info.py' not in tracked_changed:
+        return 'backend/config/build_info.py must change for the 53A build bump'
+    for required in NEW_SOURCE:
+        if required not in relevant_untracked and required not in tracked_changed:
+            return f'missing required 53A file {required}'
 
-    print('D2_CHANGED_FILE_SCOPE_OK')
+    print('A53_CHANGED_FILE_SCOPE_OK')
     return None
 
 
@@ -297,64 +282,52 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
-        ('52R-D2', 'AstraEdge 52R-D2'),
-        ('53A', 'AstraEdge 53A'),
-    }:
+    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53A', 'AstraEdge 53A'):
         return _fail(
-            f'build must be exact 52R-D2 / AstraEdge 52R-D2 or successor '
-            f'53A / AstraEdge 53A, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'build must be exact 53A / AstraEdge 53A, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     print('V1_BUILD_IDENTITY_OK')
 
-    module_path = PROJECT_ROOT / 'backend/news/event_freshness_projection.py'
+    module_path = PROJECT_ROOT / 'backend/analysis/candle_anatomy.py'
     if not module_path.is_file():
-        return _fail('missing backend/news/event_freshness_projection.py')
+        return _fail('missing backend/analysis/candle_anatomy.py')
     src = module_path.read_text(encoding='utf-8')
     imported = _imported_names(src)
+    if 'def analyze_candle(' not in src:
+        return _fail('public analyzer analyze_candle is missing')
+    for name in THRESHOLD_NAMES:
+        if name not in src:
+            return _fail(f'missing threshold constant {name}')
     for mod in NETWORK_MODULES:
         if mod in imported:
-            return _fail(f'projector imports network module {mod!r}')
+            return _fail(f'analyzer imports network module {mod!r}')
         if re.search(rf'(?:^|\s)(?:import|from)\s+{re.escape(mod)}\b', src, re.M):
-            return _fail(f'projector import line mentions {mod!r}')
+            return _fail(f'analyzer import line mentions {mod!r}')
     for needle in AI_NEEDLES:
         if needle in src:
-            return _fail(f'projector mentions AI {needle!r}')
+            return _fail(f'analyzer mentions AI {needle!r}')
     for needle in WRITE_NEEDLES:
         if needle in src:
-            return _fail(f'projector contains write/store-mutation path {needle!r}')
+            return _fail(f'analyzer contains write path {needle!r}')
     if 'open(' in src:
-        return _fail('projector contains open() write/read path')
+        return _fail('analyzer contains open() path')
     for needle in (
         'market_freshness_guard',
         'opening_session_freshness',
         'alert_freshness_gate',
         'snapshot_freshness_monitor',
+        'event_freshness_projection',
+        'broker_discovery_foundation',
+        'news_pipeline_reliability',
+        'live_news_tracker',
     ):
         if needle in src:
-            return _fail(f'projector imports trading freshness {needle}')
-    if 'news_pipeline_reliability' in src or 'evaluate_news_pipeline_reliability' in src:
-        return _fail('projector couples to D1 freshness')
-    if 'source_age_seconds' in src:
-        return _fail('generic source_age_seconds contract exists')
-    if '_verified_linked_sighting' not in src:
-        return _fail('event projector must verify sighting.event_id linkage')
-    if 'sighting_event_id != event_id' not in src:
-        return _fail('event projector must compare sighting.event_id to event.event_id')
-    if 'health if health != HEALTH_OK else HEALTH_MALFORMED' in src:
-        return _fail('malformed sighting_id must not synthesize sidecar HEALTH_MALFORMED')
-    if 'PUBLISHED_PARSED' not in src or 'UPDATED_PARSED' not in src:
-        return _fail('PUBLISHED_PARSED / UPDATED_PARSED distinction missing')
-    if 'source_time_value' not in src or 'BINDING_MISMATCH' not in src:
-        return _fail('binding comparison missing')
-    if 'SOURCE_TIME_AMBIGUOUS' not in src:
-        return _fail('historical ambiguity contract missing')
-    if 'max(0' in src or 'max(0,' in src:
-        return _fail('future timestamps must not be clamped')
-    for needle in STORE_SCAN_NEEDLES:
-        if needle in src:
-            return _fail(f'projector scans A1 store via {needle}')
-    print('V2_PROJECTOR_CONTRACT_OK')
+            return _fail(f'analyzer depends on {needle}')
+    src_lower = src.lower()
+    for token in FORBIDDEN_OUTPUT:
+        if token in src_lower:
+            return _fail(f'analyzer source contains trade-interpretation token {token}')
+    print('V2_ANALYZER_CONTRACT_OK')
 
     for rel in PROTECTED_PRODUCTION:
         diff = subprocess.run(
@@ -368,26 +341,10 @@ def main() -> int:
             return _fail(f'protected file changed vs HEAD: {rel}')
     print('V3_PROTECTED_UNCHANGED_OK')
 
-    from backend.news.broker_discovery_foundation import SCHEMA_VERSION as A1_SCHEMA
-    from backend.news.source_time_provenance import SCHEMA_VERSION as D2P_SCHEMA
-    from backend.news.verified_intelligence_classifier import DERIVATION_VERSION
-    from backend.news.verified_intelligence_store import INTELLIGENCE_SCHEMA_VERSION
-    from backend.news.news_pipeline_reliability import SCHEMA_VERSION as D1_SCHEMA
-
-    if A1_SCHEMA != '52R-A1':
-        return _fail(f'A1 schema mutated: {A1_SCHEMA}')
-    if D2P_SCHEMA != '52R-D2P':
-        return _fail(f'D2P schema mutated: {D2P_SCHEMA}')
-    if INTELLIGENCE_SCHEMA_VERSION != '52R-C1A' or DERIVATION_VERSION != '52R-C1B':
-        return _fail('C1A/C1B versions changed')
-    if D1_SCHEMA != '52R-D1':
-        return _fail(f'D1 schema mutated: {D1_SCHEMA}')
-    print('V4_SCHEMA_UNCHANGED_OK')
-
     env = os.environ.copy()
     env['PYTHONUNBUFFERED'] = '1'
     proc = subprocess.run(
-        [sys.executable, '-u', str(PROJECT_ROOT / 'scripts/test_event_age_freshness_52r_d2.py')],
+        [sys.executable, '-u', str(PROJECT_ROOT / 'scripts/test_candle_anatomy_53a.py')],
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
@@ -400,17 +357,18 @@ def main() -> int:
     if proc.stderr:
         print(proc.stderr, end='' if proc.stderr.endswith('\n') else '\n', file=sys.stderr)
     if proc.returncode != 0:
-        return _fail('focused 52R-D2 event freshness tests failed')
+        return _fail('focused 53A candle anatomy tests failed')
     missing = [m for m in REQUIRED_TEST_MARKERS if m not in out]
     if missing:
         return _fail(f'missing focused markers: {missing}')
-    print('V5_FOCUSED_TESTS_OK')
+    print('V4_FOCUSED_TESTS_OK')
 
     compile_targets = [
-        'backend/news/event_freshness_projection.py',
+        'backend/analysis/__init__.py',
+        'backend/analysis/candle_anatomy.py',
         'backend/config/build_info.py',
-        'scripts/test_event_age_freshness_52r_d2.py',
-        'scripts/validate_event_age_freshness_52r_d2.py',
+        'scripts/test_candle_anatomy_53a.py',
+        'scripts/validate_candle_anatomy_53a.py',
     ]
     compiled = subprocess.run(
         [sys.executable, '-m', 'py_compile', *compile_targets],
@@ -420,8 +378,8 @@ def main() -> int:
         check=False,
     )
     if compiled.returncode != 0:
-        return _fail(f'V6 py_compile failed: {compiled.stderr or compiled.stdout}')
-    print('V6_PY_COMPILE_OK')
+        return _fail(f'V5 py_compile failed: {compiled.stderr or compiled.stdout}')
+    print('V5_PY_COMPILE_OK')
 
     diff_check = subprocess.run(
         ['git', 'diff', '--check'],
@@ -431,8 +389,8 @@ def main() -> int:
         check=False,
     )
     if diff_check.returncode != 0:
-        return _fail(f'V7 git diff --check failed: {diff_check.stdout or diff_check.stderr}')
-    print('V7_DIFF_CHECK_OK')
+        return _fail(f'V6 git diff --check failed: {diff_check.stdout or diff_check.stderr}')
+    print('V6_DIFF_CHECK_OK')
 
     after = {str(p): _file_digest(p) for p in WATCHED_PATHS}
     if before != after:
@@ -458,7 +416,7 @@ def main() -> int:
     if (data_proc.stdout or '').strip():
         return _fail('repository data/ is not clean after focused validation')
 
-    print('PHASE_52R_D2_VALIDATION_PASS')
+    print('PHASE_53A_VALIDATION_PASS')
     return 0
 
 

@@ -16,7 +16,9 @@ CANONICAL_HEAD = '5063f488878b548e2e2aad6b8fa5a705a94b5ddb'
 CANONICAL_TREE = '4baf34a1eb7da14bcd9ba62cb034b594819b56da'
 COMMITTED_D2P_HEAD = '8e526eb374a01d07bc3bab4fb00e620b238793c6'
 COMMITTED_D2P_TREE = '44d7b3109a64bf7c36e93b863c47a1258a8453a3'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_D2P_HEAD})
+COMMITTED_D2_HEAD = '1e47967bbdf9cd1338d525c008b9ea376943a18a'
+COMMITTED_D2_TREE = 'cbf045ab4a99a2537cba9097a6354c0c1256b4d3'
+ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -88,6 +90,8 @@ ALLOWED_REPORTS = {
     'phase52r_d2_diff.txt',
     'phase52r_d2_integration_audit.txt',
     'phase52r_d2_validation.txt',
+    'phase53a_review.txt',
+    'phase53a_diff.txt',
 }
 
 ALLOWED_SUCCESSOR_D2 = {
@@ -97,7 +101,15 @@ ALLOWED_SUCCESSOR_D2 = {
     'scripts/validate_event_age_freshness_52r_d2.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_D2
+ALLOWED_SUCCESSOR_53A = {
+    'backend/analysis/__init__.py',
+    'backend/analysis/candle_anatomy.py',
+    'backend/config/build_info.py',
+    'scripts/test_candle_anatomy_53a.py',
+    'scripts/validate_candle_anatomy_53a.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -210,12 +222,15 @@ def _validate_changed_file_scope() -> str | None:
     if actual_head not in ALLOWED_HEADS:
         return (
             f'HEAD must remain canonical D2P baseline {CANONICAL_HEAD} '
-            f'or committed D2P HEAD {COMMITTED_D2P_HEAD}, got {actual_head}'
+            f'or committed D2P HEAD {COMMITTED_D2P_HEAD} '
+            f'or committed D2 HEAD {COMMITTED_D2_HEAD}, got {actual_head}'
         )
     if actual_head == CANONICAL_HEAD and actual_tree != CANONICAL_TREE:
         return f'HEAD tree must remain {CANONICAL_TREE}'
     if actual_head == COMMITTED_D2P_HEAD and actual_tree != COMMITTED_D2P_TREE:
         return f'committed D2P HEAD tree must remain {COMMITTED_D2P_TREE}'
+    if actual_head == COMMITTED_D2_HEAD and actual_tree != COMMITTED_D2_TREE:
+        return f'committed D2 HEAD tree must remain {COMMITTED_D2_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -309,6 +324,7 @@ def main() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
+        ('53A', 'AstraEdge 53A'),
     }:
         return _fail(
             f'build must be exact 52R-D2P / AstraEdge 52R-D2P or successor '

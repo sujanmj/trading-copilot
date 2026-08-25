@@ -190,8 +190,11 @@ def _imported_names(src: str) -> set[str]:
 def test_t1_build() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-D2', 'AstraEdge 52R-D2'):
-        return _fail(f'expected 52R-D2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('52R-D2', 'AstraEdge 52R-D2'),
+        ('53A', 'AstraEdge 53A'),
+    }:
+        return _fail(f'expected 52R-D2 pair or successor 53A pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
     return 0
 
