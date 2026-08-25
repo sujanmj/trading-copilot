@@ -20,11 +20,14 @@ COMMITTED_53A_HEAD = '7596540a797432c24e01dcb79f2bd663c9f837cb'
 COMMITTED_53A_TREE = '0e056cec28e7f42322c87a8a8fb563ba2952e8eb'
 COMMITTED_53A2_HEAD = '2a2414010aed70e2a34741534d6b66b6300b593c'
 COMMITTED_53A2_TREE = 'd5876f3c78e2c7f0d29f2ec20721475ab11b91a5'
+COMMITTED_53B_HEAD = '7df88790ad9ada1a81b0f5613caafb05a0c217d5'
+COMMITTED_53B_TREE = '91f784a344655723cbc5f322703029f67aa0f544'
 ALLOWED_HEADS = frozenset({
     CANONICAL_HEAD,
     COMMITTED_D2_HEAD,
     COMMITTED_53A_HEAD,
     COMMITTED_53A2_HEAD,
+    COMMITTED_53B_HEAD,
 })
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -103,6 +106,8 @@ ALLOWED_REPORTS = {
     'phase53a_diff.txt',
     'phase53b_review.txt',
     'phase53b_diff.txt',
+    'phase53c_review.txt',
+    'phase53c_diff.txt',
 }
 
 ALLOWED_SUCCESSOR_53A = {
@@ -126,6 +131,12 @@ ALLOWED_SUCCESSOR_53B = {
     'scripts/validate_price_action_structure_53b.py',
 }
 
+ALLOWED_SUCCESSOR_53C = {
+    'backend/analysis/key_levels_supply_demand.py',
+    'scripts/test_key_levels_supply_demand_53c.py',
+    'scripts/validate_key_levels_supply_demand_53c.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
     INTENDED_PRODUCTION
     | NEW_SOURCE
@@ -133,6 +144,7 @@ ALLOWED_CHANGED_SOURCE = (
     | ALLOWED_SUCCESSOR_53A
     | ALLOWED_SUCCESSOR_53A2
     | ALLOWED_SUCCESSOR_53B
+    | ALLOWED_SUCCESSOR_53C
 )
 
 NETWORK_MODULES = frozenset({
@@ -247,6 +259,8 @@ def _validate_changed_file_scope() -> str | None:
         return f'committed 53A HEAD tree must remain {COMMITTED_53A_TREE}'
     if actual_head == COMMITTED_53A2_HEAD and actual_tree != COMMITTED_53A2_TREE:
         return f'committed 53A2 HEAD tree must remain {COMMITTED_53A2_TREE}'
+    if actual_head == COMMITTED_53B_HEAD and actual_tree != COMMITTED_53B_TREE:
+        return f'committed 53B HEAD tree must remain {COMMITTED_53B_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -338,6 +352,7 @@ def main() -> int:
         ('53A', 'AstraEdge 53A'),
         ('53A2', 'AstraEdge 53A2'),
         ('53B', 'AstraEdge 53B'),
+        ('53C', 'AstraEdge 53C'),
     }:
         return _fail(
             f'build must be exact 52R-D2 / AstraEdge 52R-D2 or successor '

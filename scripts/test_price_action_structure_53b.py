@@ -163,8 +163,11 @@ def _git_names(*args: str) -> list[str]:
 def test_t1_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53B', 'AstraEdge 53B'):
-        return _fail(f'T1 expected exact 53B build pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53B', 'AstraEdge 53B'),
+        ('53C', 'AstraEdge 53C'),
+    }:
+        return _fail(f'T1 expected 53B or successor 53C pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
     return 0
 

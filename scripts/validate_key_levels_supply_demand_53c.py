@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only validator for AstraEdge 53B price-action structure."""
+"""Read-only validator for AstraEdge 53C deterministic levels and zones."""
 
 from __future__ import annotations
 
@@ -12,20 +12,20 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CANONICAL_HEAD = '2a2414010aed70e2a34741534d6b66b6300b593c'
-CANONICAL_TREE = 'd5876f3c78e2c7f0d29f2ec20721475ab11b91a5'
-COMMITTED_53B_HEAD = '7df88790ad9ada1a81b0f5613caafb05a0c217d5'
-COMMITTED_53B_TREE = '91f784a344655723cbc5f322703029f67aa0f544'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53B_HEAD})
+CANONICAL_HEAD = '7df88790ad9ada1a81b0f5613caafb05a0c217d5'
+CANONICAL_TREE = '91f784a344655723cbc5f322703029f67aa0f544'
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
 WATCHED_PATHS = (
     PROJECT_ROOT / 'backend' / 'config' / 'build_info.py',
+    PROJECT_ROOT / 'backend' / 'analysis' / 'key_levels_supply_demand.py',
     PROJECT_ROOT / 'backend' / 'analysis' / 'price_action_structure.py',
     PROJECT_ROOT / 'backend' / 'analysis' / 'candle_anatomy.py',
     PROJECT_ROOT / 'backend' / 'analysis' / 'candlestick_patterns.py',
+    PROJECT_ROOT / 'scripts' / 'test_key_levels_supply_demand_53c.py',
+    PROJECT_ROOT / 'scripts' / 'validate_key_levels_supply_demand_53c.py',
     PROJECT_ROOT / 'scripts' / 'test_price_action_structure_53b.py',
     PROJECT_ROOT / 'scripts' / 'validate_price_action_structure_53b.py',
     PROJECT_ROOT / 'scripts' / 'test_candlestick_patterns_53a2.py',
@@ -34,12 +34,10 @@ WATCHED_PATHS = (
     PROJECT_ROOT / 'scripts' / 'validate_candle_anatomy_53a.py',
     PROJECT_ROOT / 'scripts' / 'test_event_age_freshness_52r_d2.py',
     PROJECT_ROOT / 'scripts' / 'validate_event_age_freshness_52r_d2.py',
-    PROJECT_ROOT / 'backend' / 'analysis' / 'key_levels_supply_demand.py',
-    PROJECT_ROOT / 'scripts' / 'test_key_levels_supply_demand_53c.py',
-    PROJECT_ROOT / 'scripts' / 'validate_key_levels_supply_demand_53c.py',
 )
 
 PROTECTED_PRODUCTION = {
+    'backend/analysis/price_action_structure.py',
     'backend/analysis/candle_anatomy.py',
     'backend/analysis/candlestick_patterns.py',
     'backend/collectors/live_news_tracker.py',
@@ -49,22 +47,22 @@ PROTECTED_PRODUCTION = {
     'backend/runtime/snapshot_freshness_monitor.py',
 }
 
-PROTECTED_PREFIXES = (
-    'backend/news/',
-)
+PROTECTED_PREFIXES = ('backend/news/',)
 
 INTENDED_PRODUCTION = {
     'backend/config/build_info.py',
-    'backend/analysis/price_action_structure.py',
+    'backend/analysis/key_levels_supply_demand.py',
 }
 
 NEW_SOURCE = {
-    'backend/analysis/price_action_structure.py',
-    'scripts/test_price_action_structure_53b.py',
-    'scripts/validate_price_action_structure_53b.py',
+    'backend/analysis/key_levels_supply_demand.py',
+    'scripts/test_key_levels_supply_demand_53c.py',
+    'scripts/validate_key_levels_supply_demand_53c.py',
 }
 
 ALLOWED_HISTORICAL_REGRESSIONS = {
+    'scripts/test_price_action_structure_53b.py',
+    'scripts/validate_price_action_structure_53b.py',
     'scripts/test_candlestick_patterns_53a2.py',
     'scripts/validate_candlestick_patterns_53a2.py',
     'scripts/test_candle_anatomy_53a.py',
@@ -73,30 +71,8 @@ ALLOWED_HISTORICAL_REGRESSIONS = {
     'scripts/validate_event_age_freshness_52r_d2.py',
 }
 
-ALLOWED_REPORTS = {
-    'phase53b_review.txt',
-    'phase53b_diff.txt',
-    'phase53c_review.txt',
-    'phase53c_diff.txt',
-}
-
-ALLOWED_SUCCESSOR_53C = {
-    'backend/analysis/key_levels_supply_demand.py',
-    'scripts/test_key_levels_supply_demand_53c.py',
-    'scripts/validate_key_levels_supply_demand_53c.py',
-}
-
-SUCCESSOR_53C_PRODUCTION = {
-    'backend/config/build_info.py',
-    'backend/analysis/key_levels_supply_demand.py',
-}
-
-ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION
-    | NEW_SOURCE
-    | ALLOWED_HISTORICAL_REGRESSIONS
-    | ALLOWED_SUCCESSOR_53C
-)
+ALLOWED_REPORTS = {'phase53c_review.txt', 'phase53c_diff.txt'}
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -111,27 +87,29 @@ EXTERNAL_DEPENDENCY_NEEDLES = (
     'broker',
     'freshness',
 )
-FORBIDDEN_OUTPUT = (
-    'buy',
-    'sell',
-    'long',
-    'short',
-    'entry',
-    'stop',
-    'target',
-    'position_size',
-    'trade_signal',
-    'win_probability',
-    'confidence',
-    'recommendation',
+FORBIDDEN_REIMPLEMENTATION = (
+    'SWING_SPAN',
+    'def _confirmed_swings',
+    'def _high_relation',
+    'def _low_relation',
+    'def _break_events',
+    'previous_close',
+    'analyze_candle',
+    'from backend.analysis.candle_anatomy',
 )
-REQUIRED_TEST_MARKERS = tuple(f'T{index}' for index in range(1, 56)) + (
-    'PRICE_ACTION_STRUCTURE_53B_PASS',
+FORBIDDEN_OUTPUT = frozenset({
+    'buy', 'sell', 'long', 'short', 'entry', 'stop', 'target',
+    'position size', 'position_size', 'trade signal', 'trade_signal',
+    'win probability', 'win_probability', 'confidence', 'recommendation',
+    'strong buy', 'strong sell',
+})
+REQUIRED_TEST_MARKERS = tuple(f'T{index}' for index in range(1, 78)) + (
+    'KEY_LEVELS_SUPPLY_DEMAND_53C_PASS',
 )
 
 
 def _fail(message: str) -> int:
-    print(f'ASTRAEDGE_PHASE_53B_PRICE_ACTION_STRUCTURE_FAIL: {message}', file=sys.stderr)
+    print(f'ASTRAEDGE_PHASE_53C_KEY_LEVELS_FAIL: {message}', file=sys.stderr)
     return 1
 
 
@@ -199,9 +177,7 @@ def _emitted_strings(value) -> list[str]:
         for item in value:
             strings.extend(_emitted_strings(item))
         return strings
-    if isinstance(value, str):
-        return [value]
-    return []
+    return [value] if isinstance(value, str) else []
 
 
 def _validate_changed_file_scope() -> str | None:
@@ -221,15 +197,10 @@ def _validate_changed_file_scope() -> str | None:
     )
     actual_head = (head.stdout or '').strip()
     actual_tree = (tree.stdout or '').strip()
-    if actual_head not in ALLOWED_HEADS:
-        return (
-            f'HEAD must remain canonical 53B baseline {CANONICAL_HEAD} '
-            f'or committed 53B HEAD {COMMITTED_53B_HEAD}, got {actual_head}'
-        )
-    if actual_head == CANONICAL_HEAD and actual_tree != CANONICAL_TREE:
+    if actual_head != CANONICAL_HEAD:
+        return f'HEAD must remain canonical 53C baseline {CANONICAL_HEAD}, got {actual_head}'
+    if actual_tree != CANONICAL_TREE:
         return f'HEAD tree must remain {CANONICAL_TREE}, got {actual_tree}'
-    if actual_head == COMMITTED_53B_HEAD and actual_tree != COMMITTED_53B_TREE:
-        return f'committed 53B HEAD tree must remain {COMMITTED_53B_TREE}, got {actual_tree}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -239,7 +210,7 @@ def _validate_changed_file_scope() -> str | None:
     actual_source_scope = tracked_changed | relevant_untracked
 
     print(
-        'B53_CHANGED_FILE_SCOPE '
+        'C53_CHANGED_FILE_SCOPE '
         f'head={actual_head} '
         f'tracked={sorted(tracked_changed)} '
         f'untracked_relevant={sorted(relevant_untracked)} '
@@ -248,7 +219,7 @@ def _validate_changed_file_scope() -> str | None:
 
     reports_tracked = ALLOWED_REPORTS & tracked_now
     if reports_tracked:
-        return f'53B reports must remain untracked: {sorted(reports_tracked)}'
+        return f'53C reports must remain untracked: {sorted(reports_tracked)}'
 
     staged = _git_paths('diff', '--cached', '--name-only')
     if staged:
@@ -267,51 +238,29 @@ def _validate_changed_file_scope() -> str | None:
     }
     if protected_hits:
         return f'protected production files changed: {sorted(protected_hits)}'
-    for path in PROTECTED_PRODUCTION:
-        diff = subprocess.run(
-            ['git', 'diff', '--name-only', 'HEAD', '--', path],
-            cwd=str(PROJECT_ROOT),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if (diff.stdout or '').strip():
-            return f'protected file changed: {path}'
 
     unexpected = actual_source_scope - ALLOWED_CHANGED_SOURCE
     if unexpected:
         return f'unexpected changed source/test/validator files: {sorted(unexpected)}'
 
     if 'backend/config/build_info.py' not in tracked_changed:
-        return 'backend/config/build_info.py must change for the active successor build bump'
-    if actual_head == CANONICAL_HEAD:
-        for path in NEW_SOURCE:
-            if path not in relevant_untracked and path not in tracked_changed:
-                return f'missing required 53B file: {path}'
-        expected_production = INTENDED_PRODUCTION
-    else:
-        for path in NEW_SOURCE:
-            if path not in tracked_now:
-                return f'missing committed 53B file: {path}'
-        for path in ALLOWED_SUCCESSOR_53C:
-            if path not in relevant_untracked and path not in tracked_changed:
-                return f'missing required 53C successor file: {path}'
-        if 'backend/analysis/price_action_structure.py' in tracked_changed:
-            return '53B price_action_structure.py must remain unchanged for 53C'
-        expected_production = SUCCESSOR_53C_PRODUCTION
+        return 'backend/config/build_info.py must change for the 53C build bump'
+    for path in NEW_SOURCE:
+        if path not in relevant_untracked and path not in tracked_changed:
+            return f'missing required 53C file: {path}'
 
     production_changes = {
         path for path in actual_source_scope
         if path.startswith('backend/')
     }
-    if production_changes != expected_production:
+    if production_changes != INTENDED_PRODUCTION:
         return f'production scope must be exact: {sorted(production_changes)}'
 
-    print('B53_CHANGED_FILE_SCOPE_OK')
+    print('C53_CHANGED_FILE_SCOPE_OK')
     return None
 
 
-def _run_script(path: str, marker: str, label: str) -> str | None:
+def _run_script(path: str, marker: str, label: str) -> tuple[str | None, str]:
     env = os.environ.copy()
     env['PYTHONUNBUFFERED'] = '1'
     proc = subprocess.run(
@@ -328,10 +277,10 @@ def _run_script(path: str, marker: str, label: str) -> str | None:
     if proc.stderr:
         print(proc.stderr, end='' if proc.stderr.endswith('\n') else '\n', file=sys.stderr)
     if proc.returncode != 0:
-        return f'{label} exited {proc.returncode}'
-    if marker not in output:
-        return f'{label} missing marker {marker}'
-    return None
+        return f'{label} exited {proc.returncode}', output
+    if marker not in {line.strip() for line in output.splitlines()}:
+        return f'{label} missing marker {marker}', output
+    return None, output
 
 
 def main() -> int:
@@ -356,59 +305,63 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
-        ('53B', 'AstraEdge 53B'),
-        ('53C', 'AstraEdge 53C'),
-    }:
-        return _fail(f'build must be exact 53B or successor 53C pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53C', 'AstraEdge 53C'):
+        return _fail(f'build must be exact 53C / AstraEdge 53C, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     print('V1_BUILD_IDENTITY_OK')
 
-    module_path = PROJECT_ROOT / 'backend' / 'analysis' / 'price_action_structure.py'
+    module_path = PROJECT_ROOT / 'backend' / 'analysis' / 'key_levels_supply_demand.py'
     if not module_path.is_file():
-        return _fail('missing backend/analysis/price_action_structure.py')
+        return _fail('missing backend/analysis/key_levels_supply_demand.py')
     source = module_path.read_text(encoding='utf-8')
     imported = _imported_names(source)
-    if 'def analyze_price_action_structure(' not in source:
-        return _fail('public analyze_price_action_structure API is missing')
-    if 'from backend.analysis.candle_anatomy import' not in source or 'analyze_candle' not in source:
-        return _fail('53B must import and reuse 53A analyze_candle')
-    if 'def analyze_candle(' in source:
-        return _fail('53B must not reimplement analyze_candle')
-    print('V2_PUBLIC_API_AND_53A_REUSE_OK')
+    if 'def analyze_key_levels(' not in source:
+        return _fail('public analyze_key_levels API is missing')
+    if 'backend.analysis.price_action_structure' not in imported:
+        return _fail('53C must import the 53B price-action structure module')
+    if 'analyze_price_action_structure' not in source:
+        return _fail('53C must reuse analyze_price_action_structure')
+    if 'def analyze_price_action_structure(' in source:
+        return _fail('53C must not reimplement the 53B analyzer')
+    for needle in FORBIDDEN_REIMPLEMENTATION:
+        if needle in source:
+            return _fail(f'53B swing/break/anatomy logic appears duplicated: {needle}')
+    print('V2_PUBLIC_API_AND_53B_REUSE_OK')
 
-    from backend.analysis.price_action_structure import (
-        EVENT_TAG_ORDER,
-        MIN_STRUCTURE_CANDLES,
-        SWING_KIND_ORDER,
-        SWING_SPAN,
-        analyze_price_action_structure,
+    from backend.analysis.key_levels_supply_demand import (
+        KEY_LEVEL_KEYS,
+        LEVEL_CLUSTER_TOLERANCE_RATIO,
+        LEVEL_GROUP_KEYS,
+        MIN_LEVEL_CANDLES,
+        MIN_LEVEL_GROUP_MEMBERS,
+        OUTPUT_KEYS,
+        ZONE_KEYS,
+        analyze_key_levels,
     )
 
-    if SWING_SPAN != 2 or MIN_STRUCTURE_CANDLES != 5:
-        return _fail(f'cardinality constants mismatch: span={SWING_SPAN} minimum={MIN_STRUCTURE_CANDLES}')
-    if SWING_KIND_ORDER != ('HIGH', 'LOW'):
-        return _fail(f'swing ordering mismatch: {SWING_KIND_ORDER}')
-    expected_tags = (
-        'BREAK_ABOVE_SWING_HIGH',
-        'BREAK_BELOW_SWING_LOW',
-        'BULLISH_BOS_LIKE',
-        'BEARISH_BOS_LIKE',
-        'BULLISH_CHOCH_LIKE',
-        'BEARISH_CHOCH_LIKE',
-    )
-    if EVENT_TAG_ORDER != expected_tags:
-        return _fail(f'event-tag ordering mismatch: {EVENT_TAG_ORDER}')
+    if MIN_LEVEL_CANDLES != 5:
+        return _fail(f'MIN_LEVEL_CANDLES must be 5, got {MIN_LEVEL_CANDLES}')
+    if LEVEL_CLUSTER_TOLERANCE_RATIO != 0.0025:
+        return _fail(f'LEVEL_CLUSTER_TOLERANCE_RATIO must be 0.0025, got {LEVEL_CLUSTER_TOLERANCE_RATIO}')
+    if MIN_LEVEL_GROUP_MEMBERS != 2:
+        return _fail(f'MIN_LEVEL_GROUP_MEMBERS must be 2, got {MIN_LEVEL_GROUP_MEMBERS}')
     required_literals = (
         'OK', 'INSUFFICIENT_CANDLES', 'MALFORMED',
-        'FIRST_HIGH', 'HIGHER_HIGH', 'LOWER_HIGH', 'EQUAL_HIGH',
-        'FIRST_LOW', 'HIGHER_LOW', 'LOWER_LOW', 'EQUAL_LOW',
-        'BULLISH', 'BEARISH', 'MIXED', 'UNDEFINED',
-        *expected_tags,
+        'SWING_HIGH_LEVEL', 'SWING_LOW_LEVEL',
+        'UNBROKEN', 'BROKEN_ABOVE', 'BROKEN_BELOW',
+        'SUPPLY_LIKE', 'DEMAND_LIKE', 'ACTIVE', 'INVALIDATED',
     )
     for literal in required_literals:
         if literal not in source:
-            return _fail(f'missing required state/relation/tag literal: {literal}')
-    print('V3_CONSTANTS_RELATIONS_AND_TAGS_OK')
+            return _fail(f'missing required level/group/zone state: {literal}')
+    expected_output_keys = (
+        'schema_version', 'level_state', 'candle_count', 'cluster_tolerance_ratio',
+        'structure_bias', 'key_levels', 'level_groups', 'zones', 'source_structure',
+    )
+    if OUTPUT_KEYS != expected_output_keys:
+        return _fail(f'top-level output keys mismatch: {OUTPUT_KEYS}')
+    if len(KEY_LEVEL_KEYS) != 10 or len(LEVEL_GROUP_KEYS) != 9 or len(ZONE_KEYS) != 11:
+        return _fail('closed record key counts do not match the 53C contract')
+    print('V3_CONSTANTS_STATES_AND_CLOSED_KEYS_OK')
 
     for module in NETWORK_MODULES:
         if module in imported:
@@ -426,7 +379,7 @@ def main() -> int:
             return _fail(f'broker/news/freshness dependency found: {needle}')
     print('V4_NO_EXTERNAL_EFFECTS_OK')
 
-    sample = analyze_price_action_structure([
+    sample = analyze_key_levels([
         {'open': 5, 'high': 6, 'low': 4, 'close': 5},
         {'open': 6, 'high': 8, 'low': 5, 'close': 6},
         {'open': 7, 'high': 10, 'low': 6, 'close': 7},
@@ -434,12 +387,14 @@ def main() -> int:
         {'open': 5, 'high': 7, 'low': 4, 'close': 5},
     ])
     emitted = {value.strip().lower() for value in _emitted_strings(sample)}
-    for token in FORBIDDEN_OUTPUT:
-        if token in emitted:
-            return _fail(f'forbidden interpretation token in output: {token}')
+    forbidden = sorted(FORBIDDEN_OUTPUT & emitted)
+    if forbidden:
+        return _fail(f'forbidden trade interpretation output: {forbidden}')
+    if sample['schema_version'] != '53C' or sample['level_state'] != 'OK':
+        return _fail(f'basic analyzer result mismatch: {sample}')
     print('V5_DESCRIPTIVE_OUTPUT_ONLY_OK')
 
-    for path in ('backend/analysis/candle_anatomy.py', 'backend/analysis/candlestick_patterns.py'):
+    for path in sorted(PROTECTED_PRODUCTION):
         changed = subprocess.run(
             ['git', 'diff', '--name-only', 'HEAD', '--', path],
             cwd=str(PROJECT_ROOT),
@@ -448,47 +403,48 @@ def main() -> int:
             check=False,
         )
         if (changed.stdout or '').strip():
-            return _fail(f'protected analysis module changed: {path}')
-    print('V6_53A_53A2_MODULES_UNCHANGED_OK')
+            return _fail(f'protected production changed: {path}')
+    protected_prefix_hits = {
+        path for path in _git_paths('diff', '--name-only', 'HEAD', '--')
+        if path.startswith(PROTECTED_PREFIXES)
+    }
+    if protected_prefix_hits:
+        return _fail(f'protected production prefix changed: {sorted(protected_prefix_hits)}')
+    print('V6_PROTECTED_PRODUCTION_UNCHANGED_OK')
 
-    focused_error = _run_script(
-        'scripts/test_price_action_structure_53b.py',
-        'PRICE_ACTION_STRUCTURE_53B_PASS',
-        'focused 53B tests',
+    focused_error, focused_output = _run_script(
+        'scripts/test_key_levels_supply_demand_53c.py',
+        'KEY_LEVELS_SUPPLY_DEMAND_53C_PASS',
+        'focused 53C tests',
     )
     if focused_error:
         return _fail(focused_error)
-    focused_output = subprocess.run(
-        [sys.executable, '-u', str(PROJECT_ROOT / 'scripts/test_price_action_structure_53b.py')],
-        cwd=str(PROJECT_ROOT),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    combined = f'{focused_output.stdout or ""}{focused_output.stderr or ""}'
-    missing = [marker for marker in REQUIRED_TEST_MARKERS if marker not in combined]
-    if focused_output.returncode != 0 or missing:
+    output_lines = {line.strip() for line in focused_output.splitlines()}
+    missing = [marker for marker in REQUIRED_TEST_MARKERS if marker not in output_lines]
+    if missing:
         return _fail(f'focused marker verification failed: missing={missing}')
-    print('V7_FOCUSED_53B_OK')
+    print('V7_FOCUSED_53C_OK')
 
     regressions = (
+        ('scripts/validate_price_action_structure_53b.py', 'PHASE_53B_VALIDATION_PASS', '53B regression'),
         ('scripts/validate_candlestick_patterns_53a2.py', 'PHASE_53A2_VALIDATION_PASS', '53A2 regression'),
         ('scripts/validate_candle_anatomy_53a.py', 'PHASE_53A_VALIDATION_PASS', '53A regression'),
         ('scripts/validate_event_age_freshness_52r_d2.py', 'PHASE_52R_D2_VALIDATION_PASS', '52R-D2 regression'),
     )
     for path, marker, label in regressions:
-        error = _run_script(path, marker, label)
+        error, _ = _run_script(path, marker, label)
         if error:
             return _fail(error)
         print(f'V8_{label.replace("-", "_").replace(" ", "_").upper()}_OK')
 
     compile_targets = [
         'backend/config/build_info.py',
+        'backend/analysis/key_levels_supply_demand.py',
+        'backend/analysis/price_action_structure.py',
         'backend/analysis/candle_anatomy.py',
         'backend/analysis/candlestick_patterns.py',
-        'backend/analysis/price_action_structure.py',
-        'scripts/test_price_action_structure_53b.py',
-        'scripts/validate_price_action_structure_53b.py',
+        'scripts/test_key_levels_supply_demand_53c.py',
+        'scripts/validate_key_levels_supply_demand_53c.py',
         *sorted(ALLOWED_HISTORICAL_REGRESSIONS),
     ]
     compiled = subprocess.run(
@@ -524,7 +480,7 @@ def main() -> int:
     if data_after:
         return _fail(f'repository data/ is dirty: {sorted(data_after)}')
 
-    print('PHASE_53B_VALIDATION_PASS')
+    print('PHASE_53C_VALIDATION_PASS')
     return 0
 
 
