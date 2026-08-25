@@ -17,7 +17,8 @@ COMMITTED_C1B_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
 COMMITTED_D_HEAD = '5063f488878b548e2e2aad6b8fa5a705a94b5ddb'
 COMMITTED_D2P_HEAD = '8e526eb374a01d07bc3bab4fb00e620b238793c6'
 COMMITTED_D2_HEAD = '1e47967bbdf9cd1338d525c008b9ea376943a18a'
-ALLOWED_HEADS = frozenset({BASELINE_COMMIT, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD})
+COMMITTED_53A_HEAD = '7596540a797432c24e01dcb79f2bd663c9f837cb'
+ALLOWED_HEADS = frozenset({BASELINE_COMMIT, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD, COMMITTED_53A_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -132,7 +133,14 @@ ALLOWED_SUCCESSOR_53A = {
     'scripts/validate_candle_anatomy_53a.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A
+ALLOWED_SUCCESSOR_53A2 = {
+    'backend/analysis/candlestick_patterns.py',
+    'backend/config/build_info.py',
+    'scripts/test_candlestick_patterns_53a2.py',
+    'scripts/validate_candlestick_patterns_53a2.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A | ALLOWED_SUCCESSOR_53A2
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -225,7 +233,8 @@ def _validate_changed_file_scope() -> str | None:
             f'or committed C1B HEAD {COMMITTED_C1B_HEAD} '
             f'or committed D HEAD {COMMITTED_D_HEAD} '
             f'or committed D2P HEAD {COMMITTED_D2P_HEAD} '
-            f'or committed D2 HEAD {COMMITTED_D2_HEAD}, got {actual_head}'
+            f'or committed D2 HEAD {COMMITTED_D2_HEAD} '
+            f'or committed 53A HEAD {COMMITTED_53A_HEAD}, got {actual_head}'
         )
 
     tracked_changed = _git_paths(
@@ -327,6 +336,7 @@ def main() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }:
         return _fail(
             f'build must be exact 52R-C1B / AstraEdge 52R-C1B or successor '

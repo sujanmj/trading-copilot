@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validator — AstraEdge 53A deterministic candle anatomy (read-only)."""
+"""Validator — AstraEdge 53A2 deterministic candlestick-pattern grammar (read-only)."""
 
 from __future__ import annotations
 
@@ -12,23 +12,21 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CANONICAL_HEAD = '1e47967bbdf9cd1338d525c008b9ea376943a18a'
-CANONICAL_TREE = 'cbf045ab4a99a2537cba9097a6354c0c1256b4d3'
-COMMITTED_53A_HEAD = '7596540a797432c24e01dcb79f2bd663c9f837cb'
-COMMITTED_53A_TREE = '0e056cec28e7f42322c87a8a8fb563ba2952e8eb'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53A_HEAD})
+CANONICAL_HEAD = '7596540a797432c24e01dcb79f2bd663c9f837cb'
+CANONICAL_TREE = '0e056cec28e7f42322c87a8a8fb563ba2952e8eb'
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
 WATCHED_PATHS = (
     PROJECT_ROOT / 'backend' / 'config' / 'build_info.py',
-    PROJECT_ROOT / 'backend' / 'analysis' / 'candle_anatomy.py',
-    PROJECT_ROOT / 'scripts' / 'test_candle_anatomy_53a.py',
-    PROJECT_ROOT / 'scripts' / 'validate_candle_anatomy_53a.py',
+    PROJECT_ROOT / 'backend' / 'analysis' / 'candlestick_patterns.py',
+    PROJECT_ROOT / 'scripts' / 'test_candlestick_patterns_53a2.py',
+    PROJECT_ROOT / 'scripts' / 'validate_candlestick_patterns_53a2.py',
 )
 
 PROTECTED_PRODUCTION = {
+    'backend/analysis/candle_anatomy.py',
     'backend/news/broker_discovery_foundation.py',
     'backend/news/source_time_provenance.py',
     'backend/news/verified_intelligence_store.py',
@@ -48,18 +46,18 @@ PROTECTED_PRODUCTION = {
 
 INTENDED_PRODUCTION = {
     'backend/config/build_info.py',
-    'backend/analysis/__init__.py',
-    'backend/analysis/candle_anatomy.py',
+    'backend/analysis/candlestick_patterns.py',
 }
 
 NEW_SOURCE = {
-    'backend/analysis/__init__.py',
-    'backend/analysis/candle_anatomy.py',
-    'scripts/test_candle_anatomy_53a.py',
-    'scripts/validate_candle_anatomy_53a.py',
+    'backend/analysis/candlestick_patterns.py',
+    'scripts/test_candlestick_patterns_53a2.py',
+    'scripts/validate_candlestick_patterns_53a2.py',
 }
 
 ALLOWED_HISTORICAL_REGRESSIONS = {
+    'scripts/test_candle_anatomy_53a.py',
+    'scripts/validate_candle_anatomy_53a.py',
     'scripts/test_broker_discovery_foundation_52r_a1.py',
     'scripts/validate_broker_discovery_foundation_52r_a1.py',
     'scripts/test_rss_discovery_adapter_52r_a2.py',
@@ -87,40 +85,59 @@ ALLOWED_HISTORICAL_REGRESSIONS = {
 }
 
 ALLOWED_REPORTS = {
-    'phase53a_review.txt',
-    'phase53a_diff.txt',
     'phase53a2_review.txt',
     'phase53a2_diff.txt',
+    'phase53a_review.txt',
+    'phase53a_diff.txt',
     'phase52r_d2_diff.txt',
     'phase52r_d2_integration_audit.txt',
     'phase52r_d2_validation.txt',
 }
 
-ALLOWED_SUCCESSOR_53A2 = {
-    'backend/analysis/candlestick_patterns.py',
-    'backend/config/build_info.py',
-    'scripts/test_candlestick_patterns_53a2.py',
-    'scripts/validate_candlestick_patterns_53a2.py',
-}
-
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_53A2
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
 })
 AI_NEEDLES = ('openai', 'anthropic', 'groq', 'ai_router', 'google.generativeai')
 WRITE_NEEDLES = ('atomic_write', 'write_text', 'write_bytes')
-REQUIRED_TEST_MARKERS = tuple(f'T{i}' for i in range(1, 46)) + ('CANDLE_ANATOMY_53A_PASS',)
+REPAIR1_TEST_MARKERS = (
+    'R1_ONE_VALID_INSUFFICIENT_OK',
+    'R1_ONE_MALFORMED_INSUFFICIENT_OK',
+    'R1_EMPTY_INSUFFICIENT_OK',
+    'R1_FOUR_VALID_UNSUPPORTED_OK',
+    'R1_FOUR_MALFORMED_UNSUPPORTED_OK',
+    'R1_TWO_MALFORMED_OK',
+    'R1_THREE_MALFORMED_OK',
+    'CANDLESTICK_PATTERNS_53A2_REPAIR1_CARDINALITY_OK',
+)
+REQUIRED_TEST_MARKERS = (
+    tuple(f'T{i}' for i in range(1, 41))
+    + REPAIR1_TEST_MARKERS
+    + ('CANDLESTICK_PATTERNS_53A2_PASS',)
+)
 THRESHOLD_NAMES = (
-    'DOJI_BODY_RATIO_MAX',
-    'STRONG_BODY_RATIO_MIN',
-    'LONG_WICK_RATIO_MIN',
-    'REJECTION_WICK_RATIO_MIN',
-    'REJECTION_BODY_RATIO_MAX',
-    'MARUBOZU_BODY_RATIO_MIN',
-    'MARUBOZU_WICK_RATIO_MAX',
-    'HAMMER_WICK_TO_BODY_MIN',
-    'HAMMER_OPPOSITE_WICK_TO_BODY_MAX',
+    'TWEEZER_LEVEL_TOLERANCE_RATIO',
+    'STAR_SMALL_BODY_RATIO_MAX',
+    'STAR_OUTER_BODY_RATIO_MIN',
+    'SOLDIER_BODY_RATIO_MIN',
+    'PATTERN_TAG_ORDER',
+)
+REQUIRED_TAGS = (
+    'BULLISH_ENGULFING',
+    'BEARISH_ENGULFING',
+    'BULLISH_HARAMI',
+    'BEARISH_HARAMI',
+    'PIERCING_LINE_LIKE',
+    'DARK_CLOUD_COVER_LIKE',
+    'INSIDE_BAR',
+    'OUTSIDE_BAR',
+    'TWEEZER_TOP_LIKE',
+    'TWEEZER_BOTTOM_LIKE',
+    'MORNING_STAR_LIKE',
+    'EVENING_STAR_LIKE',
+    'THREE_WHITE_SOLDIERS_LIKE',
+    'THREE_BLACK_CROWS_LIKE',
 )
 FORBIDDEN_OUTPUT = (
     'buy',
@@ -128,14 +145,15 @@ FORBIDDEN_OUTPUT = (
     'entry',
     'stop',
     'target',
+    'recommendation',
     'probability',
     'confidence',
-    'signal',
+    'trade_signal',
 )
 
 
 def _fail(msg: str) -> int:
-    print(f'ASTRAEDGE_PHASE_53A_CANDLE_ANATOMY_FAIL: {msg}', file=sys.stderr)
+    print(f'ASTRAEDGE_PHASE_53A2_CANDLESTICK_PATTERNS_FAIL: {msg}', file=sys.stderr)
     return 1
 
 
@@ -209,15 +227,10 @@ def _validate_changed_file_scope() -> str | None:
     )
     actual_head = (head.stdout or '').strip()
     actual_tree = (tree.stdout or '').strip()
-    if actual_head not in ALLOWED_HEADS:
-        return (
-            f'HEAD must remain canonical 53A baseline {CANONICAL_HEAD} '
-            f'or committed 53A HEAD {COMMITTED_53A_HEAD}, got {actual_head}'
-        )
-    if actual_head == CANONICAL_HEAD and actual_tree != CANONICAL_TREE:
+    if actual_head != CANONICAL_HEAD:
+        return f'HEAD must remain canonical 53A2 baseline {CANONICAL_HEAD}'
+    if actual_tree != CANONICAL_TREE:
         return f'HEAD tree must remain {CANONICAL_TREE}'
-    if actual_head == COMMITTED_53A_HEAD and actual_tree != COMMITTED_53A_TREE:
-        return f'committed 53A HEAD tree must remain {COMMITTED_53A_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -227,7 +240,7 @@ def _validate_changed_file_scope() -> str | None:
     actual_source_scope = tracked_changed | relevant_untracked
 
     print(
-        'A53_CHANGED_FILE_SCOPE '
+        'A53A2_CHANGED_FILE_SCOPE '
         f'head={actual_head} '
         f'tracked={sorted(tracked_changed)} '
         f'untracked_relevant={sorted(relevant_untracked)} '
@@ -267,22 +280,36 @@ def _validate_changed_file_scope() -> str | None:
     if unexpected:
         return f'unexpected changed source/test/validator files: {sorted(unexpected)}'
 
-    if actual_head == CANONICAL_HEAD:
-        if 'backend/config/build_info.py' not in tracked_changed:
-            return 'backend/config/build_info.py must change for the 53A build bump'
-        for required in NEW_SOURCE:
-            if required not in relevant_untracked and required not in tracked_changed:
-                return f'missing required 53A file {required}'
-    else:
-        for required in NEW_SOURCE:
-            if required not in tracked_now:
-                return f'missing required 53A file {required}'
-        if 'backend/config/build_info.py' not in tracked_changed:
-            return 'backend/config/build_info.py must change for the 53A2 successor build bump'
-        if 'backend/analysis/candle_anatomy.py' in tracked_changed:
-            return '53A candle_anatomy.py must remain unchanged for 53A2'
+    if 'backend/config/build_info.py' not in tracked_changed:
+        return 'backend/config/build_info.py must change for the 53A2 build bump'
+    for required in NEW_SOURCE:
+        if required not in relevant_untracked and required not in tracked_changed:
+            return f'missing required 53A2 file {required}'
 
-    print('A53_CHANGED_FILE_SCOPE_OK')
+    print('A53A2_CHANGED_FILE_SCOPE_OK')
+    return None
+
+
+def _run_script(rel: str, pass_marker: str, fail_label: str) -> str | None:
+    env = os.environ.copy()
+    env['PYTHONUNBUFFERED'] = '1'
+    proc = subprocess.run(
+        [sys.executable, '-u', str(PROJECT_ROOT / rel)],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    out = f'{proc.stdout or ""}{proc.stderr or ""}'
+    if proc.stdout:
+        print(proc.stdout, end='' if proc.stdout.endswith('\n') else '\n')
+    if proc.stderr:
+        print(proc.stderr, end='' if proc.stderr.endswith('\n') else '\n', file=sys.stderr)
+    if proc.returncode != 0:
+        return fail_label
+    if pass_marker not in out:
+        return f'{fail_label}: missing {pass_marker}'
     return None
 
 
@@ -308,26 +335,40 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
-        ('53A', 'AstraEdge 53A'),
-        ('53A2', 'AstraEdge 53A2'),
-    }:
+    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53A2', 'AstraEdge 53A2'):
         return _fail(
-            f'build must be exact 53A / AstraEdge 53A or successor '
-            f'53A2 / AstraEdge 53A2, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'build must be exact 53A2 / AstraEdge 53A2, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     print('V1_BUILD_IDENTITY_OK')
 
-    module_path = PROJECT_ROOT / 'backend/analysis/candle_anatomy.py'
+    anatomy_diff = subprocess.run(
+        ['git', 'diff', '--name-only', 'HEAD', '--', 'backend/analysis/candle_anatomy.py'],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if (anatomy_diff.stdout or '').strip():
+        return _fail('53A candle_anatomy.py must remain unchanged')
+    print('V2_53A_MODULE_UNCHANGED_OK')
+
+    module_path = PROJECT_ROOT / 'backend/analysis/candlestick_patterns.py'
     if not module_path.is_file():
-        return _fail('missing backend/analysis/candle_anatomy.py')
+        return _fail('missing backend/analysis/candlestick_patterns.py')
     src = module_path.read_text(encoding='utf-8')
     imported = _imported_names(src)
-    if 'def analyze_candle(' not in src:
-        return _fail('public analyzer analyze_candle is missing')
+    if 'def analyze_candlestick_patterns(' not in src:
+        return _fail('public analyzer analyze_candlestick_patterns is missing')
+    if 'from backend.analysis.candle_anatomy import' not in src or 'analyze_candle' not in src:
+        return _fail('53A2 must import/reuse analyze_candle')
+    if 'def analyze_candle(' in src:
+        return _fail('53A2 must not reimplement analyze_candle')
     for name in THRESHOLD_NAMES:
         if name not in src:
             return _fail(f'missing threshold constant {name}')
+    for tag in REQUIRED_TAGS:
+        if tag not in src:
+            return _fail(f'missing pattern tag {tag}')
     for mod in NETWORK_MODULES:
         if mod in imported:
             return _fail(f'analyzer imports network module {mod!r}')
@@ -357,7 +398,7 @@ def main() -> int:
     for token in FORBIDDEN_OUTPUT:
         if token in src_lower:
             return _fail(f'analyzer source contains trade-interpretation token {token}')
-    print('V2_ANALYZER_CONTRACT_OK')
+    print('V3_ANALYZER_CONTRACT_OK')
 
     for rel in PROTECTED_PRODUCTION:
         diff = subprocess.run(
@@ -369,12 +410,12 @@ def main() -> int:
         )
         if (diff.stdout or '').strip():
             return _fail(f'protected file changed vs HEAD: {rel}')
-    print('V3_PROTECTED_UNCHANGED_OK')
+    print('V4_PROTECTED_UNCHANGED_OK')
 
     env = os.environ.copy()
     env['PYTHONUNBUFFERED'] = '1'
     proc = subprocess.run(
-        [sys.executable, '-u', str(PROJECT_ROOT / 'scripts/test_candle_anatomy_53a.py')],
+        [sys.executable, '-u', str(PROJECT_ROOT / 'scripts/test_candlestick_patterns_53a2.py')],
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
@@ -387,16 +428,37 @@ def main() -> int:
     if proc.stderr:
         print(proc.stderr, end='' if proc.stderr.endswith('\n') else '\n', file=sys.stderr)
     if proc.returncode != 0:
-        return _fail('focused 53A candle anatomy tests failed')
+        return _fail('focused 53A2 candlestick pattern tests failed')
     missing = [m for m in REQUIRED_TEST_MARKERS if m not in out]
     if missing:
         return _fail(f'missing focused markers: {missing}')
-    print('V4_FOCUSED_TESTS_OK')
+    print('V5_FOCUSED_TESTS_OK')
+
+    a53 = _run_script(
+        'scripts/validate_candle_anatomy_53a.py',
+        'PHASE_53A_VALIDATION_PASS',
+        '53A validator/regression failed',
+    )
+    if a53:
+        return _fail(a53)
+    print('V6_53A_REGRESSION_OK')
+
+    d2 = _run_script(
+        'scripts/validate_event_age_freshness_52r_d2.py',
+        'PHASE_52R_D2_VALIDATION_PASS',
+        '52R-D2 validator failed',
+    )
+    if d2:
+        return _fail(d2)
+    print('V7_52R_D2_REGRESSION_OK')
 
     compile_targets = [
         'backend/analysis/__init__.py',
         'backend/analysis/candle_anatomy.py',
+        'backend/analysis/candlestick_patterns.py',
         'backend/config/build_info.py',
+        'scripts/test_candlestick_patterns_53a2.py',
+        'scripts/validate_candlestick_patterns_53a2.py',
         'scripts/test_candle_anatomy_53a.py',
         'scripts/validate_candle_anatomy_53a.py',
     ]
@@ -408,8 +470,8 @@ def main() -> int:
         check=False,
     )
     if compiled.returncode != 0:
-        return _fail(f'V5 py_compile failed: {compiled.stderr or compiled.stdout}')
-    print('V5_PY_COMPILE_OK')
+        return _fail(f'V8 py_compile failed: {compiled.stderr or compiled.stdout}')
+    print('V8_PY_COMPILE_OK')
 
     diff_check = subprocess.run(
         ['git', 'diff', '--check'],
@@ -419,8 +481,8 @@ def main() -> int:
         check=False,
     )
     if diff_check.returncode != 0:
-        return _fail(f'V6 git diff --check failed: {diff_check.stdout or diff_check.stderr}')
-    print('V6_DIFF_CHECK_OK')
+        return _fail(f'V9 git diff --check failed: {diff_check.stdout or diff_check.stderr}')
+    print('V9_DIFF_CHECK_OK')
 
     after = {str(p): _file_digest(p) for p in WATCHED_PATHS}
     if before != after:
@@ -446,7 +508,7 @@ def main() -> int:
     if (data_proc.stdout or '').strip():
         return _fail('repository data/ is not clean after focused validation')
 
-    print('PHASE_53A_VALIDATION_PASS')
+    print('PHASE_53A2_VALIDATION_PASS')
     return 0
 
 

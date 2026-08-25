@@ -77,8 +77,11 @@ def _candle(**fields):
 def test_t1_build() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53A', 'AstraEdge 53A'):
-        return _fail(f'expected 53A pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
+    }:
+        return _fail(f'expected 53A pair or successor 53A2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
     return 0
 

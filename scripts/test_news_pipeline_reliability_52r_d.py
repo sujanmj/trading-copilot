@@ -235,6 +235,7 @@ def test_build_identity() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }:
         return _fail(f'expected 52R-D / AstraEdge 52R-D or successor 52R-D2P / AstraEdge 52R-D2P or 52R-D2 / AstraEdge 52R-D2, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('52R_D_BUILD_PAIR_OK')

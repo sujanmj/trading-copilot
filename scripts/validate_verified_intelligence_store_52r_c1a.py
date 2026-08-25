@@ -19,7 +19,8 @@ COMMITTED_C1B_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
 COMMITTED_D_HEAD = '5063f488878b548e2e2aad6b8fa5a705a94b5ddb'
 COMMITTED_D2P_HEAD = '8e526eb374a01d07bc3bab4fb00e620b238793c6'
 COMMITTED_D2_HEAD = '1e47967bbdf9cd1338d525c008b9ea376943a18a'
-ALLOWED_HEADS = frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD})
+COMMITTED_53A_HEAD = '7596540a797432c24e01dcb79f2bd663c9f837cb'
+ALLOWED_HEADS = frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD, COMMITTED_53A_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -164,7 +165,14 @@ ALLOWED_SUCCESSOR_53A = {
     'scripts/validate_candle_anatomy_53a.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_C1A_TESTS | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A
+ALLOWED_SUCCESSOR_53A2 = {
+    'backend/analysis/candlestick_patterns.py',
+    'backend/config/build_info.py',
+    'scripts/test_candlestick_patterns_53a2.py',
+    'scripts/validate_candlestick_patterns_53a2.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_C1A_TESTS | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A | ALLOWED_SUCCESSOR_53A2
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -253,8 +261,8 @@ def _validate_changed_file_scope() -> str | None:
     unrelated_head = '0000000000000000000000000000000000000000'
     if unrelated_head in ALLOWED_HEADS:
         return 'unrelated HEAD must never be permitted by the C1A HEAD allowlist'
-    if ALLOWED_HEADS != frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD}):
-        return 'C1A HEAD allowlist must remain the original C1A implementation baseline, committed C1A HEAD, committed C1B HEAD, committed D HEAD, committed D2P HEAD, and committed D2 HEAD'
+    if ALLOWED_HEADS != frozenset({ORIGINAL_IMPL_BASELINE, COMMITTED_C1A_HEAD, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD, COMMITTED_53A_HEAD}):
+        return 'C1A HEAD allowlist must remain the original C1A implementation baseline, committed C1A HEAD, committed C1B HEAD, committed D HEAD, committed D2P HEAD, committed D2 HEAD, and committed 53A HEAD'
     if actual_head not in ALLOWED_HEADS:
         return (
             f'HEAD must be the original C1A implementation baseline {ORIGINAL_IMPL_BASELINE} '
@@ -262,7 +270,8 @@ def _validate_changed_file_scope() -> str | None:
             f'or the committed C1B HEAD {COMMITTED_C1B_HEAD} '
             f'or the committed D HEAD {COMMITTED_D_HEAD} '
             f'or the committed D2P HEAD {COMMITTED_D2P_HEAD} '
-            f'or the committed D2 HEAD {COMMITTED_D2_HEAD}, got {actual_head}'
+            f'or the committed D2 HEAD {COMMITTED_D2_HEAD} '
+            f'or the committed 53A HEAD {COMMITTED_53A_HEAD}, got {actual_head}'
         )
 
     tracked_changed = _git_paths(
@@ -363,6 +372,7 @@ def main() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }:
         return _fail(
             f'build must be exact 52R-C1A / AstraEdge 52R-C1A or successor '
@@ -419,7 +429,7 @@ def main() -> int:
         if 'upsert_verified_intelligence_record' in text or 'verified_intelligence_store' in text:
             caller_hits.append(rel)
     authorized_callers = set()
-    if BUILD_STAGE in {'52R-C1B', '52R-D', '52R-D2P', '52R-D2', '53A'}:
+    if BUILD_STAGE in {'52R-C1B', '52R-D', '52R-D2P', '52R-D2', '53A', '53A2'}:
         authorized_callers = {'backend/news/verified_intelligence_classifier.py'}
     unexpected_callers = [hit for hit in caller_hits if hit not in authorized_callers]
     if unexpected_callers:

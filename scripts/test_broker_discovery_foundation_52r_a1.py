@@ -99,6 +99,7 @@ def test_build_identity() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
@@ -128,6 +129,7 @@ def test_exact_build_pair_allowlists() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }
     tradecard_pairs = {
         ('52P', 'AstraEdge 52P'),
@@ -143,6 +145,7 @@ def test_exact_build_pair_allowlists() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }
     # Positive current pair.
     if ('52R-C1A', 'AstraEdge 52R-C1A') not in daily_pairs:
@@ -169,6 +172,10 @@ def test_exact_build_pair_allowlists() -> int:
         return _fail('53A successor pair missing from daily-review allowlist')
     if ('53A', 'AstraEdge 53A') not in tradecard_pairs:
         return _fail('53A successor pair missing from tradecard allowlist')
+    if ('53A2', 'AstraEdge 53A2') not in daily_pairs:
+        return _fail('53A2 successor pair missing from daily-review allowlist')
+    if ('53A2', 'AstraEdge 53A2') not in tradecard_pairs:
+        return _fail('53A2 successor pair missing from tradecard allowlist')
     mismatches = (
         ('52Q', 'AstraEdge 52R-A1'),
         ('52R-A1', 'AstraEdge 52Q'),
@@ -193,6 +200,8 @@ def test_exact_build_pair_allowlists() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 52R-D2'),
         ('52R-D2', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A'),
+        ('53A', 'AstraEdge 53A2'),
     )
     for stage, telegram in mismatches:
         if (stage, telegram) in daily_pairs:

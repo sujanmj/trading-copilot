@@ -18,7 +18,9 @@ COMMITTED_D2P_HEAD = '8e526eb374a01d07bc3bab4fb00e620b238793c6'
 COMMITTED_D2P_TREE = '44d7b3109a64bf7c36e93b863c47a1258a8453a3'
 COMMITTED_D2_HEAD = '1e47967bbdf9cd1338d525c008b9ea376943a18a'
 COMMITTED_D2_TREE = 'cbf045ab4a99a2537cba9097a6354c0c1256b4d3'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD})
+COMMITTED_53A_HEAD = '7596540a797432c24e01dcb79f2bd663c9f837cb'
+COMMITTED_53A_TREE = '0e056cec28e7f42322c87a8a8fb563ba2952e8eb'
+ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_D2P_HEAD, COMMITTED_D2_HEAD, COMMITTED_53A_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -109,7 +111,14 @@ ALLOWED_SUCCESSOR_53A = {
     'scripts/validate_candle_anatomy_53a.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A
+ALLOWED_SUCCESSOR_53A2 = {
+    'backend/analysis/candlestick_patterns.py',
+    'backend/config/build_info.py',
+    'scripts/test_candlestick_patterns_53a2.py',
+    'scripts/validate_candlestick_patterns_53a2.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A | ALLOWED_SUCCESSOR_53A2
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -223,7 +232,8 @@ def _validate_changed_file_scope() -> str | None:
         return (
             f'HEAD must remain canonical D2P baseline {CANONICAL_HEAD} '
             f'or committed D2P HEAD {COMMITTED_D2P_HEAD} '
-            f'or committed D2 HEAD {COMMITTED_D2_HEAD}, got {actual_head}'
+            f'or committed D2 HEAD {COMMITTED_D2_HEAD} '
+            f'or committed 53A HEAD {COMMITTED_53A_HEAD}, got {actual_head}'
         )
     if actual_head == CANONICAL_HEAD and actual_tree != CANONICAL_TREE:
         return f'HEAD tree must remain {CANONICAL_TREE}'
@@ -231,6 +241,8 @@ def _validate_changed_file_scope() -> str | None:
         return f'committed D2P HEAD tree must remain {COMMITTED_D2P_TREE}'
     if actual_head == COMMITTED_D2_HEAD and actual_tree != COMMITTED_D2_TREE:
         return f'committed D2 HEAD tree must remain {COMMITTED_D2_TREE}'
+    if actual_head == COMMITTED_53A_HEAD and actual_tree != COMMITTED_53A_TREE:
+        return f'committed 53A HEAD tree must remain {COMMITTED_53A_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -325,6 +337,7 @@ def main() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }:
         return _fail(
             f'build must be exact 52R-D2P / AstraEdge 52R-D2P or successor '

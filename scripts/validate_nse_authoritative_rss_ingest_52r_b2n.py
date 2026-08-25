@@ -143,8 +143,15 @@ ALLOWED_SUCCESSOR_53A = {
     'scripts/validate_candle_anatomy_53a.py',
 }
 
+ALLOWED_SUCCESSOR_53A2 = {
+    'backend/analysis/candlestick_patterns.py',
+    'backend/config/build_info.py',
+    'scripts/test_candlestick_patterns_53a2.py',
+    'scripts/validate_candlestick_patterns_53a2.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2 | ALLOWED_SUCCESSOR_53A | ALLOWED_SUCCESSOR_53A2
 )
 
 FORBIDDEN_IMPORT_NEEDLES = (
@@ -302,6 +309,7 @@ def main() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2P'),
         ('52R-D2', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A2'),
     }:
         return _fail(f'build must be exact 52R-B2N pair or successor 52R-B2/52R-C1A/52R-C1B/52R-D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 

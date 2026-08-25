@@ -122,7 +122,7 @@ def _isolated():
 def test_build_identity() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    allowed = {('52R-C1A', 'AstraEdge 52R-C1A'), ('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D'), ('52R-D2P', 'AstraEdge 52R-D2P'), ('52R-D2', 'AstraEdge 52R-D2'), ('53A', 'AstraEdge 53A')}
+    allowed = {('52R-C1A', 'AstraEdge 52R-C1A'), ('52R-C1B', 'AstraEdge 52R-C1B'), ('52R-D', 'AstraEdge 52R-D'), ('52R-D2P', 'AstraEdge 52R-D2P'), ('52R-D2', 'AstraEdge 52R-D2'), ('53A', 'AstraEdge 53A'), ('53A2', 'AstraEdge 53A2')}
     mismatches = (
         ('52R-C1A', 'AstraEdge 52R-B2'),
         ('52R-B2', 'AstraEdge 52R-C1A'),
@@ -138,6 +138,8 @@ def test_build_identity() -> int:
         ('52R-D2P', 'AstraEdge 52R-D2'),
         ('53A', 'AstraEdge 52R-D2'),
         ('52R-D2', 'AstraEdge 53A'),
+        ('53A2', 'AstraEdge 53A'),
+        ('53A', 'AstraEdge 53A2'),
     )
     if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed:
         return _fail(
@@ -614,14 +616,14 @@ def test_safety_boundaries() -> int:
             caller_hits.append(rel)
     from backend.config.build_info import BUILD_STAGE as _stage
     authorized = set()
-    if _stage in {'52R-C1B', '52R-D', '52R-D2P', '52R-D2', '53A'}:
+    if _stage in {'52R-C1B', '52R-D', '52R-D2P', '52R-D2', '53A', '53A2'}:
         authorized = {'backend/news/verified_intelligence_classifier.py'}
     unexpected_callers = [hit for hit in caller_hits if hit not in authorized]
     if unexpected_callers:
         return _fail(f'production C1A callers exist: {unexpected_callers}')
     if _stage == '52R-C1A' and caller_hits:
         return _fail(f'production C1A callers exist: {caller_hits}')
-    if _stage in {'52R-C1B', '52R-D', '52R-D2P', '52R-D2', '53A'} and set(caller_hits) != authorized:
+    if _stage in {'52R-C1B', '52R-D', '52R-D2P', '52R-D2', '53A', '53A2'} and set(caller_hits) != authorized:
         return _fail(f'C1B must be the only authorized C1A store consumer, got {caller_hits}')
     if 'verified_intelligence_store' in TRACKER_PATH.read_text(encoding='utf-8'):
         return _fail('live_news_tracker must not import C1A')
