@@ -17,7 +17,8 @@ CANONICAL_HEAD = 'e6565b0988184ca3473b54a2a19818da9a7b2667'
 C1A_HEAD = '21c32dcf5a3a2280ccf90536e2ec238aa54b02e5'
 C1B_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
 D_HEAD = '5063f488878b548e2e2aad6b8fa5a705a94b5ddb'
-ALLOWED_HEADS = frozenset({BASELINE_COMMIT, CANONICAL_HEAD, C1A_HEAD, C1B_HEAD, D_HEAD})
+D2P_HEAD = '8e526eb374a01d07bc3bab4fb00e620b238793c6'
+ALLOWED_HEADS = frozenset({BASELINE_COMMIT, CANONICAL_HEAD, C1A_HEAD, C1B_HEAD, D_HEAD, D2P_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -126,7 +127,14 @@ ALLOWED_SUCCESSOR_D2P = {
     'scripts/validate_source_time_provenance_52r_d2p.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2_TESTS | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P
+ALLOWED_SUCCESSOR_D2 = {
+    'backend/news/event_freshness_projection.py',
+    'backend/config/build_info.py',
+    'scripts/test_event_age_freshness_52r_d2.py',
+    'scripts/validate_event_age_freshness_52r_d2.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2_TESTS | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright',
@@ -218,17 +226,18 @@ def _validate_changed_file_scope() -> str | None:
     unrelated_head = '0000000000000000000000000000000000000000'
     if unrelated_head in ALLOWED_HEADS:
         return 'unrelated HEAD must never be permitted by the B2 HEAD allowlist'
-    if ALLOWED_HEADS != frozenset({BASELINE_COMMIT, CANONICAL_HEAD, C1A_HEAD, C1B_HEAD, D_HEAD}):
-        return 'B2 HEAD allowlist must remain exactly the original B2 baseline, committed B2 successor, committed C1A HEAD, committed C1B HEAD, and committed D HEAD'
-    if len(ALLOWED_HEADS) != 5:
-        return 'B2 HEAD allowlist must remain a bounded five-commit set'
+    if ALLOWED_HEADS != frozenset({BASELINE_COMMIT, CANONICAL_HEAD, C1A_HEAD, C1B_HEAD, D_HEAD, D2P_HEAD}):
+        return 'B2 HEAD allowlist must remain exactly the original B2 baseline, committed B2 successor, committed C1A HEAD, committed C1B HEAD, committed D HEAD, and committed D2P HEAD'
+    if len(ALLOWED_HEADS) != 6:
+        return 'B2 HEAD allowlist must remain a bounded six-commit set'
     if actual_head not in ALLOWED_HEADS:
         return (
             f'HEAD must be the original B2 implementation baseline {BASELINE_COMMIT}, '
             f'the committed B2 successor {CANONICAL_HEAD}, '
             f'the committed C1A HEAD {C1A_HEAD}, '
             f'the committed C1B HEAD {C1B_HEAD}, '
-            f'or the committed D HEAD {D_HEAD}, got {actual_head}'
+            f'the committed D HEAD {D_HEAD}, '
+            f'or the committed D2P HEAD {D2P_HEAD}, got {actual_head}'
         )
 
     tracked_changed = _git_paths(
@@ -310,6 +319,7 @@ def main() -> int:
         ('52R-C1B', 'AstraEdge 52R-C1B'),
         ('52R-D', 'AstraEdge 52R-D'),
         ('52R-D2P', 'AstraEdge 52R-D2P'),
+        ('52R-D2', 'AstraEdge 52R-D2'),
     }:
         return _fail(f'build must be exact 52R-B2 pair or successor 52R-C1A/52R-C1B/52R-D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 

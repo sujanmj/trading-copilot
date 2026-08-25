@@ -15,7 +15,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_COMMIT = '21c32dcf5a3a2280ccf90536e2ec238aa54b02e5'
 COMMITTED_C1B_HEAD = '9601790386974dc45a8719f3c2144c5c33b82903'
 COMMITTED_D_HEAD = '5063f488878b548e2e2aad6b8fa5a705a94b5ddb'
-ALLOWED_HEADS = frozenset({BASELINE_COMMIT, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD})
+COMMITTED_D2P_HEAD = '8e526eb374a01d07bc3bab4fb00e620b238793c6'
+ALLOWED_HEADS = frozenset({BASELINE_COMMIT, COMMITTED_C1B_HEAD, COMMITTED_D_HEAD, COMMITTED_D2P_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -115,7 +116,14 @@ ALLOWED_SUCCESSOR_D2P = {
     'scripts/validate_source_time_provenance_52r_d2p.py',
 }
 
-ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P
+ALLOWED_SUCCESSOR_D2 = {
+    'backend/news/event_freshness_projection.py',
+    'backend/config/build_info.py',
+    'scripts/test_event_age_freshness_52r_d2.py',
+    'scripts/validate_event_age_freshness_52r_d2.py',
+}
+
+ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | NEW_UNTRACKED_SOURCE | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -206,7 +214,8 @@ def _validate_changed_file_scope() -> str | None:
         return (
             f'HEAD must remain canonical C1B baseline {BASELINE_COMMIT} '
             f'or committed C1B HEAD {COMMITTED_C1B_HEAD} '
-            f'or committed D HEAD {COMMITTED_D_HEAD}, got {actual_head}'
+            f'or committed D HEAD {COMMITTED_D_HEAD} '
+            f'or committed D2P HEAD {COMMITTED_D2P_HEAD}, got {actual_head}'
         )
 
     tracked_changed = _git_paths(
@@ -306,6 +315,7 @@ def main() -> int:
         ('52R-C1B', 'AstraEdge 52R-C1B'),
         ('52R-D', 'AstraEdge 52R-D'),
         ('52R-D2P', 'AstraEdge 52R-D2P'),
+        ('52R-D2', 'AstraEdge 52R-D2'),
     }:
         return _fail(
             f'build must be exact 52R-C1B / AstraEdge 52R-C1B or successor '

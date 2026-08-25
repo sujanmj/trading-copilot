@@ -175,8 +175,11 @@ def _sid_from_article(article: dict) -> tuple[str, str]:
 def test_build() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('52R-D2P', 'AstraEdge 52R-D2P'):
-        return _fail(f'expected 52R-D2P pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('52R-D2P', 'AstraEdge 52R-D2P'),
+        ('52R-D2', 'AstraEdge 52R-D2'),
+    }:
+        return _fail(f'expected 52R-D2P pair or successor 52R-D2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T0_BUILD_PAIR_OK')
     return 0
 

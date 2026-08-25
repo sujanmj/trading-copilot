@@ -128,8 +128,15 @@ ALLOWED_SUCCESSOR_D2P = {
     'scripts/validate_source_time_provenance_52r_d2p.py',
 }
 
+ALLOWED_SUCCESSOR_D2 = {
+    'backend/news/event_freshness_projection.py',
+    'backend/config/build_info.py',
+    'scripts/test_event_age_freshness_52r_d2.py',
+    'scripts/validate_event_age_freshness_52r_d2.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
-    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P
+    INTENDED_PRODUCTION | ALLOWED_HISTORICAL_REGRESSIONS | ALLOWED_B2N_TESTS | ALLOWED_SUCCESSOR_B2 | ALLOWED_SUCCESSOR_C1A | ALLOWED_SUCCESSOR_C1B | ALLOWED_SUCCESSOR_D | ALLOWED_SUCCESSOR_D2P | ALLOWED_SUCCESSOR_D2
 )
 
 FORBIDDEN_IMPORT_NEEDLES = (
@@ -285,6 +292,7 @@ def main() -> int:
         ('52R-C1B', 'AstraEdge 52R-C1B'),
         ('52R-D', 'AstraEdge 52R-D'),
         ('52R-D2P', 'AstraEdge 52R-D2P'),
+        ('52R-D2', 'AstraEdge 52R-D2'),
     }:
         return _fail(f'build must be exact 52R-B2N pair or successor 52R-B2/52R-C1A/52R-C1B/52R-D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 

@@ -233,8 +233,9 @@ def test_build_identity() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('52R-D', 'AstraEdge 52R-D'),
         ('52R-D2P', 'AstraEdge 52R-D2P'),
+        ('52R-D2', 'AstraEdge 52R-D2'),
     }:
-        return _fail(f'expected 52R-D / AstraEdge 52R-D or successor 52R-D2P / AstraEdge 52R-D2P, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'expected 52R-D / AstraEdge 52R-D or successor 52R-D2P / AstraEdge 52R-D2P or 52R-D2 / AstraEdge 52R-D2, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('52R_D_BUILD_PAIR_OK')
     return 0
 
