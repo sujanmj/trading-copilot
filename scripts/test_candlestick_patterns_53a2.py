@@ -98,8 +98,11 @@ def _ok_tags(result, expected: list[str], marker: str) -> int | None:
 def test_t1_build() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53A2', 'AstraEdge 53A2'):
-        return _fail(f'expected 53A2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53A2', 'AstraEdge 53A2'),
+        ('53B', 'AstraEdge 53B'),
+    }:
+        return _fail(f'expected 53A2 or successor 53B pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
     return 0
 

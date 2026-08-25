@@ -80,8 +80,9 @@ def test_t1_build() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('53A', 'AstraEdge 53A'),
         ('53A2', 'AstraEdge 53A2'),
+        ('53B', 'AstraEdge 53B'),
     }:
-        return _fail(f'expected 53A pair or successor 53A2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'expected 53A or successor 53A2/53B pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
     return 0
 
