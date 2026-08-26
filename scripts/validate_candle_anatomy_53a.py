@@ -20,7 +20,15 @@ COMMITTED_53A2_HEAD = '2a2414010aed70e2a34741534d6b66b6300b593c'
 COMMITTED_53A2_TREE = 'd5876f3c78e2c7f0d29f2ec20721475ab11b91a5'
 COMMITTED_53B_HEAD = '7df88790ad9ada1a81b0f5613caafb05a0c217d5'
 COMMITTED_53B_TREE = '91f784a344655723cbc5f322703029f67aa0f544'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53A_HEAD, COMMITTED_53A2_HEAD, COMMITTED_53B_HEAD})
+COMMITTED_53C_HEAD = 'd8419ef6296928fa7ffe6cbaae3916c77435fefa'
+COMMITTED_53C_TREE = '8b3008e6db85ead22dda60029775bfd1448a77d1'
+ALLOWED_HEADS = frozenset({
+    CANONICAL_HEAD,
+    COMMITTED_53A_HEAD,
+    COMMITTED_53A2_HEAD,
+    COMMITTED_53B_HEAD,
+    COMMITTED_53C_HEAD,
+})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -102,6 +110,8 @@ ALLOWED_REPORTS = {
     'phase53b_diff.txt',
     'phase53c_review.txt',
     'phase53c_diff.txt',
+    'phase53d_review.txt',
+    'phase53d_diff.txt',
 }
 
 ALLOWED_SUCCESSOR_53A2 = {
@@ -123,6 +133,12 @@ ALLOWED_SUCCESSOR_53C = {
     'scripts/validate_key_levels_supply_demand_53c.py',
 }
 
+ALLOWED_SUCCESSOR_53D = {
+    'backend/analysis/volume_vwap.py',
+    'scripts/test_volume_vwap_53d.py',
+    'scripts/validate_volume_vwap_53d.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
     INTENDED_PRODUCTION
     | NEW_SOURCE
@@ -130,6 +146,7 @@ ALLOWED_CHANGED_SOURCE = (
     | ALLOWED_SUCCESSOR_53A2
     | ALLOWED_SUCCESSOR_53B
     | ALLOWED_SUCCESSOR_53C
+    | ALLOWED_SUCCESSOR_53D
 )
 
 NETWORK_MODULES = frozenset({
@@ -249,6 +266,8 @@ def _validate_changed_file_scope() -> str | None:
         return f'committed 53A2 HEAD tree must remain {COMMITTED_53A2_TREE}'
     if actual_head == COMMITTED_53B_HEAD and actual_tree != COMMITTED_53B_TREE:
         return f'committed 53B HEAD tree must remain {COMMITTED_53B_TREE}'
+    if actual_head == COMMITTED_53C_HEAD and actual_tree != COMMITTED_53C_TREE:
+        return f'committed 53C HEAD tree must remain {COMMITTED_53C_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -344,9 +363,10 @@ def main() -> int:
         ('53A2', 'AstraEdge 53A2'),
         ('53B', 'AstraEdge 53B'),
         ('53C', 'AstraEdge 53C'),
+        ('53D', 'AstraEdge 53D'),
     }:
         return _fail(
-            f'build must be exact 53A or successor 53A2/53B/53C pair, '
+            f'build must be exact 53A or successor 53A2/53B/53C/53D pair, '
             f'got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     print('V1_BUILD_IDENTITY_OK')

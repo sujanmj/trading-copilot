@@ -166,8 +166,9 @@ def test_t1_build_identity() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('53B', 'AstraEdge 53B'),
         ('53C', 'AstraEdge 53C'),
+        ('53D', 'AstraEdge 53D'),
     }:
-        return _fail(f'T1 expected 53B or successor 53C pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'T1 expected 53B or successor 53C/53D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
     return 0
 

@@ -82,8 +82,9 @@ def test_t1_build() -> int:
         ('53A2', 'AstraEdge 53A2'),
         ('53B', 'AstraEdge 53B'),
         ('53C', 'AstraEdge 53C'),
+        ('53D', 'AstraEdge 53D'),
     }:
-        return _fail(f'expected 53A or successor 53A2/53B/53C pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'expected 53A or successor 53A2/53B/53C/53D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
     return 0
 
