@@ -194,8 +194,11 @@ def _actual_frames() -> list[dict]:
 def test_t1_t10_build_reuse_and_cardinality() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53E', 'AstraEdge 53E'):
-        return _fail(f'T1 exact build mismatch: {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53E', 'AstraEdge 53E'),
+        ('53E2', 'AstraEdge 53E2'),
+    }:
+        return _fail(f'T1 expected 53E or successor 53E2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
 
     source = MODULE_PATH.read_text(encoding='utf-8')

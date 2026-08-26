@@ -17,7 +17,9 @@ CANONICAL_HEAD = 'd8419ef6296928fa7ffe6cbaae3916c77435fefa'
 CANONICAL_TREE = '8b3008e6db85ead22dda60029775bfd1448a77d1'
 COMMITTED_53D_HEAD = 'f500a9413103a3bca7c5aaaeed9062472fa913c4'
 COMMITTED_53D_TREE = 'ca5201a4c2283f5fd553119b2de512c6378efe3b'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53D_HEAD})
+COMMITTED_53E_HEAD = 'eeaeb222fdc02a29bdda76c03de0f56d85bb3ceb'
+COMMITTED_53E_TREE = '6962e5556de1f08a826f1c4eb8b8bb63ece0fd75'
+ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53D_HEAD, COMMITTED_53E_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -41,6 +43,9 @@ WATCHED_PATHS = (
     PROJECT_ROOT / 'scripts' / 'validate_candle_anatomy_53a.py',
     PROJECT_ROOT / 'scripts' / 'test_event_age_freshness_52r_d2.py',
     PROJECT_ROOT / 'scripts' / 'validate_event_age_freshness_52r_d2.py',
+    PROJECT_ROOT / 'backend' / 'analysis' / 'premarket_structure.py',
+    PROJECT_ROOT / 'scripts' / 'test_premarket_structure_53e2.py',
+    PROJECT_ROOT / 'scripts' / 'validate_premarket_structure_53e2.py',
 )
 
 PROTECTED_PRODUCTION = {
@@ -85,6 +90,8 @@ ALLOWED_REPORTS = {
     'phase53d_diff.txt',
     'phase53e_review.txt',
     'phase53e_diff.txt',
+    'phase53e2_review.txt',
+    'phase53e2_diff.txt',
 }
 
 ALLOWED_SUCCESSOR_53E = {
@@ -110,6 +117,31 @@ SUCCESSOR_53E_CHANGED_SOURCE = (
     | ALLOWED_HISTORICAL_REGRESSIONS
     | ALLOWED_SUCCESSOR_53E
 )
+
+ALLOWED_SUCCESSOR_53E2 = {
+    'backend/analysis/premarket_structure.py',
+    'scripts/test_premarket_structure_53e2.py',
+    'scripts/validate_premarket_structure_53e2.py',
+}
+
+SUCCESSOR_53E2_COMPATIBILITY = {
+    'scripts/test_multi_timeframe_53e.py',
+    'scripts/validate_multi_timeframe_53e.py',
+    'scripts/test_volume_vwap_53d.py',
+    'scripts/validate_volume_vwap_53d.py',
+    *ALLOWED_HISTORICAL_REGRESSIONS,
+}
+
+SUCCESSOR_53E2_CHANGED_SOURCE = (
+    {'backend/config/build_info.py'}
+    | SUCCESSOR_53E2_COMPATIBILITY
+    | ALLOWED_SUCCESSOR_53E2
+)
+
+SUCCESSOR_53E2_PRODUCTION = {
+    'backend/config/build_info.py',
+    'backend/analysis/premarket_structure.py',
+}
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -249,6 +281,8 @@ def _validate_changed_file_scope() -> str | None:
         return f'HEAD tree must remain {CANONICAL_TREE}, got {actual_tree}'
     if actual_head == COMMITTED_53D_HEAD and actual_tree != COMMITTED_53D_TREE:
         return f'committed 53D HEAD tree must remain {COMMITTED_53D_TREE}, got {actual_tree}'
+    if actual_head == COMMITTED_53E_HEAD and actual_tree != COMMITTED_53E_TREE:
+        return f'committed 53E HEAD tree must remain {COMMITTED_53E_TREE}, got {actual_tree}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -287,11 +321,12 @@ def _validate_changed_file_scope() -> str | None:
     if protected_hits:
         return f'protected production files changed: {sorted(protected_hits)}'
 
-    expected_source_scope = (
-        ALLOWED_CHANGED_SOURCE
-        if actual_head == CANONICAL_HEAD
-        else SUCCESSOR_53E_CHANGED_SOURCE
-    )
+    if actual_head == CANONICAL_HEAD:
+        expected_source_scope = ALLOWED_CHANGED_SOURCE
+    elif actual_head == COMMITTED_53D_HEAD:
+        expected_source_scope = SUCCESSOR_53E_CHANGED_SOURCE
+    else:
+        expected_source_scope = SUCCESSOR_53E2_CHANGED_SOURCE
     if actual_source_scope != expected_source_scope:
         missing = sorted(expected_source_scope - actual_source_scope)
         unexpected = sorted(actual_source_scope - expected_source_scope)
@@ -306,7 +341,7 @@ def _validate_changed_file_scope() -> str | None:
                 f'{sorted(ALLOWED_HISTORICAL_REGRESSIONS - tracked_changed)}'
             )
         expected_production = INTENDED_PRODUCTION
-    else:
+    elif actual_head == COMMITTED_53D_HEAD:
         if not NEW_SOURCE <= tracked_now:
             return f'missing committed 53D source files: {sorted(NEW_SOURCE - tracked_now)}'
         if not ALLOWED_SUCCESSOR_53E <= relevant_untracked:
@@ -314,6 +349,17 @@ def _validate_changed_file_scope() -> str | None:
         if 'backend/analysis/volume_vwap.py' in tracked_changed:
             return '53D volume_vwap.py must remain unchanged for 53E'
         expected_production = SUCCESSOR_53E_PRODUCTION
+    else:
+        committed_predecessors = NEW_SOURCE | ALLOWED_SUCCESSOR_53E
+        if not committed_predecessors <= tracked_now:
+            return f'missing committed predecessor files: {sorted(committed_predecessors - tracked_now)}'
+        if not ALLOWED_SUCCESSOR_53E2 <= relevant_untracked:
+            return f'missing required 53E2 successor files: {sorted(ALLOWED_SUCCESSOR_53E2 - relevant_untracked)}'
+        if 'backend/analysis/volume_vwap.py' in tracked_changed:
+            return '53D volume_vwap.py must remain unchanged for 53E2'
+        if 'backend/analysis/multi_timeframe.py' in tracked_changed:
+            return '53E multi_timeframe.py must remain unchanged for 53E2'
+        expected_production = SUCCESSOR_53E2_PRODUCTION
 
     production_changes = {
         path for path in actual_source_scope
@@ -364,8 +410,9 @@ def main() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('53D', 'AstraEdge 53D'),
         ('53E', 'AstraEdge 53E'),
+        ('53E2', 'AstraEdge 53E2'),
     }:
-        return _fail(f'build must be exact 53D or successor 53E pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'build must be exact 53D or successor 53E/53E2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     print('V1_BUILD_IDENTITY_OK')
 
     module_path = PROJECT_ROOT / 'backend' / 'analysis' / 'volume_vwap.py'
@@ -570,6 +617,7 @@ def main() -> int:
     allowed_final_states = {
         (CANONICAL_HEAD, CANONICAL_TREE),
         (COMMITTED_53D_HEAD, COMMITTED_53D_TREE),
+        (COMMITTED_53E_HEAD, COMMITTED_53E_TREE),
     }
     if (final_head, final_tree) not in allowed_final_states:
         return _fail(f'final HEAD/tree changed: {final_head} / {final_tree}')

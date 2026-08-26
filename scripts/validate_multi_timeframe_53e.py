@@ -15,6 +15,9 @@ from unittest.mock import patch
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CANONICAL_HEAD = 'f500a9413103a3bca7c5aaaeed9062472fa913c4'
 CANONICAL_TREE = 'ca5201a4c2283f5fd553119b2de512c6378efe3b'
+COMMITTED_53E_HEAD = 'eeaeb222fdc02a29bdda76c03de0f56d85bb3ceb'
+COMMITTED_53E_TREE = '6962e5556de1f08a826f1c4eb8b8bb63ece0fd75'
+ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53E_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -41,6 +44,9 @@ WATCHED_PATHS = (
     PROJECT_ROOT / 'scripts' / 'validate_candle_anatomy_53a.py',
     PROJECT_ROOT / 'scripts' / 'test_event_age_freshness_52r_d2.py',
     PROJECT_ROOT / 'scripts' / 'validate_event_age_freshness_52r_d2.py',
+    PROJECT_ROOT / 'backend' / 'analysis' / 'premarket_structure.py',
+    PROJECT_ROOT / 'scripts' / 'test_premarket_structure_53e2.py',
+    PROJECT_ROOT / 'scripts' / 'validate_premarket_structure_53e2.py',
 )
 
 PROTECTED_PRODUCTION = {
@@ -85,8 +91,36 @@ ALLOWED_HISTORICAL_REGRESSIONS = {
     'scripts/validate_event_age_freshness_52r_d2.py',
 }
 
-ALLOWED_REPORTS = {'phase53e_review.txt', 'phase53e_diff.txt'}
+ALLOWED_REPORTS = {
+    'phase53e_review.txt',
+    'phase53e_diff.txt',
+    'phase53e2_review.txt',
+    'phase53e2_diff.txt',
+}
 ALLOWED_CHANGED_SOURCE = INTENDED_PRODUCTION | NEW_SOURCE | ALLOWED_HISTORICAL_REGRESSIONS
+
+ALLOWED_SUCCESSOR_53E2 = {
+    'backend/analysis/premarket_structure.py',
+    'scripts/test_premarket_structure_53e2.py',
+    'scripts/validate_premarket_structure_53e2.py',
+}
+
+SUCCESSOR_53E2_COMPATIBILITY = {
+    'scripts/test_multi_timeframe_53e.py',
+    'scripts/validate_multi_timeframe_53e.py',
+    *ALLOWED_HISTORICAL_REGRESSIONS,
+}
+
+SUCCESSOR_53E2_CHANGED_SOURCE = (
+    {'backend/config/build_info.py'}
+    | SUCCESSOR_53E2_COMPATIBILITY
+    | ALLOWED_SUCCESSOR_53E2
+)
+
+SUCCESSOR_53E2_PRODUCTION = {
+    'backend/config/build_info.py',
+    'backend/analysis/premarket_structure.py',
+}
 
 NETWORK_MODULES = frozenset({
     'requests', 'httpx', 'aiohttp', 'urllib.request', 'selenium', 'playwright', 'feedparser',
@@ -229,10 +263,15 @@ def _emitted_strings(value) -> list[str]:
 def _validate_changed_file_scope() -> str | None:
     actual_head = _git_value('rev-parse', 'HEAD')
     actual_tree = _git_value('rev-parse', 'HEAD^{tree}')
-    if actual_head != CANONICAL_HEAD:
-        return f'HEAD must remain canonical 53E baseline {CANONICAL_HEAD}, got {actual_head}'
-    if actual_tree != CANONICAL_TREE:
+    if actual_head not in ALLOWED_HEADS:
+        return (
+            f'HEAD must remain canonical 53E predecessor {CANONICAL_HEAD} '
+            f'or committed 53E HEAD {COMMITTED_53E_HEAD}, got {actual_head}'
+        )
+    if actual_head == CANONICAL_HEAD and actual_tree != CANONICAL_TREE:
         return f'HEAD tree must remain {CANONICAL_TREE}, got {actual_tree}'
+    if actual_head == COMMITTED_53E_HEAD and actual_tree != COMMITTED_53E_TREE:
+        return f'committed 53E HEAD tree must remain {COMMITTED_53E_TREE}, got {actual_tree}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -271,24 +310,39 @@ def _validate_changed_file_scope() -> str | None:
     if protected_hits:
         return f'protected production files changed: {sorted(protected_hits)}'
 
-    if actual_source_scope != ALLOWED_CHANGED_SOURCE:
-        missing = sorted(ALLOWED_CHANGED_SOURCE - actual_source_scope)
-        unexpected = sorted(actual_source_scope - ALLOWED_CHANGED_SOURCE)
+    expected_source_scope = (
+        ALLOWED_CHANGED_SOURCE
+        if actual_head == CANONICAL_HEAD
+        else SUCCESSOR_53E2_CHANGED_SOURCE
+    )
+    if actual_source_scope != expected_source_scope:
+        missing = sorted(expected_source_scope - actual_source_scope)
+        unexpected = sorted(actual_source_scope - expected_source_scope)
         return f'changed source scope mismatch: missing={missing} unexpected={unexpected}'
 
-    if not NEW_SOURCE <= relevant_untracked:
-        return f'53E source files must be new and untracked: {sorted(NEW_SOURCE - relevant_untracked)}'
-    if not ALLOWED_HISTORICAL_REGRESSIONS <= tracked_changed:
-        return (
-            'missing narrow predecessor compatibility changes: '
-            f'{sorted(ALLOWED_HISTORICAL_REGRESSIONS - tracked_changed)}'
-        )
+    if actual_head == CANONICAL_HEAD:
+        if not NEW_SOURCE <= relevant_untracked:
+            return f'53E source files must be new and untracked: {sorted(NEW_SOURCE - relevant_untracked)}'
+        if not ALLOWED_HISTORICAL_REGRESSIONS <= tracked_changed:
+            return (
+                'missing narrow predecessor compatibility changes: '
+                f'{sorted(ALLOWED_HISTORICAL_REGRESSIONS - tracked_changed)}'
+            )
+        expected_production = INTENDED_PRODUCTION
+    else:
+        if not NEW_SOURCE <= tracked_now:
+            return f'missing committed 53E source files: {sorted(NEW_SOURCE - tracked_now)}'
+        if not ALLOWED_SUCCESSOR_53E2 <= relevant_untracked:
+            return f'missing required 53E2 successor files: {sorted(ALLOWED_SUCCESSOR_53E2 - relevant_untracked)}'
+        if 'backend/analysis/multi_timeframe.py' in tracked_changed:
+            return '53E multi_timeframe.py must remain unchanged for 53E2'
+        expected_production = SUCCESSOR_53E2_PRODUCTION
 
     production_changes = {
         path for path in actual_source_scope
         if path.startswith('backend/')
     }
-    if production_changes != INTENDED_PRODUCTION:
+    if production_changes != expected_production:
         return f'production scope must be exact: {sorted(production_changes)}'
 
     print('E53_CHANGED_FILE_SCOPE_OK')
@@ -358,8 +412,11 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53E', 'AstraEdge 53E'):
-        return _fail(f'build must be exact 53E / AstraEdge 53E, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53E', 'AstraEdge 53E'),
+        ('53E2', 'AstraEdge 53E2'),
+    }:
+        return _fail(f'build must be exact 53E or successor 53E2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     print('V1_BUILD_IDENTITY_OK')
 
     module_path = PROJECT_ROOT / 'backend' / 'analysis' / 'multi_timeframe.py'
@@ -577,7 +634,11 @@ def main() -> int:
         return _fail(f'nothing may be staged: {sorted(staged)}')
     if data_after:
         return _fail(f'repository data/ is dirty: {sorted(data_after)}')
-    if (final_head, final_tree) != (CANONICAL_HEAD, CANONICAL_TREE):
+    allowed_final_states = {
+        (CANONICAL_HEAD, CANONICAL_TREE),
+        (COMMITTED_53E_HEAD, COMMITTED_53E_TREE),
+    }
+    if (final_head, final_tree) not in allowed_final_states:
         return _fail(f'final HEAD/tree changed: {final_head} / {final_tree}')
 
     print('PHASE_53E_VALIDATION_PASS')
