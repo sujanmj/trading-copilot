@@ -16,7 +16,9 @@ CANONICAL_HEAD = '7df88790ad9ada1a81b0f5613caafb05a0c217d5'
 CANONICAL_TREE = '91f784a344655723cbc5f322703029f67aa0f544'
 COMMITTED_53C_HEAD = 'd8419ef6296928fa7ffe6cbaae3916c77435fefa'
 COMMITTED_53C_TREE = '8b3008e6db85ead22dda60029775bfd1448a77d1'
-ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53C_HEAD})
+COMMITTED_53D_HEAD = 'f500a9413103a3bca7c5aaaeed9062472fa913c4'
+COMMITTED_53D_TREE = 'ca5201a4c2283f5fd553119b2de512c6378efe3b'
+ALLOWED_HEADS = frozenset({CANONICAL_HEAD, COMMITTED_53C_HEAD, COMMITTED_53D_HEAD})
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -79,6 +81,8 @@ ALLOWED_REPORTS = {
     'phase53c_diff.txt',
     'phase53d_review.txt',
     'phase53d_diff.txt',
+    'phase53e_review.txt',
+    'phase53e_diff.txt',
 }
 
 ALLOWED_SUCCESSOR_53D = {
@@ -92,11 +96,23 @@ SUCCESSOR_53D_PRODUCTION = {
     'backend/analysis/volume_vwap.py',
 }
 
+ALLOWED_SUCCESSOR_53E = {
+    'backend/analysis/multi_timeframe.py',
+    'scripts/test_multi_timeframe_53e.py',
+    'scripts/validate_multi_timeframe_53e.py',
+}
+
+SUCCESSOR_53E_PRODUCTION = {
+    'backend/config/build_info.py',
+    'backend/analysis/multi_timeframe.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
     INTENDED_PRODUCTION
     | NEW_SOURCE
     | ALLOWED_HISTORICAL_REGRESSIONS
     | ALLOWED_SUCCESSOR_53D
+    | ALLOWED_SUCCESSOR_53E
 )
 
 NETWORK_MODULES = frozenset({
@@ -231,6 +247,8 @@ def _validate_changed_file_scope() -> str | None:
         return f'HEAD tree must remain {CANONICAL_TREE}, got {actual_tree}'
     if actual_head == COMMITTED_53C_HEAD and actual_tree != COMMITTED_53C_TREE:
         return f'committed 53C HEAD tree must remain {COMMITTED_53C_TREE}, got {actual_tree}'
+    if actual_head == COMMITTED_53D_HEAD and actual_tree != COMMITTED_53D_TREE:
+        return f'committed 53D HEAD tree must remain {COMMITTED_53D_TREE}, got {actual_tree}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -280,7 +298,7 @@ def _validate_changed_file_scope() -> str | None:
             if path not in relevant_untracked and path not in tracked_changed:
                 return f'missing required 53C file: {path}'
         expected_production = INTENDED_PRODUCTION
-    else:
+    elif actual_head == COMMITTED_53C_HEAD:
         for path in NEW_SOURCE:
             if path not in tracked_now:
                 return f'missing committed 53C file: {path}'
@@ -290,6 +308,18 @@ def _validate_changed_file_scope() -> str | None:
         if 'backend/analysis/key_levels_supply_demand.py' in tracked_changed:
             return '53C key_levels_supply_demand.py must remain unchanged for 53D'
         expected_production = SUCCESSOR_53D_PRODUCTION
+    else:
+        for path in NEW_SOURCE | ALLOWED_SUCCESSOR_53D:
+            if path not in tracked_now:
+                return f'missing committed predecessor file: {path}'
+        for path in ALLOWED_SUCCESSOR_53E:
+            if path not in relevant_untracked and path not in tracked_changed:
+                return f'missing required 53E successor file: {path}'
+        if 'backend/analysis/key_levels_supply_demand.py' in tracked_changed:
+            return '53C key_levels_supply_demand.py must remain unchanged for 53E'
+        if 'backend/analysis/volume_vwap.py' in tracked_changed:
+            return '53D volume_vwap.py must remain unchanged for 53E'
+        expected_production = SUCCESSOR_53E_PRODUCTION
 
     production_changes = {
         path for path in actual_source_scope
@@ -350,8 +380,9 @@ def main() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('53C', 'AstraEdge 53C'),
         ('53D', 'AstraEdge 53D'),
+        ('53E', 'AstraEdge 53E'),
     }:
-        return _fail(f'build must be exact 53C or successor 53D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'build must be exact 53C or successor 53D/53E pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     print('V1_BUILD_IDENTITY_OK')
 
     module_path = PROJECT_ROOT / 'backend' / 'analysis' / 'key_levels_supply_demand.py'

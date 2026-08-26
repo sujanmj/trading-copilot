@@ -102,8 +102,11 @@ def _emitted_strings(value) -> list[str]:
 def test_t1_t17_build_reuse_validation() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53D', 'AstraEdge 53D'):
-        return _fail(f'T1 exact build mismatch: {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53D', 'AstraEdge 53D'),
+        ('53E', 'AstraEdge 53E'),
+    }:
+        return _fail(f'T1 expected 53D or successor 53E pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
 
     source = MODULE_PATH.read_text(encoding='utf-8')
@@ -550,6 +553,8 @@ def test_t72_t77_lookahead_and_successor_scope() -> int:
     _pass('T76')
 
     expected_historical = {
+        'scripts/test_volume_vwap_53d.py',
+        'scripts/validate_volume_vwap_53d.py',
         'scripts/test_key_levels_supply_demand_53c.py',
         'scripts/validate_key_levels_supply_demand_53c.py',
         'scripts/test_price_action_structure_53b.py',

@@ -24,6 +24,8 @@ COMMITTED_53B_HEAD = '7df88790ad9ada1a81b0f5613caafb05a0c217d5'
 COMMITTED_53B_TREE = '91f784a344655723cbc5f322703029f67aa0f544'
 COMMITTED_53C_HEAD = 'd8419ef6296928fa7ffe6cbaae3916c77435fefa'
 COMMITTED_53C_TREE = '8b3008e6db85ead22dda60029775bfd1448a77d1'
+COMMITTED_53D_HEAD = 'f500a9413103a3bca7c5aaaeed9062472fa913c4'
+COMMITTED_53D_TREE = 'ca5201a4c2283f5fd553119b2de512c6378efe3b'
 ALLOWED_HEADS = frozenset({
     CANONICAL_HEAD,
     COMMITTED_D2_HEAD,
@@ -31,6 +33,7 @@ ALLOWED_HEADS = frozenset({
     COMMITTED_53A2_HEAD,
     COMMITTED_53B_HEAD,
     COMMITTED_53C_HEAD,
+    COMMITTED_53D_HEAD,
 })
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -113,6 +116,8 @@ ALLOWED_REPORTS = {
     'phase53c_diff.txt',
     'phase53d_review.txt',
     'phase53d_diff.txt',
+    'phase53e_review.txt',
+    'phase53e_diff.txt',
 }
 
 ALLOWED_SUCCESSOR_53A = {
@@ -148,6 +153,12 @@ ALLOWED_SUCCESSOR_53D = {
     'scripts/validate_volume_vwap_53d.py',
 }
 
+ALLOWED_SUCCESSOR_53E = {
+    'backend/analysis/multi_timeframe.py',
+    'scripts/test_multi_timeframe_53e.py',
+    'scripts/validate_multi_timeframe_53e.py',
+}
+
 ALLOWED_CHANGED_SOURCE = (
     INTENDED_PRODUCTION
     | NEW_SOURCE
@@ -157,6 +168,7 @@ ALLOWED_CHANGED_SOURCE = (
     | ALLOWED_SUCCESSOR_53B
     | ALLOWED_SUCCESSOR_53C
     | ALLOWED_SUCCESSOR_53D
+    | ALLOWED_SUCCESSOR_53E
 )
 
 NETWORK_MODULES = frozenset({
@@ -275,6 +287,8 @@ def _validate_changed_file_scope() -> str | None:
         return f'committed 53B HEAD tree must remain {COMMITTED_53B_TREE}'
     if actual_head == COMMITTED_53C_HEAD and actual_tree != COMMITTED_53C_TREE:
         return f'committed 53C HEAD tree must remain {COMMITTED_53C_TREE}'
+    if actual_head == COMMITTED_53D_HEAD and actual_tree != COMMITTED_53D_TREE:
+        return f'committed 53D HEAD tree must remain {COMMITTED_53D_TREE}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -368,10 +382,11 @@ def main() -> int:
         ('53B', 'AstraEdge 53B'),
         ('53C', 'AstraEdge 53C'),
         ('53D', 'AstraEdge 53D'),
+        ('53E', 'AstraEdge 53E'),
     }:
         return _fail(
             f'build must be exact 52R-D2 / AstraEdge 52R-D2 or successor '
-            f'53A/53A2/53B/53C/53D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
+            f'53A/53A2/53B/53C/53D/53E pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}'
         )
     print('V1_BUILD_IDENTITY_OK')
 

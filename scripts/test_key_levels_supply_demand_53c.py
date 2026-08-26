@@ -239,8 +239,9 @@ def test_t1_t8_build_reuse_and_failures() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('53C', 'AstraEdge 53C'),
         ('53D', 'AstraEdge 53D'),
+        ('53E', 'AstraEdge 53E'),
     }:
-        return _fail(f'T1 expected 53C or successor 53D pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'T1 expected 53C or successor 53D/53E pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
 
     import backend.analysis.key_levels_supply_demand as module
