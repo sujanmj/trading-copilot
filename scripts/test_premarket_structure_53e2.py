@@ -167,7 +167,10 @@ def _actual_snapshot() -> dict:
 def test_t1_t18_build_dependencies_and_outer_validation() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53E2', 'AstraEdge 53E2'):
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53E2', 'AstraEdge 53E2'),
+        ('53F', 'AstraEdge 53F'),
+    }:
         return _fail(f'T1 exact build mismatch: {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
 

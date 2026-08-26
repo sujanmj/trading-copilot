@@ -50,7 +50,35 @@ NEW_SOURCE = {
     'scripts/validate_premarket_structure_53e2.py',
 }
 
-ALLOWED_REPORTS = {'phase53e2_review.txt', 'phase53e2_diff.txt'}
+ALLOWED_REPORTS = {
+    'phase53e2_review.txt',
+    'phase53e2_diff.txt',
+    'phase53f_review.txt',
+    'phase53f_diff.txt',
+}
+
+COMMITTED_53E2_HEAD = 'e43be3ca8b3c2036fb8a7a85078c9e6911289f25'
+COMMITTED_53E2_TREE = '66ec9e271d3851f78d593a11fa542d30cccdbcbe'
+
+ALLOWED_SUCCESSOR_53F = {
+    'backend/analysis/historical_setup_evidence.py',
+    'scripts/test_historical_setup_evidence_53f.py',
+    'scripts/validate_historical_setup_evidence_53f.py',
+}
+
+SUCCESSOR_53F_TRACKED_CHANGES = (
+    {'backend/config/build_info.py'}
+    | COMPATIBILITY_FILES
+    | {
+        'scripts/test_premarket_structure_53e2.py',
+        'scripts/validate_premarket_structure_53e2.py',
+    }
+)
+
+SUCCESSOR_53F_PRODUCTION = {
+    'backend/config/build_info.py',
+    'backend/analysis/historical_setup_evidence.py',
+}
 
 PROTECTED_PRODUCTION = {
     'backend/analysis/candle_anatomy.py',
@@ -73,6 +101,7 @@ PROTECTED_PREFIXES = (
 WATCHED_RELATIVE = (
     EXPECTED_TRACKED_CHANGES
     | NEW_SOURCE
+    | ALLOWED_SUCCESSOR_53F
     | ALLOWED_REPORTS
     | PROTECTED_PRODUCTION
 )
@@ -280,22 +309,37 @@ def _analyze_with_source(snapshot: dict, source: dict | None = None) -> tuple[di
 def _validate_repository_scope() -> str | None:
     head = _git_value('rev-parse', 'HEAD')
     tree = _git_value('rev-parse', 'HEAD^{tree}')
-    if head != BASELINE_HEAD:
-        return f'HEAD must remain {BASELINE_HEAD}, got {head}'
-    if tree != BASELINE_TREE:
-        return f'HEAD tree must remain {BASELINE_TREE}, got {tree}'
+    successor_mode = head == COMMITTED_53E2_HEAD
+    if successor_mode:
+        if tree != COMMITTED_53E2_TREE:
+            return f'committed 53E2 HEAD tree must remain {COMMITTED_53E2_TREE}, got {tree}'
+    else:
+        if head != BASELINE_HEAD:
+            return f'HEAD must remain {BASELINE_HEAD}, got {head}'
+        if tree != BASELINE_TREE:
+            return f'HEAD tree must remain {BASELINE_TREE}, got {tree}'
 
     tracked = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
     tracked_now = _git_paths('ls-files')
     staged = _git_paths('diff', '--cached', '--name-only')
-    if tracked != EXPECTED_TRACKED_CHANGES:
-        missing = sorted(EXPECTED_TRACKED_CHANGES - tracked)
-        unexpected = sorted(tracked - EXPECTED_TRACKED_CHANGES)
+    expected_tracked = SUCCESSOR_53F_TRACKED_CHANGES if successor_mode else EXPECTED_TRACKED_CHANGES
+    if tracked != expected_tracked:
+        missing = sorted(expected_tracked - tracked)
+        unexpected = sorted(tracked - expected_tracked)
         return f'tracked change scope mismatch: missing={missing} unexpected={unexpected}'
-    if not NEW_SOURCE <= untracked:
-        return f'53E2 source files must be new and untracked: {sorted(NEW_SOURCE - untracked)}'
-    unexpected_untracked = untracked - NEW_SOURCE - ALLOWED_REPORTS
+    if successor_mode:
+        if not NEW_SOURCE <= tracked_now:
+            return f'missing committed 53E2 source files: {sorted(NEW_SOURCE - tracked_now)}'
+        if 'backend/analysis/premarket_structure.py' in tracked:
+            return 'backend/analysis/premarket_structure.py must remain unchanged for 53F'
+        if not ALLOWED_SUCCESSOR_53F <= untracked:
+            return f'missing required 53F successor files: {sorted(ALLOWED_SUCCESSOR_53F - untracked)}'
+        unexpected_untracked = untracked - ALLOWED_SUCCESSOR_53F - ALLOWED_REPORTS
+    else:
+        if not NEW_SOURCE <= untracked:
+            return f'53E2 source files must be new and untracked: {sorted(NEW_SOURCE - untracked)}'
+        unexpected_untracked = untracked - NEW_SOURCE - ALLOWED_REPORTS
     if unexpected_untracked:
         return f'unexpected untracked files: {sorted(unexpected_untracked)}'
     reports_tracked = ALLOWED_REPORTS & tracked_now
@@ -322,7 +366,7 @@ def _validate_repository_scope() -> str | None:
         path for path in tracked | untracked
         if path.startswith('backend/')
     }
-    expected_production = {
+    expected_production = SUCCESSOR_53F_PRODUCTION if successor_mode else {
         'backend/config/build_info.py',
         'backend/analysis/premarket_structure.py',
     }
@@ -607,7 +651,11 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53E2', 'AstraEdge 53E2'):
+    actual_head = _git_value('rev-parse', 'HEAD')
+    allowed_builds = {('53E2', 'AstraEdge 53E2')}
+    if actual_head == COMMITTED_53E2_HEAD:
+        allowed_builds.add(('53F', 'AstraEdge 53F'))
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed_builds:
         return _fail(f'build must be exact 53E2 / AstraEdge 53E2, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 
     source_error = _validate_source_contract()
@@ -702,7 +750,11 @@ def main() -> int:
         return _fail(f'nothing may be staged: {sorted(staged)}')
     if data_after:
         return _fail(f'repository data/ is dirty: {sorted(data_after)}')
-    if (final_head, final_tree) != (BASELINE_HEAD, BASELINE_TREE):
+    allowed_final_states = {
+        (BASELINE_HEAD, BASELINE_TREE),
+        (COMMITTED_53E2_HEAD, COMMITTED_53E2_TREE),
+    }
+    if (final_head, final_tree) not in allowed_final_states:
         return _fail(f'final HEAD/tree changed: {final_head} / {final_tree}')
     print('V9_FINAL_REPOSITORY_STATE_OK')
 

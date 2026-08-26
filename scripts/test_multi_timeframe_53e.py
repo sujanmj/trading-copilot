@@ -197,8 +197,9 @@ def test_t1_t10_build_reuse_and_cardinality() -> int:
     if (BUILD_STAGE, TELEGRAM_BUILD) not in {
         ('53E', 'AstraEdge 53E'),
         ('53E2', 'AstraEdge 53E2'),
+        ('53F', 'AstraEdge 53F'),
     }:
-        return _fail(f'T1 expected 53E or successor 53E2 pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'T1 expected 53E or successor 53E2/53F pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
 
     source = MODULE_PATH.read_text(encoding='utf-8')
