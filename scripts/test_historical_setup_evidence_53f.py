@@ -293,7 +293,10 @@ def _history_item(snapshot: dict, ratio) -> dict:
 def test_t1_t4_build_and_reuse() -> int:
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53F', 'AstraEdge 53F'):
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in {
+        ('53F', 'AstraEdge 53F'),
+        ('53G', 'AstraEdge 53G'),
+    }:
         return _fail(f'T1 exact build mismatch: {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
 

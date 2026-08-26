@@ -24,6 +24,8 @@ COMMITTED_53E_HEAD = 'eeaeb222fdc02a29bdda76c03de0f56d85bb3ceb'
 COMMITTED_53E_TREE = '6962e5556de1f08a826f1c4eb8b8bb63ece0fd75'
 COMMITTED_53E2_HEAD = 'e43be3ca8b3c2036fb8a7a85078c9e6911289f25'
 COMMITTED_53E2_TREE = '66ec9e271d3851f78d593a11fa542d30cccdbcbe'
+COMMITTED_53F_HEAD = '52dc868d5cf1aad2ffb179a5f4ad2ad674eb276f'
+COMMITTED_53F_TREE = 'e17ffb3b7069baee7786ead330795ecfad252054'
 ALLOWED_HEADS = frozenset({
     CANONICAL_HEAD,
     COMMITTED_53B_HEAD,
@@ -31,6 +33,7 @@ ALLOWED_HEADS = frozenset({
     COMMITTED_53D_HEAD,
     COMMITTED_53E_HEAD,
     COMMITTED_53E2_HEAD,
+    COMMITTED_53F_HEAD,
 })
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -104,6 +107,8 @@ ALLOWED_REPORTS = {
     'phase53e2_diff.txt',
     'phase53f_review.txt',
     'phase53f_diff.txt',
+    'phase53g_review.txt',
+    'phase53g_diff.txt',
 }
 
 ALLOWED_SUCCESSOR_53C = {
@@ -186,9 +191,32 @@ SUCCESSOR_53F_CHANGED_SOURCE = (
     | ALLOWED_SUCCESSOR_53F
 )
 
+ALLOWED_SUCCESSOR_53G = {
+    'backend/analysis/full_stack.py',
+    'scripts/test_full_stack_53g.py',
+    'scripts/validate_full_stack_53g.py',
+}
+
+SUCCESSOR_53G_COMPATIBILITY = {
+    'scripts/test_historical_setup_evidence_53f.py',
+    'scripts/validate_historical_setup_evidence_53f.py',
+    *SUCCESSOR_53F_COMPATIBILITY,
+}
+
+SUCCESSOR_53G_CHANGED_SOURCE = (
+    {'backend/config/build_info.py'}
+    | SUCCESSOR_53G_COMPATIBILITY
+    | ALLOWED_SUCCESSOR_53G
+)
+
 SUCCESSOR_53F_PRODUCTION = {
     'backend/config/build_info.py',
     'backend/analysis/historical_setup_evidence.py',
+}
+
+SUCCESSOR_53G_PRODUCTION = {
+    'backend/config/build_info.py',
+    'backend/analysis/full_stack.py',
 }
 
 ALLOWED_CHANGED_SOURCE = (
@@ -340,6 +368,8 @@ def _validate_changed_file_scope() -> str | None:
         return f'committed 53E HEAD tree must remain {COMMITTED_53E_TREE}, got {actual_tree}'
     if actual_head == COMMITTED_53E2_HEAD and actual_tree != COMMITTED_53E2_TREE:
         return f'committed 53E2 HEAD tree must remain {COMMITTED_53E2_TREE}, got {actual_tree}'
+    if actual_head == COMMITTED_53F_HEAD and actual_tree != COMMITTED_53F_TREE:
+        return f'committed 53F HEAD tree must remain {COMMITTED_53F_TREE}, got {actual_tree}'
 
     tracked_changed = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
@@ -398,6 +428,11 @@ def _validate_changed_file_scope() -> str | None:
             missing = sorted(SUCCESSOR_53F_CHANGED_SOURCE - actual_source_scope)
             unexpected = sorted(actual_source_scope - SUCCESSOR_53F_CHANGED_SOURCE)
             return f'53F changed source scope mismatch: missing={missing} unexpected={unexpected}'
+    elif actual_head == COMMITTED_53F_HEAD:
+        if actual_source_scope != SUCCESSOR_53G_CHANGED_SOURCE:
+            missing = sorted(SUCCESSOR_53G_CHANGED_SOURCE - actual_source_scope)
+            unexpected = sorted(actual_source_scope - SUCCESSOR_53G_CHANGED_SOURCE)
+            return f'53G changed source scope mismatch: missing={missing} unexpected={unexpected}'
     else:
         unexpected = actual_source_scope - ALLOWED_CHANGED_SOURCE
         if unexpected:
@@ -464,7 +499,7 @@ def _validate_changed_file_scope() -> str | None:
             if path in tracked_changed:
                 return f'predecessor production must remain unchanged for 53E2: {path}'
         expected_production = SUCCESSOR_53E2_PRODUCTION
-    else:
+    elif actual_head == COMMITTED_53E2_HEAD:
         committed_predecessors = (
             NEW_SOURCE | ALLOWED_SUCCESSOR_53C | ALLOWED_SUCCESSOR_53D | ALLOWED_SUCCESSOR_53E | ALLOWED_SUCCESSOR_53E2
         )
@@ -482,6 +517,32 @@ def _validate_changed_file_scope() -> str | None:
             if path in tracked_changed:
                 return f'predecessor production must remain unchanged for 53F: {path}'
         expected_production = SUCCESSOR_53F_PRODUCTION
+    elif actual_head == COMMITTED_53F_HEAD:
+        committed_predecessors = (
+            NEW_SOURCE
+            | ALLOWED_SUCCESSOR_53C
+            | ALLOWED_SUCCESSOR_53D
+            | ALLOWED_SUCCESSOR_53E
+            | ALLOWED_SUCCESSOR_53E2
+            | ALLOWED_SUCCESSOR_53F
+        )
+        if not committed_predecessors <= tracked_now:
+            return f'missing committed predecessor files: {sorted(committed_predecessors - tracked_now)}'
+        if not ALLOWED_SUCCESSOR_53G <= relevant_untracked:
+            return f'missing required 53G successor files: {sorted(ALLOWED_SUCCESSOR_53G - relevant_untracked)}'
+        for path in (
+            'backend/analysis/price_action_structure.py',
+            'backend/analysis/key_levels_supply_demand.py',
+            'backend/analysis/volume_vwap.py',
+            'backend/analysis/multi_timeframe.py',
+            'backend/analysis/premarket_structure.py',
+            'backend/analysis/historical_setup_evidence.py',
+        ):
+            if path in tracked_changed:
+                return f'predecessor production must remain unchanged for 53G: {path}'
+        expected_production = SUCCESSOR_53G_PRODUCTION
+    else:
+        return f'unsupported HEAD for 53B successor scope: {actual_head}'
 
     production_changes = {
         path for path in actual_source_scope
@@ -546,8 +607,9 @@ def main() -> int:
         ('53E', 'AstraEdge 53E'),
         ('53E2', 'AstraEdge 53E2'),
         ('53F', 'AstraEdge 53F'),
+        ('53G', 'AstraEdge 53G'),
     }:
-        return _fail(f'build must be exact 53B or successor 53C/53D/53E/53E2/53F pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'build must be exact 53B or successor 53C/53D/53E/53E2/53F/53G pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     print('V1_BUILD_IDENTITY_OK')
 
     module_path = PROJECT_ROOT / 'backend' / 'analysis' / 'price_action_structure.py'

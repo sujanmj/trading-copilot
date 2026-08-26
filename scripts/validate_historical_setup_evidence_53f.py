@@ -18,6 +18,8 @@ from unittest.mock import patch
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_HEAD = 'e43be3ca8b3c2036fb8a7a85078c9e6911289f25'
 BASELINE_TREE = '66ec9e271d3851f78d593a11fa542d30cccdbcbe'
+COMMITTED_53F_HEAD = '52dc868d5cf1aad2ffb179a5f4ad2ad674eb276f'
+COMMITTED_53F_TREE = 'e17ffb3b7069baee7786ead330795ecfad252054'
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -53,7 +55,31 @@ NEW_SOURCE = {
     'scripts/validate_historical_setup_evidence_53f.py',
 }
 
-ALLOWED_REPORTS = {'phase53f_review.txt', 'phase53f_diff.txt'}
+ALLOWED_SUCCESSOR_53G = {
+    'backend/analysis/full_stack.py',
+    'scripts/test_full_stack_53g.py',
+    'scripts/validate_full_stack_53g.py',
+}
+
+SUCCESSOR_53G_TRACKED_CHANGES = (
+    EXPECTED_TRACKED_CHANGES
+    | {
+        'scripts/test_historical_setup_evidence_53f.py',
+        'scripts/validate_historical_setup_evidence_53f.py',
+    }
+)
+
+SUCCESSOR_53G_PRODUCTION = {
+    'backend/config/build_info.py',
+    'backend/analysis/full_stack.py',
+}
+
+ALLOWED_REPORTS = {
+    'phase53f_review.txt',
+    'phase53f_diff.txt',
+    'phase53g_review.txt',
+    'phase53g_diff.txt',
+}
 
 PROTECTED_PRODUCTION = {
     'backend/analysis/candle_anatomy.py',
@@ -77,6 +103,7 @@ PROTECTED_PREFIXES = (
 WATCHED_RELATIVE = (
     EXPECTED_TRACKED_CHANGES
     | NEW_SOURCE
+    | ALLOWED_SUCCESSOR_53G
     | ALLOWED_REPORTS
     | PROTECTED_PRODUCTION
 )
@@ -299,22 +326,37 @@ def _payload(*, current=None, horizon: str = '1h', history=None) -> dict:
 def _validate_repository_scope() -> str | None:
     head = _git_value('rev-parse', 'HEAD')
     tree = _git_value('rev-parse', 'HEAD^{tree}')
-    if head != BASELINE_HEAD:
-        return f'HEAD must remain {BASELINE_HEAD}, got {head}'
-    if tree != BASELINE_TREE:
-        return f'HEAD tree must remain {BASELINE_TREE}, got {tree}'
+    successor_mode = head == COMMITTED_53F_HEAD
+    if successor_mode:
+        if tree != COMMITTED_53F_TREE:
+            return f'committed 53F HEAD tree must remain {COMMITTED_53F_TREE}, got {tree}'
+    else:
+        if head != BASELINE_HEAD:
+            return f'HEAD must remain {BASELINE_HEAD}, got {head}'
+        if tree != BASELINE_TREE:
+            return f'HEAD tree must remain {BASELINE_TREE}, got {tree}'
 
     tracked = _git_paths('diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD', '--')
     untracked = _git_paths('ls-files', '--others', '--exclude-standard')
     tracked_now = _git_paths('ls-files')
     staged = _git_paths('diff', '--cached', '--name-only')
-    if tracked != EXPECTED_TRACKED_CHANGES:
-        missing = sorted(EXPECTED_TRACKED_CHANGES - tracked)
-        unexpected = sorted(tracked - EXPECTED_TRACKED_CHANGES)
+    expected_tracked = SUCCESSOR_53G_TRACKED_CHANGES if successor_mode else EXPECTED_TRACKED_CHANGES
+    if tracked != expected_tracked:
+        missing = sorted(expected_tracked - tracked)
+        unexpected = sorted(tracked - expected_tracked)
         return f'tracked change scope mismatch: missing={missing} unexpected={unexpected}'
-    if not NEW_SOURCE <= untracked:
-        return f'53F source files must be new and untracked: {sorted(NEW_SOURCE - untracked)}'
-    unexpected_untracked = untracked - NEW_SOURCE - ALLOWED_REPORTS
+    if successor_mode:
+        if not NEW_SOURCE <= tracked_now:
+            return f'missing committed 53F source files: {sorted(NEW_SOURCE - tracked_now)}'
+        if 'backend/analysis/historical_setup_evidence.py' in tracked:
+            return 'backend/analysis/historical_setup_evidence.py must remain unchanged for 53G'
+        if not ALLOWED_SUCCESSOR_53G <= untracked:
+            return f'missing required 53G successor files: {sorted(ALLOWED_SUCCESSOR_53G - untracked)}'
+        unexpected_untracked = untracked - ALLOWED_SUCCESSOR_53G - ALLOWED_REPORTS
+    else:
+        if not NEW_SOURCE <= untracked:
+            return f'53F source files must be new and untracked: {sorted(NEW_SOURCE - untracked)}'
+        unexpected_untracked = untracked - NEW_SOURCE - ALLOWED_REPORTS
     if unexpected_untracked:
         return f'unexpected untracked files: {sorted(unexpected_untracked)}'
     reports_tracked = ALLOWED_REPORTS & tracked_now
@@ -341,7 +383,7 @@ def _validate_repository_scope() -> str | None:
         path for path in tracked | untracked
         if path.startswith('backend/')
     }
-    expected_production = {
+    expected_production = SUCCESSOR_53G_PRODUCTION if successor_mode else {
         'backend/config/build_info.py',
         'backend/analysis/historical_setup_evidence.py',
     }
@@ -746,7 +788,11 @@ def main() -> int:
 
     from backend.config.build_info import BUILD_STAGE, TELEGRAM_BUILD
 
-    if (BUILD_STAGE, TELEGRAM_BUILD) != ('53F', 'AstraEdge 53F'):
+    actual_head = _git_value('rev-parse', 'HEAD')
+    allowed_builds = {('53F', 'AstraEdge 53F')}
+    if actual_head == COMMITTED_53F_HEAD:
+        allowed_builds.add(('53G', 'AstraEdge 53G'))
+    if (BUILD_STAGE, TELEGRAM_BUILD) not in allowed_builds:
         return _fail(f'build must be exact 53F / AstraEdge 53F, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
 
     source_error = _validate_source_contract()
@@ -842,7 +888,11 @@ def main() -> int:
         return _fail(f'nothing may be staged: {sorted(staged)}')
     if data_after:
         return _fail(f'repository data/ is dirty: {sorted(data_after)}')
-    if (final_head, final_tree) != (BASELINE_HEAD, BASELINE_TREE):
+    allowed_final_states = {
+        (BASELINE_HEAD, BASELINE_TREE),
+        (COMMITTED_53F_HEAD, COMMITTED_53F_TREE),
+    }
+    if (final_head, final_tree) not in allowed_final_states:
         return _fail(f'final HEAD/tree changed: {final_head} / {final_tree}')
     print('V9_FINAL_REPOSITORY_STATE_OK')
 

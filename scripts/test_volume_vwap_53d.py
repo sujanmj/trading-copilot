@@ -107,8 +107,9 @@ def test_t1_t17_build_reuse_validation() -> int:
         ('53E', 'AstraEdge 53E'),
         ('53E2', 'AstraEdge 53E2'),
         ('53F', 'AstraEdge 53F'),
+        ('53G', 'AstraEdge 53G'),
     }:
-        return _fail(f'T1 expected 53D or successor 53E/53E2/53F pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
+        return _fail(f'T1 expected 53D or successor 53E/53E2/53F/53G pair, got {BUILD_STAGE!r} / {TELEGRAM_BUILD!r}')
     _pass('T1')
 
     source = MODULE_PATH.read_text(encoding='utf-8')
@@ -574,8 +575,17 @@ def test_t72_t77_lookahead_and_successor_scope() -> int:
         'scripts/test_premarket_structure_53e2.py',
         'scripts/validate_premarket_structure_53e2.py',
     }
+    successor_53f_scripts = {
+        'scripts/test_historical_setup_evidence_53f.py',
+        'scripts/validate_historical_setup_evidence_53f.py',
+    }
     changed_scripts = set(_git_names('diff', '--name-only', 'HEAD', '--', 'scripts'))
-    if changed_scripts not in (expected_historical, expected_historical | successor_53e2_scripts):
+    allowed_scopes = {
+        frozenset(expected_historical),
+        frozenset(expected_historical | successor_53e2_scripts),
+        frozenset(expected_historical | successor_53e2_scripts | successor_53f_scripts),
+    }
+    if frozenset(changed_scripts) not in allowed_scopes:
         return _fail(f'T77 predecessor compatibility scope mismatch: {sorted(changed_scripts)}')
     _pass('T77')
     return 0
