@@ -21,6 +21,7 @@ WEEKEND_ALERT_SLOTS = (
     'opening_radar_0920',
     'early_tradecards_0925',
     'final_confirmation_0931',
+    'macro_shock_checkpoint',
 )
 
 
@@ -34,6 +35,15 @@ def main() -> int:
 
     if sched.WEEKEND_SUPPRESS_SEND_SLOTS != frozenset(WEEKEND_ALERT_SLOTS):
         return _fail(f'unexpected suppress slots: {sched.WEEKEND_SUPPRESS_SEND_SLOTS}')
+
+    # The macro checkpoint was added after this test's original phase. It
+    # shares the same weekend prohibition and must not reach the sentinel.
+    with patch.object(sched, '_is_weekend_research_mode', return_value=True):
+        with patch('backend.trading.macro_shock_sentinel.run_macro_shock_checkpoint_0830') as checkpoint:
+            if sched.run_macro_shock_checkpoint_slot():
+                return _fail('macro checkpoint should not run on weekend')
+            if checkpoint.called:
+                return _fail('weekend macro checkpoint reached sentinel')
 
     with patch.object(sched, '_is_weekend_research_mode', return_value=True):
         with patch(

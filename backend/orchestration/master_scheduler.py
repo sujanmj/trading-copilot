@@ -424,6 +424,11 @@ def main():
     if not bind_primary_scheduler():
         print("[WARN] Primary scheduler registry already bound in-process", flush=True)
 
+    # Independent clock check: synchronous legacy jobs must not delay 08:58
+    # dispatch. Capture is read-only and guarded in-process and across processes.
+    from backend.collectors.nse_preopen_iep import start_automatic_capture
+    start_automatic_capture()
+
     register_interval_jobs()
 
     print("=" * 60, flush=True)
