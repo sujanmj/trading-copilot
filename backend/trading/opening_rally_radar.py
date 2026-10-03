@@ -812,6 +812,14 @@ def build_opening_rally_board(
         payload = apply_decision_traces_to_board(payload)
     except Exception:
         pass
+    # Shadow facts are appended only after all existing decisions are final.
+    try:
+        from backend.runtime.full_stack_shadow import append_full_stack_shadow
+
+        payload = append_full_stack_shadow(payload, now=ist_now)
+    except Exception:
+        # Observational failures must never disable the existing board.
+        pass
     return payload
 
 

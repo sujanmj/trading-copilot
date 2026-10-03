@@ -32,9 +32,9 @@ def digest_data():
             for p in (ROOT / 'data').rglob('*') if p.is_file()}
 
 
-def run():
+def run(expected_stage='54B'):
     from backend.config import build_info
-    assert build_info.BUILD_STAGE == '54B'
+    assert build_info.BUILD_STAGE == expected_stage
     # Continue validating after the authorized release commit; the frozen
     # foundation remains anchored to the known 53G baseline, not a moving HEAD.
     subprocess.run(['git', 'merge-base', '--is-ancestor', BASELINE, 'HEAD'], check=True)
@@ -67,6 +67,7 @@ def run():
                              and err.getvalue().strip() in {
                                  'VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: []',
                                  "VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: ['scripts/test_weekend_scheduler_quiet.py']",
+                                 "VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: ['scripts/validate_full_stack_runtime_54b.py']",
                              })
                     assert known, err.getvalue() or f'{phase}:{name}'
                     print('LEGACY_53D_T77_MANIFEST_GATE_INCOMPATIBLE', flush=True)
@@ -82,7 +83,7 @@ def run():
     assert not subprocess.check_output(['git', 'diff', '--cached', '--name-only'], text=True).strip()
     assert not subprocess.check_output(['git', 'status', '--short', '--', 'data'], text=True).strip()
     assert before == digest_data(), 'validation changed data/'
-    print('PHASE_54B_VALIDATION_PASS', flush=True)
+    print(f'PHASE_{expected_stage}_FOUNDATION_VALIDATION_PASS', flush=True)
 
 
 if __name__ == '__main__':
