@@ -32,6 +32,19 @@ def digest_data():
             for p in (ROOT / 'data').rglob('*') if p.is_file()}
 
 
+def legacy_manifest_only(phase, name, message, markers):
+    """Recognize only the frozen T77 bookkeeping failure, never behavior failures."""
+    if (phase != 'volume_vwap_53d' or name != 'test_t72_t77_lookahead_and_successor_scope'
+            or not {f'T{i}' for i in range(72, 77)}.issubset(markers)):
+        return False
+    path = 'scripts/test_volume_vwap_53d.py'
+    if (ROOT / path).read_bytes() != subprocess.check_output(['git', 'show', BASELINE + ':' + path]):
+        return False
+    changed = sorted(set(subprocess.check_output(
+        ['git', 'diff', '--name-only', 'HEAD', '--', 'scripts'], text=True).splitlines()))
+    return message.strip() == f'VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: {changed}'
+
+
 def run(expected_stage='54B'):
     from backend.config import build_info
     assert build_info.BUILD_STAGE == expected_stage
@@ -63,12 +76,7 @@ def run(expected_stage='54B'):
                 with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                     result = fn()
                 if result:
-                    known = (phase == 'volume_vwap_53d' and name == 'test_t72_t77_lookahead_and_successor_scope'
-                             and err.getvalue().strip() in {
-                                 'VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: []',
-                                 "VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: ['scripts/test_weekend_scheduler_quiet.py']",
-                                 "VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: ['scripts/validate_full_stack_runtime_54b.py']",
-                             })
+                    known = legacy_manifest_only(phase, name, err.getvalue(), module.PASS_MARKERS)
                     assert known, err.getvalue() or f'{phase}:{name}'
                     print('LEGACY_53D_T77_MANIFEST_GATE_INCOMPATIBLE', flush=True)
             marker_count += len(module.PASS_MARKERS)

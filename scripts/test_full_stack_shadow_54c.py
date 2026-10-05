@@ -1,6 +1,7 @@
 """Offline shadow isolation, load bounds and real-board behavior regression."""
 import copy
 import os
+import subprocess
 import sys
 import threading
 import tempfile
@@ -43,6 +44,10 @@ class ShadowTests(unittest.TestCase):
         self.now = clock('09:25:00')
 
     def runner(self, source=None, **kwargs):
+        if 'monotonic' not in kwargs:
+            ticks = [0.0]
+            kwargs['monotonic'] = lambda: ticks[0]
+            kwargs.setdefault('sleeper', lambda delay: ticks.__setitem__(0, ticks[0] + delay))
         return ShadowRunner(source=source or Mock(return_value=ready_bundle()),
                             clock=lambda: self.now, **kwargs)
 
@@ -120,6 +125,41 @@ class ShadowTests(unittest.TestCase):
         runner.worker.join(2)
         out = runner.enrich(board(), self.now)
         self.assertEqual(out['ranked_candidates'][0]['full_stack_shadow']['adapter_state'], 'INPUT_NOT_READY')
+
+    def test_fast_sources_are_spaced_even_after_failure(self):
+        ticks, starts = [0.0], []
+        def source(*args):
+            starts.append(ticks[0])
+            if len(starts) == 1:
+                raise RuntimeError('provider rejected request')
+            return {}
+        runner = self.runner(Mock(side_effect=source), monotonic=lambda: ticks[0],
+                             sleeper=lambda delay: ticks.__setitem__(0, ticks[0] + delay))
+        runner._run(('A', 'B', 'C'))
+        self.assertEqual(len(starts), 3)
+        self.assertTrue(all(b-a >= 1.0 for a, b in zip(starts, starts[1:])))
+
+    def test_delayed_wakeup_does_not_admit_work_after_deadline(self):
+        ticks = [0.0]
+        runner = self.runner(Mock(return_value={}), monotonic=lambda: ticks[0],
+                             sleeper=lambda delay: ticks.__setitem__(0, 61.0))
+        runner._run(('A', 'B'))
+        self.assertEqual(runner.source.call_count, 1)
+
+    def test_historical_manifest_exception_cannot_hide_behavior_failure(self):
+        from scripts.validate_full_stack_runtime_54b import legacy_manifest_only
+        phase, name = 'volume_vwap_53d', 'test_t72_t77_lookahead_and_successor_scope'
+        markers = [f'T{i}' for i in range(72, 77)]
+        changed = sorted(set(subprocess.check_output(
+            ['git', 'diff', '--name-only', 'HEAD', '--', 'scripts'], text=True).splitlines()))
+        message = f'VOLUME_VWAP_53D_FAIL: T77 predecessor compatibility scope mismatch: {changed}'
+        self.assertTrue(legacy_manifest_only(phase, name, message, markers))
+        self.assertFalse(legacy_manifest_only(phase, name, message, markers[:-1]))
+        self.assertFalse(legacy_manifest_only(phase, name, 'T76 behavior failure', markers))
+        self.assertFalse(legacy_manifest_only('another_phase', name, message, markers))
+        with patch('scripts.validate_full_stack_runtime_54b.ROOT') as root:
+            root.__truediv__.return_value.read_bytes.return_value = b'changed historic test'
+            self.assertFalse(legacy_manifest_only(phase, name, message, markers))
 
     def test_expired_future_previous_day_cache_never_reused(self):
         for offset in (61, -1, 86400):

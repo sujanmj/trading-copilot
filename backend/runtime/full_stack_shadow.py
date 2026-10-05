@@ -22,6 +22,7 @@ IST = ZoneInfo('Asia/Kolkata')
 MAX_CANDIDATES = 12
 TTL_SECONDS = 60
 BATCH_SECONDS = 60
+SOURCE_SPACING_SECONDS = 1.05
 LOG = logging.getLogger(__name__)
 
 
@@ -33,9 +34,11 @@ def pending(symbol, cutoff, reason):
 
 class ShadowRunner:
     def __init__(self, source=build_source_bundle, adapter=adapt_full_stack,
-                 clock=lambda: datetime.now(IST), monotonic=time.monotonic):
+                 clock=lambda: datetime.now(IST), monotonic=time.monotonic,
+                 sleeper=time.sleep):
         self.source, self.adapter = source, adapter
         self.clock, self.monotonic = clock, monotonic
+        self.sleeper = sleeper
         self.lock = threading.Lock()
         self.worker = None
         self.cache = {}
@@ -44,8 +47,16 @@ class ShadowRunner:
     def _run(self, symbols):
         deadline = self.monotonic() + BATCH_SECONDS
         results = {}
+        next_source_start = self.monotonic()
         try:
             for symbol in symbols:
+                # Each source build can issue one FULL quote. Leave a gap after
+                # completion, including failures, to avoid quote bursts.
+                delay = next_source_start - self.monotonic()
+                if delay > 0:
+                    if next_source_start >= deadline:
+                        break
+                    self.sleeper(delay)
                 if self.monotonic() >= deadline:
                     break
                 observed = self.clock()
@@ -57,6 +68,7 @@ class ShadowRunner:
                     result.update(schema_version='54C', mode='SHADOW_ONLY')
                 except Exception:
                     result = pending(symbol, cutoff, 'SHADOW_SOURCE_ERROR')
+                next_source_start = self.monotonic() + SOURCE_SPACING_SECONDS
                 results[symbol] = (observed, result)
                 LOG.info('FULL_STACK_SHADOW symbol=%s state=%s', symbol,
                          result.get('adapter_state', 'INPUT_NOT_READY'))
