@@ -20,7 +20,7 @@ from backend.utils.config import LOCKS_DIR, ensure_dirs, IS_LOCAL_DEV
 
 _active_locks: list[Path] = []
 
-_LOCK_MAX_AGE_SECONDS = 86400  # 24h — stale lock file age fallback
+_LOCK_MAX_AGE_SECONDS = 86400  # 24h fallback when process identity is unverified
 
 
 def _pid_alive(pid: int) -> bool:
@@ -105,13 +105,20 @@ def is_lock_holder_valid(name: str, info: Optional[Dict[str, Any]] = None) -> bo
     if sys.platform != 'win32' and name == 'master_scheduler' and pid == 1:
         return False
 
+    identity_verified = False
     if sys.platform != 'win32':
         cmdline = _proc_cmdline(pid)
+        if sys.platform == 'linux' and not cmdline:
+            return False
         if cmdline and not _cmdline_matches_lock(name, cmdline):
             return False
+        identity_verified = bool(cmdline)
 
     started = info.get('started_at')
-    if started is not None:
+    # A continuously running scheduler can outlive its lock's creation date.
+    # Expiring a proven live owner removes its singleton protection and causes
+    # false recovery attempts; age is only a fallback without process identity.
+    if not identity_verified and started is not None:
         try:
             if time.time() - float(started) > _LOCK_MAX_AGE_SECONDS:
                 return False

@@ -17,6 +17,7 @@ if __name__ == '__main__':
             'git', 'show', '35ac7d2530a8df0a740bc97d2c88657e7e4394b5:' + path]), path
     run(expected_stage='54C')
     subprocess.run([sys.executable, 'scripts/test_full_stack_shadow_54c.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/test_process_lock_54c.py'], check=True)
     subprocess.run([sys.executable, '-m', 'py_compile', 'backend/runtime/full_stack_shadow.py',
                     'backend/trading/opening_rally_radar.py'], check=True)
     assert before == digest_data(), '54C tests changed data/'
