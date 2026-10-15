@@ -11,8 +11,13 @@ import requests
 from backend.ai.model_config import (
     GROQ_COST_PER_1K_INPUT,
     GROQ_COST_PER_1K_OUTPUT,
+    GEMINI_PRIMARY_COST_PER_1K_INPUT,
+    GEMINI_PRIMARY_COST_PER_1K_OUTPUT,
+    GEMINI_LITE_COST_PER_1K_INPUT,
+    GEMINI_LITE_COST_PER_1K_OUTPUT,
     GEMINI_LITE_MODEL,
     GEMINI_PRIMARY_MODEL,
+    estimate_gemini_cost,
     resolve_groq_model,
 )
 from backend.ai.response_validator import validate_ai_response
@@ -120,14 +125,14 @@ MODELS = {
     'gemini': {
         'provider': 'google',
         'model': GEMINI_PRIMARY_MODEL,
-        'cost_per_1k_input': 0,
-        'cost_per_1k_output': 0,
+        'cost_per_1k_input': GEMINI_PRIMARY_COST_PER_1K_INPUT,
+        'cost_per_1k_output': GEMINI_PRIMARY_COST_PER_1K_OUTPUT,
     },
     'gemini_lite': {
         'provider': 'google',
         'model': GEMINI_LITE_MODEL,
-        'cost_per_1k_input': 0,
-        'cost_per_1k_output': 0,
+        'cost_per_1k_input': GEMINI_LITE_COST_PER_1K_INPUT,
+        'cost_per_1k_output': GEMINI_LITE_COST_PER_1K_OUTPUT,
     },
     'groq': {
         'provider': 'groq',
@@ -249,7 +254,9 @@ def _call_gemini_rest(api_key, model_name, prompt, max_tokens=2500):
             'text': text,
             'model': model_name,
             'provider': provider,
-            'estimated_cost': 0.0,
+            'estimated_cost': estimate_gemini_cost(
+                model_name, usage.get('promptTokenCount', 0), usage.get('candidatesTokenCount', 0),
+            ),
             'error': None if text else 'Empty Gemini REST response',
             'input_tokens': usage.get('promptTokenCount', 0),
             'output_tokens': usage.get('candidatesTokenCount', 0),
@@ -522,9 +529,12 @@ def ask_ai(
         output_tokens = raw.get('output_tokens', 0) or 0
         if input_tokens or output_tokens:
             cfg = MODELS.get(model_key, MODELS['gemini'])
+            if raw.get('provider') == 'google':
+                actual_model = str(raw.get('model') or model_name)
+                cfg = MODELS['gemini_lite'] if actual_model.startswith(GEMINI_LITE_MODEL) else MODELS['gemini']
             input_cost = (input_tokens / 1000) * cfg['cost_per_1k_input']
             output_cost = (output_tokens / 1000) * cfg['cost_per_1k_output']
-            result['estimated_cost'] = round(input_cost + output_cost, 4)
+            result['estimated_cost'] = round(input_cost + output_cost, 6)
 
     record_provider_request(
         provider=normalize_provider(result.get('provider', provider), tier),

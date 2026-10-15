@@ -24,9 +24,14 @@ def main() -> int:
     from backend.ai.model_config import (
         GROQ_COST_PER_1K_INPUT,
         GROQ_COST_PER_1K_OUTPUT,
+        GEMINI_LITE_COST_PER_1K_INPUT,
+        GEMINI_LITE_COST_PER_1K_OUTPUT,
+        GEMINI_PRIMARY_COST_PER_1K_INPUT,
+        GEMINI_PRIMARY_COST_PER_1K_OUTPUT,
         GEMINI_LITE_MODEL,
         GEMINI_PRIMARY_MODEL,
         GROQ_DEFAULT_MODEL,
+        estimate_gemini_cost,
         resolve_groq_model,
     )
     from backend.ai.provider_manager import GROQ_DEFAULT_MODEL as PROVIDER_MANAGER_MODEL
@@ -35,6 +40,12 @@ def main() -> int:
     assert GEMINI_LITE_MODEL == 'gemini-3.5-flash-lite'
     assert MODELS['gemini']['model'] == GEMINI_PRIMARY_MODEL
     assert MODELS['gemini_lite']['model'] == GEMINI_LITE_MODEL
+    assert MODELS['gemini']['cost_per_1k_input'] == GEMINI_PRIMARY_COST_PER_1K_INPUT
+    assert MODELS['gemini']['cost_per_1k_output'] == GEMINI_PRIMARY_COST_PER_1K_OUTPUT
+    assert MODELS['gemini_lite']['cost_per_1k_input'] == GEMINI_LITE_COST_PER_1K_INPUT
+    assert MODELS['gemini_lite']['cost_per_1k_output'] == GEMINI_LITE_COST_PER_1K_OUTPUT
+    assert estimate_gemini_cost(GEMINI_PRIMARY_MODEL, 1000, 1000) == 0.009
+    assert estimate_gemini_cost(f'{GEMINI_LITE_MODEL} (lite)', 1000, 1000) == 0.0028
     assert GROQ_DEFAULT_MODEL == 'openai/gpt-oss-20b'
     assert resolve_groq_model('llama-3.3-70b-versatile') == GROQ_DEFAULT_MODEL
     assert MODELS['groq']['model'] == GROQ_DEFAULT_MODEL
