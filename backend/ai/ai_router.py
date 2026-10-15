@@ -8,6 +8,13 @@ import warnings
 
 import requests
 
+from backend.ai.model_config import (
+    GROQ_COST_PER_1K_INPUT,
+    GROQ_COST_PER_1K_OUTPUT,
+    GEMINI_LITE_MODEL,
+    GEMINI_PRIMARY_MODEL,
+    resolve_groq_model,
+)
 from backend.ai.response_validator import validate_ai_response
 
 try:
@@ -112,21 +119,21 @@ MODELS = {
     },
     'gemini': {
         'provider': 'google',
-        'model': 'gemini-2.0-flash',
+        'model': GEMINI_PRIMARY_MODEL,
         'cost_per_1k_input': 0,
         'cost_per_1k_output': 0,
     },
     'gemini_lite': {
         'provider': 'google',
-        'model': 'gemini-2.0-flash-lite',
+        'model': GEMINI_LITE_MODEL,
         'cost_per_1k_input': 0,
         'cost_per_1k_output': 0,
     },
     'groq': {
         'provider': 'groq',
-        'model': os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile'),
-        'cost_per_1k_input': 0,
-        'cost_per_1k_output': 0,
+        'model': resolve_groq_model(os.environ.get('GROQ_MODEL')),
+        'cost_per_1k_input': GROQ_COST_PER_1K_INPUT,
+        'cost_per_1k_output': GROQ_COST_PER_1K_OUTPUT,
     },
     'final_synthesis': {
         'provider': 'anthropic',
@@ -314,9 +321,9 @@ def call_gemini(model_name, prompt, max_tokens=2500, *, use_case: str = ''):
             return result, latency
         err = str(result.get('error') or '')
         if '429' in err or 'quota' in err.lower() or 'resource_exhausted' in err.lower():
-            lite = _call_gemini_rest(api_key, 'gemini-2.0-flash-lite', prompt, max_tokens)
+            lite = _call_gemini_rest(api_key, GEMINI_LITE_MODEL, prompt, max_tokens)
             if lite.get('success'):
-                lite['model'] = 'gemini-2.0-flash-lite (lite)'
+                lite['model'] = f'{GEMINI_LITE_MODEL} (lite)'
                 return lite, (time.time() - t0) * 1000
             result = lite
         return result, latency
@@ -355,7 +362,7 @@ def call_groq(model_name, prompt, max_tokens=2500, *, use_case: str = '', allow_
     if allow_gemini_fallback and not get_gemini_pool().is_degraded():
         print('  [AI] Groq pool exhausted — falling back to Gemini for conversational request')
         _log_route(use_case or 'conversational', 'gemini_pool', 'groq-fallback')
-        gem = call_gemini('gemini-2.0-flash-lite', prompt, max_tokens, use_case=use_case)
+        gem = call_gemini(GEMINI_LITE_MODEL, prompt, max_tokens, use_case=use_case)
         if gem.get('success'):
             gem['model'] = f"{gem.get('model', 'gemini')} (groq-fallback)"
             gem['provider'] = 'google'

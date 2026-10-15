@@ -11,6 +11,7 @@ import json
 import re
 from typing import Any, Dict, Optional
 
+from backend.ai.model_config import GEMINI_PRIMARY_MODEL
 from backend.storage.data_paths import get_data_path
 
 
@@ -161,7 +162,7 @@ def call_strategic_with_cascade(
         reason2 = 'quota_rate_limit' if is_failover_error(err2) else 'groq_failed'
         log_provider_fallback('groq', 'gemini', reason2)
 
-        raw = _invoke_gemini('gemini-2.0-flash', prompt, max_tokens, use_case=use_case)
+        raw = _invoke_gemini(GEMINI_PRIMARY_MODEL, prompt, max_tokens, use_case=use_case)
         if raw.get('success'):
             raw['model'] = f"{raw.get('model', 'gemini')} (cascade)"
             raw['routing_tier'] = 'gemini'
@@ -176,7 +177,7 @@ def call_strategic_with_cascade(
 
     log_provider_fallback('claude', 'gemini', reason)
 
-    raw = _invoke_gemini('gemini-2.0-flash', prompt, max_tokens, use_case=use_case)
+    raw = _invoke_gemini(GEMINI_PRIMARY_MODEL, prompt, max_tokens, use_case=use_case)
     if raw.get('success'):
         raw['model'] = f"{raw.get('model', 'gemini')} (cascade)"
         raw['routing_tier'] = 'gemini'

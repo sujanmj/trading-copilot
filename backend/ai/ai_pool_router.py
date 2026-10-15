@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
+from backend.ai.model_config import GEMINI_LITE_MODEL
+
 OUTCOME_EXPLAINER_USE_CASE = 'candidate_outcome_explainer'
 OUTCOME_EXPLAINER_ROUTE = ('groq', 'gemini', 'claude')
 
@@ -86,7 +88,7 @@ def _invoke_provider(
             allow_gemini_fallback=False,
         )
     elif provider == 'gemini':
-        raw = call_gemini('gemini-2.0-flash-lite', prompt, max_tokens, use_case=use_case)
+        raw = call_gemini(GEMINI_LITE_MODEL, prompt, max_tokens, use_case=use_case)
     elif provider == 'claude':
         raw = call_anthropic(MODELS['sonnet']['model'], prompt, max_tokens)
     else:

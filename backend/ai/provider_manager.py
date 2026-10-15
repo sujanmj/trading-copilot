@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from backend.ai.model_config import resolve_groq_model
 from backend.storage.json_io import atomic_write_json
 from backend.utils.config import DATA_DIR, IS_RAILWAY, load_env
 
@@ -39,7 +40,7 @@ GROQ_KEY_VARS = (
 GEMINI_LEGACY_VARS: Tuple[str, ...] = ()
 GROQ_LEGACY_VARS: Tuple[str, ...] = ()
 CLAUDE_KEY_VARS = ('ANTHROPIC_API_KEY', 'CLAUDE_API_KEY')
-GROQ_DEFAULT_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
+GROQ_DEFAULT_MODEL = resolve_groq_model(os.environ.get('GROQ_MODEL'))
 
 ENV_TYPO_PATTERNS = (
     (re.compile(r'^GORQ_', re.I), 'GORQ → did you mean GROQ?'),
