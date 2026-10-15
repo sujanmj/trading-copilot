@@ -20,7 +20,7 @@ os.environ['GROQ_MODEL'] = 'llama-3.3-70b-versatile'
 
 
 def main() -> int:
-    from backend.ai.ai_router import MODELS
+    from backend.ai.ai_router import MODELS, _gemini_generation_config
     from backend.ai.model_config import (
         GROQ_COST_PER_1K_INPUT,
         GROQ_COST_PER_1K_OUTPUT,
@@ -43,6 +43,11 @@ def main() -> int:
     assert PROVIDER_MANAGER_MODEL == GROQ_DEFAULT_MODEL
     assert resolve_groq_model('custom/model') == 'custom/model'
     assert resolve_groq_model(None) == GROQ_DEFAULT_MODEL
+    assert _gemini_generation_config(GEMINI_PRIMARY_MODEL, 128) == {'maxOutputTokens': 128}
+    assert _gemini_generation_config(GEMINI_LITE_MODEL, 128) == {'maxOutputTokens': 128}
+    assert _gemini_generation_config('gemini-2.5-flash', 128) == {
+        'maxOutputTokens': 128, 'temperature': 0.7,
+    }
     for module in ('ai_router.py', 'ai_pool_router.py', 'ai_provider_fallback.py'):
         source = (ROOT / 'backend/ai' / module).read_text(encoding='utf-8')
         assert 'gemini-2.0-flash' not in source, f'retired Gemini ID remains in {module}'

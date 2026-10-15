@@ -219,6 +219,15 @@ def call_anthropic(model_name, prompt, max_tokens=2500):
         return _ai_result(False, model=model_name, provider=provider, error=str(e))
 
 
+def _gemini_generation_config(model_name, max_tokens):
+    generation_config = {"maxOutputTokens": max_tokens}
+    # Gemini 3.x no longer accepts the legacy sampling controls used by 2.x.
+    # Keep the 2.x setting for any explicitly configured legacy model.
+    if not str(model_name).startswith('gemini-3.'):
+        generation_config['temperature'] = 0.7
+    return generation_config
+
+
 def _call_gemini_rest(api_key, model_name, prompt, max_tokens=2500):
     provider = 'google'
     url = (
@@ -227,10 +236,7 @@ def _call_gemini_rest(api_key, model_name, prompt, max_tokens=2500):
     )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens,
-            "temperature": 0.7,
-        },
+        "generationConfig": _gemini_generation_config(model_name, max_tokens),
     }
     try:
         response = requests.post(url, json=payload, timeout=45)
