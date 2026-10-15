@@ -767,6 +767,14 @@ def startup_event():
 
 
 import math
+import re
+
+_PUBLIC_HEALTH_SECRET_PATTERNS = (
+    re.compile(r'(?i)([?&](?:api[_-]?key|key|token|access[_-]?token|secret|authorization)=)[^&\s\"\'<>]+'),
+    re.compile(r'(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*'),
+    re.compile(r'\bAIza[0-9A-Za-z_-]{20,}\b'),
+    re.compile(r'\bsk-[A-Za-z0-9_-]{20,}\b'),
+)
 
 def sanitize_json_value(obj):
     """Replace NaN/Infinity with None (JSON compliant)"""
@@ -868,7 +876,7 @@ def api_config():
 
 @app.get("/api/health")
 def health():
-    return _build_health_payload()
+    return _public_health_payload(_build_health_payload())
 
 
 @app.get("/api/debug/build-info")
@@ -1576,6 +1584,40 @@ def _build_health_payload() -> dict:
         "provider_ops": provider_ops,
         "provider_analytics": provider_analytics,
     }
+
+
+_PRIVATE_HEALTH_FIELD_NAMES = frozenset({
+    'last_error',
+    'error',
+    'exception',
+    'traceback',
+    'stack_trace',
+    'env_diagnostics',
+    'api_key',
+    'token',
+    'secret',
+    'authorization',
+    'masked',
+})
+
+
+def _public_health_payload(payload: dict) -> dict:
+    """Keep the public liveness endpoint useful without exposing provider secrets."""
+    def strip_private(value):
+        if isinstance(value, dict):
+            return {
+                key: strip_private(item)
+                for key, item in value.items()
+                if str(key).strip().lower() not in _PRIVATE_HEALTH_FIELD_NAMES
+            }
+        if isinstance(value, list):
+            return [strip_private(item) for item in value]
+        if isinstance(value, str):
+            for pattern in _PUBLIC_HEALTH_SECRET_PATTERNS:
+                value = pattern.sub(r'\1[REDACTED]' if pattern is _PUBLIC_HEALTH_SECRET_PATTERNS[0] else '[REDACTED]', value)
+        return value
+
+    return sanitize_json_value(strip_private(payload))
 
 
 def _wrap_runtime_snapshot_for_frontend(
