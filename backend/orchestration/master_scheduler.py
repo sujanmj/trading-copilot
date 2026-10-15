@@ -29,6 +29,7 @@ PYTHON_EXE = sys.executable
 
 _eod_thread: threading.Thread | None = None
 _eod_lock = threading.Lock()
+_outcome_horizon_lock = threading.Lock()
 _interval_jobs_registered = False
 _last_recovery_check = 0.0
 RECOVERY_CHECK_SECONDS = 300
@@ -328,17 +329,41 @@ def run_scheduled_collection():
 
 
 def run_outcome_horizon_tick():
-    """Evaluate 15m/1h/intraday signal horizons during market hours."""
+    """Evaluate due horizons off-loop so a slow price lookup cannot starve heartbeats."""
+    if not _outcome_horizon_lock.acquire(blocking=False):
+        print("[OUTCOME HORIZON] previous evaluation still running; skip", flush=True)
+        return
+
+    def _evaluate():
+        started_at = time.monotonic()
+        print("[OUTCOME HORIZON] evaluation started", flush=True)
+        try:
+            from backend.utils.market_hours import get_market_period
+            from backend.analytics.signal_outcomes import evaluate_due_horizons
+            if get_market_period() != 'market':
+                print("[OUTCOME HORIZON] outside market hours; skip", flush=True)
+                return
+            result = evaluate_due_horizons()
+            print(
+                f"[OUTCOME HORIZON] evaluation complete evaluated={result.get('evaluated', 0)} "
+                f"duration_s={time.monotonic() - started_at:.1f}",
+                flush=True,
+            )
+        except Exception as e:
+            print(f"[!] Outcome horizon tick failed: {e}", flush=True)
+        finally:
+            _outcome_horizon_lock.release()
+
+    worker = threading.Thread(
+        target=_evaluate,
+        name='Outcome-Horizon',
+        daemon=True,
+    )
     try:
-        from backend.utils.market_hours import get_market_period
-        from backend.analytics.signal_outcomes import evaluate_due_horizons
-        if get_market_period() != 'market':
-            return
-        result = evaluate_due_horizons()
-        if result.get('evaluated'):
-            print(f"[OUTCOME LEARN] evaluated {result['evaluated']} horizons", flush=True)
-    except Exception as e:
-        print(f"[!] Outcome horizon tick failed: {e}", flush=True)
+        worker.start()
+    except Exception:
+        _outcome_horizon_lock.release()
+        raise
 
 
 def run_stability_watchdog_tick():
