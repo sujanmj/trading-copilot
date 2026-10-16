@@ -14,6 +14,7 @@ from backend.utils.runner import run_script
 from backend.lifecycle.lifecycle_tracing import SCHEDULER_EXIT_SINGLETON
 from backend.orchestration.schedule_registry import (
     bind_primary_scheduler,
+    DEFERRED_JOB,
     dump_task_registry,
     get_task_registry,
     ist_daily,
@@ -29,6 +30,7 @@ PYTHON_EXE = sys.executable
 
 _eod_thread: threading.Thread | None = None
 _eod_lock = threading.Lock()
+_full_cycle_lock = threading.Lock()
 _outcome_horizon_lock = threading.Lock()
 _interval_jobs_registered = False
 _last_recovery_check = 0.0
@@ -111,6 +113,57 @@ def run_full_cycle(brief_name: str = "Scheduled", push_brain: bool = False):
     """Collect data + optional analyzer; smart alerts handled by alert_scheduler."""
     print(f"\n[*] Full Cycle: {brief_name} @ {datetime.now(IST).strftime('%H:%M:%S IST')}", flush=True)
     run_all_collectors_parallel(push_telegram_brain=push_brain, run_analyzer=True)
+
+
+def run_full_cycle_async(
+    brief_name: str = "Scheduled",
+    push_brain: bool = False,
+    job_name: str | None = None,
+):
+    """Dispatch long collection cycles away from the scheduler heartbeat loop."""
+    if not _full_cycle_lock.acquire(blocking=False):
+        print(f"[FULL CYCLE] previous cycle still running; skip {brief_name}", flush=True)
+        if job_name:
+            set_job_status(job_name, 'skipped:full_cycle_in_progress')
+        return DEFERRED_JOB
+
+    def _run():
+        started_at = time.monotonic()
+        if job_name:
+            set_job_status(job_name, 'running')
+        print(f"[FULL CYCLE WORKER] started brief={brief_name}", flush=True)
+        try:
+            run_full_cycle(brief_name=brief_name, push_brain=push_brain)
+            if job_name:
+                set_job_status(job_name, 'completed')
+            print(
+                f"[FULL CYCLE WORKER] complete brief={brief_name} "
+                f"duration_s={time.monotonic() - started_at:.1f}",
+                flush=True,
+            )
+        except Exception as exc:
+            if job_name:
+                set_job_status(job_name, f'failed:{type(exc).__name__}')
+            print(
+                f"[FULL CYCLE WORKER] failed brief={brief_name} "
+                f"duration_s={time.monotonic() - started_at:.1f} "
+                f"error_type={type(exc).__name__}",
+                flush=True,
+            )
+        finally:
+            _full_cycle_lock.release()
+
+    worker = threading.Thread(
+        target=_run,
+        name=f"Full-Cycle-{brief_name}",
+        daemon=True,
+    )
+    try:
+        worker.start()
+    except Exception:
+        _full_cycle_lock.release()
+        raise
+    return DEFERRED_JOB
 
 
 def _run_eod_lifecycle_impl(force: bool = False, trigger: str = 'scheduled'):
@@ -237,12 +290,12 @@ def _job_outcome_tracker():
 
 @ist_daily(8, 45, name='pre_market')
 def _job_pre_market():
-    run_full_cycle("Pre-Market")
+    run_full_cycle_async("Pre-Market", job_name='pre_market')
 
 
 @ist_daily(12, 0, name='midday')
 def _job_midday():
-    run_full_cycle("Midday")
+    run_full_cycle_async("Midday", job_name='midday')
 
 
 @ist_daily(15, 35, name='market_close_intel')
@@ -288,7 +341,7 @@ def _job_eod_lifecycle():
 
 @ist_daily(23, 0, name='us_pulse')
 def _job_us_pulse():
-    run_full_cycle("US Pulse")
+    run_full_cycle_async("US Pulse", job_name='us_pulse')
 
 
 # ── Intraday IST slots (weekdays) ─────────────────────────────────────────
@@ -304,7 +357,10 @@ def _make_intraday_job(slot: str):
 
     @ist_daily(hour, minute, name=f'intraday_{slot}')
     def _job():
-        run_full_cycle(brief_name=f"Intraday {slot}")
+        run_full_cycle_async(
+            brief_name=f"Intraday {slot}",
+            job_name=f'intraday_{slot}',
+        )
 
     return _job
 

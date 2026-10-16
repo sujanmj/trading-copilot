@@ -18,6 +18,7 @@ _ist_last_fired: Dict[str, float] = {}
 _job_runtime_status: Dict[str, str] = {}
 _last_tick_log_minute: str | None = None
 _PRIMARY_SCHEDULER_BOUND = False
+DEFERRED_JOB = object()
 
 # Sub-stages executed inside eod_lifecycle @ 15:45 IST (visibility only)
 EOD_PIPELINE_TASKS = [
@@ -160,8 +161,9 @@ def tick_ist_jobs() -> List[str]:
         else:
             print(f"[SCHEDULER IST] Executing {name} @ {now.strftime('%H:%M')} IST", flush=True)
         try:
-            job['fn']()
-            set_job_status(name, 'completed')
+            result = job['fn']()
+            if result is not DEFERRED_JOB:
+                set_job_status(name, 'completed')
             if name == 'eod_lifecycle':
                 print(f"[EOD TASK FIRING] lifecycle thread dispatched @ {now.strftime('%H:%M')} IST", flush=True)
             fired.append(name)
