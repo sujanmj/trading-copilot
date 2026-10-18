@@ -88,6 +88,7 @@ SIGNAL_STACK_FIELDS = (
     'overall_conviction',
     'elite_verified',
     'display_confidence',
+    'decision_timestamp_source',
 )
 
 

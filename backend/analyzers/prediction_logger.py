@@ -18,6 +18,7 @@ import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from backend.storage.db_manager import insert_prediction, insert_signal, init_db, DB_PATH
 
@@ -40,6 +41,29 @@ def safe_print(text):
             print(text.encode('ascii', errors='replace').decode('ascii'))
         except Exception:
             pass
+
+
+def _source_decision_timestamp(intelligence):
+    """Keep the source generation instant for outcome evaluation.
+
+    ``prediction_date`` remains the legacy deduplication key, but it has only
+    day precision. Do not turn that date into a fabricated intraday time.
+    """
+    if not isinstance(intelligence, dict):
+        return None
+    raw = intelligence.get('timestamp')
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text or len(text) <= 10:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace('Z', '+00:00'))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=ZoneInfo('Asia/Kolkata'))
+    return parsed.isoformat()
 
 
 # ============================================================
@@ -394,6 +418,10 @@ def log_predictions_from_intelligence():
         intel = json.load(f)
     
     prediction_date = intel.get('timestamp', datetime.now().isoformat())[:10]
+    decision_timestamp = _source_decision_timestamp(intel)
+    decision_timestamp_source = (
+        'unified_intelligence_timestamp' if decision_timestamp else 'date_only'
+    )
     run_type = os.environ.get('AI_USE_CASE', 'manual_refresh')
     conviction = 6 # Default as it's not explicitly in the JSON root
     
@@ -416,6 +444,8 @@ def log_predictions_from_intelligence():
 
         prediction_data = {
             'prediction_date': prediction_date,
+            'timestamp': decision_timestamp,
+            'decision_timestamp_source': decision_timestamp_source,
             'run_type': run_type,
             'ticker': ticker,
             'sector': get_sector_for_ticker(ticker),
@@ -464,6 +494,8 @@ def log_predictions_from_intelligence():
 
         risk_data = {
             'prediction_date': prediction_date,
+            'timestamp': decision_timestamp,
+            'decision_timestamp_source': decision_timestamp_source,
             'run_type': run_type,
             'ticker': ticker,
             'sector': get_sector_for_ticker(ticker),
