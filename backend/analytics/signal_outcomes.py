@@ -447,7 +447,9 @@ def track_telegram_alert(
         'contradiction_severity': contradiction_severity,
         'source_consensus': None,
         'entry_price': entry_price if entry_price and float(entry_price) > 0 else None,
-        'dedupe_key': f'tg_{event_date}_{category}_{ticker}',
+        # A symbol can receive multiple valid alerts in one session. Deduplicate
+        # retries for the same observed signal, not the entire ticker-day pair.
+        'dedupe_key': f'tg_{event_date}_{category}_{ticker}_{direction}_{timestamp}',
         'metadata': {
             'category': category,
             'entry_source': entry_source,

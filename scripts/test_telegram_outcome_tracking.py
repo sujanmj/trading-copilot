@@ -198,6 +198,26 @@ class TelegramOutcomeTrackingTests(unittest.TestCase):
         self.assertEqual(counts['PENDING'], 0)
         self.assertEqual(len(summary['rows']), 2)
 
+    def test_separate_same_day_alerts_get_separate_outcome_records(self):
+        base = datetime(2026, 10, 18, 10, 0, tzinfo=IST)
+        first = self.signal_outcomes.track_telegram_alert(
+            category='INTRADAY_OPPORTUNITY', ticker='TST', direction='BUY',
+            entry_price=100, event_ts=base.isoformat(), entry_source='scanner_data',
+        )
+        second = self.signal_outcomes.track_telegram_alert(
+            category='INTRADAY_OPPORTUNITY', ticker='TST', direction='BUY',
+            entry_price=101, event_ts=(base + timedelta(minutes=10)).isoformat(), entry_source='scanner_data',
+        )
+        self.assertNotEqual(first, second)
+        conn = self.db_manager.get_connection()
+        try:
+            count = conn.execute(
+                "SELECT count(*) FROM signal_events WHERE signal_type='telegram' AND ticker='TST'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        self.assertEqual(count, 2)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
