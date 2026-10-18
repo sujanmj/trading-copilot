@@ -94,9 +94,9 @@ def _query_telegram_alert_outcomes(review_date: str) -> dict:
         rows = conn.execute(
             """
             SELECT e.source AS category, e.ticker, e.direction, h.hit_miss, h.change_pct,
-                   e.entry_price, h.evaluated_at
+                   e.entry_price, h.evaluated_at, h.resolution_status, h.resolution_reason
             FROM signal_events e
-            LEFT JOIN signal_horizons h ON h.event_id = e.id
+            LEFT JOIN signal_horizons h ON h.event_id = e.id AND h.horizon='next_day'
             WHERE e.event_date = ?
               AND e.signal_type = 'telegram'
             ORDER BY e.event_ts DESC
@@ -108,8 +108,11 @@ def _query_telegram_alert_outcomes(review_date: str) -> dict:
             d = dict(row)
             category = str(d.get('category') or '')
             alert_type = ALERT_TYPE_MAP.get(category, 'intraday')
-            hit = (d.get('hit_miss') or 'PENDING').upper()
-            if hit == 'PENDING' and d.get('entry_price') is None:
+            raw = (d.get('hit_miss') or 'PENDING').upper()
+            hit = {'HIT': 'WIN', 'MISS': 'LOSS'}.get(raw, raw)
+            if d.get('resolution_status') == 'UNRESOLVED':
+                hit = 'PENDING'
+            if hit == 'PENDING' and (d.get('entry_price') is None or d.get('resolution_reason')):
                 price_missing = True
             bucket = hit if hit in counts_keys() else 'PENDING'
             type_counts = by_type.setdefault(alert_type, {'WIN': 0, 'LOSS': 0, 'NEUTRAL': 0, 'PARTIAL': 0, 'PENDING': 0})

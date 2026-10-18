@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS signal_events (
     entry_price REAL,
     dedupe_key TEXT,
     metadata TEXT,
+    tracking_version TEXT,
     UNIQUE(event_date, signal_type, source, ticker, dedupe_key)
 );
 
@@ -221,12 +222,29 @@ CREATE TABLE IF NOT EXISTS signal_horizons (
     mfe_pct REAL,
     mae_pct REAL,
     hit_miss TEXT DEFAULT 'PENDING',
+    resolution_status TEXT NOT NULL DEFAULT 'PENDING',
+    resolution_reason TEXT,
+    observed_at TEXT,
+    price_source TEXT,
     UNIQUE(event_id, horizon)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sh_event ON signal_horizons(event_id);
 CREATE INDEX IF NOT EXISTS idx_sh_horizon ON signal_horizons(horizon);
 CREATE INDEX IF NOT EXISTS idx_sh_hit ON signal_horizons(hit_miss);
+
+CREATE TABLE IF NOT EXISTS signal_outcome_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    horizon TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TEXT,
+    UNIQUE(event_id, horizon)
+);
+CREATE INDEX IF NOT EXISTS idx_son_status ON signal_outcome_notifications(status, created_at);
 """
 
 
@@ -252,6 +270,18 @@ def init_db():
     try:
         conn.executescript(SCHEMA)
         conn.executescript(SIGNAL_TRACKING_SCHEMA)
+        horizon_cols = {row[1] for row in conn.execute('PRAGMA table_info(signal_horizons)').fetchall()}
+        for name, col_type in (
+            ('resolution_status', "TEXT NOT NULL DEFAULT 'PENDING'"),
+            ('resolution_reason', 'TEXT'),
+            ('observed_at', 'TEXT'),
+            ('price_source', 'TEXT'),
+        ):
+            if name not in horizon_cols:
+                conn.execute(f'ALTER TABLE signal_horizons ADD COLUMN {name} {col_type}')
+        event_cols = {row[1] for row in conn.execute('PRAGMA table_info(signal_events)').fetchall()}
+        if 'tracking_version' not in event_cols:
+            conn.execute('ALTER TABLE signal_events ADD COLUMN tracking_version TEXT')
         cols = {row[1] for row in conn.execute('PRAGMA table_info(predictions)').fetchall()}
         for name, col_type in (
             ('prediction_horizon', 'TEXT'),

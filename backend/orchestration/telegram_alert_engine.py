@@ -8,9 +8,10 @@ compact formatting when explicitly enabled via TELEGRAM_GEMINI_FORMAT=1.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import os
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -242,6 +243,26 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
     try:
         from backend.analytics.signal_outcomes import track_telegram_alert
         state = _load_analysis_state()
+        signal_price = None
+        signal_ts = None
+        signal_source = None
+        if ticker:
+            scanner = _load(FILES['scanner']) or {}
+            scan_ts = scanner.get('last_updated') or scanner.get('scan_time_local')
+            try:
+                parsed_scan_ts = datetime.fromisoformat(str(scan_ts).replace('Z', '+00:00'))
+                if parsed_scan_ts.tzinfo is None:
+                    parsed_scan_ts = parsed_scan_ts.replace(tzinfo=ZoneInfo('Asia/Kolkata'))
+                age_seconds = (datetime.now(timezone.utc) - parsed_scan_ts.astimezone(timezone.utc)).total_seconds()
+                if 0 <= age_seconds <= 15 * 60:
+                    signal_ts = parsed_scan_ts.isoformat()
+                    for sig in scanner.get('top_signals', []) or []:
+                        if isinstance(sig, dict) and str(sig.get('ticker', '')).upper() == ticker.upper():
+                            signal_price = float(sig.get('price') or 0) or None
+                            signal_source = 'scanner_data'
+                            break
+            except (TypeError, ValueError):
+                pass
         track_telegram_alert(
             category=category,
             ticker=ticker,
@@ -250,6 +271,9 @@ def _dispatch(category: str, text: str, confidence: float, detail: str, *,
             direction=direction,
             reasoning=detail,
             contradiction_severity=float(state.get('disagreement_score') or 0),
+            entry_price=signal_price,
+            event_ts=signal_ts,
+            entry_source=signal_source,
         )
     except Exception:
         pass

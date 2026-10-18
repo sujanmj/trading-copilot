@@ -19,6 +19,7 @@ if __name__ == '__main__':
     subprocess.run([sys.executable, 'scripts/test_full_stack_shadow_54c.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_process_lock_54c.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_scheduler_horizon_nonblocking_54c.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/test_telegram_outcome_tracking.py'], check=True)
     subprocess.run([sys.executable, '-m', 'py_compile', 'backend/runtime/full_stack_shadow.py',
                     'backend/trading/opening_rally_radar.py'], check=True)
     assert before == digest_data(), '54C tests changed data/'

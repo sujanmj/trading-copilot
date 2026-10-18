@@ -11,9 +11,10 @@ import json
 import sqlite3
 import threading
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from backend.storage.db_manager import get_connection, init_db, upsert_outcome
 from backend.storage.json_io import atomic_write_json
@@ -33,6 +34,13 @@ HORIZONS = {
     'intraday': None,
     'next_day': None,
 }
+IST = ZoneInfo('Asia/Kolkata')
+HORIZON_GRACE = {
+    '15m': timedelta(minutes=15),
+    '1h': timedelta(minutes=20),
+    'intraday': timedelta(minutes=45),
+    'next_day': timedelta(minutes=60),
+}
 
 _lock = threading.Lock()
 
@@ -42,11 +50,25 @@ def _log(tag: str, msg: str):
 
 
 def _now_iso() -> str:
-    return datetime.now().isoformat()
+    return datetime.now(IST).isoformat()
 
 
 def _today() -> str:
-    return datetime.now().strftime('%Y-%m-%d')
+    return datetime.now(IST).strftime('%Y-%m-%d')
+
+
+def _parse_iso(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except (TypeError, ValueError):
+        return None
+    return parsed.replace(tzinfo=IST) if parsed.tzinfo is None else parsed
+
+
+def _as_ist(value: datetime) -> datetime:
+    return value.replace(tzinfo=IST) if value.tzinfo is None else value.astimezone(IST)
 
 
 def _parse_confidence_band(value: Any) -> Tuple[Optional[float], str]:
@@ -119,6 +141,7 @@ def _insert_event(event: dict) -> Optional[int]:
             _normalize_event_value(payload.get('entry_price'), 'entry_price'),
             _normalize_event_value(payload.get('dedupe_key')),
             json.dumps(payload.get('metadata') or {}),
+            'v2',
         )
         cur = conn.execute(
             """
@@ -126,7 +149,8 @@ def _insert_event(event: dict) -> Optional[int]:
                 event_ts, event_date, signal_type, source, ticker, direction,
                 confidence, confidence_band, regime, sector, reasoning_summary,
                 contradiction_severity, source_consensus, entry_price, dedupe_key, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                , tracking_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
@@ -152,9 +176,9 @@ def _insert_event(event: dict) -> Optional[int]:
 
 def _seed_horizons(conn: sqlite3.Connection, event_id: int, event_ts: str):
     try:
-        base = datetime.fromisoformat(event_ts)
+        base = _as_ist(datetime.fromisoformat(event_ts))
     except ValueError:
-        base = datetime.now()
+        base = datetime.now(IST)
     for horizon in HORIZONS:
         if horizon == '15m':
             due = base + timedelta(minutes=15)
@@ -400,12 +424,16 @@ def track_telegram_alert(
     direction: str = 'NEUTRAL',
     reasoning: str = '',
     contradiction_severity: Optional[float] = None,
+    entry_price: Optional[float] = None,
+    event_ts: Optional[str] = None,
+    entry_source: Optional[str] = None,
 ) -> Optional[int]:
-    event_date = _today()
+    timestamp = event_ts or _now_iso()
+    event_date = _parse_iso(timestamp).astimezone(IST).strftime('%Y-%m-%d') if _parse_iso(timestamp) else _today()
     cval = max(0.0, min(1.0, float(confidence)))
     cband = 'HIGH' if cval >= 0.75 else ('LOW' if cval <= 0.45 else 'MEDIUM')
     return _insert_event({
-        'event_ts': _now_iso(),
+        'event_ts': timestamp,
         'event_date': event_date,
         'signal_type': 'telegram',
         'source': category,
@@ -418,26 +446,110 @@ def track_telegram_alert(
         'reasoning_summary': reasoning[:240] if reasoning else category,
         'contradiction_severity': contradiction_severity,
         'source_consensus': None,
-        'entry_price': _fetch_current_price(ticker) if ticker else None,
+        'entry_price': entry_price if entry_price and float(entry_price) > 0 else None,
         'dedupe_key': f'tg_{event_date}_{category}_{ticker}',
-        'metadata': {'category': category},
+        'metadata': {
+            'category': category,
+            'entry_source': entry_source,
+            'entry_timestamp': timestamp if entry_price else None,
+        },
     })
 
 
-def evaluate_due_horizons(limit: int = 80) -> dict:
-    """Evaluate pending horizon outcomes using live/cached prices."""
+def _time_aligned_market_price(ticker: str) -> Optional[dict]:
+    """Read a price with its own observation timestamp; never infer one from file time."""
+    try:
+        with open(MARKET_DATA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f) or {}
+        prices = data.get('prices') or {}
+        entry = next((v for k, v in prices.items() if str(k).upper().strip() == ticker.upper().strip()), None)
+        if not isinstance(entry, dict):
+            return None
+        price = float(entry.get('ltp') or entry.get('price') or entry.get('close') or 0)
+        observed_at = _parse_iso(entry.get('validated_at') or entry.get('timestamp') or entry.get('as_of'))
+        if price <= 0 or observed_at is None:
+            return None
+        source = entry.get('source') or entry.get('provider') or entry.get('exchange') or 'latest_market_data.json'
+        return {'price': price, 'observed_at': observed_at, 'source': str(source)[:100]}
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _format_result_notice(event: dict, horizon: str, verdict: str, change_pct: float, observed_at: str) -> str:
+    ticker = str(event.get('ticker') or 'Unknown').replace('<', '').replace('>', '')
+    label = {'HIT': 'WON', 'MISS': 'LOST', 'NEUTRAL': 'NEUTRAL'}[verdict]
+    direction = str(event.get('direction') or 'NEUTRAL').replace('<', '').replace('>', '')
+    return (
+        f"<b>Prediction result: {label}</b>\n"
+        f"<b>{ticker}</b> · {direction}\n"
+        f"Final horizon: {horizon} · return {change_pct:+.2f}%\n"
+        f"Recorded price observation: {observed_at}\n"
+        "Saved to the outcome tracker for accuracy review."
+    )
+
+
+def _deliver_pending_outcome_notifications(limit: int = 30) -> dict:
+    """Deliver final-horizon outcomes from a retryable DB outbox."""
+    conn = get_connection()
+    sent = failed = 0
+    try:
+        rows = conn.execute(
+            """
+            SELECT n.id AS notification_id, e.id AS event_id, e.ticker, e.direction,
+                   h.horizon, h.hit_miss, h.change_pct, h.observed_at
+            FROM signal_outcome_notifications n
+            JOIN signal_events e ON e.id=n.event_id
+            JOIN signal_horizons h ON h.event_id=n.event_id AND h.horizon=n.horizon
+            WHERE n.status='PENDING'
+            ORDER BY n.created_at ASC LIMIT ?
+            """, (limit,)
+        ).fetchall()
+        for row in rows:
+            item = dict(row)
+            verdict = item['hit_miss']
+            try:
+                from backend.utils.telegram_bot import send_message_result
+                result = send_message_result(_format_result_notice(
+                    item, item['horizon'], verdict, float(item['change_pct'] or 0), item['observed_at'] or ''
+                ))
+            except Exception as exc:
+                result = {'sent': False, 'reason': str(exc)[:160]}
+            if result.get('sent'):
+                conn.execute(
+                    "UPDATE signal_outcome_notifications SET status='SENT', sent_at=?, attempts=attempts+1, last_error=NULL WHERE id=?",
+                    (_now_iso(), item['notification_id']),
+                )
+                sent += 1
+            else:
+                reason = 'dry_run' if result.get('dry_run') else str(result.get('reason') or 'send_failed')[:160]
+                conn.execute(
+                    "UPDATE signal_outcome_notifications SET attempts=attempts+1, last_error=? WHERE id=?",
+                    (reason, item['notification_id']),
+                )
+                failed += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return {'notifications_sent': sent, 'notifications_pending': failed}
+
+
+def evaluate_due_horizons(limit: int = 80, *, now: Optional[datetime] = None) -> dict:
+    """Score only timestamped prices observed near the due horizon; queue final notices."""
     _ensure_tables()
-    now = datetime.now()
+    now = _as_ist(now or datetime.now(IST))
     evaluated = 0
+    unresolved = 0
     conn = get_connection()
     try:
         rows = conn.execute(
             """
             SELECT h.id AS horizon_id, h.horizon, h.due_at, h.mfe_pct, h.mae_pct,
-                   e.id AS event_id, e.ticker, e.direction, e.entry_price, e.signal_type, e.regime
+                   e.id AS event_id, e.ticker, e.direction, e.entry_price, e.signal_type, e.regime,
+                   e.tracking_version
             FROM signal_horizons h
             JOIN signal_events e ON e.id = h.event_id
-            WHERE h.hit_miss = 'PENDING' AND h.due_at <= ?
+            WHERE h.hit_miss = 'PENDING' AND h.resolution_status = 'PENDING'
+              AND e.tracking_version = 'v2' AND h.due_at <= ?
             ORDER BY h.due_at ASC
             LIMIT ?
             """,
@@ -449,30 +561,34 @@ def evaluate_due_horizons(limit: int = 80) -> dict:
             horizon = row['horizon']
             ticker = row['ticker']
             entry = row['entry_price']
+            due_at = _parse_iso(row['due_at'])
+            grace = HORIZON_GRACE.get(horizon, timedelta(0))
+            reason = None
+            observation = _time_aligned_market_price(ticker) if ticker else None
+            if not ticker:
+                reason = 'missing_ticker'
+            elif not entry or float(entry) <= 0:
+                reason = 'missing_entry_price'
+            elif due_at is None:
+                reason = 'invalid_due_time'
+            elif observation and due_at <= observation['observed_at'] <= due_at + grace and observation['observed_at'] <= now:
+                reason = None
+            elif now > (due_at + grace if due_at else now):
+                reason = 'no_timestamped_price_in_horizon_window'
+            else:
+                continue
 
-            if row['signal_type'] == 'regime' and not ticker:
-                change = _fetch_nifty_change_pct()
-                if change is None:
-                    continue
-                hit = _classify_hit(row['direction'], change, horizon)
+            if reason:
+                # Keep historical records and source gaps visible, without inventing a verdict.
                 conn.execute(
-                    """
-                    UPDATE signal_horizons SET evaluated_at=?, change_pct=?, hit_miss=?, mfe_pct=?, mae_pct=?
-                    WHERE id=?
-                    """,
-                    (_now_iso(), change, hit, max(0, change), min(0, change), row['horizon_id']),
+                    "UPDATE signal_horizons SET resolution_status='UNRESOLVED', resolution_reason=? WHERE id=?",
+                    (reason, row['horizon_id']),
                 )
-                evaluated += 1
+                unresolved += 1
                 continue
 
-            if not ticker or not entry:
-                continue
-
-            price = _fetch_current_price(ticker)
-            if not price:
-                continue
-
-            change_pct = round(((price - entry) / entry) * 100, 3)
+            price = observation['price']
+            change_pct = round(((price - float(entry)) / float(entry)) * 100, 3)
             mfe = max(row['mfe_pct'] or change_pct, change_pct)
             mae = min(row['mae_pct'] or change_pct, change_pct)
             hit = _classify_hit(row['direction'], change_pct, horizon)
@@ -480,21 +596,29 @@ def evaluate_due_horizons(limit: int = 80) -> dict:
             conn.execute(
                 """
                 UPDATE signal_horizons SET evaluated_at=?, price=?, change_pct=?,
-                       mfe_pct=?, mae_pct=?, hit_miss=?
+                       mfe_pct=?, mae_pct=?, hit_miss=?, resolution_status='RESOLVED',
+                       resolution_reason=NULL, observed_at=?, price_source=?
                 WHERE id=?
                 """,
-                (_now_iso(), price, change_pct, mfe, mae, hit, row['horizon_id']),
+                (_now_iso(), price, change_pct, mfe, mae, hit, observation['observed_at'].isoformat(),
+                 observation['source'], row['horizon_id']),
             )
+            if row['signal_type'] == 'telegram' and horizon == 'next_day' and ticker:
+                conn.execute(
+                    "INSERT OR IGNORE INTO signal_outcome_notifications (event_id, horizon, status) VALUES (?, ?, 'PENDING')",
+                    (row['event_id'], horizon),
+                )
             evaluated += 1
 
         conn.commit()
     finally:
         conn.close()
 
+    notification_stats = _deliver_pending_outcome_notifications()
     if evaluated:
         _refresh_intelligence_memory()
         _log('OUTCOME EVAL', f'evaluated {evaluated} horizons')
-    return {'evaluated': evaluated}
+    return {'evaluated': evaluated, 'unresolved': unresolved, **notification_stats}
 
 
 def _query_horizon_stats(where_sql: str = '', params: tuple = ()) -> List[dict]:
