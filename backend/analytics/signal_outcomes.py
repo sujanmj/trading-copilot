@@ -59,11 +59,13 @@ def _parse_confidence_band(value: Any) -> Tuple[Optional[float], str]:
         v = max(0.0, min(1.0, v))
         band = 'HIGH' if v >= 0.75 else ('LOW' if v <= 0.45 else 'MEDIUM')
         return v, band
-    text = str(value).upper()
-    if 'HIGH' in text or 'VERY' in text:
-        return 0.85, 'HIGH'
-    if 'LOW' in text:
+    text = ' '.join(str(value).upper().split())
+    # Check low first: "VERY LOW" contains "VERY" but must never be
+    # promoted into the HIGH bucket.
+    if 'LOW' in text or 'WEAK' in text:
         return 0.35, 'LOW'
+    if 'HIGH' in text or 'VERY' in text or 'STRONG' in text or 'ULTRA' in text:
+        return 0.85, 'HIGH'
     return 0.55, 'MEDIUM'
 
 
