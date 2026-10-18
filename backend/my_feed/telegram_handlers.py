@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from typing import Any
 
 from backend.my_feed.feed_processor import sanitize_item_for_api, scan_feed_summary
@@ -32,7 +33,11 @@ def format_myfeed_list(items: list[dict[str, Any]], *, title: str = 'My Feed') -
             f"{row.get('suggested_action', 'NEWS ONLY')} | impact {row.get('impact_score', 0)} | "
             f"{status_tag}{archived_note}"
         )
-        lines.append(f"  {tickers} · {_display_headline(row)}")
+        if row.get('auto_ingested'):
+            source_name = html.escape(str(row.get('source_name') or row.get('provider_id') or 'news source')[:70])
+            lines.append(f'  📰 {source_name} · automatically collected')
+        headline = html.escape(_display_headline(row))
+        lines.append(f"  {tickers} · {headline}")
     return '\n'.join(lines)
 
 

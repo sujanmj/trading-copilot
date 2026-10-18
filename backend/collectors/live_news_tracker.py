@@ -40,6 +40,28 @@ def run_live_news_tracker():
                 print(f'  [WARN] {err}')
 
         try:
+            from backend.my_feed.news_ingestion import ingest_provider_articles
+
+            articles = ((result.get('output') or {}).get('articles') or [])
+            my_feed_ingestion = ingest_provider_articles(articles)
+        except Exception as exc:
+            print(f'[MY_FEED_NEWS] isolated failure: {type(exc).__name__}', flush=True)
+            my_feed_ingestion = {
+                'ok': False, 'received': 0, 'inserted': 0,
+                'duplicates': 0, 'skipped': 0, 'errors': 1,
+            }
+        result['my_feed_ingestion'] = my_feed_ingestion
+        print(
+            '[MY_FEED_NEWS] '
+            f"received={my_feed_ingestion.get('received')} "
+            f"inserted={my_feed_ingestion.get('inserted')} "
+            f"duplicates={my_feed_ingestion.get('duplicates')} "
+            f"skipped={my_feed_ingestion.get('skipped')} "
+            f"errors={my_feed_ingestion.get('errors')}",
+            flush=True,
+        )
+
+        try:
             from backend.news.automatic_primary_verification import run_automatic_primary_verification
 
             verification = run_automatic_primary_verification()

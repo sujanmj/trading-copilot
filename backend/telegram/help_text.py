@@ -72,6 +72,7 @@ HELP_BLOCKS: dict[str, str] = {
 /aihub brain full — full brain details""",
     'feed': """<b>My Feed:</b>
 /feed &lt;market news text&gt; — save text to My Feed
+/myfeed today — includes automatically collected headlines with source labels
 /feed verify FEED_ID — re-check saved feed against fresh news
 /feed remove FEED_ID — remove bad feed from active memory
 /feed restore FEED_ID — restore removed feed
@@ -211,6 +212,7 @@ Use section help to avoid Telegram truncation.
 
 <b>My Feed:</b>
 /feed &lt;market news text&gt; — save text to My Feed
+/myfeed today — includes automatically collected headlines with source labels
 /myfeed list — latest saved feed
 /myfeed today — today's feed
 /myfeed scan — tickers/themes impact

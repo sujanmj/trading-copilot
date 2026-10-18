@@ -149,6 +149,18 @@ def run_news_cache_refresh(
         from backend.collectors.news_provider_registry import run_unified_news_refresh
 
         unified = run_unified_news_refresh(send_macro_alerts=False)
+        try:
+            from backend.my_feed.news_ingestion import ingest_provider_articles
+
+            unified['my_feed_ingestion'] = ingest_provider_articles(
+                ((unified.get('output') or {}).get('articles') or [])
+            )
+        except Exception as exc:
+            unified['my_feed_ingestion'] = {
+                'ok': False, 'received': 0, 'inserted': 0,
+                'duplicates': 0, 'skipped': 0, 'errors': 1,
+                'error_type': type(exc).__name__,
+            }
         result['refresh'] = {'ok': unified.get('ok'), 'scope': 'news', 'news': 'ok' if unified.get('ok') else 'partial'}
         result['ok'] = bool(unified.get('ok'))
         result['partial'] = bool(unified.get('partial'))
@@ -159,6 +171,7 @@ def run_news_cache_refresh(
         result['error_count'] = int(unified.get('error_count') or 0)
         result['sources'] = list(unified.get('sources') or [])
         result['provider_status'] = unified.get('provider_status') or {}
+        result['my_feed_ingestion'] = unified.get('my_feed_ingestion') or {}
     except Exception as exc:
         result['error'] = str(exc)[:200]
         return result
@@ -227,6 +240,8 @@ def format_news_refresh_telegram(result: dict[str, Any]) -> str:
         f'sources_checked={int(result.get("sources_checked") or 0)}',
         f'items_found={int(result.get("items_found") or 0)}',
         f'new_items={int(result.get("new_items") or 0)}',
+        f"my_feed_saved={int((result.get('my_feed_ingestion') or {}).get('inserted') or 0)}",
+        f"my_feed_duplicates={int((result.get('my_feed_ingestion') or {}).get('duplicates') or 0)}",
         f'errors={int(result.get("error_count") or 0)}',
         f'sources={sources_disp}',
     ]

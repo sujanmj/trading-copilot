@@ -24,6 +24,7 @@ PUBLIC_ITEM_KEYS = frozenset({
     'tickers', 'themes', 'impact_score', 'urgency', 'suggested_action', 'status',
     'verification_status', 'verified_headline', 'source_name', 'side', 'confidence',
     'raw_user_text', 'normalized_claim', 'catalyst_eligible', 'archive_reason', 'archived',
+    'published_at', 'source_url', 'provider_id', 'auto_ingested',
 })
 
 
@@ -63,6 +64,9 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     ))
     geo_country = any(w in lower for w in ('iran', 'kuwait', 'jordan', 'bahrain', 'israel', 'ukraine'))
     market_wide = looks_like_market_wide_macro(summary)
+    commodity_ticker = bool(set(str(t).upper() for t in (extracted.get('tickers') or [])) & {
+        'GOLD', 'SILVER', 'CRUDEOIL', 'NATURALGAS', 'COPPER', 'ALUMINIUM', 'ZINC',
+    })
 
     if market_wide and (geo_attack or geo_country or any(w in lower for w in (
         'geopolitical', 'nifty', 'sensex', 'crude', 'oil surge', 'risk-off', 'bond yield', 'inflation',
@@ -74,7 +78,7 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
             if theme.lower() in lower or theme == 'macro policy':
                 if theme not in themes:
                     themes.append(theme)
-    elif tickers and not market_wide:
+    elif tickers and not market_wide and not commodity_ticker:
         event_type = 'company_news'
         feed_type = 'company_news'
         if any(w in lower for w in ('results', 'earnings', 'q1', 'q2', 'q3', 'q4')):
@@ -91,7 +95,15 @@ def _classify_item(extracted: dict[str, Any]) -> dict[str, Any]:
     elif any(w in lower for w in ('block deal', 'insider', 'stake', 'jv')):
         event_type = 'corporate_action'
         feed_type = 'company_news'
-    elif any(w in lower for w in ('crude', 'gold', 'silver', 'commodity', 'oil')) and market_wide:
+    elif (
+        any(re.search(rf'\b{re.escape(w)}\b', lower) for w in ('crude', 'gold', 'silver', 'commodity', 'oil'))
+        and (
+            market_wide
+            or bool(set(str(t).upper() for t in (extracted.get('tickers') or [])) & {
+                'GOLD', 'SILVER', 'CRUDEOIL', 'NATURALGAS', 'COPPER', 'ALUMINIUM', 'ZINC',
+            })
+        )
+    ):
         event_type = 'commodity'
         feed_type = 'macro_shock'
         macro = True

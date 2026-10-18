@@ -223,9 +223,23 @@ def run_premarket_slot(
                     from backend.collectors.news_provider_registry import run_unified_news_refresh
 
                     news_result = run_unified_news_refresh(send_macro_alerts=False)
+                    try:
+                        from backend.my_feed.news_ingestion import ingest_provider_articles
+
+                        news_result['my_feed_ingestion'] = ingest_provider_articles(
+                            ((news_result.get('output') or {}).get('articles') or [])
+                        )
+                    except Exception as ingest_exc:
+                        news_result['my_feed_ingestion'] = {
+                            'ok': False, 'inserted': 0, 'duplicates': 0,
+                            'errors': 1, 'error_type': type(ingest_exc).__name__,
+                        }
                     print(
                         f'[UNIFIED_NEWS_REFRESH] time={ts} sources={news_result.get("sources_checked")} '
-                        f'items={news_result.get("items_found")} errors={news_result.get("error_count")}',
+                        f'items={news_result.get("items_found")} '
+                        f'my_feed_saved={(news_result.get("my_feed_ingestion") or {}).get("inserted", 0)} '
+                        f'my_feed_duplicates={(news_result.get("my_feed_ingestion") or {}).get("duplicates", 0)} '
+                        f'errors={news_result.get("error_count")}',
                         flush=True,
                     )
                 except Exception as news_exc:
