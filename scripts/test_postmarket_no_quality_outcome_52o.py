@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -79,8 +80,8 @@ def test_radar_only_skipped() -> int:
                 candidates=[row],
                 stage='opening_0920',
             )
-        if stored:
-            return _fail('radar-only candidate must not create snapshot')
+        if len(stored) != 1 or stored[0].get('learning_eligible'):
+            return _fail('radar-only candidate must be tracked as reference-only')
         with _patch_paths(paths):
             if eligible_snapshots_for_session('2026-07-10'):
                 return _fail('no eligible snapshots expected')
@@ -106,8 +107,8 @@ def test_below_threshold_skipped() -> int:
                 candidates=[row],
                 stage='final_0931',
             )
-        if stored:
-            return _fail('below-threshold candidate must not create snapshot')
+        if len(stored) != 1 or stored[0].get('learning_eligible'):
+            return _fail('below-threshold candidate must be tracked as reference-only')
     return 0
 
 
@@ -151,6 +152,64 @@ def test_quality_candidate_captured() -> int:
     return 0
 
 
+def test_reference_outcomes_are_reported_separately() -> int:
+    from backend.trading.candidate_outcome_learning import format_daily_review_tradecard_outcome_section
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        paths = _paths(Path(tmpdir))
+        paths['outcomes'].write_text('\n'.join([
+            json.dumps({
+                'session_date': '2026-07-10', 'stage': 'final_0931',
+                'symbol': 'TCS', 'outcome': 'LOSS', 'learning_eligible': False,
+            }),
+            json.dumps({
+                'session_date': '2026-07-10', 'stage': 'final_0931',
+                'symbol': 'PNB', 'outcome': 'PENDING_DATA', 'learning_eligible': False,
+            }),
+        ]) + '\n', encoding='utf-8')
+        with _patch_paths(paths):
+            text = '\n'.join(format_daily_review_tradecard_outcome_section(session_date='2026-07-10'))
+    if 'Reference candidate outcomes (tracked, not used for learning)' not in text:
+        return _fail('reference outcomes must be explicitly separated from learning samples')
+    if 'W0/L1/N0/P1' not in text or 'Lost: TCS' not in text or 'Pending data: PNB' not in text:
+        return _fail('reference outcome counts and symbols must be shown')
+    return 0
+
+
+def test_eod_resolves_reference_loss_without_learning_sample() -> int:
+    from backend.trading import candidate_outcome_learning as learning
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        paths = _paths(Path(tmpdir))
+        paths['snapshots'].write_text(json.dumps({
+            'snapshot_id': 'reference-loss-1', 'session_date': '2026-07-10',
+            'stage': 'final_0931', 'symbol': 'TCS', 'score': 45,
+            'state': 'WATCH_ONLY', 'reference_price': 100.0,
+            'learning_eligible': False, 'eligibility_reason': 'watch_only',
+        }) + '\n', encoding='utf-8')
+        with _patch_paths(paths), \
+             patch.object(learning, '_price_path_after_reference', return_value={
+                 'close_price': 98.8, 'high_after_reference': 100.2,
+                 'low_after_reference': 98.5, 'close_return_pct': -1.2,
+                 'max_favorable_excursion_pct': 0.2,
+                 'max_adverse_excursion_pct': -1.5,
+                 'price_source': 'test', 'pending_reason': '',
+             }), \
+             patch.object(learning, '_update_learning_aggregate') as aggregate, \
+             patch('backend.analytics.prediction_postmortem.process_candidate_postmortems', return_value={} ), \
+             patch('backend.trading.daily_learning_truth.record_learning_resolve_provenance'):
+            result = learning.resolve_candidate_outcomes(session_date='2026-07-10', run_ai=False)
+        aggregate.assert_not_called()
+        if len(result.get('resolved') or []) != 1:
+            return _fail('the EOD resolver must include reference candidates')
+        row = result['resolved'][0]
+        if row.get('outcome') != 'LOSS' or row.get('learning_eligible') is not False:
+            return _fail('reference candidate must resolve as a loss without becoming a learning sample')
+        if 'TCS' not in paths['outcomes'].read_text(encoding='utf-8'):
+            return _fail('resolved reference outcome must be persisted')
+    return 0
+
+
 def test_learn_today_no_stale_52i_wording() -> int:
     from backend.trading.candidate_outcome_learning import format_learn_today_telegram
 
@@ -167,8 +226,8 @@ def test_learn_today_no_stale_52i_wording() -> int:
         return _fail('missing no quality snapshots message')
     if 'skipped_watch_only:' not in text:
         return _fail('missing skipped_watch_only counter')
-    if 'auto-captured only from quality tradecards' not in text:
-        return _fail('missing quality tradecards header')
+    if 'Learning uses quality tradecards' not in text:
+        return _fail('missing quality/reference outcome distinction')
     return 0
 
 
@@ -300,6 +359,8 @@ def main() -> int:
         test_below_threshold_skipped,
         test_stale_scanner_skipped,
         test_quality_candidate_captured,
+        test_reference_outcomes_are_reported_separately,
+        test_eod_resolves_reference_loss_without_learning_sample,
         test_learn_today_no_stale_52i_wording,
         test_tradecard_outcome_no_eligible,
         test_weekly_tradecard_signal_skipped_for_radar,

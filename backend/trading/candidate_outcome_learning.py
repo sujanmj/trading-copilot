@@ -277,6 +277,7 @@ def eligible_snapshots_for_session(session_date: str | None = None) -> list[dict
         s for s in _load_jsonl(_snapshots_path())
         if str(s.get('session_date') or '')[:10] == day
         and str(s.get('stage') or '') in PRIMARY_STAGES
+        and bool(s.get('learning_eligible', True))
         and int(s.get('score') or 0) >= MIN_QUALITY_SCORE
         and str(s.get('state') or '').upper() not in INELIGIBLE_OUTCOME_STATES
     ]
@@ -380,7 +381,7 @@ def capture_quality_snapshots(
     stage: str,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Persist quality-gated candidate snapshots for learning."""
+    """Persist shown candidates for outcome review; quality candidates alone train learning."""
     day = str(board.get('source_session_date') or board.get('session_date') or _session_date(now))[:10]
     if stage in EXCLUDED_FROM_MAIN_STATS:
         return []
@@ -395,31 +396,38 @@ def capture_quality_snapshots(
         reason = outcome_learning_skip_reason(row, board=board)
         if reason:
             record_outcome_learning_skip(reason, session_date=day)
-    quality = filter_quality_candidates(
-        candidates,
-        board=board,
-        for_outcome_learning=True,
-    )
-    if not quality and stage in PRIMARY_STAGES:
-        print(f'[CANDIDATE_OUTCOME_LEARNING] stage={stage} quality=0', flush=True)
+    visible = sorted(
+        [r for r in (candidates or []) if isinstance(r, dict) and str(r.get('state') or '').upper() != 'REJECTED'],
+        key=lambda r: int(r.get('score') or 0), reverse=True,
+    )[:MAX_QUALITY_CANDIDATES]
+    if not visible and stage in PRIMARY_STAGES:
+        print(f'[CANDIDATE_OUTCOME_LEARNING] stage={stage} candidates=0', flush=True)
     existing_keys = {
         f"{s.get('session_date')}|{s.get('stage')}|{s.get('symbol')}"
         for s in _load_jsonl(_snapshots_path())
         if str(s.get('session_date') or '')[:10] == day
     }
     stored: list[dict[str, Any]] = []
-    for idx, row in enumerate(quality, start=1):
+    for idx, row in enumerate(visible, start=1):
         sym = _normalize_symbol(row.get('ticker'))
+        if not sym:
+            continue
         dedupe_key = f'{day}|{stage}|{sym}'
         if dedupe_key in existing_keys:
             continue
         snap = build_candidate_snapshot(row, board=board, stage=stage, rank=idx, now=now)
+        eligibility_reason = outcome_learning_skip_reason(row, board=board)
+        snap['learning_eligible'] = eligibility_reason is None
+        snap['eligibility_reason'] = eligibility_reason or ''
+        snap['reference_only'] = eligibility_reason is not None
         _append_jsonl(_snapshots_path(), snap)
         stored.append(snap)
         existing_keys.add(dedupe_key)
         print(
             f'[CANDIDATE_SNAPSHOT] stage={stage} symbol={snap.get("symbol")} '
-            f'rank={idx} score={snap.get("score")}',
+            f'rank={idx} score={snap.get("score")} '
+            f'learning_eligible={snap["learning_eligible"]} '
+            f'reason={snap["eligibility_reason"] or "qualified"}',
             flush=True,
         )
     return stored
@@ -905,7 +913,16 @@ def resolve_candidate_outcomes(
     """15:45 / close review — resolve primary-stage snapshots against EOD data."""
     day = session_date or _session_date()
     resolve_id = uuid.uuid4().hex
-    snapshots = eligible_snapshots_for_session(day)
+    learning_snapshots = eligible_snapshots_for_session(day)
+    learning_ids = {str(row.get('snapshot_id') or '') for row in learning_snapshots}
+    # Resolve every candidate the bot actually showed in its primary morning
+    # workflows. Reference-only candidates get an outcome record but never a
+    # training sample or confidence adjustment.
+    snapshots = [
+        row for row in _load_jsonl(_snapshots_path())
+        if str(row.get('session_date') or '')[:10] == day
+        and str(row.get('stage') or '') in PRIMARY_STAGES
+    ]
     existing = {
         str(o.get('snapshot_id') or ''): o
         for o in _load_jsonl(_outcomes_path())
@@ -922,6 +939,8 @@ def resolve_candidate_outcomes(
         if sid in existing:
             resolved.append(existing[sid])
             continue
+        learning_eligible = sid in learning_ids
+        eligibility_reason = str(snap.get('eligibility_reason') or '')
         ref = _safe_float(snap.get('reference_price'))
         if not ref or ref <= 0:
             outcome_rec = {
@@ -930,6 +949,9 @@ def resolve_candidate_outcomes(
                 'pending_reason': 'no_reference_price',
                 'reason_tags': [],
                 'reason_summary': 'No reference price at snapshot — outcome pending.',
+                'learning_eligible': learning_eligible,
+                'eligibility_reason': eligibility_reason,
+                'reference_only': not learning_eligible,
                 'resolved_at': _now_ist().isoformat(),
             }
             _append_jsonl(_outcomes_path(), outcome_rec)
@@ -950,6 +972,9 @@ def resolve_candidate_outcomes(
                 'pending_reason': pending_reason or pending_from_metrics or 'missing_price_data',
                 'reason_tags': [],
                 'reason_summary': 'Price data unavailable for EOD resolution.',
+                'learning_eligible': learning_eligible,
+                'eligibility_reason': eligibility_reason,
+                'reference_only': not learning_eligible,
                 'resolved_at': _now_ist().isoformat(),
             }
             _append_jsonl(_outcomes_path(), outcome_rec)
@@ -964,7 +989,12 @@ def resolve_candidate_outcomes(
             'pending_reason': '',
             'reason_tags': tags,
             'reason_summary': summary,
-            'ai_explain_needed': needs_ai_explanation(snap, outcome, tags, score=int(snap.get('score') or 0)),
+            'learning_eligible': learning_eligible,
+            'eligibility_reason': eligibility_reason,
+            'reference_only': not learning_eligible,
+            'ai_explain_needed': learning_eligible and needs_ai_explanation(
+                snap, outcome, tags, score=int(snap.get('score') or 0),
+            ),
             'resolved_at': _now_ist().isoformat(),
         }
         if run_ai and outcome_rec.get('ai_explain_needed') and ai_used < AI_EXPLAIN_CAP:
@@ -979,12 +1009,13 @@ def resolve_candidate_outcomes(
             if outcome_rec.get('ai_explain_needed'):
                 ai_skipped += 1
         _append_jsonl(_outcomes_path(), outcome_rec)
-        mut = _update_learning_aggregate(outcome_rec)
-        if mut.get('inserted'):
-            learning_inserted += 1
-            learning_sample_ids.append(str(mut.get('sample_id') or ''))
-        elif mut.get('deduplicated'):
-            learning_deduped += 1
+        if learning_eligible:
+            mut = _update_learning_aggregate(outcome_rec)
+            if mut.get('inserted'):
+                learning_inserted += 1
+                learning_sample_ids.append(str(mut.get('sample_id') or ''))
+            elif mut.get('deduplicated'):
+                learning_deduped += 1
         resolved.append(outcome_rec)
 
     postmortem = {'saved': 0, 'processed': 0, 'completed': 0, 'pending': 0, 'errors': 0}
@@ -1148,6 +1179,8 @@ def _group_outcomes_by_stage(outcomes: list[dict[str, Any]], stage: str) -> dict
     for row in outcomes:
         if str(row.get('stage') or '') != stage:
             continue
+        if not bool(row.get('learning_eligible', True)):
+            continue
         sym = _normalize_symbol(row.get('symbol'))
         if not sym:
             continue
@@ -1164,10 +1197,40 @@ def _outcome_learning_group_counts(*, session_date: str | None = None) -> dict[s
     for row in _load_jsonl(_outcomes_path()):
         if str(row.get('session_date') or '')[:10] != day:
             continue
+        if not bool(row.get('learning_eligible', True)):
+            continue
         bucket = str(row.get('outcome') or OUTCOME_PENDING)
         if bucket in groups:
             groups[bucket] += 1
     return groups
+
+
+def _reference_outcome_review_lines(*, session_date: str | None = None) -> list[str]:
+    """Show tracked but non-learning morning candidates and their resolved outcomes."""
+    day = session_date or _session_date()
+    groups = {OUTCOME_WIN: [], OUTCOME_LOSS: [], OUTCOME_NEUTRAL: [], OUTCOME_PENDING: []}
+    for row in _load_jsonl(_outcomes_path()):
+        if str(row.get('session_date') or '')[:10] != day:
+            continue
+        if str(row.get('stage') or '') != 'final_0931':
+            continue
+        if bool(row.get('learning_eligible', True)):
+            continue
+        outcome = str(row.get('outcome') or OUTCOME_PENDING).upper()
+        bucket = outcome if outcome in groups else OUTCOME_PENDING
+        symbol = _normalize_symbol(row.get('symbol'))
+        if symbol:
+            groups[bucket].append(symbol)
+    total = sum(len(values) for values in groups.values())
+    if not total:
+        return []
+    return [
+        '<b>Reference candidate outcomes (tracked, not used for learning):</b>',
+        f'W{len(groups[OUTCOME_WIN])}/L{len(groups[OUTCOME_LOSS])}/'
+        f'N{len(groups[OUTCOME_NEUTRAL])}/P{len(groups[OUTCOME_PENDING])}',
+        f'Lost: {", ".join(groups[OUTCOME_LOSS][:10]) or "—"}',
+        f'Pending data: {", ".join(groups[OUTCOME_PENDING][:10]) or "—"}',
+    ]
 
 
 def _skip_counts_from_opening_workflow(opening: dict[str, Any] | None) -> dict[str, int]:
@@ -1281,6 +1344,8 @@ def format_no_quality_snapshots_block(
         f'lost: {groups[OUTCOME_LOSS]}',
         f'neutral: {groups[OUTCOME_NEUTRAL]}',
         f'pending: {groups[OUTCOME_PENDING]}',
+        '',
+        *_reference_outcome_review_lines(session_date=session_date),
         *skip_lines,
     ]
 
@@ -1293,7 +1358,10 @@ def format_daily_review_tradecard_outcome_section(
     """Single unified Tradecard outcome review for scheduled DAILY REVIEW (no-eligible days)."""
     day = session_date or _session_date()
     if has_eligible_quality_snapshots(day):
-        return format_tradecard_outcome_review_block(session_date=day)
+        return [
+            *format_tradecard_outcome_review_block(session_date=day),
+            *_reference_outcome_review_lines(session_date=day),
+        ]
     groups = _outcome_learning_group_counts(session_date=day)
     skip_lines = format_skip_counter_lines(
         session_date=day,
@@ -1309,6 +1377,8 @@ def format_daily_review_tradecard_outcome_section(
         f'lost: {groups[OUTCOME_LOSS]}',
         f'neutral: {groups[OUTCOME_NEUTRAL]}',
         f'pending: {groups[OUTCOME_PENDING]}',
+        '',
+        *_reference_outcome_review_lines(session_date=day),
         *skip_lines,
     ]
 
@@ -1354,7 +1424,8 @@ def format_tradecard_outcome_review_block(*, session_date: str | None = None) ->
     if not has_eligible_quality_snapshots(session_date):
         lines.extend([
             'No eligible quality tradecard snapshots today.',
-            'Radar/watchlist candidates were reference-only and not scored as tradecard wins/losses.',
+            'Non-qualified candidates are tracked separately and excluded from learning samples.',
+            *_reference_outcome_review_lines(session_date=session_date),
         ])
         return lines
     try:
@@ -1378,6 +1449,7 @@ def format_tradecard_outcome_review_block(*, session_date: str | None = None) ->
             lines.append(f"Worst: {w.get('ticker')} — {w.get('outcome')} ({w.get('pct')}%)")
     except Exception:
         lines.append('Eligible quality snapshots captured; journal summary unavailable.')
+    lines.extend(_reference_outcome_review_lines(session_date=session_date))
     return lines
 
 
@@ -1412,6 +1484,10 @@ def format_candidate_outcome_learning_block(
         lines.append(f'Lost: {len(groups[OUTCOME_LOSS])} — {", ".join(groups[OUTCOME_LOSS][:6]) or "—"}')
         lines.append(f'Neutral: {len(groups[OUTCOME_NEUTRAL])} — {", ".join(groups[OUTCOME_NEUTRAL][:6]) or "—"}')
         lines.append(f'Pending data: {len(groups[OUTCOME_PENDING])} — {", ".join(groups[OUTCOME_PENDING][:6]) or "—"}')
+        lines.append('')
+
+    lines.extend(_reference_outcome_review_lines(session_date=day))
+    if lines and lines[-1] != '':
         lines.append('')
 
     try:
@@ -1466,7 +1542,7 @@ def format_learn_today_telegram(*, session_date: str | None = None) -> str:
     day = session_date or _session_date()
     lines = [
         f'<b>/learn today — {day}</b>',
-        '<i>Read-only — auto-captured only from quality tradecards</i>',
+        '<i>Learning uses quality tradecards; shown watch-only/below-threshold candidates are tracked as references.</i>',
         '',
     ]
     lines.extend(format_candidate_outcome_learning_block(session_date=day))
