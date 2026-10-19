@@ -793,6 +793,32 @@ def run_ai_explainer(
     if str(outcome_record.get('outcome') or '') not in (OUTCOME_WIN, OUTCOME_LOSS):
         return {'ai_explain_status': 'SKIPPED', 'ai_reason_summary': '', 'ai_reason_tags': []}
 
+    evidence_records: list[dict[str, str]] = []
+    if str(outcome_record.get('outcome') or '') == OUTCOME_LOSS:
+        try:
+            from backend.analytics.prediction_postmortem import search_prediction_day_news
+
+            evidence_records = search_prediction_day_news(
+                symbol=str(snapshot.get('symbol') or ''),
+                session_date=str(snapshot.get('session_date') or outcome_record.get('session_date') or _session_date()),
+                snapshot_at=snapshot.get('snapshot_at'),
+                cutoff_at=outcome_record.get('resolved_at'),
+            )
+        except Exception as exc:
+            return {
+                'ai_explain_status': 'SKIPPED',
+                'ai_reason_summary': '',
+                'ai_reason_tags': list(outcome_record.get('reason_tags') or [])[:4],
+                'missing_data_note': f'news_search_failed:{type(exc).__name__}'[:120],
+            }
+        if not evidence_records:
+            return {
+                'ai_explain_status': 'SKIPPED',
+                'ai_reason_summary': '',
+                'ai_reason_tags': list(outcome_record.get('reason_tags') or [])[:4],
+                'missing_data_note': 'no_dated_ticker_specific_news_found',
+            }
+
     payload = {
         'symbol': snapshot.get('symbol'),
         'stage': snapshot.get('stage'),
@@ -808,11 +834,13 @@ def run_ai_explainer(
         'macro_regime': snapshot.get('macro_regime'),
         'reason_tags': outcome_record.get('reason_tags'),
         'sector_theme': snapshot.get('sector_theme'),
+        'dated_sources': evidence_records,
     }
     prompt = (
         'Explain in 2 short sentences why this paper-research tradecard candidate '
-        f'likely {outcome_record.get("outcome")}. Use only this JSON context. '
-        'Do not invent prices, hidden facts, or trade advice. JSON:\n'
+        f'likely {outcome_record.get("outcome")}. Use only this JSON context and dated sources. '
+        'For a loss, describe possible contributors, not proven causality. Do not invent prices, '
+        'hidden facts, source claims, or trade advice. JSON:\n'
         f'{json.dumps(payload, ensure_ascii=False)}'
     )
     try:
@@ -852,6 +880,7 @@ def run_ai_explainer(
                 'model_used': str(result.get('model') or ''),
                 'provider_used': str(result.get('provider_used') or ''),
                 'key_slot_used': str(result.get('key_slot_used') or ''),
+                'evidence_records': evidence_records,
             }
         return {
             'ai_explain_status': str(result.get('ai_explain_status') or 'FAILED'),
@@ -958,6 +987,22 @@ def resolve_candidate_outcomes(
             learning_deduped += 1
         resolved.append(outcome_rec)
 
+    postmortem = {'saved': 0, 'processed': 0, 'completed': 0, 'pending': 0, 'errors': 0}
+    try:
+        from backend.analytics.prediction_postmortem import process_candidate_postmortems
+
+        postmortem = process_candidate_postmortems(
+            resolved,
+            session_date=day,
+            ai_limit=max(0, AI_EXPLAIN_CAP - ai_used),
+        )
+    except Exception as exc:
+        postmortem['errors'] = 1
+        print(
+            f'[PREDICTION_POSTMORTEM] date={day} failed={type(exc).__name__}',
+            flush=True,
+        )
+
     try:
         from backend.trading.daily_learning_truth import record_learning_resolve_provenance
 
@@ -978,6 +1023,7 @@ def resolve_candidate_outcomes(
         'ai_explanations_skipped': ai_skipped,
         'learning_samples_inserted': learning_inserted,
         'learning_samples_deduplicated': learning_deduped,
+        'prediction_postmortem': postmortem,
         'updated_at': _now_ist().isoformat(),
     }
     try:
@@ -987,7 +1033,9 @@ def resolve_candidate_outcomes(
     print(
         f'[CANDIDATE_OUTCOME_RESOLVE] date={day} resolved={len(resolved)} '
         f'ai_used={ai_used} ai_skipped={ai_skipped} '
-        f'learning_inserted={learning_inserted} learning_deduped={learning_deduped}',
+        f'learning_inserted={learning_inserted} learning_deduped={learning_deduped} '
+        f'postmortems_saved={postmortem.get("saved", 0)} '
+        f'postmortems_pending={postmortem.get("pending", 0)}',
         flush=True,
     )
     return {
@@ -997,6 +1045,7 @@ def resolve_candidate_outcomes(
         'ai_skipped': ai_skipped,
         'learning_samples_inserted': learning_inserted,
         'learning_samples_deduplicated': learning_deduped,
+        'prediction_postmortem': postmortem,
     }
 
 

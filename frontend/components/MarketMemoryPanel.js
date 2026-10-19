@@ -817,6 +817,7 @@
     const simStrategies = Array.isArray(simulation.strategy_performance)
       ? simulation.strategy_performance
       : [];
+    const walkForward = simulation.walk_forward || {};
 
     const simDisclaimer = simulation.disclaimer
       || 'Simulated predictions are backtest samples, not live predictions.';
@@ -899,6 +900,43 @@
 
           </table>`;
 
+    }
+
+    if (Array.isArray(walkForward.strategies) && walkForward.strategies.length) {
+
+      const pct = (value, signed = false) => {
+        if (value == null || !Number.isFinite(Number(value))) return '—';
+        const number = Number(value);
+        return `${signed && number > 0 ? '+' : ''}${number.toFixed(2)}%`;
+      };
+
+      const wfRows = walkForward.strategies.map((item) => {
+        const validation = item.splits?.validation || {};
+        const test = item.splits?.test || {};
+        return `
+          <tr>
+            <td>${escapeHtml(item.strategy || '—')}</td>
+            <td>${validation.scored_trades ?? 0}</td>
+            <td>${validation.win_rate_pct != null ? pct(validation.win_rate_pct) : '—'}</td>
+            <td>${pct(validation.mean_net_return_pct, true)}</td>
+            <td>${test.scored_trades ?? 0}</td>
+            <td>${test.win_rate_pct != null ? pct(test.win_rate_pct) : '—'}</td>
+            <td>${pct(test.mean_net_return_pct, true)}</td>
+            <td>${test.ambiguous_excluded ?? 0}</td>
+          </tr>`;
+      }).join('');
+
+      html += `
+          <div class="mm-learning-title">Walk-forward check · latest run</div>
+          <div class="panel-status-banner waiting mm-price-scale-warn">
+            Later dates are held out for testing. Returns are per trade after
+            ${Number(walkForward.cost_bps_round_trip || 0).toFixed(1)} round-trip cost bps;
+            overlapping trades are not portfolio returns.
+          </div>
+          <table class="mm-table mm-table-compact">
+            <thead><tr><th>Strategy</th><th>Val n</th><th>Val win%</th><th>Val net/trade</th><th>Test n</th><th>Test win%</th><th>Test net/trade</th><th>Test ambiguous</th></tr></thead>
+            <tbody>${wfRows}</tbody>
+          </table>`;
     }
 
     html += `

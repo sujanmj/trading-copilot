@@ -54,6 +54,10 @@ def main() -> int:
             'our_vs_broker': {'relationship': 'agreement'},
         },
         'historical_fn': lambda _t: {'overall': {'wins': 8, 'losses': 2, 'win_rate': 0.8}},
+        'postmortem_fn': lambda _c: {
+            'available': True, 'event_type': 'RESULTS_NEWS', 'sample_count': 7,
+            'win_rate_pct': 57.1, 'research_only': True,
+        },
         'router_fn': lambda: {'active_mode': 'INDIA_MODE', 'warnings': []},
         'freshness_fn': lambda: {'safe_to_use': True, 'warnings': []},
     }
@@ -66,6 +70,17 @@ def main() -> int:
     }, context=strong_ctx)
     if strong.get('decision') != 'BUY_CANDIDATE':
         return _fail(f'expected BUY_CANDIDATE, got {strong.get("decision")}')
+    if strong.get('components', {}).get('historical_postmortems', {}).get('sample_count') != 7:
+        return _fail('historical event analog should appear in scoring research context')
+    no_analog = score_candidate({
+        'ticker': 'MOCKSTRONG',
+        'prediction_id': 'mock:strong',
+        'direction': 'BUY',
+        'confidence_label': 'HIGH',
+        'signal_stack': {'entry_price': 98.0, 'target_price': 105.0, 'stop_loss': 95.0},
+    }, context={**strong_ctx, 'postmortem_fn': lambda _c: {'available': False}})
+    if strong.get('final_score') != no_analog.get('final_score'):
+        return _fail('unvalidated event analogs must not change candidate score')
     if not (70 <= int(strong.get('final_score') or 0) <= 100):
         return _fail(f'strong candidate score out of range: {strong.get("final_score")}')
 

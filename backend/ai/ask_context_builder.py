@@ -124,12 +124,47 @@ def _calibration_section() -> str:
     return '\n'.join(parts)
 
 
+def _postmortem_section(question: str) -> str:
+    if not question:
+        return ''
+    try:
+        from backend.analytics.prediction_postmortem import get_postmortem_context_for_question
+
+        rows = get_postmortem_context_for_question(question, limit=4)
+    except Exception:
+        rows = []
+    if not rows:
+        return ''
+    lines = [
+        '=== SAVED PREDICTION POSTMORTEMS ===',
+        'Historical analogs are evidence, not proof of cause and not a standalone recommendation.',
+    ]
+    for row in rows:
+        lines.append(
+            f"{row.get('symbol')} {row.get('session_date')} {row.get('outcome')} "
+            f"move={row.get('close_return_pct')}% event={row.get('event_type')} "
+            f"status={row.get('evidence_status')}"
+        )
+        summary = str(row.get('cause_summary') or '').strip()
+        if summary:
+            lines.append(f"  EOD review: {_clip(summary, 350)}")
+        if row.get('event_text'):
+            lines.append(f"  Snapshot context: {_clip(str(row['event_text']), 220)}")
+        for source in (row.get('evidence') or [])[:2]:
+            lines.append(
+                f"  Source ({source.get('published_at')}): {_clip(str(source.get('title') or ''), 180)} "
+                f"{source.get('url') or ''}"
+            )
+    return '\n'.join(lines)
+
+
 def build_ask_context(question: str = '', max_chars: int = 4500) -> str:
     """Assemble engine-grounded context for Ask AI prompts."""
     intel = _load_json(INTEL_FILE)
     sections = [
         "=== REGIME & CONTRADICTION ===",
         _regime_section(intel),
+        _postmortem_section(question),
         "",
         "=== ELITE RANKINGS (meta-labeler) ===",
         _elite_section(),
@@ -154,6 +189,8 @@ STRICT RULES:
 - Do NOT invent tickers or generic market picks (e.g. random Nifty names).
 - If elite setups are empty, say no high-conviction elite trades passed the >72% threshold.
 - Reference ranked opportunities, regime alignment, contradiction pressure, and calibration when relevant.
+- When saved postmortems are supplied, distinguish observed outcomes from possible causes and cite supplied source links.
+- Do not treat historical analogs as proof or as a standalone stock recommendation.
 - Keep answer to 4-6 sentences, actionable for a retail investor.
 
 INTERNAL ENGINE DATA:
