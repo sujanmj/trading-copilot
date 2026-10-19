@@ -50,6 +50,7 @@ class PredictionPostmortemTests(unittest.TestCase):
             'session_date': '2026-10-19', 'snapshot_at': '2026-10-19T09:30:00+05:30',
             'stage': 'final_0931', 'outcome': 'LOSS', 'close_return_pct': -1.2,
             'max_favorable_excursion_pct': 0.4, 'max_adverse_excursion_pct': -1.5,
+            'learning_eligible': False, 'eligibility_reason': 'below_threshold',
             'news_headline': 'Adani Power tender update', 'resolved_at': '2026-10-19T15:45:00+05:30',
             'reason_tags': ['no_volume_followthrough'],
         }
@@ -73,6 +74,16 @@ class PredictionPostmortemTests(unittest.TestCase):
         self.assertEqual(rows[0]['evidence_status'], 'COMPLETE')
         self.assertEqual(rows[0]['cause_category'], 'NEWS_AND_MOMENTUM')
         self.assertEqual(rows[0]['evidence'][0]['url'], source['url'])
+        conn = store.get_connection()
+        try:
+            context_row = conn.execute(
+                'SELECT context_json FROM prediction_postmortems WHERE snapshot_id = ?',
+                ('snap-loss-1',),
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertIn('"learning_eligible":false', context_row['context_json'])
+        self.assertIn('below_threshold', context_row['context_json'])
         listing = postmortem.format_postmortems_telegram(symbol='ADANIPOWER')
         digest = postmortem.format_eod_postmortem_digest('2026-10-19')
         self.assertIn('ADANIPOWER', listing)

@@ -53,8 +53,15 @@ def _base_record(snapshot: dict[str, Any], outcome: dict[str, Any]) -> dict[str,
         'event_text': text,
         'verification_status': snapshot.get('verification_status'),
         'macro_regime': snapshot.get('macro_regime'),
+        'learning_eligible': outcome.get('learning_eligible', snapshot.get('learning_eligible', True)),
+        'eligibility_reason': outcome.get('eligibility_reason', snapshot.get('eligibility_reason', '')),
         'reason_tags': outcome.get('reason_tags') or [],
-        'evidence_status': 'PENDING' if str(outcome.get('outcome') or '').upper() == 'LOSS' else 'COMPLETE',
+        'evidence_status': (
+            'PENDING'
+            if str(outcome.get('outcome') or '').upper() == 'LOSS'
+            and str(snapshot.get('stage') or '') == 'final_0931'
+            else 'COMPLETE'
+        ),
         'context': {
             'score': snapshot.get('score'),
             'reference_price': snapshot.get('reference_price'),
@@ -73,6 +80,8 @@ def _base_record(snapshot: dict[str, Any], outcome: dict[str, Any]) -> dict[str,
             'max_favorable_excursion_pct': outcome.get('max_favorable_excursion_pct'),
             'max_adverse_excursion_pct': outcome.get('max_adverse_excursion_pct'),
             'resolved_at': outcome.get('resolved_at'),
+            'learning_eligible': outcome.get('learning_eligible', snapshot.get('learning_eligible', True)),
+            'eligibility_reason': outcome.get('eligibility_reason', snapshot.get('eligibility_reason', '')),
         },
     }
 
@@ -293,7 +302,7 @@ def process_candidate_postmortems(
     today_pending = get_pending_postmortems(
         limit=100, session_date=str(session_date)[:10], stage='final_0931',
     )
-    backlog = get_pending_postmortems(limit=300, stage='final_0931')
+    backlog = get_pending_postmortems(limit=20)
     seen_ids: set[str] = set()
     pending: list[dict[str, Any]] = []
     for row in [*today_pending, *backlog]:
