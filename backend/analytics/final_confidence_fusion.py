@@ -806,6 +806,31 @@ def score_candidate(
     elif sim_reasons:
         explanations.append(f'H: historical simulation — {sim_reasons[0]}')
 
+    postmortem_fn = ctx.get('postmortem_fn')
+    try:
+        if postmortem_fn:
+            postmortem_analogs = postmortem_fn(candidate)
+        else:
+            from backend.analytics.prediction_postmortem import get_candidate_event_analogs
+
+            postmortem_analogs = get_candidate_event_analogs(candidate)
+    except Exception:
+        postmortem_analogs = {'available': False, 'reason': 'postmortem_store_unavailable'}
+    components['historical_postmortems'] = postmortem_analogs
+    if postmortem_analogs.get('available'):
+        explanations.append(
+            'I: historical event analogs '
+            f"{postmortem_analogs.get('event_type')} n={postmortem_analogs.get('sample_count')} "
+            f"win_rate={float(postmortem_analogs.get('win_rate_pct') or 0):.1f}% "
+            '(research context only; no score adjustment)'
+        )
+    elif postmortem_analogs.get('reason') == 'low_sample':
+        explanations.append(
+            'I: historical event analogs below minimum sample '
+            f"n={postmortem_analogs.get('sample_count', 0)} "
+            f"(needs {postmortem_analogs.get('minimum_sample_count', 5)}; no score adjustment)"
+        )
+
     if ctx.get('router_fn'):
         e_payload = ctx['router_fn']()
         active_mode = str(e_payload.get('active_mode') or 'RESEARCH_MODE')

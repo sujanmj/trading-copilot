@@ -1693,7 +1693,7 @@ def get_distinct_tickers(*, market: str | None = None, limit: int | None = None)
         rows = conn.execute(query, params).fetchall()
     finally:
         conn.close()
-    return [str(row['ticker']).strip().upper() for row in rows if row.get('ticker')]
+    return [str(row['ticker']).strip().upper() for row in rows if row['ticker']]
 
 
 def get_stats() -> dict:

@@ -397,6 +397,12 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
 
     best_lines = [format_outcome_line(r) for r in (summary.get('best') or [])]
     worst_lines = [format_outcome_line(r) for r in (summary.get('worst') or [])]
+    try:
+        from backend.analytics.prediction_postmortem import format_eod_postmortem_digest
+
+        postmortem_lines = format_eod_postmortem_digest(review_date)
+    except Exception:
+        postmortem_lines = ''
 
     by_type = summary.get('by_alert_type') or {}
     open_setup = by_type.get('open_setup') or {}
@@ -417,6 +423,7 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
         f"{chr(10).join(quality_lines)}\n\n"
         f"<b>Best:</b>\n{chr(10).join(best_lines) if best_lines else '—'}\n\n"
         f"<b>Worst:</b>\n{chr(10).join(worst_lines) if worst_lines else '—'}\n\n"
+        f"{postmortem_lines}{'\n\n' if postmortem_lines else ''}"
         f"<b>Premarket:</b>\n"
         f"Confirmed: {summary.get('premarket_confirmed', 0)} · "
         f"Rejected: {summary.get('premarket_rejected', 0)}\n\n"

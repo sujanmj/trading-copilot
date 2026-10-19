@@ -689,12 +689,16 @@ def get_simulation_dashboard(*, market: str | None = None) -> dict[str, Any]:
     stats = get_simulation_stats()
     runs = list_runs(market=market, limit=10)
     strategies = get_strategy_performance(market=market)
+    from backend.analytics.walk_forward_report import get_walk_forward_report
+
+    walk_forward = get_walk_forward_report(market=market)
     return {
         'ok': True,
         'simulation': {
             'stats': stats,
             'runs': runs,
             'strategy_performance': strategies,
+            'walk_forward': walk_forward,
             'disclaimer': (
                 'Simulated predictions are backtest samples, not live predictions.'
             ),
