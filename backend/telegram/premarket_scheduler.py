@@ -86,7 +86,11 @@ SCHEDULE_DISPLAY_LEGACY_BUILDS = [
     '08:45 — final premarket action plan',
 ]
 
-SCHEDULE_DISPLAY = SCHEDULE_DISPLAY_LEGACY_BUILDS + SCHEDULE_DISPLAY_OPENING
+SCHEDULE_DISPLAY = (
+    SCHEDULE_DISPLAY_LEGACY_BUILDS
+    + SCHEDULE_DISPLAY_OPENING
+    + ['22:00 — daily trusted-news gap digest to My Feed + Telegram']
+)
 
 
 def _load_state() -> dict:

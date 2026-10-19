@@ -48,12 +48,13 @@ def _article_id(provider_id: str, url: str, title: str, published_at: str) -> st
     return 'rss_' + hashlib.sha256(identity.encode('utf-8')).hexdigest()[:28]
 
 
-def ingest_provider_articles(articles: list[dict[str, Any]] | None) -> dict[str, int | bool]:
+def ingest_provider_articles(articles: list[dict[str, Any]] | None) -> dict[str, Any]:
     """Idempotently save fetched registry articles into the persistent My Feed DB."""
     stats: dict[str, int | bool] = {
         'ok': True, 'received': 0, 'inserted': 0, 'duplicates': 0,
         'skipped': 0, 'errors': 0,
     }
+    inserted_items: list[dict[str, Any]] = []
     saved_any = False
 
     batch = list(articles or [])
@@ -126,6 +127,15 @@ def ingest_provider_articles(articles: list[dict[str, Any]] | None) -> dict[str,
             insert_feed_item(record)
             stats['inserted'] = int(stats['inserted']) + 1
             saved_any = True
+            inserted_items.append({
+                'feed_id': feed_id,
+                'title': title,
+                'source_name': record['source_name'],
+                'source_url': url,
+                'published_at': published_at,
+                'tickers': tickers,
+                'feed_type': feed_type,
+            })
         except Exception:
             # A concurrent refresh can race on the deterministic primary key.
             if get_item(feed_id):
@@ -141,4 +151,5 @@ def ingest_provider_articles(articles: list[dict[str, Any]] | None) -> dict[str,
         except Exception:
             pass
     stats['ok'] = int(stats['errors']) == 0
+    stats['inserted_items'] = inserted_items
     return stats

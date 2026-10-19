@@ -32,6 +32,7 @@ _eod_thread: threading.Thread | None = None
 _eod_lock = threading.Lock()
 _full_cycle_lock = threading.Lock()
 _outcome_horizon_lock = threading.Lock()
+_eod_news_digest_lock = threading.Lock()
 _interval_jobs_registered = False
 _last_recovery_check = 0.0
 RECOVERY_CHECK_SECONDS = 300
@@ -320,6 +321,42 @@ def _job_postmarket_report_pack():
         f"mode={result.get('market_mode')} warnings={len(result.get('warnings') or [])}",
         flush=True,
     )
+
+
+@ist_daily(22, 0, weekdays_only=False, name='eod_news_digest')
+def _job_eod_news_digest():
+    """Refresh source-attributed news and post the daily My Feed gap digest."""
+    if not _eod_news_digest_lock.acquire(blocking=False):
+        set_job_status('eod_news_digest', 'skipped:previous_run_in_progress')
+        return DEFERRED_JOB
+
+    def _run():
+        started_at = time.monotonic()
+        set_job_status('eod_news_digest', 'running')
+        try:
+            from backend.my_feed.eod_news_digest import run_eod_news_digest
+
+            result = run_eod_news_digest()
+            state = 'completed' if result.get('ok') else 'completed_with_warnings'
+            set_job_status('eod_news_digest', state)
+            print(
+                f"[EOD_NEWS_DIGEST_WORKER] complete status={state} "
+                f"duration_s={time.monotonic() - started_at:.1f}",
+                flush=True,
+            )
+        except Exception as exc:
+            set_job_status('eod_news_digest', f'failed:{type(exc).__name__}')
+            print(
+                f"[EOD_NEWS_DIGEST_WORKER] failed duration_s={time.monotonic() - started_at:.1f} "
+                f"error_type={type(exc).__name__}",
+                flush=True,
+            )
+        finally:
+            _eod_news_digest_lock.release()
+
+    threading.Thread(target=_run, name='EOD-News-Digest', daemon=False).start()
+    set_job_status('eod_news_digest', 'running')
+    return DEFERRED_JOB
 
 
 @ist_daily(7, 0, weekdays_only=False, name='research_mode_report_pack')

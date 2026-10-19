@@ -49,6 +49,17 @@ def main() -> int:
             assert first == {
                 'ok': True, 'received': 1, 'inserted': 1,
                 'duplicates': 0, 'skipped': 0, 'errors': 0,
+                'inserted_items': [{
+                    'feed_id': 'rss_' + hashlib.sha256(
+                        ('et_markets\nhttps://example.com/markets/rbi-policy\n').encode('utf-8')
+                    ).hexdigest()[:28],
+                    'title': article['title'],
+                    'source_name': 'ET Markets',
+                    'source_url': 'https://example.com/markets/rbi-policy',
+                    'published_at': article['published_at'],
+                    'tickers': ['NIFTY'],
+                    'feed_type': 'macro',
+                }],
             }, first
 
             feed_id = 'rss_' + hashlib.sha256(

@@ -18,9 +18,11 @@ if __name__ == '__main__':
     run(expected_stage='54C')
     subprocess.run([sys.executable, 'scripts/test_full_stack_shadow_54c.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_process_lock_54c.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/test_scheduler_supervision_54c.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_scheduler_horizon_nonblocking_54c.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_telegram_outcome_tracking.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_auto_news_myfeed_ingestion.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/test_eod_news_digest.py'], check=True)
     subprocess.run([sys.executable, '-m', 'py_compile', 'backend/runtime/full_stack_shadow.py',
                     'backend/trading/opening_rally_radar.py'], check=True)
     assert before == digest_data(), '54C tests changed data/'

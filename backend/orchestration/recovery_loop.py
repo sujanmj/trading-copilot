@@ -113,18 +113,11 @@ def enforce_single_worker_mode():
 
 
 def safe_clear_stale_locks(reason: str = 'lightweight_recovery') -> bool:
-    from backend.utils.process_lock import clear_stale_lock, is_lock_holder_valid, force_clear_lock
+    from backend.utils.process_lock import clear_stale_lock
 
-    ownership = validate_singleton_ownership()
-    tick_age = ownership.get('tick_age_seconds')
-
-    if tick_age is not None and tick_age > OWNER_UNHEALTHY_SECONDS:
-        if force_clear_lock('master_scheduler', f'{reason}:tick_stale_{int(tick_age)}s'):
-            record_recovery_attempt(reason, 'lock_force_cleared', detail=f'tick_age={tick_age}')
-            return True
-
-    if is_lock_holder_valid('master_scheduler'):
-        return False
+    # A stale heartbeat is evidence that the scheduler needs a restart, but it
+    # does not make the live process's singleton lock stale. The API supervisor
+    # handles the retry signal and terminates the child before it can reacquire.
     cleared = clear_stale_lock('master_scheduler')
     if cleared:
         _log('ORCHESTRATOR', f'stale lock detected — cleared ({reason})')
