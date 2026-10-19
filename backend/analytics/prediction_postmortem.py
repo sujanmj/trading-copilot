@@ -282,22 +282,45 @@ def process_candidate_postmortems(
         upsert_postmortem(record, evidence)
         saved += 1
 
-    result = {'saved': saved, 'processed': 0, 'completed': 0, 'pending': 0, 'errors': 0}
-    pending = get_pending_postmortems(limit=max(0, int(ai_limit)))
+    result = {
+        'saved': saved, 'searched': 0, 'sources_found': 0,
+        'processed': 0, 'completed': 0, 'pending': 0, 'errors': 0,
+    }
+
+    # Research every loss in today's actual 09:31 list before applying the
+    # separate AI-call budget. This guarantees source collection is not skipped
+    # merely because the EOD explanation allowance has been consumed.
+    today_pending = get_pending_postmortems(
+        limit=100, session_date=str(session_date)[:10], stage='final_0931',
+    )
+    backlog = get_pending_postmortems(limit=300, stage='final_0931')
+    seen_ids: set[str] = set()
+    pending: list[dict[str, Any]] = []
+    for row in [*today_pending, *backlog]:
+        key = str(row.get('snapshot_id') or '')
+        if key and key not in seen_ids:
+            seen_ids.add(key)
+            pending.append(row)
+
+    researched: list[dict[str, Any]] = []
     for row in pending:
         snapshot_id = str(row.get('snapshot_id') or '')
         attempts = int(row.get('attempts') or 0) + 1
         evidence = list(row.get('evidence') or [])
+        if evidence:
+            researched.append({**row, 'evidence': evidence})
+            continue
         try:
-            if not evidence:
-                evidence = search_prediction_day_news(
-                    symbol=str(row.get('symbol') or ''),
-                    session_date=str(row.get('session_date') or session_date),
-                    snapshot_at=row.get('snapshot_at'),
-                    cutoff_at=(row.get('context') or {}).get('resolved_at'),
-                )
-                base = {**row, 'evidence_status': 'PENDING', 'attempts': attempts}
-                upsert_postmortem(base, evidence)
+            evidence = search_prediction_day_news(
+                symbol=str(row.get('symbol') or ''),
+                session_date=str(row.get('session_date') or session_date),
+                snapshot_at=row.get('snapshot_at'),
+                cutoff_at=(row.get('context') or {}).get('resolved_at'),
+            )
+            result['searched'] += 1
+            result['sources_found'] += len(evidence)
+            base = {**row, 'evidence_status': 'PENDING', 'attempts': attempts}
+            upsert_postmortem(base, evidence)
             if not evidence:
                 final = attempts >= MAX_POSTMORTEM_ATTEMPTS
                 update_postmortem_status(
@@ -309,7 +332,25 @@ def process_candidate_postmortems(
                 result['processed'] += 1
                 result['pending' if not final else 'completed'] += 1
                 continue
+            researched.append({**row, 'evidence': evidence, 'attempts': attempts})
+        except Exception as exc:
+            update_postmortem_status(
+                snapshot_id,
+                status='PENDING',
+                attempts=attempts,
+                error=f'{type(exc).__name__}: {exc}',
+            )
+            result['errors'] += 1
+            result['pending'] += 1
 
+    # Explain rows that have dated evidence, prioritizing today's 09:31 losses.
+    # Any remaining rows stay persisted with their sources and are retried on a
+    # later EOD run when the shared model-call allowance is available.
+    for row in [item for item in researched if item.get('evidence')][:max(0, int(ai_limit))]:
+        snapshot_id = str(row.get('snapshot_id') or '')
+        attempts = int(row.get('attempts') or 0) + 1
+        evidence = list(row.get('evidence') or [])
+        try:
             context_record = {
                 **row,
                 'reason_tags': row.get('reason_tags') or [],
@@ -330,18 +371,13 @@ def process_candidate_postmortems(
                 result['completed'] += 1
             else:
                 update_postmortem_status(
-                    snapshot_id,
-                    status='PENDING',
-                    attempts=attempts,
-                    error=ai.get('error'),
+                    snapshot_id, status='PENDING', attempts=attempts, error=ai.get('error'),
                 )
                 result['pending'] += 1
             result['processed'] += 1
         except Exception as exc:
             update_postmortem_status(
-                snapshot_id,
-                status='PENDING',
-                attempts=attempts,
+                snapshot_id, status='PENDING', attempts=attempts,
                 error=f'{type(exc).__name__}: {exc}',
             )
             result['errors'] += 1
@@ -496,16 +532,14 @@ def format_postmortems_telegram(
     return '\n'.join(lines)[:3800]
 
 
-def format_eod_postmortem_digest(session_date: str, *, limit: int = 4) -> str:
-    """Add today's saved loss reviews and cited news to the scheduled EOD message."""
+def format_eod_postmortem_digest(session_date: str, *, limit: int = 10) -> str:
+    """Add every 09:31-list loss, its research state, and sources to EOD Telegram."""
     from backend.storage.prediction_postmortem_store import get_postmortems
 
     day = str(session_date or '')[:10]
-    rows = [
-        row for row in get_postmortems(limit=100)
-        if str(row.get('session_date') or '')[:10] == day
-        and str(row.get('outcome') or '').upper() == 'LOSS'
-    ][:max(0, int(limit))]
+    rows = get_postmortems(
+        session_date=day, outcome='LOSS', stage='final_0931', limit=max(0, int(limit)),
+    )
     if not rows:
         return ''
     lines = ['<b>🧾 EOD prediction postmortems</b>']
@@ -518,9 +552,12 @@ def format_eod_postmortem_digest(session_date: str, *, limit: int = 4) -> str:
         )
         summary = str(row.get('cause_summary') or '').strip()
         if summary:
-            lines.append(f'  {html.escape(_clip(summary, 240))}')
+            lines.append(f'  {html.escape(_clip(summary, 170))}')
         elif str(row.get('evidence_status') or '').upper() == 'PENDING':
-            lines.append('  News review queued; it will retry on the next EOD cycle.')
+            if row.get('evidence'):
+                lines.append('  News saved; AI explanation queued for the next available review run.')
+            else:
+                lines.append('  News search is saved as pending and will retry automatically.')
         for source in (row.get('evidence') or [])[:1]:
             url = str(source.get('url') or '')
             if url.startswith(('https://', 'http://')):

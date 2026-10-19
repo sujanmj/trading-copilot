@@ -184,18 +184,26 @@ def upsert_postmortem(record: dict[str, Any], evidence: list[dict[str, Any]] | N
         conn.close()
 
 
-def get_pending_postmortems(*, limit: int = 20) -> list[dict[str, Any]]:
+def get_pending_postmortems(
+    *, limit: int = 20, session_date: str | None = None, stage: str | None = None,
+) -> list[dict[str, Any]]:
     init_postmortem_store()
     conn = get_connection()
     try:
+        clauses = ["evidence_status = 'PENDING'", "outcome = 'LOSS'"]
+        params: list[Any] = []
+        if session_date:
+            clauses.append('session_date = ?')
+            params.append(str(session_date)[:10])
+        if stage:
+            clauses.append('stage = ?')
+            params.append(str(stage))
+        params.append(max(0, int(limit)))
         rows = conn.execute(
-            """
-            SELECT * FROM prediction_postmortems
-            WHERE evidence_status = 'PENDING' AND outcome = 'LOSS'
-            ORDER BY session_date ASC, created_at ASC
-            LIMIT ?
-            """,
-            (max(0, int(limit)),),
+            f"""SELECT * FROM prediction_postmortems
+                WHERE {' AND '.join(clauses)}
+                ORDER BY session_date ASC, created_at ASC LIMIT ?""",
+            params,
         ).fetchall()
         output = []
         for row in rows:
@@ -224,7 +232,9 @@ def get_pending_postmortems(*, limit: int = 20) -> list[dict[str, Any]]:
 
 
 def get_postmortems(
-    *, symbol: str | None = None, limit: int = 5, offset: int = 0,
+    *, symbol: str | None = None, session_date: str | None = None,
+    outcome: str | None = None, stage: str | None = None,
+    limit: int = 5, offset: int = 0,
 ) -> list[dict[str, Any]]:
     init_postmortem_store()
     clauses = []
@@ -232,6 +242,15 @@ def get_postmortems(
     if symbol:
         clauses.append('UPPER(symbol) = ?')
         params.append(str(symbol).strip().upper())
+    if session_date:
+        clauses.append('session_date = ?')
+        params.append(str(session_date)[:10])
+    if outcome:
+        clauses.append('outcome = ?')
+        params.append(str(outcome).strip().upper())
+    if stage:
+        clauses.append('stage = ?')
+        params.append(str(stage).strip())
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ''
     params.append(max(0, int(limit)))
     params.append(max(0, int(offset)))

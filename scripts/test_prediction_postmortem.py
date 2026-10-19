@@ -124,6 +124,45 @@ class PredictionPostmortemTests(unittest.TestCase):
         self.assertIn('Next: /postmortems 2', first_page)
         self.assertIn('Previous: /postmortems 1', second_page)
 
+    def test_eod_searches_and_reports_every_final_0931_loss_without_ai_budget(self):
+        losses = []
+        for index in range(7):
+            losses.append({
+                'snapshot_id': f'loss-0931-{index}', 'symbol': f'LOSER{index}',
+                'session_date': '2026-10-19', 'snapshot_at': '2026-10-19T09:31:00+05:30',
+                'stage': 'final_0931', 'outcome': 'LOSS', 'close_return_pct': -0.8,
+                'max_favorable_excursion_pct': 0.1, 'max_adverse_excursion_pct': -1.1,
+                'resolved_at': '2026-10-19T15:45:00+05:30',
+            })
+        # A same-day loss from an earlier candidate stage must not appear in
+        # the report that is specifically about the 09:31 list.
+        losses.append({
+            'snapshot_id': 'loss-opening', 'symbol': 'OPENING',
+            'session_date': '2026-10-19', 'snapshot_at': '2026-10-19T09:20:00+05:30',
+            'stage': 'opening_0920', 'outcome': 'LOSS', 'close_return_pct': -1.2,
+            'resolved_at': '2026-10-19T15:45:00+05:30',
+        })
+        def source_for(*, symbol, **_kwargs):
+            return [{
+                'source_name': 'Test News', 'title': f'{symbol} news',
+                'url': f'https://example.test/{symbol}',
+                'published_at': '2026-10-19T10:00:00+00:00', 'snippet': 'News evidence.',
+            }]
+        with patch.object(postmortem, 'search_prediction_day_news', side_effect=source_for) as search, \
+             patch.object(postmortem, '_explain_loss') as explain:
+            result = postmortem.process_candidate_postmortems(
+                losses, session_date='2026-10-19', ai_limit=0,
+            )
+        self.assertEqual(result['searched'], 7, result)
+        self.assertEqual(search.call_count, 7)
+        explain.assert_not_called()
+        digest = postmortem.format_eod_postmortem_digest('2026-10-19')
+        for index in range(7):
+            self.assertIn(f'LOSER{index}', digest)
+            self.assertIn(f'https://example.test/LOSER{index}', digest)
+        self.assertNotIn('OPENING', digest)
+        self.assertIn('AI explanation queued', digest)
+
     def test_ask_ai_context_includes_saved_source_linked_postmortems(self):
         row = {
             'symbol': 'ADANIPOWER', 'session_date': '2026-10-19', 'outcome': 'LOSS',
