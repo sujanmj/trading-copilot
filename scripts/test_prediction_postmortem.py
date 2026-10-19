@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.analytics import prediction_postmortem as postmortem
+from backend.analytics import eod_outcome_scoring
 from backend.ai import ask_context_builder
 from backend.storage import prediction_postmortem_store as store
 
@@ -72,6 +73,20 @@ class PredictionPostmortemTests(unittest.TestCase):
         self.assertEqual(rows[0]['evidence_status'], 'COMPLETE')
         self.assertEqual(rows[0]['cause_category'], 'NEWS_AND_MOMENTUM')
         self.assertEqual(rows[0]['evidence'][0]['url'], source['url'])
+        listing = postmortem.format_postmortems_telegram(symbol='ADANIPOWER')
+        digest = postmortem.format_eod_postmortem_digest('2026-10-19')
+        self.assertIn('ADANIPOWER', listing)
+        self.assertIn(source['url'], listing)
+        self.assertIn('EOD prediction postmortems', digest)
+        self.assertIn('Adani Power update', digest)
+        with patch.object(eod_outcome_scoring, 'summarize_alert_review_tracking', return_value={}), \
+             patch.object(eod_outcome_scoring, 'format_daily_review_alert_lines', return_value=['Alerts tracked: 0']):
+            eod_message = eod_outcome_scoring.format_eod_telegram_message({
+                'date': '2026-10-19', 'resolved': 1, 'data_available': True,
+                'wins': 0, 'losses': 1, 'neutrals': 0, 'partials': 0,
+                'best': [], 'worst': [],
+            })
+        self.assertIn(source['url'], eod_message)
 
         with patch.object(postmortem, 'search_prediction_day_news') as search, \
              patch.object(postmortem, '_explain_loss') as explain:
@@ -104,6 +119,10 @@ class PredictionPostmortemTests(unittest.TestCase):
         self.assertEqual(result['wins'], 5)
         self.assertEqual(result['losses'], 2)
         self.assertTrue(result['research_only'])
+        first_page = postmortem.format_postmortems_telegram(page=1, page_size=5)
+        second_page = postmortem.format_postmortems_telegram(page=2, page_size=5)
+        self.assertIn('Next: /postmortems 2', first_page)
+        self.assertIn('Previous: /postmortems 1', second_page)
 
     def test_ask_ai_context_includes_saved_source_linked_postmortems(self):
         row = {

@@ -223,7 +223,9 @@ def get_pending_postmortems(*, limit: int = 20) -> list[dict[str, Any]]:
         conn.close()
 
 
-def get_postmortems(*, symbol: str | None = None, limit: int = 5) -> list[dict[str, Any]]:
+def get_postmortems(
+    *, symbol: str | None = None, limit: int = 5, offset: int = 0,
+) -> list[dict[str, Any]]:
     init_postmortem_store()
     clauses = []
     params: list[Any] = []
@@ -232,6 +234,7 @@ def get_postmortems(*, symbol: str | None = None, limit: int = 5) -> list[dict[s
         params.append(str(symbol).strip().upper())
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ''
     params.append(max(0, int(limit)))
+    params.append(max(0, int(offset)))
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -240,7 +243,7 @@ def get_postmortems(*, symbol: str | None = None, limit: int = 5) -> list[dict[s
                        macro_regime, reason_tags_json, evidence_status, cause_category,
                        cause_summary, explanation_confidence, provider, model
                 FROM prediction_postmortems {where}
-                ORDER BY session_date DESC, updated_at DESC LIMIT ?""",
+                ORDER BY session_date DESC, updated_at DESC LIMIT ? OFFSET ?""",
             params,
         ).fetchall()
         output = []

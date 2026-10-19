@@ -104,6 +104,7 @@ TELEGRAM_BOT_COMMANDS: list[dict[str, str]] = [
     {'command': 'refresh', 'description': 'Scoped cache refresh'},
     {'command': 'api', 'description': 'AI/API provider status (masked)'},
     {'command': 'learn', 'description': 'Candidate outcome learning'},
+    {'command': 'postmortems', 'description': 'Browse saved EOD prediction reviews'},
     {'command': 'help', 'description': 'Command list'},
 ]
 
@@ -785,6 +786,20 @@ def handle_analysis_command(
     elif cmd == 'learn':
         result = run_without_ai(lambda: run_learn_only(args), command='learn')
         response_text = result.get('text') or 'Outcome learning unavailable.'
+    elif cmd == 'postmortems':
+        from backend.analytics.prediction_postmortem import format_postmortems_telegram
+
+        tokens = str(args or '').split()
+        symbol = None
+        page = 1
+        if tokens:
+            if tokens[0].isdigit():
+                page = int(tokens[0])
+            else:
+                symbol = tokens[0]
+                if len(tokens) > 1 and tokens[1].isdigit():
+                    page = int(tokens[1])
+        response_text = format_postmortems_telegram(symbol=symbol, page=page)
     elif cmd == 'api':
         result = run_without_ai(lambda: run_api_only(args), command='api')
         response_text = result.get('text') or 'API status unavailable.'

@@ -32,7 +32,10 @@ HELP_BLOCKS: dict[str, str] = {
     'outcome_learning': """<b>Outcome Learning:</b>
 /learn today — 09:20 + 09:31 candidate outcome resolution
 /learn symbol SYMBOL — symbol outcome memory
-/learn patterns — best/worst reason tags""",
+/learn patterns — best/worst reason tags
+/postmortems — browse saved EOD prediction reviews
+/postmortems SYMBOL — filter reviews by ticker
+/postmortems 2 — next page""",
     'screener': """<b>Screener / Long-term:</b>
 /screener status — latest Screener import status
 /screener latest — latest import summary + top long-term picks

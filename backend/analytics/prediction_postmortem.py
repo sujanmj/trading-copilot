@@ -20,6 +20,11 @@ MAX_POSTMORTEM_ATTEMPTS = 3
 _EVENT_OUTCOME_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
 
+def _clip(value: str, limit: int) -> str:
+    text = str(value or '').strip()
+    return text if len(text) <= limit else text[:max(0, limit - 3)] + '...'
+
+
 def _event_type(text: str) -> str:
     try:
         from backend.my_feed.entity_mapping import infer_event_type_from_text
@@ -425,3 +430,101 @@ def get_postmortem_context_for_question(question: str, *, limit: int = 4) -> lis
                 rows.append(row)
                 seen.add(str(row.get('snapshot_id') or ''))
     return rows[:limit]
+
+
+def format_postmortems_telegram(
+    *, symbol: str | None = None, page: int = 1, page_size: int = 5,
+) -> str:
+    """Render a read-only, paginated view of stored EOD prediction reviews."""
+    from backend.storage.prediction_postmortem_store import get_postmortems
+
+    normalized_symbol = str(symbol or '').strip().upper() or None
+    current_page = max(1, int(page))
+    per_page = min(10, max(1, int(page_size)))
+    rows = get_postmortems(
+        symbol=normalized_symbol,
+        limit=per_page + 1,
+        offset=(current_page - 1) * per_page,
+    )
+    has_next = len(rows) > per_page
+    rows = rows[:per_page]
+    title = f"<b>Prediction postmortems{f' — {html.escape(normalized_symbol)}' if normalized_symbol else ''}</b>"
+    if not rows:
+        return f"{title}\nNo saved rows on page {current_page}. Try /postmortems or a lower page number."
+
+    lines = [title, '<i>Read-only database view · paper research only</i>', '']
+    for row in rows:
+        move = row.get('close_return_pct')
+        move_text = f'{float(move):+.2f}%' if move is not None else 'n/a'
+        lines.append(
+            f"<b>{html.escape(str(row.get('symbol') or ''))} · "
+            f"{html.escape(str(row.get('session_date') or ''))} · "
+            f"{html.escape(str(row.get('outcome') or ''))} · {move_text}</b>"
+        )
+        lines.append(
+            f"Event: {html.escape(str(row.get('event_type') or 'unclassified'))} · "
+            f"Review: {html.escape(str(row.get('evidence_status') or 'PENDING'))}"
+        )
+        summary = str(row.get('cause_summary') or '').strip()
+        if summary:
+            lines.append(html.escape(_clip(summary, 420)))
+        elif str(row.get('evidence_status') or '').upper() == 'PENDING':
+            lines.append('News review is queued for the next scheduled EOD run.')
+        elif str(row.get('evidence_status') or '').upper() == 'NO_EVIDENCE':
+            lines.append('No dated, ticker-specific news was found after retries.')
+        for source in (row.get('evidence') or [])[:2]:
+            url = str(source.get('url') or '')
+            label = html.escape(_clip(str(source.get('title') or 'Source'), 140))
+            if url.startswith(('https://', 'http://')):
+                lines.append(
+                    f"Source ({html.escape(str(source.get('published_at') or 'date n/a'))}): "
+                    f'<a href="{html.escape(url, quote=True)}">{label}</a>'
+                )
+        lines.append('')
+
+    start = (current_page - 1) * per_page + 1
+    end = start + len(rows) - 1
+    lines.append(f'Showing {start}–{end}' + (f' · Page {current_page}' if normalized_symbol else ''))
+    if current_page > 1:
+        prev_arg = f'{normalized_symbol} {current_page - 1}' if normalized_symbol else str(current_page - 1)
+        lines.append(f'Previous: /postmortems {html.escape(prev_arg)}')
+    if has_next:
+        next_arg = f'{normalized_symbol} {current_page + 1}' if normalized_symbol else str(current_page + 1)
+        lines.append(f'Next: /postmortems {html.escape(next_arg)}')
+    if not normalized_symbol:
+        lines.append('Filter a ticker: /postmortems ADANIPOWER')
+    return '\n'.join(lines)[:3800]
+
+
+def format_eod_postmortem_digest(session_date: str, *, limit: int = 4) -> str:
+    """Add today's saved loss reviews and cited news to the scheduled EOD message."""
+    from backend.storage.prediction_postmortem_store import get_postmortems
+
+    day = str(session_date or '')[:10]
+    rows = [
+        row for row in get_postmortems(limit=100)
+        if str(row.get('session_date') or '')[:10] == day
+        and str(row.get('outcome') or '').upper() == 'LOSS'
+    ][:max(0, int(limit))]
+    if not rows:
+        return ''
+    lines = ['<b>🧾 EOD prediction postmortems</b>']
+    for row in rows:
+        move = row.get('close_return_pct')
+        move_text = f'{float(move):+.2f}%' if move is not None else 'n/a'
+        lines.append(
+            f"• <b>{html.escape(str(row.get('symbol') or ''))}</b> {move_text} — "
+            f"{html.escape(str(row.get('evidence_status') or 'PENDING'))}"
+        )
+        summary = str(row.get('cause_summary') or '').strip()
+        if summary:
+            lines.append(f'  {html.escape(_clip(summary, 240))}')
+        elif str(row.get('evidence_status') or '').upper() == 'PENDING':
+            lines.append('  News review queued; it will retry on the next EOD cycle.')
+        for source in (row.get('evidence') or [])[:1]:
+            url = str(source.get('url') or '')
+            if url.startswith(('https://', 'http://')):
+                title = html.escape(_clip(str(source.get('title') or 'Source'), 100))
+                lines.append(f'  <a href="{html.escape(url, quote=True)}">{title}</a>')
+    lines.append('Browse saved rows: /postmortems · Ask details: /ask ai why SYMBOL lost')
+    return '\n'.join(lines)
