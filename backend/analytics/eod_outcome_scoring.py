@@ -412,6 +412,7 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
     def _wln(d: dict) -> str:
         return f"W{d.get('WIN', 0)}/L{d.get('LOSS', 0)}/N{d.get('NEUTRAL', 0)}"
 
+    postmortem_spacer = '\n\n' if postmortem_lines else ''
     msg = (
         f"<b>📘 DAILY REVIEW</b>\n\n"
         f"<b>EOD Resolution</b>\n"
@@ -423,7 +424,7 @@ def format_eod_telegram_message(summary: dict, *, pending_meta: Optional[dict] =
         f"{chr(10).join(quality_lines)}\n\n"
         f"<b>Best:</b>\n{chr(10).join(best_lines) if best_lines else '—'}\n\n"
         f"<b>Worst:</b>\n{chr(10).join(worst_lines) if worst_lines else '—'}\n\n"
-        f"{postmortem_lines}{'\n\n' if postmortem_lines else ''}"
+        f"{postmortem_lines}{postmortem_spacer}"
         f"<b>Premarket:</b>\n"
         f"Confirmed: {summary.get('premarket_confirmed', 0)} · "
         f"Rejected: {summary.get('premarket_rejected', 0)}\n\n"

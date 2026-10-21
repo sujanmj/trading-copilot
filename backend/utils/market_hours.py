@@ -33,9 +33,17 @@ def _now_ist(now: Optional[datetime] = None) -> datetime:
 
 
 def is_market_holiday(now: Optional[datetime] = None) -> bool:
-    """Optional holiday calendar hook — extend when holiday data is available."""
-    _ = _now_ist(now)
-    return False
+    """Return whether an IST weekday is an India exchange holiday."""
+    local_now = _now_ist(now)
+    if local_now.weekday() >= 5:
+        return False
+    try:
+        from backend.analytics.market_calendar_router import is_india_market_day
+
+        return not is_india_market_day(local_now.date())
+    except Exception:
+        # A missing calendar must not crash runtime-status reporting.
+        return False
 
 
 def get_market_period(now: Optional[datetime] = None) -> str:
