@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import pytz
 
-from backend.orchestration.eod_recovery import is_post_market_weekday
+from backend.orchestration.eod_recovery import get_stale_running_details, is_post_market_weekday
 from backend.orchestration.orchestrator_state import (
     MODE_API_ONLY,
     MODE_PRIMARY,
@@ -138,21 +138,40 @@ def diagnose_runtime() -> Dict[str, Any]:
         issues.append('no_valid_orchestrator')
 
     quiet = _quiet_period()
-    if not quiet:
-        try:
+    lifecycle_blocking = False
+    try:
+        from backend.lifecycle.lifecycle_tracing import load_lifecycle_state
+        lifecycle_state = load_lifecycle_state()
+        lifecycle_status = str(lifecycle_state.get('pipeline_status') or '').upper()
+        if lifecycle_status == 'FAILED':
+            issues.append('lifecycle_failed')
+            lifecycle_blocking = True
+        elif lifecycle_status == 'RUNNING':
+            progress = get_stale_running_details(lifecycle_state)
+            if progress.get('stale'):
+                issue = (
+                    f"lifecycle_stuck:{progress.get('stage', 'unknown')}:"
+                    f"{progress.get('age_seconds', 0)}s"
+                )
+                issues.append(issue)
+                lifecycle_blocking = True
+
+        if not quiet:
             from backend.lifecycle.prediction_lifecycle_engine import get_lifecycle_status
             lc = get_lifecycle_status()
             if lc.get('pipeline_status') == 'STALE':
                 issues.append('lifecycle_stale')
             if lc.get('pipeline_status') == 'COMPLETE' and not lc.get('exports_fresh'):
                 issues.append('exports_stale_after_eod')
-            if lc.get('pipeline_status') == 'FAILED':
-                issues.append('lifecycle_failed')
-        except Exception as e:
-            issues.append(f'lifecycle_check_error:{e}')
+    except Exception as e:
+        issues.append(f'lifecycle_check_error:{e}')
 
     return {
-        'healthy': ownership.get('healthy') and 'no_valid_orchestrator' not in issues,
+        'healthy': (
+            ownership.get('healthy')
+            and 'no_valid_orchestrator' not in issues
+            and not lifecycle_blocking
+        ),
         'ownership': ownership,
         'issues': issues,
         'mode': state.get('orchestrator_mode'),
@@ -306,6 +325,8 @@ def _recovery_allowed(diag: Dict[str, Any]) -> bool:
     if 'no_valid_orchestrator' in issues or 'scheduler_disabled' in issues:
         return True
     if 'lifecycle_failed' in issues:
+        return True
+    if any(issue.startswith('lifecycle_stuck:') for issue in issues):
         return True
     tick_age = diag.get('tick_age_seconds')
     if tick_age is not None and tick_age >= NIGHT_TICK_DEAD_SECONDS:

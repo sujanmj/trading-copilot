@@ -4,6 +4,7 @@ EOD recovery — catch missed post-market lifecycle after Railway restarts or bo
 
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, time as dt_time
 from typing import Tuple
@@ -18,7 +19,8 @@ RECOVERY_COOLDOWN_SECONDS = 300
 _last_recovery_attempt = 0.0
 _eod_recovery_day = ''
 _eod_recovery_count = 0
-MAX_EOD_RECOVERY_PER_DAY = int(__import__('os').environ.get('MAX_EOD_RECOVERY_PER_DAY', '3'))
+MAX_EOD_RECOVERY_PER_DAY = int(os.environ.get('MAX_EOD_RECOVERY_PER_DAY', '3'))
+EOD_STALE_RUNNING_SECONDS = int(os.environ.get('EOD_STALE_RUNNING_SECONDS', '2700'))
 
 
 def _now_ist() -> datetime:
@@ -27,6 +29,30 @@ def _now_ist() -> datetime:
 
 def _today() -> str:
     return _now_ist().strftime('%Y-%m-%d')
+
+
+def get_stale_running_details(state: dict, now: datetime | None = None) -> dict:
+    """Describe an EOD RUNNING heartbeat that has stopped advancing."""
+    if str(state.get('pipeline_status') or '').upper() != 'RUNNING':
+        return {'stale': False}
+    now = now or _now_ist()
+    raw = state.get('heartbeat_at') or state.get('last_eod_attempt_at')
+    if not raw:
+        # Without a timestamp we cannot distinguish a live run from an old one.
+        return {'stale': False, 'reason': 'missing_progress_timestamp'}
+    try:
+        heartbeat = datetime.fromisoformat(str(raw))
+        if heartbeat.tzinfo is None:
+            heartbeat = IST.localize(heartbeat)
+        age_seconds = max(0, int((now - heartbeat.astimezone(IST)).total_seconds()))
+    except (TypeError, ValueError, OverflowError):
+        return {'stale': False, 'reason': 'invalid_progress_timestamp'}
+    return {
+        'stale': age_seconds > EOD_STALE_RUNNING_SECONDS,
+        'age_seconds': age_seconds,
+        'stage': str(state.get('current_stage') or 'unknown'),
+        'threshold_seconds': EOD_STALE_RUNNING_SECONDS,
+    }
 
 
 def is_post_market_weekday(now: datetime | None = None) -> bool:
@@ -50,17 +76,6 @@ def needs_eod_recovery(now: datetime | None = None) -> Tuple[bool, str]:
     state = load_lifecycle_state()
     today = _today()
 
-    if state.get('pipeline_status') == 'RUNNING':
-        return False, 'pipeline_running'
-
-    try:
-        from backend.utils.process_lock import lock_status
-        eod_lock = lock_status().get('eod_lifecycle') or {}
-        if eod_lock.get('alive'):
-            return False, 'eod_lock_held'
-    except Exception:
-        pass
-
     complete_today = (
         state.get('last_eod_cycle_date') == today
         and state.get('evaluation_cycle_complete')
@@ -68,6 +83,28 @@ def needs_eod_recovery(now: datetime | None = None) -> Tuple[bool, str]:
     )
     if complete_today:
         return False, 'already_complete_today'
+
+    if state.get('pipeline_status') == 'RUNNING':
+        progress = get_stale_running_details(state, now)
+        if not progress.get('stale'):
+            return False, 'pipeline_running'
+        try:
+            from backend.utils.process_lock import lock_status
+            eod_lock = lock_status().get('eod_lifecycle') or {}
+        except Exception:
+            # Fail closed: never start a second EOD cycle if lock ownership is unknown.
+            return False, 'stale_pipeline_lock_status_unavailable'
+        if eod_lock.get('valid'):
+            return False, f"stale_pipeline_owner_alive:{progress['stage']}:{progress['age_seconds']}s"
+        return True, f"stale_pipeline_recovery:{progress['stage']}:{progress['age_seconds']}s"
+
+    try:
+        from backend.utils.process_lock import lock_status
+        eod_lock = lock_status().get('eod_lifecycle') or {}
+        if eod_lock.get('valid'):
+            return False, 'eod_lock_held'
+    except Exception:
+        pass
 
     return True, 'missed_or_incomplete_eod'
 
