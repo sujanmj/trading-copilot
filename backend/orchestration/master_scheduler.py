@@ -371,6 +371,14 @@ def _job_research_mode_report_pack():
     )
 
 
+@ist_daily(8, 0, name='missed_session_recovery')
+def _job_missed_session_recovery():
+    """Recover saved outcomes/news for recent missed exchange sessions pre-open."""
+    from backend.orchestration.missed_session_recovery import run_scheduled_missed_session_recovery
+
+    return run_scheduled_missed_session_recovery()
+
+
 @ist_daily(15, 45, name='eod_lifecycle')
 def _job_eod_lifecycle():
     run_post_market_pipeline(force=False, trigger='scheduled:15:45')

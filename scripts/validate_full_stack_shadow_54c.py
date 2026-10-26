@@ -41,6 +41,7 @@ def _validate():
     subprocess.run([sys.executable, 'scripts/test_eod_news_digest.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_eod_stuck_recovery.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_eod_health_observability.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/test_missed_session_recovery.py'], check=True)
     subprocess.run([sys.executable, 'scripts/test_historical_market_memory_db_override.py'], check=True)
     subprocess.run([sys.executable, '-m', 'py_compile', 'backend/runtime/full_stack_shadow.py',
                     'backend/trading/opening_rally_radar.py'], check=True)

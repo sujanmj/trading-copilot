@@ -936,8 +936,11 @@ def resolve_candidate_outcomes(
     learning_sample_ids: list[str] = []
     for snap in snapshots:
         sid = str(snap.get('snapshot_id') or '')
-        if sid in existing:
-            resolved.append(existing[sid])
+        prior = existing.get(sid)
+        # Missing prices are common during ingestion lag. Keep terminal rows
+        # immutable, but retry PENDING rows on later automatic recovery ticks.
+        if prior and str(prior.get('outcome') or '').upper() != OUTCOME_PENDING:
+            resolved.append(prior)
             continue
         learning_eligible = sid in learning_ids
         eligibility_reason = str(snap.get('eligibility_reason') or '')
