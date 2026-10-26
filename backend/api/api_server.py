@@ -919,6 +919,7 @@ def api_debug_build_info():
     return sanitize_json_value({
         'app': 'AstraEdge',
         'stage': get_astraedge_build_stage(),
+        'commit_sha': os.environ.get('RAILWAY_GIT_COMMIT_SHA') or os.environ.get('GIT_COMMIT_SHA'),
         'decision_bootstrap': 'enabled',
         'report_bootstrap': 'enabled',
         'telegram_handler': 'astraedge_analysis_bot',

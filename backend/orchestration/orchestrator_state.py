@@ -281,7 +281,12 @@ def refresh_component_snapshot() -> dict:
         'lifecycle': {
             'pipeline_status': lifecycle.get('pipeline_status'),
             'exports_fresh': exports_fresh,
+            'last_eod_cycle_date': lifecycle.get('last_eod_cycle_date'),
             'last_eod_cycle_at': lifecycle.get('last_eod_cycle_at'),
+            'last_successful_eod': lifecycle.get('last_successful_eod'),
+            'heartbeat_at': lifecycle.get('heartbeat_at'),
+            'current_stage': lifecycle.get('current_stage'),
+            'recovery_reason': lifecycle.get('recovery_reason'),
         },
         'exports': {
             'fresh': exports_fresh,
