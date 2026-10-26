@@ -1081,6 +1081,8 @@ def get_lifecycle_status() -> dict:
         'evaluation_cycle_complete': bool(state.get('evaluation_cycle_complete')),
         'last_eod_cycle_date': state.get('last_eod_cycle_date'),
         'last_eod_cycle_at': state.get('last_eod_cycle_at'),
+        'heartbeat_at': state.get('heartbeat_at'),
+        'current_stage': state.get('current_stage'),
         'last_evaluation_at': state.get('last_evaluation_at'),
         'brain_refresh_at': state.get('brain_refresh_at'),
         'exports_synced_at': state.get('exports_synced_at'),

@@ -97,8 +97,8 @@ def main() -> int:
         [{'ticker': 'NHPC', 'score': 70, 'setup': 'WATCH', 'reasons': ['gap']}],
         [{'ticker': 'NHPC', 'reason': 'weak vol'}],
     )
-    if conflicted[0].get('setup') != 'Conflict/Wait':
-        return _fail('NHPC conflict guard failed')
+    if conflicted:
+        return _fail('conflicted setup should be excluded from the actionable watch list')
 
     titles = {
         'premarket_top3': 'PREMARKET TOP SETUPS',

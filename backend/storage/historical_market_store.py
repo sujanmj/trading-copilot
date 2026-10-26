@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -196,6 +197,9 @@ CREATE INDEX IF NOT EXISTS idx_hstrat_market ON historical_strategy_performance(
 
 def get_historical_db_path() -> Path:
     """Return path to historical market memory SQLite DB."""
+    isolated_path = os.environ.get('ASTRAEDGE_HISTORICAL_MARKET_DB')
+    if isolated_path:
+        return Path(isolated_path)
     return DATA_DIR / HISTORICAL_DB_NAME
 
 
