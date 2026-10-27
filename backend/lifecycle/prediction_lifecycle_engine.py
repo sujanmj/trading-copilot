@@ -66,6 +66,7 @@ HIGH_CONVICTION_FILE = DATA_DIR / 'high_conviction_alerts.json'
 STATS_FILE = DATA_DIR / 'stats_data.json'
 HISTORY_FILE = DATA_DIR / 'history_data.json'
 DAILY_REVIEWS_DIR = DATA_DIR / 'daily_reviews'
+HISTORY_EXPORT_TIMEOUT_SECONDS = 1200
 
 BEARISH_REGIMES = frozenset({'bearish', 'cautious', 'risk_off', 'defensive'})
 
@@ -154,6 +155,17 @@ def _file_age_minutes(path: Path) -> Optional[int]:
 def _run_script(script_name: str, extra_env: Optional[dict] = None):
     from backend.utils.runner import run_script
     run_script(script_name, check=False, extra_env=extra_env or {})
+
+
+def _run_history_export():
+    """Bound the final EOD export so a hung child cannot strand lifecycle state."""
+    from backend.utils.runner import run_script
+
+    return run_script(
+        'history_exporter.py',
+        check=False,
+        timeout=HISTORY_EXPORT_TIMEOUT_SECONDS,
+    )
 
 
 def _run_script_safe(script_name: str, extra_env: Optional[dict] = None) -> dict:
@@ -944,7 +956,7 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
         pipeline_log('exporting stats', stage='stats_export')
         _stage('stats_export', lambda: _run_script('stats_exporter.py'))
         pipeline_log('exporting history', stage='history_export')
-        _stage('history_export', lambda: _run_script('history_exporter.py'))
+        _stage('history_export', _run_history_export)
 
         review_result = next((s.get('result') for s in result['stages'] if s.get('name') == 'daily_review'), {}) or {}
         review = (review_result.get('review') or _load_json(DAILY_REVIEWS_DIR / f'review_{_today()}.json', {}))
