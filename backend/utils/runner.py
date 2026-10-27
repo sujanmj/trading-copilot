@@ -58,20 +58,31 @@ def module_for_script(script_name: str) -> Optional[str]:
     return resolve_module(script_name)
 
 
-def run_module(module: str, check: bool = False, extra_env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
+def run_module(
+    module: str,
+    check: bool = False,
+    extra_env: Optional[Dict[str, str]] = None,
+    timeout: Optional[float] = None,
+) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, '-m', module],
         env=_base_env(extra_env),
         cwd=str(PROJECT_ROOT),
         check=check,
+        timeout=timeout,
     )
 
 
-def run_script(script_name: str, check: bool = False, extra_env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
+def run_script(
+    script_name: str,
+    check: bool = False,
+    extra_env: Optional[Dict[str, str]] = None,
+    timeout: Optional[float] = None,
+) -> subprocess.CompletedProcess:
     module = module_for_script(script_name)
     if not module:
         raise FileNotFoundError(f'Unknown script: {script_name}')
-    return run_module(module, check=check, extra_env=extra_env)
+    return run_module(module, check=check, extra_env=extra_env, timeout=timeout)
 
 
 def popen_script(
