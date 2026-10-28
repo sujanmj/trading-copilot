@@ -38,15 +38,8 @@ def update_history_heartbeat(*, status: str, detail: str = '', extra: Optional[d
     if extra:
         payload.update(extra)
     atomic_write_json(HEARTBEAT_FILE, payload)
-    try:
-        from backend.lifecycle.lifecycle_tracing import update_heartbeat
-        update_heartbeat(
-            pipeline_status='RUNNING',
-            current_stage='history_export',
-            extra={'history_engine_status': status, 'history_engine_detail': detail},
-        )
-    except Exception:
-        pass
+    # History exports also run independently overnight. Keep their progress in
+    # this dedicated heartbeat instead of changing the EOD pipeline status.
     return payload
 
 
