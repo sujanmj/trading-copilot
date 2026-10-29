@@ -36,6 +36,10 @@ def get_stale_running_details(state: dict, now: datetime | None = None) -> dict:
     if str(state.get('pipeline_status') or '').upper() != 'RUNNING':
         return {'stale': False}
     now = now or _now_ist()
+    if now.tzinfo is None:
+        now = IST.localize(now)
+    else:
+        now = now.astimezone(IST)
     raw = state.get('heartbeat_at') or state.get('last_eod_attempt_at')
     if not raw:
         # Without a timestamp we cannot distinguish a live run from an old one.
@@ -55,6 +59,87 @@ def get_stale_running_details(state: dict, now: datetime | None = None) -> dict:
     }
 
 
+def reconcile_orphaned_history_export_status(now: datetime | None = None) -> bool:
+    """Close a stale RUNNING marker written by the former standalone exporter.
+
+    Only reconcile when the EOD itself is recorded complete, a history export
+    succeeded after it, and the EOD single-execution lock can be acquired.
+    This repairs persisted state left by older releases without replaying
+    prediction outcomes.
+    """
+    from backend.lifecycle.lifecycle_tracing import load_lifecycle_state, update_heartbeat
+    from backend.history.history_engine import get_history_heartbeat
+
+    now = now or _now_ist()
+    if now.tzinfo is None:
+        now = IST.localize(now)
+    else:
+        now = now.astimezone(IST)
+    state = load_lifecycle_state()
+    progress = get_stale_running_details(state, now)
+    if (
+        not progress.get('stale')
+        or progress.get('stage') != 'history_export'
+        or not state.get('evaluation_cycle_complete')
+    ):
+        return False
+
+    def _parse_timestamp(value: object) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(value))
+            if parsed.tzinfo is None:
+                parsed = IST.localize(parsed)
+            return parsed.astimezone(IST)
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    completed_at = _parse_timestamp(state.get('last_successful_eod'))
+    if (
+        completed_at is None
+        or str(state.get('last_eod_cycle_date') or '') != completed_at.strftime('%Y-%m-%d')
+    ):
+        return False
+
+    history = get_history_heartbeat()
+    history_completed_at = _parse_timestamp(history.get('last_successful_history'))
+    history_heartbeat = _parse_timestamp(history.get('heartbeat_at'))
+    if (
+        str(history.get('status') or '').lower() != 'ok'
+        or history_completed_at is None
+        or history_heartbeat is None
+        or history_completed_at < completed_at
+    ):
+        return False
+
+    from backend.utils.process_lock import release_lock, try_acquire_lock
+
+    if not try_acquire_lock('eod_lifecycle'):
+        return False
+    try:
+        # The lock closes the race with a newly-started EOD. Recheck the state
+        # after acquiring it before replacing the old heartbeat.
+        current = load_lifecycle_state()
+        if (
+            current.get('pipeline_status') != 'RUNNING'
+            or current.get('current_stage') != 'history_export'
+            or current.get('heartbeat_at') != state.get('heartbeat_at')
+            or not current.get('evaluation_cycle_complete')
+        ):
+            return False
+        update_heartbeat(
+            pipeline_status='COMPLETE',
+            current_stage='completed',
+            stage_result='orphaned_history_export_reconciled',
+            extra={'history_export_status_reconciled_at': now.isoformat()},
+        )
+        print('[EOD RECOVERY] Reconciled stale standalone history-export heartbeat', flush=True)
+        return True
+    finally:
+        release_lock('eod_lifecycle')
+
+
 def is_post_market_weekday(now: datetime | None = None) -> bool:
     """True on Mon–Fri at or after 15:45 IST."""
     now = now or _now_ist()
@@ -72,6 +157,8 @@ def needs_eod_recovery(now: datetime | None = None) -> Tuple[bool, str]:
         return False, 'before_post_market_window'
 
     from backend.lifecycle.prediction_lifecycle_engine import load_lifecycle_state
+
+    reconcile_orphaned_history_export_status(now)
 
     state = load_lifecycle_state()
     today = _today()

@@ -1049,6 +1049,11 @@ def run_end_of_day_cycle(force: bool = False) -> dict:
 
 def get_lifecycle_status() -> dict:
     """Runtime freshness payload for OPS / UI."""
+    try:
+        from backend.orchestration.eod_recovery import reconcile_orphaned_history_export_status
+        reconcile_orphaned_history_export_status()
+    except Exception:
+        pass
     state = load_lifecycle_state()
     today = _today()
     cycle_today = state.get('last_eod_cycle_date') == today

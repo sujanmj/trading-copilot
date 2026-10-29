@@ -39,6 +39,83 @@ class StuckEodRecoveryTests(unittest.TestCase):
         self.assertEqual(details['stage'], 'tomorrow_intelligence')
         self.assertGreater(details['age_seconds'], eod_recovery.EOD_STALE_RUNNING_SECONDS)
 
+    def test_completed_export_marker_is_reconciled_without_replaying_eod(self):
+        now = IST.localize(datetime(2026, 10, 29, 8, 30))
+        heartbeat = IST.localize(datetime(2026, 10, 29, 2, 47))
+        completed = IST.localize(datetime(2026, 10, 28, 15, 52))
+        state = {
+            'pipeline_status': 'RUNNING',
+            'current_stage': 'history_export',
+            'heartbeat_at': heartbeat.isoformat(),
+            'last_eod_cycle_date': '2026-10-28',
+            'last_successful_eod': completed.isoformat(),
+            'evaluation_cycle_complete': True,
+        }
+        history = {
+            'status': 'ok',
+            'heartbeat_at': (now - timedelta(minutes=2)).isoformat(),
+            'last_successful_history': (now - timedelta(minutes=2)).isoformat(),
+        }
+        with patch('backend.lifecycle.lifecycle_tracing.load_lifecycle_state', return_value=state), \
+             patch('backend.lifecycle.lifecycle_tracing.update_heartbeat') as update, \
+             patch('backend.history.history_engine.get_history_heartbeat', return_value=history), \
+             patch('backend.utils.process_lock.try_acquire_lock', return_value=True) as acquire, \
+             patch('backend.utils.process_lock.release_lock') as release:
+            reconciled = eod_recovery.reconcile_orphaned_history_export_status(now)
+
+        self.assertTrue(reconciled)
+        acquire.assert_called_once_with('eod_lifecycle')
+        release.assert_called_once_with('eod_lifecycle')
+        self.assertEqual(update.call_args.kwargs['pipeline_status'], 'COMPLETE')
+        self.assertEqual(update.call_args.kwargs['current_stage'], 'completed')
+        self.assertEqual(state['last_eod_cycle_date'], '2026-10-28')
+
+    def test_reconciliation_requires_completed_cycle_and_successful_matching_export(self):
+        now = IST.localize(datetime(2026, 10, 29, 8, 30))
+        heartbeat = IST.localize(datetime(2026, 10, 29, 2, 47))
+        completed = IST.localize(datetime(2026, 10, 28, 15, 52))
+        state = {
+            'pipeline_status': 'RUNNING',
+            'current_stage': 'history_export',
+            'heartbeat_at': heartbeat.isoformat(),
+            'last_eod_cycle_date': '2026-10-28',
+            'last_successful_eod': completed.isoformat(),
+            'evaluation_cycle_complete': False,
+        }
+        with patch('backend.lifecycle.lifecycle_tracing.load_lifecycle_state', return_value=state), \
+             patch('backend.lifecycle.lifecycle_tracing.update_heartbeat') as update, \
+             patch('backend.history.history_engine.get_history_heartbeat', return_value={'status': 'failed'}), \
+             patch('backend.utils.process_lock.try_acquire_lock') as acquire:
+            self.assertFalse(eod_recovery.reconcile_orphaned_history_export_status(now))
+
+        update.assert_not_called()
+        acquire.assert_not_called()
+
+    def test_reconciliation_skips_when_eod_lock_is_owned(self):
+        now = IST.localize(datetime(2026, 10, 29, 8, 30))
+        heartbeat = IST.localize(datetime(2026, 10, 29, 2, 47))
+        completed = IST.localize(datetime(2026, 10, 28, 15, 52))
+        state = {
+            'pipeline_status': 'RUNNING',
+            'current_stage': 'history_export',
+            'heartbeat_at': heartbeat.isoformat(),
+            'last_eod_cycle_date': '2026-10-28',
+            'last_successful_eod': completed.isoformat(),
+            'evaluation_cycle_complete': True,
+        }
+        history = {
+            'status': 'ok',
+            'heartbeat_at': heartbeat.isoformat(),
+            'last_successful_history': heartbeat.isoformat(),
+        }
+        with patch('backend.lifecycle.lifecycle_tracing.load_lifecycle_state', return_value=state), \
+             patch('backend.lifecycle.lifecycle_tracing.update_heartbeat') as update, \
+             patch('backend.history.history_engine.get_history_heartbeat', return_value=history), \
+             patch('backend.utils.process_lock.try_acquire_lock', return_value=False):
+            self.assertFalse(eod_recovery.reconcile_orphaned_history_export_status(now))
+
+        update.assert_not_called()
+
     def test_stale_running_cycle_only_replays_after_owner_lock_is_gone(self):
         now = IST.localize(datetime(2026, 10, 21, 20, 0))
         state = {
