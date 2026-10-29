@@ -140,6 +140,8 @@ def diagnose_runtime() -> Dict[str, Any]:
     quiet = _quiet_period()
     lifecycle_blocking = False
     try:
+        from backend.orchestration.eod_recovery import reconcile_orphaned_history_export_status
+        reconcile_orphaned_history_export_status()
         from backend.lifecycle.lifecycle_tracing import load_lifecycle_state
         lifecycle_state = load_lifecycle_state()
         lifecycle_status = str(lifecycle_state.get('pipeline_status') or '').upper()
