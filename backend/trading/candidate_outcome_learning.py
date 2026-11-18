@@ -140,6 +140,27 @@ def _load_jsonl(path: Path, *, limit: int = 50000) -> list[dict[str, Any]]:
     return rows[-limit:]
 
 
+def latest_outcome_records(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the latest durable outcome state once per candidate snapshot."""
+    latest: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        snapshot_id = str(row.get('snapshot_id') or '').strip()
+        if not snapshot_id:
+            # Legacy rows lack IDs; use their stable session/stage/symbol key.
+            snapshot_id = '|'.join((
+                str(row.get('session_date') or '')[:10],
+                str(row.get('stage') or ''),
+                _normalize_symbol(row.get('symbol')),
+            ))
+        if snapshot_id not in latest:
+            order.append(snapshot_id)
+        latest[snapshot_id] = row
+    return [latest[key] for key in order]
+
+
 def _safe_float(value: object, default: float | None = None) -> float | None:
     try:
         if value in (None, ''):
@@ -1179,7 +1200,7 @@ def learning_stats() -> dict[str, Any]:
 
 def _group_outcomes_by_stage(outcomes: list[dict[str, Any]], stage: str) -> dict[str, list[str]]:
     groups = {OUTCOME_WIN: [], OUTCOME_LOSS: [], OUTCOME_NEUTRAL: [], OUTCOME_PENDING: []}
-    for row in outcomes:
+    for row in latest_outcome_records(outcomes):
         if str(row.get('stage') or '') != stage:
             continue
         if not bool(row.get('learning_eligible', True)):
@@ -1197,7 +1218,8 @@ def _group_outcomes_by_stage(outcomes: list[dict[str, Any]], stage: str) -> dict
 def _outcome_learning_group_counts(*, session_date: str | None = None) -> dict[str, int]:
     day = session_date or _session_date()
     groups = {OUTCOME_WIN: 0, OUTCOME_LOSS: 0, OUTCOME_NEUTRAL: 0, OUTCOME_PENDING: 0}
-    for row in _load_jsonl(_outcomes_path()):
+    rows = latest_outcome_records(_load_jsonl(_outcomes_path()))
+    for row in rows:
         if str(row.get('session_date') or '')[:10] != day:
             continue
         if not bool(row.get('learning_eligible', True)):
@@ -1212,7 +1234,8 @@ def _reference_outcome_review_lines(*, session_date: str | None = None) -> list[
     """Show tracked but non-learning morning candidates and their resolved outcomes."""
     day = session_date or _session_date()
     groups = {OUTCOME_WIN: [], OUTCOME_LOSS: [], OUTCOME_NEUTRAL: [], OUTCOME_PENDING: []}
-    for row in _load_jsonl(_outcomes_path()):
+    rows = latest_outcome_records(_load_jsonl(_outcomes_path()))
+    for row in rows:
         if str(row.get('session_date') or '')[:10] != day:
             continue
         if str(row.get('stage') or '') != 'final_0931':
@@ -1403,7 +1426,7 @@ def candidate_outcomes_count_for_session(session_date: str | None = None) -> int
     day = session_date or _session_date()
     return sum(
         1
-        for o in _load_jsonl(_outcomes_path())
+        for o in latest_outcome_records(_load_jsonl(_outcomes_path()))
         if str(o.get('session_date') or '')[:10] == day
     )
 
@@ -1462,10 +1485,10 @@ def format_candidate_outcome_learning_block(
 ) -> list[str]:
     day = session_date or _session_date()
     snapshots = eligible_snapshots_for_session(day)
-    outcomes = [
+    outcomes = latest_outcome_records([
         o for o in _load_jsonl(_outcomes_path())
         if str(o.get('session_date') or '')[:10] == day
-    ]
+    ])
     if not snapshots and not outcomes:
         return format_no_quality_snapshots_block(session_date=day)
 
