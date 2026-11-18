@@ -70,6 +70,25 @@ def init_postmortem_store() -> None:
     conn = get_connection()
     try:
         conn.executescript(POSTMORTEM_SCHEMA)
+        # Older builds marked every non-final-list outcome as COMPLETE even
+        # when no news evidence was attached. Repair those labels once so the
+        # Telegram database view reports outcome-only rows honestly.
+        conn.execute(
+            """
+            UPDATE prediction_postmortems
+            SET evidence_status = CASE
+                WHEN outcome = 'LOSS' AND stage = 'final_0931' THEN 'PENDING'
+                WHEN outcome = 'LOSS' THEN 'NOT_RESEARCHED'
+                ELSE 'OUTCOME_ONLY'
+            END
+            WHERE evidence_status = 'COMPLETE'
+              AND cause_summary IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM prediction_postmortem_evidence e
+                  WHERE e.snapshot_id = prediction_postmortems.snapshot_id
+              )
+            """
+        )
         conn.commit()
     finally:
         conn.close()
@@ -109,7 +128,16 @@ def upsert_postmortem(record: dict[str, Any], evidence: list[dict[str, Any]] | N
                 macro_regime=excluded.macro_regime,
                 reason_tags_json=excluded.reason_tags_json,
                 evidence_status=CASE
-                    WHEN prediction_postmortems.evidence_status IN ('COMPLETE', 'NO_EVIDENCE')
+                    WHEN prediction_postmortems.evidence_status = 'NO_EVIDENCE'
+                    THEN prediction_postmortems.evidence_status
+                    WHEN prediction_postmortems.evidence_status = 'COMPLETE'
+                     AND (
+                        prediction_postmortems.cause_summary IS NOT NULL
+                        OR EXISTS (
+                            SELECT 1 FROM prediction_postmortem_evidence e
+                            WHERE e.snapshot_id = prediction_postmortems.snapshot_id
+                        )
+                     )
                     THEN prediction_postmortems.evidence_status
                     ELSE excluded.evidence_status
                 END,
