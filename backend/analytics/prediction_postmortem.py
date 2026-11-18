@@ -60,7 +60,11 @@ def _base_record(snapshot: dict[str, Any], outcome: dict[str, Any]) -> dict[str,
             'PENDING'
             if str(outcome.get('outcome') or '').upper() == 'LOSS'
             and str(snapshot.get('stage') or '') == 'final_0931'
-            else 'COMPLETE'
+            else (
+                'NOT_RESEARCHED'
+                if str(outcome.get('outcome') or '').upper() == 'LOSS'
+                else 'OUTCOME_ONLY'
+            )
         ),
         'context': {
             'score': snapshot.get('score'),
@@ -116,7 +120,33 @@ def _company_name(symbol: str) -> str:
                 return str(name)
     except Exception:
         pass
+    try:
+        from backend.utils.nse_top500 import NSE_BY_SECTOR
+
+        for stocks in NSE_BY_SECTOR.values():
+            if isinstance(stocks, dict) and symbol in stocks:
+                return str(stocks[symbol])
+    except Exception:
+        pass
     return symbol
+
+
+def _news_mentions_symbol(blob: str, *, symbol: str, company_name: str) -> bool:
+    """Match a full company name or an explicitly labeled ticker only."""
+    normalized = str(blob or '').casefold()
+    company = str(company_name or '').strip().casefold()
+    if company and company != str(symbol or '').casefold() and company in normalized:
+        return True
+    ticker = re.escape(str(symbol or '').strip().upper())
+    if not ticker:
+        return False
+    # Some exchange symbols are ordinary words (such as ASHOKA). A bare text
+    # occurrence is weak evidence; accept a publisher-style symbol tag instead.
+    return bool(re.search(
+        rf'(?:\b(?:nse|bse|ticker|symbol)\s*[:=\-]\s*{ticker}\b|\({ticker}\)|\[{ticker}\])',
+        normalized,
+        flags=re.IGNORECASE,
+    ))
 
 
 def search_prediction_day_news(
@@ -163,7 +193,6 @@ def search_prediction_day_news(
     records: list[dict[str, str]] = []
     seen: set[str] = set()
     ticker_norm = str(symbol or '').strip().upper()
-    name_norm = name.casefold()
     for entry in getattr(feed, 'entries', []) or []:
         title = html.unescape(re.sub(r'<[^>]+>', ' ', str(entry.get('title') or ''))).strip()
         snippet = html.unescape(re.sub(r'<[^>]+>', ' ', str(entry.get('summary') or ''))).strip()
@@ -180,7 +209,7 @@ def search_prediction_day_news(
         if published_dt > end:
             continue
         blob = f'{title} {snippet}'.casefold()
-        if ticker_norm.casefold() not in blob and name_norm not in blob:
+        if not _news_mentions_symbol(blob, symbol=ticker_norm, company_name=name):
             continue
         seen.add(url)
         source = entry.get('source')
@@ -517,6 +546,10 @@ def format_postmortems_telegram(
             lines.append('News review is queued for the next scheduled EOD run.')
         elif str(row.get('evidence_status') or '').upper() == 'NO_EVIDENCE':
             lines.append('No dated, ticker-specific news was found after retries.')
+        elif str(row.get('evidence_status') or '').upper() == 'NOT_RESEARCHED':
+            lines.append('This loss was outside the automatic 09:31 news-review list.')
+        elif str(row.get('evidence_status') or '').upper() == 'OUTCOME_ONLY':
+            lines.append('Outcome saved; news research is reserved for resolved 09:31 candidate losses.')
         for source in (row.get('evidence') or [])[:2]:
             url = str(source.get('url') or '')
             label = html.escape(_clip(str(source.get('title') or 'Source'), 140))
@@ -567,6 +600,8 @@ def format_eod_postmortem_digest(session_date: str, *, limit: int = 10) -> str:
                 lines.append('  News saved; AI explanation queued for the next available review run.')
             else:
                 lines.append('  News search is saved as pending and will retry automatically.')
+        elif str(row.get('evidence_status') or '').upper() == 'NO_EVIDENCE':
+            lines.append('  No dated, ticker-specific news was found after retries.')
         for source in (row.get('evidence') or [])[:1]:
             url = str(source.get('url') or '')
             if url.startswith(('https://', 'http://')):

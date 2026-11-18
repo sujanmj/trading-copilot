@@ -135,6 +135,37 @@ class PredictionPostmortemTests(unittest.TestCase):
         self.assertIn('Next: /postmortems 2', first_page)
         self.assertIn('Previous: /postmortems 1', second_page)
 
+    def test_news_matching_rejects_common_word_ticker_false_positives(self):
+        company = postmortem._company_name('ASHOKA')
+        self.assertEqual(company, 'Ashoka Buildcon')
+        self.assertFalse(postmortem._news_mentions_symbol(
+            "Roshan, Indraganti, Ashoka Creations' Superhero Adventure",
+            symbol='ASHOKA', company_name=company,
+        ))
+        self.assertTrue(postmortem._news_mentions_symbol(
+            'Ashoka Buildcon wins a new road contract',
+            symbol='ASHOKA', company_name=company,
+        ))
+        self.assertFalse(postmortem._news_mentions_symbol(
+            'ASHOKA shares gain after result',
+            symbol='ASHOKA', company_name=company,
+        ))
+        self.assertTrue(postmortem._news_mentions_symbol(
+            '(ASHOKA) shares gain after result',
+            symbol='ASHOKA', company_name=company,
+        ))
+
+    def test_legacy_outcome_only_rows_are_not_labeled_complete(self):
+        store.upsert_postmortem({
+            'snapshot_id': 'neutral-legacy', 'symbol': 'TEST',
+            'session_date': '2026-10-19', 'outcome': 'NEUTRAL',
+            'close_return_pct': 0.1, 'event_type': 'GENERAL_NEWS',
+            'evidence_status': 'COMPLETE', 'context': {},
+        })
+        rows = store.get_postmortems(symbol='TEST', limit=1)
+        self.assertEqual(rows[0]['evidence_status'], 'OUTCOME_ONLY')
+        self.assertIn('Outcome saved', postmortem.format_postmortems_telegram(symbol='TEST'))
+
     def test_eod_searches_and_reports_every_final_0931_loss_without_ai_budget(self):
         losses = []
         for index in range(7):
