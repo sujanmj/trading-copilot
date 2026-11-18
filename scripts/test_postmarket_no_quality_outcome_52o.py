@@ -176,6 +176,42 @@ def test_reference_outcomes_are_reported_separately() -> int:
     return 0
 
 
+def test_retried_outcomes_count_once_using_latest_state() -> int:
+    from backend.trading import candidate_outcome_learning as learning
+    from backend.orchestration.missed_session_recovery import _format_recovered_review
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        paths = _paths(Path(tmpdir))
+        paths['outcomes'].write_text('\n'.join([
+            json.dumps({
+                'snapshot_id': 'same-candidate', 'session_date': '2026-07-10',
+                'stage': 'final_0931', 'symbol': 'TCS', 'outcome': 'PENDING_DATA',
+                'learning_eligible': False,
+            }),
+            json.dumps({
+                'snapshot_id': 'same-candidate', 'session_date': '2026-07-10',
+                'stage': 'final_0931', 'symbol': 'TCS', 'outcome': 'LOSS',
+                'learning_eligible': False,
+            }),
+        ]) + '\n', encoding='utf-8')
+        with _patch_paths(paths):
+            count = learning.candidate_outcomes_count_for_session('2026-07-10')
+            text = '\n'.join(learning._reference_outcome_review_lines(session_date='2026-07-10'))
+            message = _format_recovered_review(
+                '2026-07-10',
+                learning._load_jsonl(paths['outcomes']),
+                {},
+            )
+    if count != 1:
+        return _fail(f'retried outcome should count one candidate, got {count}')
+    if 'W0/L1/N0/P0' not in text:
+        return _fail('daily reference outcome should use the latest loss state once')
+    if ('Unique morning candidates reviewed: 1' not in message
+            or 'Resolved: W0 / L1 / N0 · Pending: 0' not in message):
+        return _fail('recovered review must count one unique candidate and show latest state')
+    return 0
+
+
 def test_eod_resolves_reference_loss_without_learning_sample() -> int:
     from backend.trading import candidate_outcome_learning as learning
 
@@ -360,6 +396,7 @@ def main() -> int:
         test_stale_scanner_skipped,
         test_quality_candidate_captured,
         test_reference_outcomes_are_reported_separately,
+        test_retried_outcomes_count_once_using_latest_state,
         test_eod_resolves_reference_loss_without_learning_sample,
         test_learn_today_no_stale_52i_wording,
         test_tradecard_outcome_no_eligible,
