@@ -58,10 +58,13 @@ def _snapshot_dates() -> set[str]:
 
 
 def _format_recovered_review(day: str, outcomes: list[dict[str, Any]], summary: dict) -> str:
+    from backend.trading.candidate_outcome_learning import latest_outcome_records
+
+    outcomes = latest_outcome_records(outcomes)
     counts = Counter(str(row.get('outcome') or 'PENDING').upper() for row in outcomes)
     lines = [
         f"<b>📘 Recovered EOD review · {day}</b>",
-        f"Morning candidates reviewed: {len(outcomes)}",
+        f"Unique morning candidates reviewed: {len(outcomes)}",
         f"Resolved: W{counts['WIN']} / L{counts['LOSS']} / N{counts['NEUTRAL']} · Pending: {counts['PENDING']}",
     ]
     if counts['PENDING']:
@@ -111,10 +114,16 @@ def recover_missed_sessions(
             resolved = resolve_candidate_outcomes(session_date=day, run_ai=True)
             # The resolver currently returns aggregate counts; read its durable
             # date-filtered records for the review and idempotency decision.
-            from backend.trading.candidate_outcome_learning import _load_jsonl, _outcomes_path
+            from backend.trading.candidate_outcome_learning import (
+                _load_jsonl,
+                _outcomes_path,
+                latest_outcome_records,
+            )
 
-            rows = [row for row in _load_jsonl(_outcomes_path())
-                    if str(row.get('session_date') or '')[:10] == day]
+            rows = latest_outcome_records([
+                row for row in _load_jsonl(_outcomes_path())
+                if str(row.get('session_date') or '')[:10] == day
+            ])
             summary = compute_eod_outcome_summary(review_date=day)
             persist_eod_summary(summary)
             item = {
